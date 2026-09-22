@@ -1,0 +1,15 @@
+# R2 tested application dependency versions; NOT a production release approval.
+# PyMySQL driver is declared for MySQL 8.4 integration; no MySQL server was run.
+fastapi==0.128.2
+SQLAlchemy==2.0.50
+pydantic==2.13.4
+pydantic-settings==2.14.1
+argon2-cffi==25.1.0
+uvicorn==0.48.0
+python-multipart==0.0.29
+Pillow==12.3.0
+pypdf==5.9.0
+PyMySQL[rsa]==1.2.0
+cryptography==46.0.7
+alembic==1.18.4
+openpyxl==3.1.5

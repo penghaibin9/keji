@@ -1,0 +1,17 @@
+{
+  "evidence_kind": "WAITING_FOR_REAL_MYSQL_8_4",
+  "database_engine": null,
+  "mysql_version": null,
+  "synthetic": null,
+  "installation_scope": "fresh_school_only",
+  "baseline_revision": "20260918_0001",
+  "fresh_migration": false,
+  "canonical_repeat_noop": false,
+  "canonical_restore_drill": false,
+  "schema_checks": false,
+  "legacy_upgrade_rejected": false,
+  "legacy_restore_rejected": false,
+  "stamp_only_rejected": false,
+  "provenance_checked": false,
+  "notes": "仅接纳真实 MySQL 8.4/InnoDB 新空库安装、同基线复跑、canonical 备份空目标恢复及拒绝旧库/伪版本号的现场证据。SQLite/协议替身/编译检查不得改称 MySQL 验收；旧库升级、旧备份恢复始终禁止。"
+}

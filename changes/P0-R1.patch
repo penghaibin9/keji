@@ -1,0 +1,2311 @@
+--- /dev/null
++++ b/backend/app/access_logging.py
+@@ -0,0 +1,24 @@
++"""Best-effort access logging. This must never handle critical business auditing.
++
++Critical business audit/receipt writes remain in the original business session
++and must propagate exceptions. This separate access sink never changes a response
++which a business transaction has already produced.
++"""
++from __future__ import annotations
++from .models import Audit
++
++
++def record_access_best_effort(sessions, logger, event):
++    try:
++        with sessions.begin() as db:
++            db.add(Audit(**event))
++        return True
++    except Exception as exc:
++        try:
++            # Exception class is safe; repr/traceback can contain SQL and secrets.
++            logger.error('access_log_write_failed request_id=%s error_class=%s',
++                         event['request_id'], type(exc).__name__)
++        except Exception:
++            # A broken fallback handler must not turn a committed 2xx into 5xx.
++            pass
++        return False
+--- a/backend/app/main.py
++++ b/backend/app/main.py
+@@ -15,6 +15,10 @@
+ from .config import Settings
+ from .core import make_engine
+ from .models import Audit, utcnow
++from .readiness import collect_readiness
++from .maintenance_guard import configured_maintenance
++from .access_logging import record_access_best_effort
++from starlette.concurrency import run_in_threadpool
+ from . import __version__
+ from .routes import auth, admin, business, calculations, files, tasks
+ 
+@@ -61,7 +65,11 @@
+     async def security(request:Request,call_next):
+         # A server-generated correlation ID prevents log pollution and spoofing.
+         request.state.request_id=str(uuid.uuid4());started=time.monotonic()
+-        response=await call_next(request)
++        maintenance = configured_maintenance(cfg)
++        if request.url.path.startswith('/api') and request.url.path != '/api/health' and maintenance['blocked']:
++            response = JSONResponse({'code':'MAINTENANCE','detail':'系统维护中，暂不受理业务请求','request_id':request.state.request_id},503,headers={'Retry-After':'60'})
++        else:
++            response=await call_next(request)
+         response.headers["X-Request-ID"]=request.state.request_id
+         response.headers["X-Content-Type-Options"]="nosniff"
+         response.headers["X-Frame-Options"]="DENY"
+@@ -73,17 +81,12 @@
+             response.headers["Cache-Control"]="no-store"
+             # No query string, body, cookies or authorization secrets in access audit.
+             if request.url.path not in {"/api/health"}:
+-                try:
+-                    with sessions.begin() as db:
+-                        db.add(Audit(actor_id=getattr(request.state,"actor_id",None),
+-                            actor_name=getattr(request.state,"actor_name","未登录"),org_id=getattr(request.state,"org_id",None),
+-                            module="access",object_id=request.url.path[:128],action=request.method,
+-                            before={},after={"http_status":response.status_code,"elapsed_ms":round((time.monotonic()-started)*1000,1)},
+-                            reason="服务端访问记录",result="DENIED" if response.status_code in {401,403,404} else "ERROR" if response.status_code>=400 else "SUCCESS",request_id=request.state.request_id))
+-                except Exception:
+-                    log.exception("Access audit write failed request=%s",request.state.request_id)
+-                    # Never silently accept unaudited business requests.
+-                    if response.status_code<400:return JSONResponse({"detail":"审计存储不可用，请联系管理员","request_id":request.state.request_id},503)
++                event = dict(actor_id=getattr(request.state,'actor_id',None),
++                    actor_name=getattr(request.state,'actor_name','未登录'),org_id=getattr(request.state,'org_id',None),
++                    module='access',object_id=request.url.path[:128],action=request.method,
++                    before={},after={'http_status':response.status_code,'elapsed_ms':round((time.monotonic()-started)*1000,1)},
++                    reason='服务端访问记录',result='DENIED' if response.status_code in {401,403,404} else 'ERROR' if response.status_code>=400 else 'SUCCESS',request_id=request.state.request_id)
++                await run_in_threadpool(record_access_best_effort,sessions,log,event)
+         return response
+ 
+     @app.exception_handler(StarletteHTTPException)
+@@ -99,21 +102,17 @@
+         return JSONResponse({"detail":"数据重复或关联关系冲突；本次事务已回滚，请刷新核对","request_id":getattr(request.state,"request_id","")},409)
+     @app.exception_handler(OperationalError)
+     async def database_error(request,exc):
+-        log.exception("Database error request=%s",getattr(request.state,"request_id",""))
+-        return JSONResponse({"detail":"数据库暂不可用或并发冲突，请稍后使用同一幂等请求重试","request_id":getattr(request.state,"request_id","")},503)
++        log.error("Database error request=%s type=%s",getattr(request.state,"request_id",""),type(exc).__name__)
++        return JSONResponse({"detail":"数据库暂不可用或结果尚未确认，请先核对业务结果；不要直接重复提交","request_id":getattr(request.state,"request_id","")},503)
+     @app.exception_handler(Exception)
+     async def unexpected(request,exc):
+-        log.exception("Unhandled exception request=%s",getattr(request.state,"request_id",""))
++        log.error("Unhandled error request=%s type=%s",getattr(request.state,"request_id",""),type(exc).__name__)
+         return JSONResponse({"detail":"请求未完成，请凭请求编号联系管理员","request_id":getattr(request.state,"request_id","")},500)
+ 
+     @app.get("/api/health")
+     def health():
+-        with engine.connect() as conn:
+-            conn.execute(text("SELECT 1 FROM mutation_guards WHERE `key` = 'calculations'"))
+-            if cfg.env=="production":
+-                head=conn.execute(text("SELECT version_num FROM alembic_version")).scalar()
+-                if head!="20260917_0001":raise HTTPException(503,"数据库迁移版本未就绪")
+-        return {"status":"ok","release":__version__}
++        report = collect_readiness(engine,cfg,__version__)
++        return JSONResponse(report,200 if report['status']=='ok' else 503)
+     for router in (auth.router,admin.router,business.router,calculations.router,files.router,tasks.router):app.include_router(router)
+     # A local review server only. Production frontend is served by the separate nginx service.
+     if cfg.env=="test":
+--- /dev/null
++++ b/backend/app/maintenance_guard.py
+@@ -0,0 +1,32 @@
++"""Fail-closed maintenance latch shared with deployment scripts.
++
++The Compose bind mount is read-only in the application containers. A process lock
++alone is not enough: the durable latch survives an interrupted upgrade.
++"""
++from __future__ import annotations
++from pathlib import Path
++import os
++import stat
++
++
++def maintenance_state(directory=None, *, required=False):
++    if directory is None or str(directory) == '':
++        return {'status':'MISCONFIGURED' if required else 'DISABLED', 'blocked':required}
++    path = Path(directory)
++    try:
++        mode = path.lstat().st_mode
++        if not stat.S_ISDIR(mode) or stat.S_ISLNK(mode):
++            return {'status':'UNREADABLE', 'blocked':True}
++        # Proves that an empty or absent marker can actually be observed.
++        with os.scandir(path) as entries:
++            names = {entry.name for entry in entries}
++        if 'active' in names:
++            return {'status':'ACTIVE', 'blocked':True}
++        return {'status':'OPEN', 'blocked':False}
++    except OSError:
++        return {'status':'UNREADABLE', 'blocked':True}
++
++
++def configured_maintenance(cfg):
++    directory = getattr(cfg, 'maintenance_dir', None) or os.environ.get('ND_MAINTENANCE_DIR')
++    return maintenance_state(directory, required=cfg.env == 'production')
+--- /dev/null
++++ b/backend/app/read_queries.py
+@@ -0,0 +1,182 @@
++"""Shared, read-only business scope. Requires the caller's real authenticated actor.
++
++No user/role fallback is implemented here. This module deliberately does not
++reconstruct the missing authentication layer. These queries perform no writes.
++"""
++from __future__ import annotations
++from collections.abc import Mapping
++from datetime import date, datetime
++from decimal import Decimal
++import re
++from fastapi import HTTPException
++from sqlalchemy import select, func, distinct
++from .models import Org, User, Period, TrainingRecord, Assessment, Setting
++
++RECORD_FILTERS = frozenset({'q','teacher_id','org_id','start','end','project_code','course_code','period_id'})
++ASSESSMENT_FILTERS = RECORD_FILTERS | {'state','returned','business_scope'}
++BUSINESS_FILTERS = frozenset({'q','start','end','project_code','course_code'})
++ASSESSMENT_STATES = frozenset({'TEACHER','DEPARTMENT','COLLEGE','SCHOOL','READY','ARCHIVED'})
++
++
++def clean_filters(filters, allowed):
++    if filters is None:
++        return {}
++    if not isinstance(filters, Mapping) or set(filters) - allowed:
++        raise HTTPException(422, '含不支持的筛选字段')
++    result = {}
++    for key, value in filters.items():
++        if value is None or value == '':
++            continue
++        if isinstance(value, bool) and key in {'returned','business_scope'}:
++            value = 'true' if value else 'false'
++        if not isinstance(value, str) or len(value) > (100 if key == 'q' else 128):
++            raise HTTPException(422, '筛选值格式或长度不正确')
++        if any(ord(c) < 32 for c in value):
++            raise HTTPException(422, '筛选值包含控制字符')
++        result[key] = value
++    return result
++
++
++def boolean_filter(value):
++    if value in ('1', 'true'):
++        return True
++    if value in ('0', 'false'):
++        return False
++    raise HTTPException(422, '布尔筛选只允许 true/false 或 1/0')
++
++
++def authorized_org_descendants(db, actor, org_id):
++    # Intersect with the live actor scope. Organization membership is never an
++    # alternative to permission. A malformed hierarchy fails closed.
++    permitted = set(actor.org_ids)
++    org = db.get(Org, org_id)
++    if org is None or not org.active or org_id not in permitted:
++        raise HTTPException(403, '筛选组织不在授权范围')
++    found, frontier = {org_id}, {org_id}
++    while frontier:
++        children = set(db.scalars(select(Org.id).where(Org.parent_id.in_(frontier), Org.active.is_(True))))
++        if children & found:
++            raise HTTPException(503, '组织层级异常，请联系管理员')
++        found |= children
++        if len(found) > 10000:
++            raise HTTPException(503, '组织层级超过安全检查范围')
++        frontier = children
++    return sorted(found & permitted)
++
++
++def record_query(db, actor, filters=None):
++    f = clean_filters(filters, RECORD_FILTERS)
++    q = select(TrainingRecord).where(actor.scope(TrainingRecord.teacher_id), TrainingRecord.state == 'VALID')
++    for name in ('teacher_id','project_code','course_code'):
++        if name in f:
++            q = q.where(getattr(TrainingRecord, name) == f[name])
++    bounds = {}
++    for name in ('start','end'):
++        if name not in f:
++            continue
++        try:
++            if re.fullmatch(r'\d{4}-\d{2}-\d{2}', f[name]) is None:
++                raise ValueError('date shape')
++            bounds[name] = date.fromisoformat(f[name])
++        except ValueError:
++            raise HTTPException(422, '日期格式应为 YYYY-MM-DD') from None
++    if 'start' in bounds and 'end' in bounds and bounds['start'] > bounds['end']:
++        raise HTTPException(422, '开始日期不能晚于结束日期')
++    if 'start' in bounds:
++        q = q.where(TrainingRecord.event_date >= bounds['start'])
++    if 'end' in bounds:
++        q = q.where(TrainingRecord.event_date <= bounds['end'])
++    if 'period_id' in f:
++        period = db.get(Period, f['period_id'])
++        if period is None:
++            raise HTTPException(404, '考核周期不存在')
++        q = q.where(TrainingRecord.event_date >= period.start_date, TrainingRecord.event_date <= period.end_date)
++    if 'q' in f:
++        word = f['q']
++        q = q.where(TrainingRecord.project.contains(word, autoescape=True) |
++                    TrainingRecord.course.contains(word, autoescape=True) |
++                    TrainingRecord.external_key.contains(word, autoescape=True))
++    if 'org_id' in f:
++        ids = authorized_org_descendants(db, actor, f['org_id'])
++        q = q.where(TrainingRecord.teacher_id.in_(select(User.id).where(User.org_id.in_(ids))))
++    return q
++
++
++def assessment_query(db, actor, filters=None, *, business_query=None):
++    """Preserve cycle scores; filter only the set of assessments being viewed.
++
++    Native assessment lists include qualified teachers with no training rows.
++    A dashboard drill explicitly passes business_scope=true, or a training-only
++    filter, to use the same participating teacher set as the dashboard.
++    """
++    f = clean_filters(filters, ASSESSMENT_FILTERS)
++    rf = {k:v for k,v in f.items() if k in RECORD_FILTERS}
++    # Validates every supplied scope/period/date, even if there are no matches.
++    rq = business_query if business_query is not None else record_query(db, actor, rf)
++    q = select(Assessment).where(actor.scope(Assessment.teacher_id))
++    for name in ('period_id','teacher_id'):
++        if name in f:
++            q = q.where(getattr(Assessment, name) == f[name])
++    if 'org_id' in f:
++        ids = authorized_org_descendants(db, actor, f['org_id'])
++        q = q.where(Assessment.teacher_id.in_(select(User.id).where(User.org_id.in_(ids))))
++    use_business = boolean_filter(f['business_scope']) if 'business_scope' in f else False
++    if business_query is not None or use_business or BUSINESS_FILTERS & f.keys():
++        # IN(subquery) avoids multiplying assessment counts for multiple records.
++        scope = rq.subquery()
++        q = q.where(Assessment.teacher_id.in_(select(scope.c.teacher_id).distinct()))
++    if 'state' in f:
++        if f['state'] not in ASSESSMENT_STATES:
++            raise HTTPException(422, '考核环节不正确')
++        q = q.where(Assessment.state == f['state'])
++    if 'returned' in f:
++        q = q.where(Assessment.returned.is_(boolean_filter(f['returned'])))
++    return q
++
++
++def _json_values(value):
++    if isinstance(value, Decimal):
++        return str(value)
++    if isinstance(value, (date, datetime)):
++        return value.isoformat()
++    if isinstance(value, dict):
++        return {key:_json_values(item) for key,item in value.items()}
++    if isinstance(value, (tuple,list)):
++        return [_json_values(item) for item in value]
++    return value
++
++
++def stats(db, actor, filters=None):
++    f = clean_filters(filters, RECORD_FILTERS)
++    rq = record_query(db, actor, f)
++    sub = rq.subquery()
++    values = db.execute(select(func.count(),func.coalesce(func.sum(sub.c.income),0),func.coalesce(func.sum(sub.c.hours),0),
++        func.coalesce(func.sum(sub.c.participants),0),func.count(distinct(sub.c.teacher_id)),func.count(distinct(sub.c.project_code)),
++        func.count(distinct(sub.c.course_code)),func.count(distinct(sub.c.class_code))).select_from(sub)).one()
++    groups = db.execute(select(User.org_id,func.sum(sub.c.income),func.sum(sub.c.participants),func.count(distinct(sub.c.teacher_id)))
++        .select_from(sub).join(User,User.id==sub.c.teacher_id).group_by(User.org_id).order_by(func.sum(sub.c.income).desc())).all()
++    months = db.execute(select(func.substr(sub.c.event_date,1,7).label('month'),func.sum(sub.c.income),func.sum(sub.c.participants))
++        .select_from(sub).group_by('month').order_by('month')).all()
++    orgs = {o.id:o for o in db.scalars(select(Org))}
++    colleges = {}
++    for oid,income,people,teachers in groups:
++        o = orgs.get(oid)
++        co = orgs.get(o.parent_id) if o and o.kind == 'dept' else o
++        if co:
++            c = colleges.setdefault(co.id,{'id':co.id,'name':co.name,'income':Decimal(0),'participants':0,'teachers':0})
++            c['income'] += income or Decimal(0)
++            c['participants'] += people
++            c['teachers'] += teachers
++    aq = assessment_query(db, actor, f, business_query=rq).subquery()
++    distribution = db.execute(select(aq.c.state,func.count()).select_from(aq).group_by(aq.c.state)).all()
++    metrics, qualification = db.get(Setting,'metrics'), db.get(Setting,'qualification')
++    if metrics is None or qualification is None or not isinstance(metrics.value,dict) or not isinstance(qualification.value,dict) or 'expiry_days' not in qualification.value:
++        raise HTTPException(503,'统计初始化配置未就绪')
++    return _json_values({'records':values[0],'income':values[1],'hours':values[2],'participants':values[3],'teachers':values[4],
++        'projects':values[5],'courses':values[6],'classes':values[7],
++        'ranking':[{'org_id':oid,'name':orgs[oid].name,'income':income,'participants':people,'teachers':tc} for oid,income,people,tc in groups],
++        'colleges':sorted(colleges.values(),key=lambda x:x['income'],reverse=True),
++        'trend':[{'month':m,'income':i,'participants':p} for m,i,p in months],
++        'assessment_states':dict(distribution),
++        'assessment_scope':{**f,'business_scope':'true'},
++        'metric_notes':metrics.value,'qualification_warning_days':qualification.value['expiry_days']})
+--- /dev/null
++++ b/backend/app/readiness.py
+@@ -0,0 +1,106 @@
++"""Read-only, initialization-aware startup probe. Never creates or seeds tables."""
++from __future__ import annotations
++from collections.abc import Mapping
++import os
++from sqlalchemy import select, text
++from sqlalchemy.exc import SQLAlchemyError
++from .models import Org, Role, Setting, Guard
++from .release_contract import EXPECTED_MIGRATION_HEADS
++from .maintenance_guard import configured_maintenance
++
++
++def _nonblank(value):
++    return isinstance(value, str) and bool(value.strip())
++
++
++def _setting_ok(key, value):
++    if not isinstance(value, Mapping):
++        return False
++    if key == 'branding':
++        return _nonblank(value.get('school_name'))
++    if key == 'metrics':
++        return all(_nonblank(value.get(k)) for k in ('income_note','participants_note'))
++    if key == 'qualification':
++        days, categories = value.get('expiry_days'), value.get('categories')
++        return (type(days) is int and 1 <= days <= 365 and isinstance(categories, list)
++                and bool(categories) and all(_nonblank(v) for v in categories))
++    return False
++
++
++def _enabled_or_ambiguous(value):
++    # Unknown values are not assumed safe in production.
++    if value is None or value is False:
++        return False
++    return not (isinstance(value, str) and value.strip().lower() in {'false','0','no','off',''})
++
++
++def _production_policy(cfg, maintenance):
++    if cfg.env != 'production':
++        return True
++    for attr, env in (('seed_enabled','ND_SEED_ENABLED'),
++                      ('auto_create_tables','ND_AUTO_CREATE_TABLES'),
++                      ('auto_create_schema','ND_AUTO_CREATE_SCHEMA')):
++        if _enabled_or_ambiguous(getattr(cfg, attr, None)) or _enabled_or_ambiguous(os.environ.get(env)):
++            return False
++    return maintenance['status'] in {'OPEN','ACTIVE'}
++
++
++def collect_readiness(engine, cfg, release, *, expected_heads=EXPECTED_MIGRATION_HEADS):
++    """Return stable public codes only; never expose SQL, URLs, passwords or errors.
++
++    status describes DB/schema/initialization readiness for deployment probes.
++    accepting_requests additionally reflects the durable maintenance latch.
++    During an upgrade /api/health remains inspectable but business requests 503.
++    """
++    maintenance = configured_maintenance(cfg)
++    report = {'status':'not_ready','release':release,
++              'database':{'status':'unchecked'},
++              'migration':{'status':'unchecked'},
++              'initialization':{'status':'unchecked'},
++              'maintenance':maintenance['status'], 'accepting_requests':False}
++    if not _production_policy(cfg, maintenance):
++        report['initialization'] = {'status':'invalid','reason':'PRODUCTION_POLICY'}
++        return report
++    try:
++        with engine.connect() as conn:
++            if conn.execute(text('SELECT 1')).scalar_one() != 1:
++                report['database'] = {'status':'unavailable'}
++                return report
++            vendor = conn.dialect.name
++            report['database'] = {'status':'ok','engine':vendor}
++            if cfg.env == 'production':
++                if vendor != 'mysql':
++                    report['database']['status'] = 'unsupported'
++                    return report
++                version = conn.execute(text('SELECT VERSION()')).scalar_one()
++                if not isinstance(version,str) or not version.startswith('8.4.') or 'mariadb' in version.lower():
++                    report['database']['status'] = 'unsupported'
++                    return report
++            heads = frozenset(conn.execute(text('SELECT version_num FROM alembic_version')).scalars())
++            if not expected_heads or heads != frozenset(expected_heads):
++                report['migration'] = {'status':'mismatch'}
++                return report
++            report['migration'] = {'status':'ok'}
++            guard = conn.execute(select(Guard.version).where(Guard.key=='calculations')).scalar_one_or_none()
++            values = dict(conn.execute(select(Setting.key,Setting.value).where(Setting.key.in_(['branding','metrics','qualification']))).all())
++            roots = conn.execute(select(Org.id).where(Org.kind=='school',Org.parent_id.is_(None),Org.active.is_(True))).scalars().all()
++            roles = conn.execute(select(Role.kind,Role.permissions).where(Role.active.is_(True))).all()
++            kinds = {kind for kind,perms in roles if isinstance(perms,list) and all(isinstance(p,str) for p in perms)}
++            checks = {'calculations_guard': type(guard) is int and guard >= 1,
++                      'settings': all(_setting_ok(key,values.get(key)) for key in ('branding','metrics','qualification')),
++                      'school_root':len(roots)==1,
++                      'core_roles':{'teacher','dept','college','school'} <= kinds}
++            report['initialization'] = {'status':'ok' if all(checks.values()) else 'incomplete', 'checks':checks}
++    except SQLAlchemyError:
++        # Do not echo driver exceptions, SQL parameters or connection strings.
++        if report['database']['status'] == 'unchecked':
++            report['database'] = {'status':'unavailable'}
++        elif report['migration']['status'] == 'unchecked':
++            report['migration'] = {'status':'unavailable'}
++        else:
++            report['initialization'] = {'status':'unavailable'}
++        return report
++    if all(report[key]['status']=='ok' for key in ('database','migration','initialization')):
++        report['status'] = 'ok'
++        report['accepting_requests'] = not maintenance['blocked']
++    return report
+--- /dev/null
++++ b/backend/app/release_contract.py
+@@ -0,0 +1,8 @@
++"""Inherited application expectation, NOT a claim that migrations were recovered.
++
++The audited main.py expected 20260917_0001. No new revision is invented in this
++repair. scripts/check_assembly.py blocks a release until the real migration graph
++and its other source dependencies are present and consistent.
++"""
++EXPECTED_MIGRATION_HEADS = frozenset({'20260917_0001'})
++REPAIR_ID = 'nondegree-p0-repair-20260917-r1'
+--- a/backend/app/services.py
++++ b/backend/app/services.py
+@@ -5,71 +5,14 @@
+ from fastapi import HTTPException
+ from .core import *
+ from .schemas import RecordIn
++from .read_queries import record_query, assessment_query, stats
+ 
+ D = Decimal
+ 
+ def rounded(value): return D(str(value)).quantize(D("0.01"), rounding=ROUND_HALF_UP)
+ 
+-def record_query(db, actor, filters=None):
+-    filters = filters or {}
+-    allowed={"q","teacher_id","org_id","start","end","project_code","course_code","period_id"}
+-    if set(filters)-allowed: raise HTTPException(422,"含不支持的筛选字段")
+-    q=select(TrainingRecord).where(actor.scope(TrainingRecord.teacher_id),TrainingRecord.state=="VALID")
+-    for name in ["teacher_id","project_code","course_code"]:
+-        if filters.get(name): q=q.where(getattr(TrainingRecord,name)==filters[name])
+-    for name,comparison in [("start",lambda x: TrainingRecord.event_date>=x),("end",lambda x: TrainingRecord.event_date<=x)]:
+-        if filters.get(name):
+-            try: value=date.fromisoformat(str(filters[name]))
+-            except ValueError: raise HTTPException(422,"日期格式应为 YYYY-MM-DD")
+-            q=q.where(comparison(value))
+-    if filters.get("period_id"):
+-        period=db.get(Period,filters["period_id"])
+-        if not period: raise HTTPException(404,"考核周期不存在")
+-        q=q.where(TrainingRecord.event_date>=period.start_date,TrainingRecord.event_date<=period.end_date)
+-    if filters.get("q"):
+-        text=str(filters["q"])[:100]
+-        q=q.where(TrainingRecord.project.contains(text,autoescape=True)|TrainingRecord.course.contains(text,autoescape=True)|TrainingRecord.external_key.contains(text,autoescape=True))
+-    if filters.get("org_id"):
+-        org=db.get(Org,filters["org_id"])
+-        if not org or org.id not in actor.org_ids: raise HTTPException(403,"筛选组织不在授权范围")
+-        ids=org_scope(db,org,org.kind)
+-        q=q.where(TrainingRecord.teacher_id.in_(select(User.id).where(User.org_id.in_(ids))))
+-    return q
+ 
+ 
+-def stats(db, actor, filters=None):
+-    sub=record_query(db,actor,filters).subquery()
+-    values=db.execute(select(func.count(),func.coalesce(func.sum(sub.c.income),0),func.coalesce(func.sum(sub.c.hours),0),
+-        func.coalesce(func.sum(sub.c.participants),0),func.count(distinct(sub.c.teacher_id)),func.count(distinct(sub.c.project_code)),
+-        func.count(distinct(sub.c.course_code)),func.count(distinct(sub.c.class_code))).select_from(sub)).one()
+-    # The same filtered subquery is used for totals, ranking and trends.
+-    groups=db.execute(select(User.org_id,func.sum(sub.c.income),func.sum(sub.c.participants),func.count(distinct(sub.c.teacher_id)))
+-        .join(User,User.id==sub.c.teacher_id).group_by(User.org_id).order_by(func.sum(sub.c.income).desc())).all()
+-    months=db.execute(select(func.substr(sub.c.event_date,1,7).label("month"),func.sum(sub.c.income),func.sum(sub.c.participants))
+-        .group_by("month").order_by("month")).all()
+-    orgs={o.id:o for o in db.scalars(select(Org)).all()}
+-    colleges={}
+-    for oid,income,people,teachers in groups:
+-        o=orgs.get(oid);co=orgs.get(o.parent_id) if o and o.kind=="dept" else o
+-        if co:
+-            c=colleges.setdefault(co.id,{"id":co.id,"name":co.name,"income":D(0),"participants":0,"teachers":0})
+-            c["income"]+=income or D(0);c["participants"]+=people;c["teachers"]+=teachers
+-    aq=select(Assessment).where(actor.scope(Assessment.teacher_id))
+-    if filters and filters.get("period_id"):aq=aq.where(Assessment.period_id==filters["period_id"])
+-    if filters and filters.get("teacher_id"):aq=aq.where(Assessment.teacher_id==filters["teacher_id"])
+-    if filters and filters.get("org_id"):
+-        org=db.get(Org,filters["org_id"])
+-        aq=aq.where(Assessment.teacher_id.in_(select(User.id).where(User.org_id.in_(org_scope(db,org,org.kind)))))
+-    a_sub=aq.subquery()
+-    distribution=db.execute(select(a_sub.c.state,func.count()).group_by(a_sub.c.state)).all()
+-    return serial({"records":values[0],"income":values[1],"hours":values[2],"participants":values[3],"teachers":values[4],
+-        "projects":values[5],"courses":values[6],"classes":values[7],
+-        "ranking":[{"org_id":oid,"name":orgs[oid].name,"income":income,"participants":people,"teachers":tc} for oid,income,people,tc in groups],
+-        "colleges":sorted(colleges.values(),key=lambda x:x["income"],reverse=True),
+-        "trend":[{"month":m,"income":i,"participants":p} for m,i,p in months],
+-        "assessment_states":dict(distribution),
+-        "metric_notes":db.get(Setting,"metrics").value,
+-        "qualification_warning_days":db.get(Setting,"qualification").value["expiry_days"]})
+ 
+ 
+ def insert_record(db,actor,payload:RecordIn,batch_id=None):
+--- a/deploy/compose.yml
++++ b/deploy/compose.yml
+@@ -13,8 +13,9 @@
+     ND_STORAGE_DIR: /var/lib/nondegree/files
+     ND_SECURE_COOKIE: "true"
+     ND_SEED_ENABLED: "false"
++    ND_MAINTENANCE_DIR: /run/nondegree-maintenance
+   secrets: [runtime_url]
+-  volumes: ["../runtime/files:/var/lib/nondegree/files"]
++  volumes: ["../runtime/files:/var/lib/nondegree/files", "../runtime/maintenance:/run/nondegree-maintenance:ro"]
+   read_only: true
+   tmpfs: ["/tmp:size=256m,mode=1777"]
+   cap_drop: [ALL]
+@@ -81,6 +82,7 @@
+       ND_STORAGE_DIR: /var/lib/nondegree/files
+       ND_SECURE_COOKIE: "true"
+       ND_SEED_ENABLED: "false"
++      ND_MAINTENANCE_DIR: /run/nondegree-maintenance
+     secrets: [migration_url,admin_password]
+     command: [alembic,upgrade,head]
+   frontend:
+--- a/frontend/app.js
++++ b/frontend/app.js
+@@ -1,4 +1,5 @@
+ import {icons} from './icons.js';
++import {businessFilters, pageFilters, drillFilters, navigationHash, restoreNavigation, selectedPeriod} from './scope.js';
+ 'use strict';
+ const $=(s,r=document)=>r.querySelector(s),$$=(s,r=document)=>[...r.querySelectorAll(s)];
+ const esc=v=>String(v??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+@@ -57,8 +58,8 @@
+ function pager(data){return `<div class="pagination"><span>共 ${number(data.total)} 条 · 第 ${data.page} 页</span><div class="pages"><button data-action="prev" ${data.page<=1?'disabled':''}>上一页</button><button class="active">${data.page}</button><button data-action="next" ${data.page*data.size>=data.total?'disabled':''}>下一页</button></div></div>`}
+ const periodSelect=()=>`<select id="period-filter" class="period-name"><option value="">全部周期</option>${periods.map(p=>`<option value="${p.id}" ${p.id===periodId?'selected':''}>${esc(p.name)}</option>`).join('')}</select>`;
+ function pageHead(desc='',actions=''){return `<div class="pagehead"><div><div class="eyebrow">NON-DEGREE EDUCATION</div><h1>${titles[page]}</h1><p>${esc(desc)}</p></div><div class="page-actions">${actions}</div></div>`}
+-function filtersBar({search=true,states=[],period=false,dates=false,teacher=false,organization=false,project=false,exportKind=''}={}){
+- return `<form id="filters" class="filterbar">${search?`<div class="field-search">${icon('search')}<input name="q" placeholder="搜索名称或编号" value="${esc(filter.q||'')}"></div>`:''}${period?periodSelect():''}${states.length?`<select name="state"><option value="">全部状态</option>${states.map(s=>`<option value="${s}" ${filter.state===s?'selected':''}>${labels[s]||s}</option>`).join('')}</select>`:''}${dates?`<input name="start" type="date" aria-label="开始日期" value="${esc(filter.start||'')}"><span class="muted small">至</span><input name="end" type="date" aria-label="结束日期" value="${esc(filter.end||'')}">`:''}${organization?`<select name="org_id"><option value="">全部授权组织</option>${orgs.filter(o=>o.kind!=='school').map(o=>`<option value="${o.id}" ${filter.org_id===o.id?'selected':''}>${esc(o.name)}</option>`).join('')}</select>`:''}${teacher?`<input class="filter-teacher" name="teacher_search" list="filter-teacher-list" placeholder="教师工号检索" value="${esc(teachers.find(t=>t.id===filter.teacher_id)?.staff_no||'')}"><datalist id="filter-teacher-list">${teachers.map(t=>`<option value="${esc(t.staff_no)}">${esc(t.name)}</option>`).join('')}</datalist>`:''}${project?`<input name="project_code" placeholder="项目编码" value="${esc(filter.project_code||'')}"><input name="course_code" placeholder="课程编码" value="${esc(filter.course_code||'')}">`:''}<button class="btn primary" type="submit">查询</button>${act('重置','reset-filters','','')}${exportKind&&can('export')?act('导出 Excel','export',exportKind,'','export'):''}</form>`;
++function filtersBar({search=true,states=[],period=false,dates=false,teacher=false,organization=false,project=false,returned=false,exportKind=''}={}){
++ return `<form id="filters" class="filterbar">${search?`<div class="field-search">${icon('search')}<input name="q" placeholder="搜索名称或编号" value="${esc(filter.q||'')}"></div>`:''}${period?periodSelect():''}${states.length?`<select name="state"><option value="">全部状态</option>${states.map(s=>`<option value="${s}" ${filter.state===s?'selected':''}>${labels[s]||s}</option>`).join('')}</select>`:''}${returned?`<select name="returned" aria-label="退回状态"><option value="">全部退回状态</option><option value="true" ${filter.returned==='true'?'selected':''}>已退回</option><option value="false" ${filter.returned==='false'?'selected':''}>未退回</option></select>`:''}${dates?`<input name="start" type="date" aria-label="开始日期" value="${esc(filter.start||'')}"><span class="muted small">至</span><input name="end" type="date" aria-label="结束日期" value="${esc(filter.end||'')}">`:''}${organization?`<select name="org_id"><option value="">全部授权组织</option>${orgs.filter(o=>o.kind!=='school').map(o=>`<option value="${o.id}" ${filter.org_id===o.id?'selected':''}>${esc(o.name)}</option>`).join('')}</select>`:''}${teacher?`<input class="filter-teacher" name="teacher_search" list="filter-teacher-list" placeholder="教师工号检索" value="${esc(teachers.find(t=>t.id===filter.teacher_id)?.staff_no||'')}"><datalist id="filter-teacher-list">${teachers.map(t=>`<option value="${esc(t.staff_no)}">${esc(t.name)}</option>`).join('')}</datalist>`:''}${project?`<input name="project_code" placeholder="项目编码" value="${esc(filter.project_code||'')}"><input name="course_code" placeholder="课程编码" value="${esc(filter.course_code||'')}">`:''}<button class="btn primary" type="submit">查询</button>${act('重置','reset-filters','','')}${exportKind&&can('export')?act('导出 Excel','export',exportKind,'','export'):''}</form>`;
+ }
+ function loginView(message=''){
+  $('#app').innerHTML=`<div class="login-shell"><section class="login-story"><div class="flex">${icon('school')}<strong>跃科 · 智慧教育</strong></div><h1>数据有依据<br>办事有闭环</h1><p>一站式非学历教育智慧前台<br>把资质、积分、考核与分级管理，汇聚到一个工作入口。</p><div class="login-features"><span>教师本人办理</span><span>四级组织权限</span><span>学校本地部署</span></div></section><section class="login-form-shell"><form id="login-form" class="login-form"><h2>欢迎登录</h2><p>使用学校管理员为你开通的账号。</p><div id="login-error">${message?`<div class="error-text">${esc(message)}</div>`:''}</div><div class="form-field"><label for="username">账号</label><input id="username" name="username" autocomplete="username" required placeholder="输入账号"></div><div class="form-field"><label for="password">密码</label><input id="password" name="password" autocomplete="current-password" type="password" required placeholder="输入密码"></div><button class="btn primary" type="submit">登录工作台 ${icon('arrow')}</button><div class="login-foot">忘记密码请联系学校管理员。<br>统一认证对接完成前，使用本地账号认证。<br>湖南跃科信息工程有限公司</div></form></section></div>`;
+@@ -76,30 +77,42 @@
+  const data=await api('/auth/me');me=data;csrf=data.csrf;
+  if(me.user.must_change_password){shell();$('#content').innerHTML=pageHead('首次使用前，请修改管理员分配的临时密码。');changePassword(true);return}
+  [periods,teachers,orgs]=await Promise.all([api('/periods'),api('/teachers?size=200'),api('/organizations')]).then(r=>r.map(x=>x.items));
+- const dest=location.hash.replace('#','').split('?')[0];if(dest&&titles[dest])page=dest;
++ const restored=restoreNavigation(location.hash,titles);page=restored.page;filter=restored.filter;periodId=restored.periodId;
+  shell();await render();
+ }
+-function nav(dest,extra={}){if(!titles[dest])return;page=dest;filter=extra;tablePage=1;location.hash=dest;$('#sidebar')?.classList.remove('open');return render()}
++function syncLocation(replace=false){const hash=navigationHash(page,filter,periodId);if(replace)history.replaceState(null,'',location.pathname+location.search+hash);else if(location.hash!==hash)location.hash=hash;}
++function nav(dest,extra={}){if(!Object.hasOwn(titles,dest))return;page=dest;filter=pageFilters(dest,extra);tablePage=1;syncLocation();$('#sidebar')?.classList.remove('open');return render()}
++function scopeNav(dest,extra={}){const f=drillFilters(dest,filter,extra);return nav(dest,f)}
+ async function render(){
+  if(!me)return;const seq=++renderSequence;$('#breadcrumb').textContent=titles[page];$$('.nav-item').forEach(n=>n.classList.toggle('active',n.dataset.id===page));
+  $('#content').innerHTML='<div class="busy-panel">正在读取授权业务数据…</div>';
+  try{const html=await pages[page]();if(seq!==renderSequence)return;$('#content').innerHTML=html+`<footer class="footer"><span>跃科 · 一站式非学历教育智慧前台</span><span>权限范围：${esc(me.role.kind==='teacher'?'仅本人':orgName(me.user.org_id))} · 服务端统一统计口径</span></footer>`;bindFilters()}
+  catch(err){if(seq===renderSequence&&$('#content'))$('#content').innerHTML=pageHead()+note(err.message,true)+`<div class="mt16">${act('重新读取','refresh')}</div>`;}
+ }
+-function bindFilters(){const form=$('#filters');if(!form)return;form.addEventListener('submit',e=>{e.preventDefault();const v=Object.fromEntries(new FormData(form));if(v.teacher_search){const t=teachers.find(t=>t.staff_no===v.teacher_search);if(!t){toast('请检索并选择一个授权教师工号',true);return}v.teacher_id=t.id}delete v.teacher_search;periodId=$('#period-filter')?.value||periodId;filter=v;tablePage=1;render()});}
++function bindFilters(){
++ const form=$('#filters');if(!form)return;
++ form.addEventListener('submit',e=>{e.preventDefault();
++  const v=Object.fromEntries(new FormData(form));
++  if(v.teacher_search){const t=teachers.find(t=>t.staff_no===v.teacher_search);if(!t){toast('请检索并选择一个授权教师工号',true);return}v.teacher_id=t.id}
++  delete v.teacher_search;
++  // A hidden drill marker stays in the current assessment context until reset.
++  if(page==='assessment'&&filter.business_scope==='true')v.business_scope='true';
++  periodId=selectedPeriod($('#period-filter'),periodId);filter=pageFilters(page,v);tablePage=1;syncLocation(true);render();
++ });
++}
+ const listQuery=(usePeriod=false)=>query({...filter,page:tablePage,size:20,...(usePeriod&&periodId?{period_id:periodId}:{})});
+-const metricsHTML=s=>`<div class="kpis">${[['归属培训收入',number(s.income,2),'元','wallet','records'],['课程人次',number(s.participants),'人次','users','records'],['参与教师',number(s.teachers),'人','users','organization'],['培训项目',number(s.projects),'个','book','records']].map(([l,v,u,i,p])=>`<button class="kpi" data-action="nav" data-id="${p}"><span class="kpi-label">${l}</span><span class="kpi-icon">${icon(i)}</span><div class="kpi-value">${v}<small>${u}</small></div><div class="kpi-foot">当前筛选范围 · 点击查看业务明细</div></button>`).join('')}</div>`;
+-function trendHTML(s){const max=Math.max(1,...s.trend.map(x=>Number(x.income)));return `<div class="card"><div class="card-head"><div><h2>培训收入趋势</h2><p>按业务日期月份汇总 · 与台账同源</p></div>${act('业务明细','nav','records','text','arrow')}</div><div class="card-pad">${s.trend.length?`<div class="line-chart">${s.trend.map(x=>`<div class="chart-bar" style="height:${Math.max(2,Number(x.income)/max*125)}px" title="${esc(x.month)}：${esc(x.income)} 元"><span>${number(x.income/10000,1)}万</span></div>`).join('')}</div><div class="chart-months">${s.trend.map(x=>`<span>${x.month}</span>`).join('')}</div>`:empty('暂无收入趋势')}</div><div class="card-foot">负向更正可能导致月份净收入为负；准确金额见台账。</div></div>`}
++const metricsHTML=s=>`<div class="kpis">${[['归属培训收入',number(s.income,2),'元','wallet','records'],['课程人次',number(s.participants),'人次','users','records'],['参与教师',number(s.teachers),'人','users','organization'],['培训项目',number(s.projects),'个','book','records']].map(([l,v,u,i,p])=>`<button class="kpi" data-action="scope-nav" data-id="${p}"><span class="kpi-label">${l}</span><span class="kpi-icon">${icon(i)}</span><div class="kpi-value">${v}<small>${u}</small></div><div class="kpi-foot">当前筛选范围 · 点击查看业务明细</div></button>`).join('')}</div>`;
++function trendHTML(s){const max=Math.max(1,...s.trend.map(x=>Number(x.income)));return `<div class="card"><div class="card-head"><div><h2>培训收入趋势</h2><p>按业务日期月份汇总 · 与台账同源</p></div>${act('业务明细','scope-nav','records','text','arrow')}</div><div class="card-pad">${s.trend.length?`<div class="line-chart">${s.trend.map(x=>`<div class="chart-bar" style="height:${Math.max(2,Number(x.income)/max*125)}px" title="${esc(x.month)}：${esc(x.income)} 元"><span>${number(x.income/10000,1)}万</span></div>`).join('')}</div><div class="chart-months">${s.trend.map(x=>`<span>${x.month}</span>`).join('')}</div>`:empty('暂无收入趋势')}</div><div class="card-foot">负向更正可能导致月份净收入为负；准确金额见台账。</div></div>`}
+ function rankHTML(s){const a=s.colleges,max=Math.max(1,...a.map(x=>Number(x.income)));return `<div class="card"><div class="card-head"><h2>学院培训收入</h2><span class="small muted">元</span></div><div class="ranking">${a.length?a.map((x,i)=>`<div class="rank-row"><span class="rank-no">${String(i+1).padStart(2,'0')}</span><div class="grow"><div class="rank-title"><span>${esc(x.name)}</span><strong>${number(x.income,2)}</strong></div><div class="track"><div class="fill" style="width:${Math.max(0,Number(x.income)/max*100)}%"></div></div></div>${act('','drill-org',x.id,'text','chevron')}</div>`).join(''):empty()}</div></div>`}
+ function todosHTML(items){return items.length?`<div class="task-list">${items.slice(0,6).map(x=>`<div class="task-row"><span class="task-icon">${icon(x.type==='qualification'?'cert':x.type==='assessment'?'assess':'help')}</span><div class="grow"><div class="task-title">${esc(x.title)}</div><div class="task-sub">${x.teacher_id?esc(teacherName(x.teacher_id))+' · ':''}${esc(labels[x.state]||x.state)}</div></div>${act('去办理','todo',`${x.type}|${x.id}`,'sm')}</div>`).join('')}</div>`:empty('当前没有待办','新资质、核对申请和考核确认会在这里自动汇集。')}
+ const pages={
+- async home(){const[s,t,n]=await Promise.all([api('/statistics'),api('/todos'),api('/notices?size=4')]);let personal='';if(me.role.kind==='teacher'){const[q,p,a]=await Promise.all([api('/qualifications?size=1&state=APPROVED'),api('/points?'+query({size:1,period_id:periodId})),api('/assessments?'+query({size:1,period_id:periodId}))]);const latest=a.items[0];personal=`<div class="summary-row"><div class="summary-item"><label>审核通过的本人资质</label><strong>${q.total}<small>份</small></strong></div><div class="summary-item"><label>当前周期积分</label><strong>${number(p.sum,2)}<small>分</small></strong></div><div class="summary-item"><label>当前周期考核得分</label><strong>${latest?number(latest.score,2):'—'}</strong></div><div class="summary-item"><label>当前考核环节</label><div class="mt12">${latest?badge(latest.state):'尚未生成考核'}</div></div></div>`}view={s,t,n};return pageHead('从数据核对到考核归档，今天的工作从这里开始。',act('刷新数据','refresh','','','refresh'))+`<section class="banner"><div><div class="eyebrow">YOUR WORKSPACE</div><h2>${esc(me.user.name)}，欢迎回到工作台</h2><p>当前有 ${t.total} 项事项需要关注。资质、积分与考核依据均可追溯，请先核对，再确认。</p></div><div class="banner-next"><div class="pending"><b>${t.total}</b> 项待办</div>${act('查看我的待办','nav','todos','white','arrow')}</div></section>`+metricsHTML(s)+personal+`<div class="cols2">${trendHTML(s)}<div class="card"><div class="card-head"><h2>待办事项</h2>${link('全部待办','nav','todos')}</div>${todosHTML(t.items)}</div></div><div class="equal2 mt20"><div class="card"><div class="card-head"><h2>高频业务</h2></div><div class="quick-grid">${[['qualifications','cert','维护教师资质'],['points','award','核对积分明细'],['assessment','assess','办理考核确认'],['records','data','查看培训台账']].map(([p,i,l])=>`<button class="quick" data-action="nav" data-id="${p}"><span class="qicon">${icon(i)}</span>${l}</button>`).join('')}</div><div class="card-foot">所有操作绑定真实登录账号，不能切换他人身份代确认。</div></div><div class="card"><div class="card-head"><h2>政策通知</h2>${link('查看全部','nav','notices')}</div><div class="card-pad">${n.items.map(x=>`<button class="notice-row" data-action="notice" data-id="${x.id}"><span>${esc(x.title)}</span><time>${x.created_at.slice(5,10)}</time></button>`).join('')||empty('暂无政策通知')}</div></div></div><div class="mt20">${note(s.metric_notes.income_note+' '+s.metric_notes.participants_note)}</div>`},
+- async cockpit(){const q=query({...filter,...(periodId?{period_id:periodId}:{})}),s=await api('/statistics?'+q);view={s};return pageHead('全校运行态势 · 学院对比 · 同源统计',act('查看数据明细','nav','records','','data'))+`<div class="card mb16">${filtersBar({period:true,dates:true,organization:true,teacher:true,project:true})}</div>`+metricsHTML(s)+`<div class="cols2">${trendHTML(s)}${rankHTML(s)}</div><div class="equal2 mt20"><div class="card"><div class="card-head"><h2>考核处理进度</h2></div>${table(['环节','教师数量'],Object.entries(s.assessment_states).map(([k,v])=>[badge(k),link(String(v),'drill-state',k)]))}<div class="card-foot">考核统计按当前周期与组织 / 教师范围；时间与项目筛选仅作用于培训业务指标。</div></div><div class="card card-pad"><h2>运行规模与接口状态</h2><div class="two-numbers mt20"><div><strong class="inline-metric">${s.courses}</strong><p class="metric-label">课程</p></div><div><strong class="inline-metric">${s.classes}</strong><p class="metric-label">班级</p></div><div><strong class="inline-metric">${number(s.hours,2)}</strong><p class="metric-label">授课学时</p></div></div><div class="divider"></div>${badge('NOT_CONNECTED')}<p class="note-text mt12">学校数据中台与省级平台尚未真实接入；本地业务不冒充省级同步成功。</p><div class="mt16">${act('数据接入与同步','nav','sync','','sync')}</div></div></div>`},
++ async home(){const[s,t,n]=await Promise.all([api('/statistics?'+query(businessFilters({...filter,period_id:periodId}))),api('/todos'),api('/notices?size=4')]);let personal='';if(me.role.kind==='teacher'){const[q,p,a]=await Promise.all([api('/qualifications?size=1&state=APPROVED'),api('/points?'+query({size:1,period_id:periodId})),api('/assessments?'+query({size:1,period_id:periodId}))]);const latest=a.items[0];personal=`<div class="summary-row"><div class="summary-item"><label>审核通过的本人资质</label><strong>${q.total}<small>份</small></strong></div><div class="summary-item"><label>${periodId?'所选周期积分':'全部周期积分'}</label><strong>${number(p.sum,2)}<small>分</small></strong></div><div class="summary-item"><label>${periodId?'所选周期考核得分':'考核列表首条得分'}</label><strong>${latest?number(latest.score,2):'—'}</strong></div><div class="summary-item"><label>当前考核环节</label><div class="mt12">${latest?badge(latest.state):'尚未生成考核'}</div></div></div>`}view={s,t,n};return pageHead('从数据核对到考核归档，今天的工作从这里开始。',act('刷新数据','refresh','','','refresh'))+`<div class="card mb16">${filtersBar({search:false,period:true,dates:true,project:true})}</div><section class="banner"><div><div class="eyebrow">YOUR WORKSPACE</div><h2>${esc(me.user.name)}，欢迎回到工作台</h2><p>当前有 ${t.total} 项事项需要关注。资质、积分与考核依据均可追溯，请先核对，再确认。</p></div><div class="banner-next"><div class="pending"><b>${t.total}</b> 项待办</div>${act('查看我的待办','nav','todos','white','arrow')}</div></section>`+metricsHTML(s)+personal+`<div class="cols2">${trendHTML(s)}<div class="card"><div class="card-head"><h2>待办事项</h2>${link('全部待办','nav','todos')}</div>${todosHTML(t.items)}</div></div><div class="equal2 mt20"><div class="card"><div class="card-head"><h2>高频业务</h2></div><div class="quick-grid">${[['qualifications','cert','维护教师资质'],['points','award','核对积分明细'],['assessment','assess','办理考核确认'],['records','data','查看培训台账']].map(([p,i,l])=>`<button class="quick" data-action="nav" data-id="${p}"><span class="qicon">${icon(i)}</span>${l}</button>`).join('')}</div><div class="card-foot">所有操作绑定真实登录账号，不能切换他人身份代确认。</div></div><div class="card"><div class="card-head"><h2>政策通知</h2>${link('查看全部','nav','notices')}</div><div class="card-pad">${n.items.map(x=>`<button class="notice-row" data-action="notice" data-id="${x.id}"><span>${esc(x.title)}</span><time>${x.created_at.slice(5,10)}</time></button>`).join('')||empty('暂无政策通知')}</div></div></div><div class="mt20">${note(s.metric_notes.income_note+' '+s.metric_notes.participants_note)}</div>`},
++ async cockpit(){const q=query({...filter,...(periodId?{period_id:periodId}:{})}),s=await api('/statistics?'+q);view={s};return pageHead('全校运行态势 · 学院对比 · 同源统计',act('查看数据明细','scope-nav','records','','data'))+`<div class="card mb16">${filtersBar({period:true,dates:true,organization:true,teacher:true,project:true})}</div>`+metricsHTML(s)+`<div class="cols2">${trendHTML(s)}${rankHTML(s)}</div><div class="equal2 mt20"><div class="card"><div class="card-head"><h2>考核处理进度</h2></div>${table(['环节','教师数量'],Object.entries(s.assessment_states).map(([k,v])=>[badge(k),link(String(v),'drill-state',k)]))}<div class="card-foot">考核统计仅包含当前业务筛选涉及的教师；点击环节保留全部筛选。查看范围不会改变已生成的周期得分。</div></div><div class="card card-pad"><h2>运行规模与接口状态</h2><div class="two-numbers mt20"><div><strong class="inline-metric">${s.courses}</strong><p class="metric-label">课程</p></div><div><strong class="inline-metric">${s.classes}</strong><p class="metric-label">班级</p></div><div><strong class="inline-metric">${number(s.hours,2)}</strong><p class="metric-label">授课学时</p></div></div><div class="divider"></div>${badge('NOT_CONNECTED')}<p class="note-text mt12">学校数据中台与省级平台尚未真实接入；本地业务不冒充省级同步成功。</p><div class="mt16">${act('数据接入与同步','nav','sync','','sync')}</div></div></div>`},
+  async todos(){const d=await api('/todos');view=d;return pageHead('审核、核对、资质有效期与考核确认集中办理。')+`<div class="card"><div class="card-head"><h2>全部待办</h2><span class="subtle">${d.total} 项</span></div>${table(['事项','所属教师','状态','办理'],d.items.map(x=>[esc(x.title),esc(teacherName(x.teacher_id)),badge(x.state),act('去办理','todo',`${x.type}|${x.id}`,'sm')]))}</div>`},
+  async records(){const d=await api('/records?'+listQuery(true));view=d;return pageHead('收入与人次以业务台账为准；更正保留版本，已归档快照不受影响。',can('records.write')?act('新增业务记录','record-form','','primary','plus'):'')+`<div class="card">${filtersBar({period:true,dates:true,teacher:true,organization:me.role.kind!=='teacher',project:true,exportKind:'records'})}${table(['业务日期 / 来源编号','教师','项目 / 课程','班级','学时','人次','归属收入（元）','操作'],d.items.map(x=>[`<strong>${esc(x.event_date)}</strong><div class="cell-sub">${esc(x.external_key)}</div>`,esc(teacherName(x.teacher_id)),`<strong>${esc(x.project)}</strong><div class="cell-sub">${esc(x.course)}</div>`,esc(x.class_name),number(x.hours,2),number(x.participants),number(x.income,2),link('查看依据','record',x.id)+(can('records.write')?link('更正','record-form',x.id):'')]))}${pager(d)}</div>`},
+  async qualifications(){const d=await api('/qualifications?'+listQuery());view=d;return pageHead('上传真实佐证 → 教师提交 → 授权审核 → 版本归档与到期提醒。',can('qualification.write')&&me.user.staff_no?act('新增我的资质','qualification-form','','primary','plus'):'')+`<div class="card">${filtersBar({states:['DRAFT','SUBMITTED','RETURNED','APPROVED'],teacher:me.role.kind!=='teacher',exportKind:'qualifications'})}${table(['证书名称 / 类别','教师','证书编号','有效期至','状态','版本','操作'],d.items.map(x=>[`<strong>${esc(x.name)}</strong><div class="cell-sub">${esc(x.category)}</div>`,esc(teacherName(x.teacher_id)),esc(x.certificate_no),esc(x.expires||'长期有效'),badge(x.state),'v'+x.version,link('查看 / 办理','qualification',x.id)]))}${pager(d)}</div>`},
+- async points(){const[d,b]=await Promise.all([api('/points?'+listQuery(true)),api('/point-balances?'+query({period_id:periodId}))]);view={...d,balances:b.items};return pageHead('查看原始值、计算公式与规则版本；纠错只追加调整项。',(can('points.calculate')?act('计算 / 重算','calculate','points','primary','refresh'):'')+(can('points.adjust')?act('追加调整项','point-adjust','','','plus'):''))+`<div class="summary-row"><div class="summary-item"><label>当前范围积分合计</label><strong>${number(d.sum,2)}<small>分</small></strong></div><div class="summary-item"><label>积分流水</label><strong>${d.total}<small>笔</small></strong></div><div class="summary-item"><label>已确认台账</label><strong>${b.items.filter(x=>x.confirmed).length}<small>份</small></strong></div><div class="summary-item"><label>当前周期</label><p class="mt12 small">${esc(periodId?periodName(periodId):'全部周期')}</p></div></div><div class="card">${filtersBar({search:false,period:true,teacher:me.role.kind!=='teacher',exportKind:'points'})}${table(['教师','积分项','变动类型','分值','计算时间','操作'],d.items.map(x=>[esc(teacherName(x.teacher_id)),esc(x.item_key),badge(x.kind),`<strong>${Number(x.amount)>0?'+':''}${number(x.amount,2)}</strong>`,ts(x.created_at),link('计算依据','point',x.id)]))}${pager(d)}</div><div class="card mt20"><div class="card-head"><h2>教师积分确认</h2><span class="subtle">确认后冻结；授权解锁必须填写原因</span></div>${table(['教师','周期','确认状态','操作'],b.items.map(x=>[esc(teacherName(x.teacher_id)),esc(periodName(x.period_id)),badge(x.confirmed?'已确认':'待本人确认'),x.teacher_id===me.user.id&&!x.confirmed?act('本人确认','balance-action',x.id,'sm'):x.confirmed&&can('points.adjust')?act('留痕解锁','balance-action',x.id,'sm'):'—']))}</div>`},
+- async assessment(){const d=await api('/assessments?'+listQuery(true));view=d;return pageHead('自动取数与评分 → 教师 → 教研室 → 学院 → 学校 → 归档。',can('assessment.calculate')?act('生成 / 重算考核','calculate','assessment','primary','refresh'):'')+`<div class="flow-strip">${['数据采集','自动计算','教师确认 / 核对','教研室确认','学院确认','学校审核','归档'].map((x,i)=>`<div class="flow-step"><i>${i+1}</i>${x}</div>`).join('')}</div><div class="card">${filtersBar({search:false,period:true,teacher:me.role.kind!=='teacher',states:['TEACHER','DEPARTMENT','COLLEGE','SCHOOL','READY','ARCHIVED'],exportKind:'assessments'})}${table(['范围序号','教师','考核周期','得分','当前环节','是否退回','操作'],d.items.map(x=>[x.scope_rank,esc(teacherName(x.teacher_id)),esc(periodName(x.period_id)),`<strong class="blue">${number(x.score,2)}</strong>`,badge(x.state),x.returned?badge('RETURNED'):'—',link('查看 / 办理','assessment',x.id)]))}${pager(d)}<div class="card-foot">${esc(d.rank_note)}</div></div>`},
++ async points(){const[d,b]=await Promise.all([api('/points?'+listQuery(true)),api('/point-balances?'+query({period_id:periodId,teacher_id:filter.teacher_id||''}))]);view={...d,balances:b.items};return pageHead('查看原始值、计算公式与规则版本；纠错只追加调整项。',(can('points.calculate')?act('计算 / 重算','calculate','points','primary','refresh'):'')+(can('points.adjust')?act('追加调整项','point-adjust','','','plus'):''))+`<div class="summary-row"><div class="summary-item"><label>当前范围积分合计</label><strong>${number(d.sum,2)}<small>分</small></strong></div><div class="summary-item"><label>积分流水</label><strong>${d.total}<small>笔</small></strong></div><div class="summary-item"><label>已确认台账</label><strong>${b.items.filter(x=>x.confirmed).length}<small>份</small></strong></div><div class="summary-item"><label>当前周期</label><p class="mt12 small">${esc(periodId?periodName(periodId):'全部周期')}</p></div></div><div class="card">${filtersBar({search:false,period:true,teacher:me.role.kind!=='teacher',exportKind:'points'})}${table(['教师','积分项','变动类型','分值','计算时间','操作'],d.items.map(x=>[esc(teacherName(x.teacher_id)),esc(x.item_key),badge(x.kind),`<strong>${Number(x.amount)>0?'+':''}${number(x.amount,2)}</strong>`,ts(x.created_at),link('计算依据','point',x.id)]))}${pager(d)}</div><div class="card mt20"><div class="card-head"><h2>教师积分确认</h2><span class="subtle">确认后冻结；授权解锁必须填写原因</span></div>${table(['教师','周期','确认状态','操作'],b.items.map(x=>[esc(teacherName(x.teacher_id)),esc(periodName(x.period_id)),badge(x.confirmed?'已确认':'待本人确认'),x.teacher_id===me.user.id&&!x.confirmed?act('本人确认','balance-action',x.id,'sm'):x.confirmed&&can('points.adjust')?act('留痕解锁','balance-action',x.id,'sm'):'—']))}</div>`},
++ async assessment(){const d=await api('/assessments?'+listQuery(true));view=d;return pageHead('自动取数与评分 → 教师 → 教研室 → 学院 → 学校 → 归档。',can('assessment.calculate')?act('生成 / 重算考核','calculate','assessment','primary','refresh'):'')+`<div class="flow-strip">${['数据采集','自动计算','教师确认 / 核对','教研室确认','学院确认','学校审核','归档'].map((x,i)=>`<div class="flow-step"><i>${i+1}</i>${x}</div>`).join('')}</div><div class="card">${filtersBar({search:false,period:true,teacher:me.role.kind!=='teacher',states:['TEACHER','DEPARTMENT','COLLEGE','SCHOOL','READY','ARCHIVED'],returned:true,dates:true,project:true,organization:me.role.kind!=='teacher',exportKind:'assessments'})}${table(['范围序号','教师','考核周期','得分','当前环节','是否退回','操作'],d.items.map(x=>[x.scope_rank,esc(teacherName(x.teacher_id)),esc(periodName(x.period_id)),`<strong class="blue">${number(x.score,2)}</strong>`,badge(x.state),x.returned?badge('RETURNED'):'—',link('查看 / 办理','assessment',x.id)]))}${pager(d)}<div class="card-foot">${esc(d.rank_note)}</div></div>`},
+  async disputes(){const d=await api('/disputes?'+listQuery(true));view=d;return pageHead('从业务明细发起核对，复核人与申请人分离；未解决前阻止考核确认。')+`<div class="card">${filtersBar({search:false,states:['OPEN','RESOLVED'],period:true})}${table(['提交时间','教师','业务对象','核对原因','状态','操作'],d.items.map(x=>[ts(x.created_at),esc(teacherName(x.teacher_id)),esc({record:'培训数据',points:'积分',assessment:'考核'}[x.object_type]),`<span title="${esc(x.reason)}">${esc(x.reason.slice(0,45))}</span>`,badge(x.state),link('查看 / 复核','dispute',x.id)]))}${pager(d)}</div>`},
+  async organization(){const s=await api('/statistics?'+query({...filter,...(periodId?{period_id:periodId}:{})}));view={s};return pageHead('按组织自动限定业务范围，逐层查看教师与明细。')+`<div class="card mb16">${filtersBar({period:true,organization:true,teacher:true,dates:true,project:true,exportKind:'records'})}</div>`+metricsHTML(s)+`<div class="card"><div class="card-head"><h2>教研室运行概览</h2></div>${table(['教研室','归属培训收入（元）','课程人次','参与教师','查看'],s.ranking.map(x=>[esc(x.name),number(x.income,2),number(x.participants),x.teachers,link('穿透业务明细','drill-org',x.org_id)]))}</div>`},
+  async rules(){const d=await api('/rules?'+query({period_id:periodId}));view=d;return pageHead('规则不可覆盖修改；先复制新版本，再试算启用。',(can('settings.manage')?act('新增周期','period-form','','','plus'):'')+act('新增规则','rule-form','','primary','plus'))+`<div class="card">${filtersBar({search:false,period:true})}${table(['规则名称','类型','周期','版本','状态','操作'],d.items.map(x=>[esc(x.name),x.kind==='points'?'积分激励':'三级考核',esc(periodName(x.period_id)),x.version_no,badge(x.state),link('详情 / 试算','rule',x.id)+link('复制新规则','rule-form',x.id)]))}</div><div class="card mt20"><div class="card-head"><h2>考核周期</h2><span class="subtle">关闭周期前，所有考核须归档且无未解决核对</span></div>${table(['周期','开始','结束','状态','操作'],periods.map(p=>[esc(p.name),p.start_date,p.end_date,badge(p.state),p.state==='OPEN'?link('关闭周期','close-period',p.id):'—']))}</div>`},
+@@ -108,7 +121,7 @@
+  async permissions(){const[u,r,o]=await Promise.all([api('/users?'+listQuery()),api('/roles'),api('/organizations')]);orgs=o.items;view={users:u.items,roles:r.items,...u};return pageHead('账号绑定组织和角色；组织或角色变更即时改变数据范围。',act('新增组织','org-form','','','plus')+act('新增账号','user-form','','primary','plus'))+`<div class="card">${filtersBar()}${table(['账号 / 工号','姓名','组织','角色','状态','操作'],u.items.map(x=>[`<strong>${esc(x.username)}</strong><div class="cell-sub">${esc(x.staff_no||'管理账号')}</div>`,esc(x.name),esc(orgName(x.org_id)),esc(r.items.find(y=>y.id===x.role_id)?.name),badge(x.active?'已启用':'INACTIVE'),link('编辑','user-form',x.id)+link('重置密码','reset-password',x.id)]))}${pager(u)}</div><div class="card mt20"><div class="card-head"><h2>角色与批量授权</h2><span class="subtle">菜单 / 操作 / 数据 / 导出权限</span></div>${table(['角色','层级','权限数','状态','操作'],r.items.map(x=>[esc(x.name),esc(x.kind),x.permissions.length,badge(x.active?'ACTIVE':'INACTIVE'),link('批量授权','role-permissions',x.id)+link('复制角色','role-copy',x.id)]))}</div><div class="card mt20"><div class="card-head"><h2>组织机构</h2></div>${table(['组织编码','名称','层级','上级','状态','操作'],orgs.map(x=>[esc(x.code),esc(x.name),esc({school:'学校',college:'二级学院',dept:'教研室'}[x.kind]),esc(orgName(x.parent_id)),badge(x.active?'ACTIVE':'INACTIVE'),link('编辑','org-form',x.id)+(x.kind!=='school'?link(x.active?'停用':'启用','org-state',x.id):'')]))}</div>`},
+  async settings(){const d=await api('/settings');view=d;return pageHead('统一字典与展示口径；关键配置变更必须说明原因。')+`<div class="cols3">${d.items.map(x=>`<div class="card card-pad"><h2>${esc({branding:'学校品牌',qualification:'资质字典与到期提醒',metrics:'统计口径说明'}[x.key]||x.key)}</h2><div class="small muted mt8">配置版本 ${x.version}</div>${json(x.value)}<div class="mt16">${act('修改配置','setting',x.key,'primary','edit')}</div></div>`).join('')}</div>`},
+  async audit(){const d=await api('/audit?'+listQuery());view=d;return pageHead('登录、查询、导出、审核、权限和配置调整均记录服务端审计。')+`<div class="card">${filtersBar({exportKind:'audit'})}${table(['操作时间','操作人','模块','操作','业务对象','结果','详情'],d.items.map(x=>[ts(x.created_at),esc(x.actor_name),esc(x.module),esc(x.action),`<span class="mono">${esc(x.object_id?.slice(0,25))}</span>`,badge(x.result),link('前后值','audit-detail',x.id)]))}${pager(d)}</div>`},
+- async sync(){const[c,t]=await Promise.all([api('/connections'),api('/tasks?kind=sync&size=30')]);view={connections:c.items,tasks:t.items};return pageHead('维护接口登记与字段映射；真实外部对接暂不在本次范围内。')+note('配置参数或本地报文校验不等于联调成功。本版本不向外部系统发送数据，真实连接默认关闭。',true)+`<div class="cols3 mt16">${c.items.map(x=>`<div class="card card-pad"><h2>${esc(x.name)}</h2><div class="mt12">${badge(x.state)}</div><p class="note-text mt12">字段映射 ${x.mappings.length} 项 · 配置版本 ${x.version}</p><div class="mt16 flex wrap">${act('配置映射','connection',x.id,'sm')}${act('本地报文校验','mapping-trial',x.id,'sm')}</div></div>`).join('')}</div><div class="card mt20"><div class="card-head"><h2>同步任务记录</h2><span class="subtle">保留每次失败及后续处理结果</span></div>${table(['时间','任务类型','状态','尝试次数','原因','操作'],t.items.map(x=>[ts(x.created_at),esc(x.payload.data_type),badge(x.state),x.attempts,esc(x.error),link('详情','task',x.id)]))}</div>`},
++ async sync(){const[c,t]=await Promise.all([api('/connections'),api('/tasks?kind=sync&size=30')]);view={connections:c.items,tasks:t.items};return pageHead('三类外部接口属于采购建设范围；当前等待正式适配与学校联调。')+note('配置参数或本地报文校验不等于联调成功。本版本不向外部系统发送数据，真实连接默认关闭。',true)+`<div class="cols3 mt16">${c.items.map(x=>`<div class="card card-pad"><h2>${esc(x.name)}</h2><div class="mt12">${badge(x.state)}</div><p class="note-text mt12">字段映射 ${x.mappings.length} 项 · 配置版本 ${x.version}</p><div class="mt16 flex wrap">${act('配置映射','connection',x.id,'sm')}${act('本地报文校验','mapping-trial',x.id,'sm')}</div></div>`).join('')}</div><div class="card mt20"><div class="card-head"><h2>同步任务记录</h2><span class="subtle">保留每次失败及后续处理结果</span></div>${table(['时间','任务类型','状态','尝试次数','原因','操作'],t.items.map(x=>[ts(x.created_at),esc(x.payload.data_type),badge(x.state),x.attempts,esc(x.error),link('详情','task',x.id)]))}</div>`},
+  async operations(){const d=await api('/operations');view=d;return pageHead('真实运行信息与现场验收门槛；未检测的项目不显示通过。')+`<div class="system-health"><div class="card card-pad"><h2>数据库</h2><p class="inline-metric mt16">${esc(d.database_engine)}</p><p class="note-text">${d.database_reachable?'连接正常':'连接异常'} · ${esc(d.environment)}</p></div><div class="card card-pad"><h2>后台任务进程</h2><div class="mt16">${badge(d.worker.healthy?'运行正常':'尚无有效心跳')}</div><p class="note-text mt12">最后心跳 ${ts(d.worker.last_heartbeat)}</p></div><div class="card card-pad"><h2>存储剩余空间</h2><p class="inline-metric mt16">${d.free_gib} GiB</p><p class="note-text">文件、导出与日志需定期核查空间</p></div></div><div class="equal2 mt20"><div class="card card-pad"><h2>最近备份记录</h2>${json(d.backup)}<p class="note-text mt12">有备份文件不代表能够恢复。按交付运维手册在独立空库执行恢复演练。</p></div><div class="card card-pad"><h2>PDF 现场验收条件</h2>${table(['项目','指标'],[['普通业务页面','原则上 ≤ 3 秒'],['复杂统计分析','原则上 ≤ 5 秒'],['同时在线','3000 人'],['并发访问','不少于 100 用户'],['真实业务双轨比对','积分 / 考核样本 100% 一致']])}<p class="note-text mt12">上述为采购要求，不是本环境已经测得的结果。</p></div></div><div class="mt20">${note(d.notes,true)}</div>`},
+  async notices(){const d=await api('/notices?'+listQuery());view=d;return pageHead('学校政策、业务通知与操作指引。',can('notice.manage')?act('发布通知','notice-form','','primary','plus'):'')+`<div class="card">${filtersBar()}${table(['通知标题','分类','发布范围','发布时间','操作'],d.items.map(x=>[esc(x.title),esc(x.category),esc(orgName(x.org_id)),ts(x.created_at),link('阅读','notice',x.id)+(can('notice.manage')?link('编辑 / 撤回','notice-form',x.id):'')]))}${pager(d)}</div>`},
+  async help(){return pageHead('按角色办理，一次把关键事项办清楚。')+`<div class="equal2">${[['普通教师','先核对培训台账，再上传资质与佐证；资质提交后等待审核。查看积分和考核计算依据，有问题从明细提交核对申请，处理后本人确认。'],['教研室 / 二级学院','从统一待办进入本组织业务，核验材料和计算依据。考核仅在本层级步骤可确认，发现问题说明原因退回，不能跳过教师确认。'],['学校管理部门','先初始化组织、账号、字典和周期；维护积分 / 考核规则并试算。以 Excel 导入或人工录入形成可追溯台账，计算后组织四级确认，最后归档。'],['管理员运维','教师批量导入后账号默认停用，先配置并启用。每日核查任务进程、磁盘和备份，定期独立恢复演练。机房上线前须完成真实 MySQL、100 并发、3000 在线与脱敏真实案例比对。']].map(([t,b])=>`<section class="card card-pad"><h2>${t}</h2><p class="policy-text mt16">${b}</p></section>`).join('')}</div><div class="card card-pad mt20"><h2>常见问题</h2><div class="policy"><h3>为什么不能改已确认或归档的数据？</h3><p>积分通过追加差额纠错；已确认的积分需授权留痕解锁。考核须按流程退回后重算，已归档不可覆盖，应新建更正周期，原周期继续保留。</p><h3>导出没有立即下载怎么办？</h3><p>进入“导出与任务中心”查看后台任务。长时间排队时由管理员检查 worker 进程；权限变化后应重新导出，不能继续下载旧范围文件。</p><h3>Excel 为什么要再次点击确认？</h3><p>上传后只生成预览与错误行，不写业务表。确认时再次校验当前权限和数据重复情况，全批次在同一事务中入库。</p><h3>没有接学校接口能用吗？</h3><p>本地账号、手工台账和 Excel 可独立运行。统一认证、学校数据中台、湘培直通车尚未接通，不能把本地校验结果当成外部同步成功。</p></div></div>`}
+@@ -175,13 +188,14 @@
+ async function mappingTrial(id){formModal('本地报文字段校验',field('data_type','数据类型','text','教师基础信息')+field('records','脱敏样本 JSON 数组','textarea','[\n  {"teacher_no": "J2026001"}\n]',{rows:9,full:true})+reasonFields(),async v=>{let records;try{records=JSON.parse(v.records)}catch{throw Error('报文必须是合法 JSON 数组')};const result=await api('/connections/validate',{method:'POST',body:{...v,records,connection_id:id}});modal('本地字段校验报告',note('仅做字段转换与格式校验，未调用外部接口、未写入业务台账。')+json(result),act('关闭','close'),true)},{wide:true,submit:'仅执行本地校验'})}
+ 
+ const handlers={
+- nav:id=>nav(id),refresh:()=>render(),close:()=>closeModal(),prev:()=>{tablePage=Math.max(1,tablePage-1);return render()},next:()=>{tablePage++;return render()},'reset-filters':()=>{filter={};periodId='';tablePage=1;return render()},
++ nav:id=>nav(id),refresh:()=>render(),close:()=>closeModal(),prev:()=>{tablePage=Math.max(1,tablePage-1);return render()},next:()=>{tablePage++;return render()},'reset-filters':()=>{filter={};periodId='';tablePage=1;syncLocation(true);return render()},
+  'toggle-menu':()=>$('#sidebar').classList.toggle('open'),
+  logout:async()=>{await api('/auth/logout',{method:'POST'});me=null;csrf='';closeModal();location.hash='';loginView()},
+  profile:()=>modal('当前账号',`<dl class="kv"><dt>姓名</dt><dd>${esc(me.user.name)}</dd><dt>账号</dt><dd>${esc(me.user.username)}</dd><dt>角色</dt><dd>${esc(me.role.name)}</dd><dt>组织</dt><dd>${esc(me.org.name)}</dd><dt>工号</dt><dd>${esc(me.user.staff_no||'管理账号')}</dd></dl>`,act('关闭','close')+act('修改密码','password','','primary')),
+  password:()=>changePassword(),
+  search:()=>{modal('搜索功能入口',`<input id="menu-search" style="width:100%" placeholder="输入菜单、资质、积分、考核等关键词"><div id="menu-results" class="search-results">${navItems().flatMap(x=>x[1]).map(([p,i])=>`<button data-action="search-nav" data-id="${p}">${icon(i)}${titles[p]}</button>`).join('')}</div>`);$('#menu-search').addEventListener('input',e=>$$('#menu-results button').forEach(x=>x.hidden=!x.textContent.includes(e.target.value)))},
+- 'search-nav':id=>{closeModal();return nav(id)},'drill-org':id=>nav('records',{org_id:id}),'drill-state':s=>nav('assessment',{state:s}),
++ 'search-nav':id=>{closeModal();return nav(id)},'drill-org':id=>scopeNav('records',{org_id:id}),'drill-state':s=>scopeNav('assessment',{state:s}),
++ 'scope-nav':id=>scopeNav(id),
+  todo:code=>{const[k,id]=code.split('|');closeModal();return ({qualification:showQualification,assessment:showAssessment,points:showPoint,record:showRecord,dispute:showDispute,sync:showTask}[k]||(()=>nav('todos')))(id)},
+  'record-form':recordForm,record:showRecord,'qualification-form':qualificationForm,qualification:showQualification,point:showPoint,assessment:showAssessment,dispute:showDispute,
+  upload:code=>{const[k,id]=code.split('|');return upload(k,id)},
+@@ -213,6 +227,6 @@
+ let lookupTimer;document.addEventListener('input',e=>{const input=e.target;if(!input.matches('.teacher-lookup,.filter-teacher'))return;clearTimeout(lookupTimer);lookupTimer=setTimeout(async()=>{try{const d=await api('/teachers?'+query({q:input.value,size:50}));for(const t of d.items)if(!teachers.find(x=>x.id===t.id))teachers.push(t);const list=document.getElementById(input.getAttribute('list'));if(list)list.innerHTML=d.items.map(t=>`<option value="${esc(t.staff_no)}">${esc(t.name)}</option>`).join('');const chosen=teachers.find(t=>t.staff_no===input.value);if(input.matches('.teacher-lookup')){const hidden=input.parentElement.querySelector('input[type=hidden]');if(hidden)hidden.value=chosen?.id||''}}catch(err){toast(err.message,true)}},280)});
+ document.addEventListener('change',e=>{if(e.target.matches('.teacher-lookup')){const input=e.target,t=teachers.find(x=>x.staff_no===input.value);input.parentElement.querySelector('input[type=hidden]').value=t?.id||''}});
+ document.addEventListener('keydown',e=>{if(e.key==='Escape'&&!me?.user.must_change_password)closeModal();if(e.key==='/'&&!e.target.matches('input,textarea,select')&&me){e.preventDefault();handlers.search()}});
+-window.addEventListener('hashchange',()=>{const dest=location.hash.slice(1);if(titles[dest]&&dest!==page&&me){page=dest;filter={};tablePage=1;render()}});
++window.addEventListener('hashchange',()=>{if(!me)return;try{const next=restoreNavigation(location.hash,titles);if(navigationHash(next.page,next.filter,next.periodId)===navigationHash(page,filter,periodId))return;page=next.page;filter=next.filter;periodId=next.periodId;tablePage=1;render()}catch(err){toast(err.message,true)}});
+ window.addEventListener('afterprint',()=>document.body.classList.remove('print-mode'));
+ (async()=>{try{await boot()}catch{if(!me)loginView()}})();
+--- /dev/null
++++ b/frontend/scope.js
+@@ -0,0 +1,55 @@
++/* Query context only: this is not authorization. The server always rechecks scope. */
++export const BUSINESS_KEYS = Object.freeze(['q','teacher_id','org_id','start','end','project_code','course_code']);
++const PERIOD_PAGES = new Set(['home','cockpit','records','points','assessment','disputes','organization','rules']);
++const PAGE_KEYS = Object.freeze({
++  home: BUSINESS_KEYS, cockpit: BUSINESS_KEYS, records: BUSINESS_KEYS, organization: BUSINESS_KEYS,
++  assessment: [...BUSINESS_KEYS,'state','returned','business_scope'],
++  points: ['teacher_id','org_id'], disputes: ['teacher_id','state'],
++  qualifications: ['q','teacher_id','state'], rules: [],
++  audit: ['q'], imports: ['q'], notices: ['q'], permissions: ['q'],
++  todos: [], sync: [], operations: [], exports: [], help: [],
++});
++function valuesFor(keys, values = {}) {
++  const result = {};
++  for (const key of keys) {
++    const value = values[key];
++    if (value === undefined || value === null || value === '') continue;
++    if (typeof value !== 'string' || value.length > (key === 'q' ? 100 : 128) || /[\x00-\x1f]/.test(value))
++      throw Error('筛选条件格式不正确，请重新选择。');
++    result[key] = value;
++  }
++  return result;
++}
++export const businessFilters = values => valuesFor([...BUSINESS_KEYS,'period_id'], values);
++export const pageFilters = (page, values) => valuesFor(PAGE_KEYS[page] || [], values);
++export function drillFilters(destination, current, overrides = {}) {
++  const merged = {...businessFilters(current), ...overrides};
++  if (destination === 'assessment') merged.business_scope = 'true';
++  return pageFilters(destination, merged);
++}
++export function navigationHash(page, filter, periodId = '') {
++  const fields = pageFilters(page, filter);
++  if (PERIOD_PAGES.has(page) && periodId !== '')
++    fields.period_id = valuesFor(['period_id'], {period_id: periodId}).period_id;
++  const q = new URLSearchParams(Object.entries(fields).sort(([a],[b]) => a.localeCompare(b))).toString();
++  return '#' + page + (q ? '?' + q : '');
++}
++export function restoreNavigation(hash, titles) {
++  const raw = hash.replace(/^#/, '');
++  const split = raw.indexOf('?');
++  const page = split < 0 ? raw : raw.slice(0, split);
++  if (!Object.hasOwn(titles, page)) return {page:'home', filter:{}, periodId:''};
++  const query = split < 0 ? '' : raw.slice(split + 1);
++  const params = new URLSearchParams(query);
++  const fields = {};
++  for (const [key, value] of params) {
++    if (Object.hasOwn(fields, key)) throw Error('筛选条件重复，请重置筛选。');
++    Object.defineProperty(fields, key, {value, enumerable:true, configurable:true});
++  }
++  const filter = pageFilters(page, fields);
++  const periodId = PERIOD_PAGES.has(page) ? (valuesFor(['period_id'], fields).period_id || '') : '';
++  return {page, filter, periodId};
++}
++export function selectedPeriod(control, previous) {
++  return control ? control.value : previous; // An empty value means ALL, not "keep old".
++}
+--- /dev/null
++++ b/pytest.ini
+@@ -0,0 +1,3 @@
++[pytest]
++testpaths = tests/p0
++addopts = -ra
+--- /dev/null
++++ b/scripts/atomic_env.py
+@@ -0,0 +1,100 @@
++#!/usr/bin/env python3
++"""Update only requested image keys; never execute .env as shell code."""
++from __future__ import annotations
++import argparse
++import os
++from pathlib import Path
++import re
++import stat
++import tempfile
++
++IMAGE_KEYS = ('ND_API_IMAGE','ND_FRONTEND_IMAGE')
++KEY_LINE = re.compile(r'^\s*(?:export\s+)?([A-Za-z_][A-Za-z0-9_]*)\s*=\s*(.*?)\s*$')
++IMAGE = re.compile(r'^[A-Za-z0-9][A-Za-z0-9._/:@-]{0,511}$')
++
++
++def validate_image(value):
++    if not isinstance(value,str) or IMAGE.fullmatch(value) is None or '..' in value.split('/'):
++        raise ValueError('invalid image reference')
++    return value
++
++
++def read_env(path):
++    """Literal values only; interpolation is rejected for deployment control keys."""
++    values = {}
++    for line in Path(path).read_text(encoding='utf-8-sig').splitlines():
++        match = KEY_LINE.fullmatch(line)
++        if not match:
++            continue
++        key,value = match.groups()
++        if key in values:
++            raise ValueError('duplicate environment key; configuration is ambiguous')
++        if value.startswith(('"',"'")):
++            quote = value[0]
++            end=value.find(quote,1)
++            if end<1 or (value[end+1:].strip() and not value[end+1:].lstrip().startswith('#')):
++                raise ValueError('invalid quoted environment value')
++            value = value[1:end]
++        else:
++            value = value.split(' #',1)[0].rstrip()
++        values[key] = value
++    return values
++
++
++def _signature(s):
++    return s.st_dev,s.st_ino,s.st_size,s.st_mtime_ns,s.st_mode,s.st_uid,s.st_gid
++
++
++def update_images(path, api, frontend):
++    p = Path(path)
++    values = dict(zip(IMAGE_KEYS, (validate_image(api),validate_image(frontend))))
++    fd = os.open(p,os.O_RDONLY|os.O_NOFOLLOW)
++    try:
++        info = os.fstat(fd)
++        if not stat.S_ISREG(info.st_mode) or info.st_nlink != 1 or info.st_size > 1024*1024:
++            raise ValueError('environment must be a small regular non-linked file')
++        with os.fdopen(fd,'rb',closefd=False) as stream:
++            raw = stream.read()
++    finally:
++        os.close(fd)
++    text = raw.decode('utf-8-sig')
++    newline = '\r\n' if '\r\n' in text else '\n'
++    seen, lines = set(), []
++    for line in text.splitlines():
++        match = KEY_LINE.fullmatch(line)
++        key = match.group(1) if match else None
++        if key in values:
++            if key in seen:
++                raise ValueError('duplicate image key; refusing ambiguous update')
++            seen.add(key)
++            lines.append(key+'='+values[key])
++        else:
++            lines.append(line)
++    lines.extend(key+'='+values[key] for key in IMAGE_KEYS if key not in seen)
++    payload = (('\ufeff' if raw.startswith(b'\xef\xbb\xbf') else '') + newline.join(lines)+newline).encode('utf-8')
++    temp_fd, name = tempfile.mkstemp(prefix='.images-',dir=p.parent)
++    try:
++        os.fchown(temp_fd,info.st_uid,info.st_gid)
++        os.fchmod(temp_fd,stat.S_IMODE(info.st_mode))
++        with os.fdopen(temp_fd,'wb',closefd=False) as stream:
++            stream.write(payload);stream.flush();os.fsync(temp_fd)
++        if _signature(p.lstat()) != _signature(info):
++            raise RuntimeError('environment changed during update')
++        os.replace(name,p)
++        dir_fd = os.open(p.parent,os.O_DIRECTORY)
++        try: os.fsync(dir_fd)
++        finally: os.close(dir_fd)
++    finally:
++        os.close(temp_fd)
++        if os.path.lexists(name):os.unlink(name)
++    return values
++
++
++if __name__=='__main__':
++    parser=argparse.ArgumentParser(description=__doc__)
++    parser.add_argument('path');parser.add_argument('api');parser.add_argument('frontend')
++    args=parser.parse_args()
++    try: update_images(args.path,args.api,args.frontend)
++    except (ValueError,OSError,RuntimeError,UnicodeError):
++        parser.exit(2,'BLOCKED: environment update failed; original values are not printed.\n')
++    print('IMAGE_CONFIGURATION_UPDATED')
+--- a/scripts/backup.sh
++++ b/scripts/backup.sh
+@@ -1,31 +1,4 @@
+ #!/usr/bin/env bash
+-# Consistent DB + attachment backup. This maintenance profile briefly stops writes.
+-source "$(dirname "$0")/common.sh"
+-require_config
+-[[ "${1:-}" == '--allow-maintenance-window' ]] || { echo '备份将暂时停止前台和写入。请在维护窗口明确传入 --allow-maintenance-window。'; exit 2; }
+-command -v flock >/dev/null
+-mkdir -p runtime/backups; chmod 700 runtime/backups
+-exec 9>runtime/maintenance.lock
+-flock -n 9 || { echo '另一个维护任务正在执行。'; exit 2; }
+-stamp=$(date -u +%Y%m%dT%H%M%SZ)
+-dest="runtime/backups/$stamp"
+-mkdir -m 700 "$dest"; mkdir "$dest/files"
+-restart=0
+-resume() { if [[ $restart == 1 ]]; then "${DC[@]}" up -d --no-build --pull never api worker frontend; fi; }
+-trap resume EXIT
+-restart=1
+-"${DC[@]}" stop -t 45 frontend worker api
+-"${DC[@]}" exec -T db mysqldump --defaults-extra-file=/run/secrets/root_cnf \
+- --single-transaction --routines --triggers --events --hex-blob --no-tablespaces --set-gtid-purged=OFF nondegree | gzip > "$dest/database.sql.gz"
+-gzip -t "$dest/database.sql.gz"
+-cp -a runtime/files/. "$dest/files/"
+-cp deploy/.env "$dest/school-config.env"
+-printf 'Restore requires a separately configured empty school instance; DB accounts and TLS secrets are intentionally not in this business backup.\n' > "$dest/README.txt"
+-python3 scripts/backup_manifest.py create "$dest"
+-python3 scripts/backup_manifest.py verify "$dest"
+-sha=$(sha256sum "$dest/manifest.json" | cut -d' ' -f1)
+-"${DC[@]}" run --rm --no-deps --pull never migrate python -m app.maintenance record-backup --sha256 "$sha" --location "$stamp"
+-printf '%s  %s/manifest.json\n' "$sha" "$stamp" >> runtime/backups/manifest-sha256.log
+-chmod -R go-rwx "$dest"
+-echo "业务备份已完成并校验：$dest；尚未证明可恢复，需另做空库恢复演练。"
+-# Keep all backups by default. Never auto-delete business history without an approved retention policy.
++set -Eeuo pipefail
++ROOT="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd -P)"
++exec python3 "$ROOT/scripts/deploy_control.py" backup "$@"
+--- /dev/null
++++ b/scripts/backup_manifest.py
+@@ -0,0 +1,81 @@
++#!/usr/bin/env python3
++"""Hash every regular backup file; reject traversal, links and unknown files."""
++from __future__ import annotations
++import argparse
++from datetime import datetime, timezone
++import hashlib
++import json
++import os
++from pathlib import Path, PurePosixPath
++import stat
++import tempfile
++
++
++def sha256(path):
++    h=hashlib.sha256()
++    with Path(path).open('rb') as stream:
++        for chunk in iter(lambda:stream.read(1024*1024),b''):h.update(chunk)
++    return h.hexdigest()
++
++
++def inventory(root):
++    root=Path(root)
++    if root.is_symlink() or not root.is_dir(): raise ValueError('invalid backup root')
++    result={}
++    for directory,dirs,files in os.walk(root,followlinks=False):
++        for name in dirs+files:
++            p=Path(directory)/name;s=p.lstat()
++            if stat.S_ISLNK(s.st_mode):raise ValueError('links are forbidden in backup')
++            if p.is_dir():continue
++            if not stat.S_ISREG(s.st_mode) or s.st_nlink!=1:raise ValueError('special or linked file')
++            relative=p.relative_to(root).as_posix()
++            if relative=='manifest.json':continue
++            if '\\' in relative:raise ValueError('nonportable backup path')
++            result[relative]={'sha256':sha256(p),'bytes':s.st_size}
++    return result
++
++
++def create(root):
++    root=Path(root)
++    if (root/'manifest.json').exists():raise ValueError('manifest already exists')
++    files=inventory(root)
++    if 'database.sql.gz' not in files or files['database.sql.gz']['bytes']==0:
++        raise ValueError('database dump missing')
++    data={'schema_version':1,'created_at':datetime.now(timezone.utc).isoformat(), 'files':files}
++    fd,name=tempfile.mkstemp(prefix='.manifest-',dir=root)
++    try:
++        with os.fdopen(fd,'w',encoding='utf-8') as f:
++            json.dump(data,f,ensure_ascii=False,indent=2,sort_keys=True);f.write('\n');f.flush();os.fsync(f.fileno())
++        os.replace(name,root/'manifest.json')
++        os.chmod(root/'manifest.json',0o600)
++    finally:
++        if os.path.lexists(name):os.unlink(name)
++    return verify(root)
++
++
++def verify(root):
++    root=Path(root)
++    p=root/'manifest.json'
++    if p.is_symlink() or not p.is_file() or p.stat().st_size>16*1024*1024:
++        raise ValueError('manifest missing or invalid')
++    data=json.loads(p.read_text(encoding='utf-8'))
++    if not isinstance(data,dict) or data.get('schema_version')!=1 or not isinstance(data.get('files'),dict):
++        raise ValueError('unsupported manifest')
++    expected=data['files']
++    for name,entry in expected.items():
++        q=PurePosixPath(name)
++        if not name or '\\' in name or q.is_absolute() or any(v in {'.','..',''} for v in name.split('/')) or not isinstance(entry,dict):
++            raise ValueError('unsafe manifest path')
++        if set(entry)!={'sha256','bytes'} or not isinstance(entry['sha256'],str) or type(entry['bytes']) is not int or entry['bytes']<0:
++            raise ValueError('invalid manifest entry')
++    current=inventory(root)
++    if current != expected or 'database.sql.gz' not in current:
++        raise ValueError('backup manifest mismatch')
++    return {'files':len(current),'manifest_sha256':sha256(p)}
++
++
++if __name__=='__main__':
++    p=argparse.ArgumentParser(description=__doc__);p.add_argument('action',choices=['create','verify']);p.add_argument('directory');a=p.parse_args()
++    try: result=(create if a.action=='create' else verify)(a.directory)
++    except (ValueError,OSError,KeyError,TypeError):p.exit(2,'BACKUP_MANIFEST_REJECTED\n')
++    print(json.dumps(result))
+--- /dev/null
++++ b/scripts/check_assembly.py
+@@ -0,0 +1,63 @@
++#!/usr/bin/env python3
++"""Read-only source assembly gate. It is not a procurement acceptance shortcut."""
++from __future__ import annotations
++import argparse
++import ast
++import json
++from pathlib import Path
++
++REQUIRED = [
++ 'backend/app/__init__.py','backend/app/config.py','backend/app/core.py','backend/app/schemas.py',
++ 'backend/app/main.py','backend/app/models.py','backend/app/services.py',
++ *['backend/app/routes/'+x+'.py' for x in ('auth','admin','business','calculations','files','tasks')],
++ 'backend/app/worker.py','backend/app/healthcheck.py','backend/app/releasecheck.py',
++ 'backend/app/cli.py','backend/app/grants.py','backend/app/maintenance.py',
++ 'backend/requirements.txt','frontend/index.html','frontend/icons.js',
++ 'deploy/Dockerfile.api','deploy/Dockerfile.frontend','deploy/compose.yml','deploy/mysql-init/01-users.sh',
++]
++
++
++def inspect_assembly(root):
++    root=Path(root)
++    missing=[name for name in REQUIRED if not (root/name).is_file() or not (root/name).stat().st_size]
++    python_errors=[]
++    for p in (root/'backend').rglob('*.py'):
++        try:ast.parse(p.read_text(encoding='utf-8'))
++        except (SyntaxError,UnicodeError):python_errors.append(str(p.relative_to(root)))
++    revisions=[]
++    for p in (root/'backend').rglob('versions/*.py'):
++        if p.name=='__init__.py':continue
++        try:
++            tree=ast.parse(p.read_text());values={}
++            for n in tree.body:
++                if isinstance(n,ast.Assign):
++                    for t in n.targets:
++                        if isinstance(t,ast.Name) and t.id in {'revision','down_revision'}:values[t.id]=ast.literal_eval(n.value)
++                if isinstance(n,ast.AnnAssign) and isinstance(n.target,ast.Name) and n.target.id in {'revision','down_revision'}:
++                    values[n.target.id]=ast.literal_eval(n.value)
++            if 'revision' in values:revisions.append(values)
++        except (SyntaxError,ValueError,TypeError):python_errors.append(str(p.relative_to(root)))
++    revision_ids={v['revision'] for v in revisions}
++    parents=set()
++    for v in revisions:
++        parent=v.get('down_revision')
++        parents.update(parent if isinstance(parent,(list,tuple)) else [parent] if parent else [])
++    heads=sorted(revision_ids-parents)
++    migration_ok=bool(revisions) and parents<=revision_ids and len(revision_ids)==len(revisions) and heads==['20260917_0001']
++    alembic_config=any((root/p).is_file() for p in ('backend/alembic.ini','alembic.ini'))
++    migration_env=any((root/'backend').rglob('env.py'))
++    ok=not missing and not python_errors and migration_ok and alembic_config and migration_env
++    return {'status':'PASS' if ok else 'BLOCKED','kind':'SOURCE_ASSEMBLY_ONLY','missing':missing,
++            'python_errors':python_errors,'observed_alembic_heads':heads,
++            'inherited_application_expected_heads':['20260917_0001'],
++            'migration_graph_verified':migration_ok,'alembic_config_present':alembic_config,
++            'migration_env_present':migration_env,
++            'procurement_acceptance':False,'deployment_allowed_by_this_check_alone':False}
++
++
++if __name__=='__main__':
++    p=argparse.ArgumentParser(description=__doc__);p.add_argument('--root',type=Path,default=Path(__file__).resolve().parents[1]);p.add_argument('--strict',action='store_true');p.add_argument('--output',type=Path);a=p.parse_args()
++    result=inspect_assembly(a.root);payload=json.dumps(result,ensure_ascii=False,indent=2)
++    if a.output:a.output.write_text(payload+'\n',encoding='utf-8')
++    print(payload)
++    raise SystemExit(2 if a.strict and result['status']!='PASS' else 0)
+--- /dev/null
++++ b/scripts/deploy_control.py
+@@ -0,0 +1,373 @@
++#!/usr/bin/env python3
++"""Maintenance-owned backup, upgrade and empty-school install/restore.
++
++Only the top-level operation owns the lock. An upgrade calls create_backup with
++that owner; the backup cannot restart services or remove the durable latch.
++No Docker, SQL, filesystem or TLS success is simulated by production code.
++"""
++from __future__ import annotations
++import argparse
++from datetime import datetime, timezone
++import fcntl
++import gzip
++import json
++import os
++from pathlib import Path
++import secrets
++import shutil
++import stat
++import subprocess
++import tempfile
++
++from atomic_env import read_env, update_images, validate_image
++from backup_manifest import create as create_manifest, verify as verify_manifest, inventory
++from check_assembly import inspect_assembly
++from deployment_smoke import run_smoke
++
++WRITERS=('frontend','worker','api')
++START_ORDER=('api','worker','frontend')
++
++class ControlError(RuntimeError): pass
++class MaintenanceBusy(ControlError): pass
++
++
++def fsync_dir(path):
++    fd=os.open(path,os.O_DIRECTORY)
++    try:os.fsync(fd)
++    finally:os.close(fd)
++
++
++def write_json(path,data,mode=0o600):
++    path=Path(path);fd,name=tempfile.mkstemp(prefix='.state-',dir=path.parent)
++    try:
++        os.fchmod(fd,mode)
++        with os.fdopen(fd,'w',encoding='utf-8') as f:
++            json.dump(data,f,ensure_ascii=False,sort_keys=True);f.write('\n');f.flush();os.fsync(f.fileno())
++        os.replace(name,path);fsync_dir(path.parent)
++    finally:
++        if os.path.lexists(name):os.unlink(name)
++
++
++def safe_directory(path,mode=0o700):
++    # Check every existing ancestor, not just the final directory. Never follow a
++    # runtime/backups link into a different school's data while running as root.
++    path=Path(os.path.abspath(path))
++    for component in (*reversed(path.parents),path):
++        if os.path.lexists(component):
++            if not stat.S_ISDIR(component.lstat().st_mode):
++                raise ControlError('symbolic or non-directory path component rejected')
++        else:
++            component.mkdir(mode=mode)
++    return path
++
++
++def sync_backup_tree(root):
++    """Make copied bytes durable before marking a backup as hash-verified."""
++    for directory,dirs,files in os.walk(root,topdown=False,followlinks=False):
++        for name in files:
++            fd=os.open(Path(directory)/name,os.O_RDONLY|os.O_NOFOLLOW)
++            try:
++                info=os.fstat(fd)
++                if not stat.S_ISREG(info.st_mode) or info.st_nlink!=1:
++                    raise ControlError('unsafe backup entry')
++                os.fsync(fd)
++            finally:os.close(fd)
++        fsync_dir(directory)
++
++
++class Runner:
++    def run(self,command,*,extra_env=None,input_bytes=None,input_stream=None,output=None,timeout=180):
++        if input_stream is not None and input_bytes is not None:raise ControlError('ambiguous command input')
++        env=os.environ.copy()
++        for key in list(env):
++            if key.startswith('COMPOSE_') or key in {'ND_API_IMAGE','ND_FRONTEND_IMAGE','ND_PROJECT_NAME',
++                   'ND_BIND_IP','ND_HTTPS_PORT','ND_MYSQL_IMAGE','ND_PYTHON_IMAGE','ND_NGINX_IMAGE'}:
++                env.pop(key,None)
++        env.update(extra_env or {})
++        try:
++            result=subprocess.run(command,stdin=input_stream,input=input_bytes,stdout=output if output is not None else subprocess.PIPE,
++                                  stderr=subprocess.PIPE,env=env,timeout=timeout,check=False)
++        except (OSError,subprocess.TimeoutExpired):
++            raise ControlError('command unavailable or timed out; output suppressed') from None
++        if result.returncode:
++            raise ControlError('command failed; sensitive command output suppressed')
++        return result.stdout or b''
++
++
++class Maintenance:
++    def __init__(self,pipeline,operation):
++        self.pipeline=pipeline;self.root=pipeline.root;self.operation=operation
++        self.directory=self.root/'runtime/maintenance';self.active=self.directory/'active'
++        self.fd=None;self.done=False;self.owned=False;self.stage='acquiring'
++        self.started=datetime.now(timezone.utc).isoformat()
++    def __enter__(self):
++        safe_directory(self.root/'runtime',0o750);safe_directory(self.directory,0o755)
++        # App UID 10001 can inspect the directory but must not be able to modify it.
++        if self.directory.stat().st_uid!=os.geteuid():
++            raise ControlError('maintenance directory must be owned by deployment administrator')
++        os.chmod(self.directory,0o755)
++        lock=self.root/'runtime/maintenance.lock'
++        self.fd=os.open(lock,os.O_RDWR|os.O_CREAT|os.O_NOFOLLOW,0o600)
++        lock_info=os.fstat(self.fd)
++        if not stat.S_ISREG(lock_info.st_mode) or lock_info.st_nlink!=1 or lock_info.st_uid!=os.geteuid():
++            os.close(self.fd);self.fd=None;raise ControlError('maintenance lock must be regular')
++        try:fcntl.flock(self.fd,fcntl.LOCK_EX|fcntl.LOCK_NB)
++        except BlockingIOError:
++            os.close(self.fd);self.fd=None;raise MaintenanceBusy('another maintenance operation is running') from None
++        if os.path.lexists(self.active):
++            os.close(self.fd);self.fd=None
++            raise MaintenanceBusy('unresolved maintenance latch exists; manual recovery is required')
++        self.owned=True
++        try:self.mark('entered')
++        except Exception:
++            self.__exit__(*__import__('sys').exc_info());raise
++        return self
++    def mark(self,stage,**diagnostics):
++        if not self.owned or self.fd is None or self.done:raise ControlError('operation does not own maintenance')
++        self.stage=stage
++        write_json(self.active,{'operation':self.operation,'owner_pid':os.getpid(),'started_at':self.started,
++                               'stage':stage,'accepting_requests':False,**diagnostics},0o644)
++    def success(self):
++        self.mark('verified_ready_to_open')
++        logdir=safe_directory(self.root/'runtime/logs',0o700)
++        write_json(logdir/('maintenance-'+secrets.token_hex(8)+'.json'),{
++            'operation':self.operation,'status':'VERIFIED','started_at':self.started,
++            'finished_at':datetime.now(timezone.utc).isoformat(), 'scope':'deployment smoke, not procurement acceptance'})
++        self.active.unlink();fsync_dir(self.directory);self.done=True
++    def __exit__(self,exc_type,exc,tb):
++        try:
++            if self.owned and not self.done:
++                try:self.mark('FAILED_AT_'+self.stage)
++                except Exception:pass
++                # No trap or finally path is allowed to restart business services.
++                try:
++                    self.pipeline.stop_writers()
++                    self.mark(self.stage,stop_confirmed=True,manual_isolation_required=False)
++                except Exception:
++                    # A dead Docker daemon is not proof that its containers stopped.
++                    try:self.mark(self.stage,stop_confirmed=False,manual_isolation_required=True)
++                    except Exception:pass
++        finally:
++            if self.fd is not None:
++                os.close(self.fd);self.fd=None
++        return False
++
++
++class Pipeline:
++    def __init__(self,root,runner=None):
++        self.root=Path(root).resolve();self.runner=runner or Runner();self.config={}
++        self.compose=['docker','compose','--env-file',str(self.root/'deploy/.env'),'-f',str(self.root/'deploy/compose.yml')]
++    def dc(self,*args,**kwargs):return self.runner.run(self.compose+list(args),**kwargs)
++    def preflight(self,operation):
++        # Never stop a school before detecting the current missing-source baseline.
++        assembly=inspect_assembly(self.root)
++        if assembly['status']!='PASS':raise ControlError('source assembly incomplete; run scripts/check_assembly.py for missing files')
++        env=self.root/'deploy/.env'
++        if env.is_symlink() or not env.is_file() or env.stat().st_nlink!=1:raise ControlError('private deployment environment file missing')
++        self.config=read_env(env)
++        for key in ('ND_API_IMAGE','ND_FRONTEND_IMAGE'):
++            if operation in {'install','restore'} or self.config.get(key):
++                validate_image(self.config.get(key,''))
++        origin=self.config.get('ND_PUBLIC_ORIGIN','')
++        from urllib.parse import urlsplit
++        u=urlsplit(origin)
++        if u.scheme!='https' or not u.hostname or u.username or u.password or u.path not in {'','/'} or u.query or u.fragment:
++            raise ControlError('ND_PUBLIC_ORIGIN must be configured before maintenance')
++        for name in ('tls/fullchain.pem','tls/privkey.pem','secrets/root.cnf','secrets/runtime_url','secrets/migration_url'):
++            p=self.root/'deploy'/name
++            if p.is_symlink() or not p.is_file() or not p.stat().st_size:raise ControlError('deployment TLS/secrets are not complete')
++        self.runner.run(['openssl','x509','-in',str(self.root/'deploy/tls/fullchain.pem'),'-noout','-checkend','86400'])
++        if operation in {'backup','upgrade'} and not (self.root/'runtime/files').is_dir():raise ControlError('existing private file store missing')
++        safe_directory(self.root/'runtime',0o750)
++        for p in ('backups','logs'):safe_directory(self.root/'runtime'/p,0o700)
++        self.dc('config','--quiet')
++    def running_writers(self):
++        names=self.dc('ps','--status','running','--services').decode().split()
++        return [s for s in START_ORDER if s in names]
++    def stop_writers(self):
++        self.dc('stop','-t','45',*WRITERS,timeout=180)
++        if self.running_writers():raise ControlError('one or more business services did not stop')
++    def resume(self,services):
++        if services:self.dc('up','-d','--no-deps','--no-build','--pull','never','--wait','--wait-timeout','120',*services,timeout=180)
++    def resolve_images(self,api,frontend):
++        expected={}
++        for name,ref in (('api',api),('frontend',frontend)):
++            validate_image(ref)
++            result=json.loads(self.runner.run(['docker','image','inspect',ref]))
++            if len(result)!=1 or not isinstance(result[0].get('Id'),str) or not result[0]['Id'].startswith('sha256:'):
++                raise ControlError('requested image could not be resolved')
++            expected[name]=result[0]['Id']
++        expected['worker']=expected['api']
++        return expected
++    def verify_images(self,expected):
++        for service in START_ORDER:
++            ids=self.dc('ps','-q',service).decode().split()
++            if not ids:raise ControlError('new service container missing')
++            containers=json.loads(self.runner.run(['docker','inspect',*ids]))
++            if len(containers)!=len(ids):raise ControlError('container inspection incomplete')
++            for container in containers:
++                if container.get('Image')!=expected[service] or container.get('State',{}).get('Running') is not True:
++                    raise ControlError('running container does not match requested image')
++                health=container['State'].get('Health',{}).get('Status')
++                if (service in {'api','worker'} and health!='healthy') or health in {'unhealthy','starting'}:
++                    raise ControlError('new service is not healthy')
++    def migrate(self,owner):
++        owner.mark('release_check')
++        self.dc('run','--rm','--no-deps','--pull','never','migrate','python','-m','app.releasecheck')
++        owner.mark('schema_migration')
++        self.dc('run','--rm','--no-deps','--pull','never','migrate','alembic','upgrade','head',timeout=900)
++    def grants_and_check(self,owner):
++        owner.mark('database_grants')
++        sql=self.dc('run','--rm','--no-deps','--pull','never','migrate','python','-c','from app.grants import sql; print(sql())')
++        self.dc('exec','-T','db','mysql','--defaults-extra-file=/run/secrets/root_cnf',input_bytes=sql)
++        owner.mark('data_consistency_check')
++        self.dc('run','--rm','--no-deps','--pull','never','migrate','python','-m','app.cli','check')
++    def smoke(self):
++        ca=self.config.get('ND_TLS_CA_FILE') or None
++        if ca:
++            ca=Path(ca);ca=ca if ca.is_absolute() else self.root/ca
++        return run_smoke(self.config['ND_PUBLIC_ORIGIN'],ca)
++    def activate(self,owner,expected):
++        owner.mark('starting_new_services')
++        self.resume(START_ORDER)
++        owner.mark('verify_running_images')
++        self.verify_images(expected)
++        owner.mark('https_readiness_and_assets_smoke')
++        result=self.smoke()
++        logdir=safe_directory(self.root/'runtime/logs',0o700)
++        write_json(logdir/'last-deployment-smoke.json',result)
++        owner.mark('final_image_recheck')
++        self.verify_images(expected)
++        owner.success() # Removing the durable latch is the last activation step.
++    def create_backup(self,owner):
++        """Called by either standalone backup or upgrade; never owns/relinquishes the lock."""
++        if not owner.owned or owner.done or owner.pipeline is not self:raise ControlError('backup requires the current maintenance owner')
++        if self.running_writers():raise ControlError('cannot snapshot while business services are running')
++        owner.mark('database_and_file_backup')
++        base=safe_directory(self.root/'runtime/backups',0o700)
++        stamp=datetime.now(timezone.utc).strftime('%Y%m%dT%H%M%SZ')+'-'+secrets.token_hex(4)
++        stage=Path(tempfile.mkdtemp(prefix='.partial-'+stamp+'-',dir=base));os.chmod(stage,0o700)
++        # A dump command failure cannot be hidden by a successful gzip process.
++        raw=stage/'database.sql'
++        with raw.open('xb') as output:
++            os.chmod(raw,0o600)
++            self.dc('exec','-T','db','mysqldump','--defaults-extra-file=/run/secrets/root_cnf',
++                    '--single-transaction','--routines','--triggers','--events','--hex-blob',
++                    '--no-tablespaces','--set-gtid-purged=OFF','nondegree',output=output,timeout=900)
++            output.flush();os.fsync(output.fileno())
++        if raw.stat().st_size==0:raise ControlError('empty database dump')
++        with raw.open('rb') as source,gzip.open(stage/'database.sql.gz','wb') as target:shutil.copyfileobj(source,target,1024*1024)
++        raw.unlink()
++        with gzip.open(stage/'database.sql.gz','rb') as check:
++            while check.read(1024*1024):pass
++        source=self.root/'runtime/files'
++        inventory(source) # Reject links/special files before copying from the stopped store.
++        shutil.copytree(source,stage/'files',copy_function=shutil.copy2)
++        shutil.copy2(self.root/'deploy/.env',stage/'school-config.env')
++        write_json(stage/'backup-metadata.json',{'operation':owner.operation,'time':datetime.now(timezone.utc).isoformat(),
++                   'source_database':'nondegree','mode':'stopped-writers','contains_secrets': 'school-config.env is private',
++                   'restore_policy':'empty school instance only'})
++        for d,dirs,files in os.walk(stage):
++            os.chmod(d,0o700)
++            for name in files:os.chmod(Path(d)/name,0o600)
++        owner.mark('backup_manifest_verification')
++        result=create_manifest(stage);verify_manifest(stage)
++        sync_backup_tree(stage)
++        dest=base/stamp;os.rename(stage,dest);fsync_dir(base)
++        # Operational receipt is outside the DB snapshot; no post-dump application writes.
++        write_json(base/(stamp+'.receipt.json'),{'backup':stamp,**result,'status':'HASH_VERIFIED_NOT_RESTORE_TESTED'})
++        return dest
++    def run_backup(self):
++        self.preflight('backup');before=self.running_writers()
++        with Maintenance(self,'backup') as owner:
++            owner.mark('stopping_writers');self.stop_writers()
++            backup=self.create_backup(owner)
++            owner.mark('restoring_previously_running_services');self.resume(before)
++            if self.running_writers()!=before:raise ControlError('running service set changed')
++            owner.success()
++        return {'status':'BACKUP_HASH_VERIFIED','backup':str(backup),'restore_tested':False}
++    def run_upgrade(self,api,frontend):
++        self.preflight('upgrade');expected=self.resolve_images(api,frontend)
++        with Maintenance(self,'upgrade') as owner:
++            owner.mark('stopping_writers');self.stop_writers()
++            backup=self.create_backup(owner)
++            owner.mark('atomic_image_configuration')
++            update_images(self.root/'deploy/.env',api,frontend)
++            self.migrate(owner);self.grants_and_check(owner);self.activate(owner,expected)
++        return {'status':'UPGRADE_SMOKE_VERIFIED','backup':str(backup),'business_e2e':False,'procurement_acceptance':False}
++    def empty_school(self):
++        for directory in ('runtime/mysql','runtime/files'):
++            p=self.root/directory
++            if p.is_symlink() or (p.exists() and (not p.is_dir() or any(p.iterdir()))):
++                raise ControlError('target school is not empty; overwriting is forbidden')
++        if self.dc('ps','-aq').strip():raise ControlError('existing Compose project containers found; use an independent empty instance')
++    def _prepare_private_files(self):
++        p=safe_directory(self.root/'runtime/files',0o700)
++        for d,dirs,files in os.walk(p):
++            os.chown(d,10001,10001);os.chmod(d,0o700)
++            for name in files:os.chown(Path(d)/name,10001,10001);os.chmod(Path(d)/name,0o600)
++        for p in (self.root/'deploy/tls',self.root/'deploy/tls/fullchain.pem',self.root/'deploy/tls/privkey.pem'):
++            os.chown(p,10001,10001);os.chmod(p,0o750 if p.is_dir() else 0o640)
++    def run_install(self):
++        self.preflight('install');self.empty_school()
++        expected=self.resolve_images(self.config['ND_API_IMAGE'],self.config['ND_FRONTEND_IMAGE'])
++        with Maintenance(self,'install') as owner:
++            self._prepare_private_files();owner.mark('starting_empty_database')
++            self.dc('up','-d','--no-build','--pull','never','--wait','db')
++            self.migrate(owner);owner.mark('empty_business_initialization')
++            self.dc('run','--rm','--no-deps','--pull','never','migrate','python','-m','app.cli','init','--password-file','/run/secrets/admin_password')
++            self.grants_and_check(owner);self.activate(owner,expected)
++        return {'status':'EMPTY_SCHOOL_INITIALIZED','procurement_acceptance':False}
++    def run_restore(self,backup,username='admin'):
++        backup=Path(backup)
++        verify_manifest(backup)
++        self.preflight('restore');self.empty_school()
++        expected=self.resolve_images(self.config['ND_API_IMAGE'],self.config['ND_FRONTEND_IMAGE'])
++        with Maintenance(self,'restore') as owner:
++            self._prepare_private_files();owner.mark('starting_empty_database')
++            self.dc('up','-d','--no-build','--pull','never','--wait','db')
++            count=self.dc('exec','-T','db','mysql','--defaults-extra-file=/run/secrets/root_cnf','-N','-e',
++                    "SELECT COUNT(*) FROM information_schema.tables WHERE table_schema='nondegree';").strip()
++            if count!=b'0':raise ControlError('destination database already has tables; restore refused')
++            owner.mark('restoring_database')
++            # Named temporary SQL is private and removed even if restore fails.
++            with tempfile.TemporaryFile(dir=self.root/'runtime',mode='w+b') as raw:
++                with gzip.open(backup/'database.sql.gz','rb') as source:shutil.copyfileobj(source,raw,1024*1024)
++                raw.flush();raw.seek(0)
++                self._restore_sql_stream(raw)
++            owner.mark('restoring_original_files')
++            shutil.copytree(backup/'files',self.root/'runtime/files',dirs_exist_ok=True)
++            self._prepare_private_files()
++            if inventory(self.root/'runtime/files')!=inventory(backup/'files'):
++                raise ControlError('restored attachment hashes do not match backup')
++            sync_backup_tree(self.root/'runtime/files')
++            self.migrate(owner);owner.mark('revoking_restored_sessions')
++            self.dc('run','--rm','--no-deps','--pull','never','migrate','python','-m','app.maintenance','sanitize-restore',
++                    '--username',username,'--password-file','/run/secrets/admin_password')
++            self.grants_and_check(owner);self.activate(owner,expected)
++        return {'status':'EMPTY_SCHOOL_RESTORE_SMOKE_VERIFIED','business_reconciliation_required':True}
++    def _restore_sql_stream(self,stream):
++        # Streaming avoids loading a school database dump into memory.
++        self.dc('exec','-T','db','mysql','--defaults-extra-file=/run/secrets/root_cnf','nondegree',input_stream=stream,timeout=900)
++
++
++def main():
++    p=argparse.ArgumentParser(description=__doc__)
++    sub=p.add_subparsers(dest='operation',required=True)
++    b=sub.add_parser('backup');b.add_argument('--allow-maintenance-window',action='store_true',required=True)
++    u=sub.add_parser('upgrade');u.add_argument('--allow-maintenance-window',action='store_true',required=True);u.add_argument('api');u.add_argument('frontend')
++    i=sub.add_parser('install');i.add_argument('--initialize-new-school',action='store_true',required=True)
++    r=sub.add_parser('restore');r.add_argument('--into-empty-school',action='store_true',required=True);r.add_argument('backup');r.add_argument('username',nargs='?',default='admin')
++    a=p.parse_args()
++    if os.geteuid()!=0:p.exit(2,'BLOCKED: run with administrator approval via sudo.\n')
++    pipeline=Pipeline(Path(__file__).resolve().parents[1])
++    try:
++        if a.operation=='backup':result=pipeline.run_backup()
++        elif a.operation=='upgrade':result=pipeline.run_upgrade(a.api,a.frontend)
++        elif a.operation=='install':result=pipeline.run_install()
++        else:result=pipeline.run_restore(a.backup,a.username)
++    except (ControlError,ValueError,OSError):
++        p.exit(2,'BLOCKED: operation failed. Inspect source assembly and runtime/maintenance/active; writes are not automatically reopened.\n')
++    print(json.dumps(result,ensure_ascii=False))
++
++if __name__=='__main__':main()
+--- /dev/null
++++ b/scripts/deployment_smoke.py
+@@ -0,0 +1,65 @@
++#!/usr/bin/env python3
++"""HTTPS/asset/readiness smoke while the maintenance latch is still active.
++This does not replace authenticated business-flow or school browser acceptance.
++"""
++from __future__ import annotations
++from html.parser import HTMLParser
++import json
++from pathlib import Path
++import re
++import ssl
++from urllib.parse import urljoin, urlsplit
++from urllib.request import Request, build_opener, HTTPSHandler, HTTPRedirectHandler
++from urllib.error import HTTPError
++
++class NoRedirect(HTTPRedirectHandler):
++    def redirect_request(self,req,fp,code,msg,headers,newurl):return None
++
++class Assets(HTMLParser):
++    def __init__(self):super().__init__();self.paths=[]
++    def handle_starttag(self,tag,attrs):
++        a=dict(attrs)
++        if tag=='script' and a.get('src'):self.paths.append(a['src'])
++        if tag=='link' and a.get('rel')=='stylesheet' and a.get('href'):self.paths.append(a['href'])
++
++
++def run_smoke(origin,ca_file=None):
++    base=urlsplit(origin)
++    if base.scheme!='https' or not base.hostname or base.username or base.password or base.query or base.fragment or base.path not in {'','/'}:
++        raise ValueError('ND_PUBLIC_ORIGIN must be an HTTPS origin')
++    context=ssl.create_default_context(cafile=str(ca_file) if ca_file else None)
++    opener=build_opener(HTTPSHandler(context=context),NoRedirect())
++    def get(path):
++        url=urljoin(origin.rstrip('/')+'/',path)
++        target=urlsplit(url)
++        if (target.scheme,target.netloc)!=(base.scheme,base.netloc):raise ValueError('cross-origin asset rejected')
++        try:
++            with opener.open(Request(url,headers={'Cache-Control':'no-cache'}),timeout=10) as r:
++                data=r.read(2*1024*1024+1)
++                if len(data)>2*1024*1024:raise ValueError('smoke response exceeds limit')
++                return r.status,data
++        except HTTPError as e:
++            return e.code,e.read(8192)
++    status,html=get('/')
++    if status!=200:raise ValueError('frontend is not ready')
++    parser=Assets();parser.feed(html.decode('utf-8'))
++    if not parser.paths or not any(urlsplit(x).path.endswith('.js') for x in parser.paths):raise ValueError('frontend application entry missing')
++    seen=set();queue=[urljoin(origin+'/',p) for p in parser.paths]
++    while queue:
++        path=queue.pop(0)
++        if path in seen:continue
++        seen.add(path)
++        if len(seen)>80:raise ValueError('too many smoke assets')
++        status,body=get(path)
++        if status!=200 or not body or re.match(br'\s*<(?:!doctype\s+html|html|head|body)(?:\s|>)',body,re.I):raise ValueError('asset missing or HTML fallback')
++        if urlsplit(path).path.endswith('.js'):
++            for rel in re.findall(r'''(?:from\s*|import\s*)['"](\.{1,2}/[^'"]+)['"]''',body.decode('utf-8')):
++                queue.append(urljoin(path,rel))
++    status,data=get('/api/health');health=json.loads(data)
++    if status!=200 or health.get('status')!='ok' or health.get('accepting_requests') is not False or health.get('maintenance')!='ACTIVE':
++        raise ValueError('readiness or maintenance contract mismatch')
++    for section in ('database','migration','initialization'):
++        if health.get(section,{}).get('status')!='ok':raise ValueError('not initialized')
++    status,data=get('/api/records')
++    if status!=503 or json.loads(data).get('code')!='MAINTENANCE':raise ValueError('public business request is not blocked during maintenance')
++    return {'status':'PASS','scope':'HTTPS_ASSETS_AND_READINESS_ONLY','asset_count':len(seen),'business_e2e':False}
+--- a/scripts/install.sh
++++ b/scripts/install.sh
+@@ -1,22 +1,4 @@
+ #!/usr/bin/env bash
+-# First installation only. Requires prebuilt/imported images and a valid school certificate.
+-source "$(dirname "$0")/common.sh"
+-require_config
+-[[ "${1:-}" == '--initialize-new-school' ]] || { echo '首次安装必须明确传入 --initialize-new-school；本脚本不升级已有学校库。'; exit 2; }
+-[[ $EUID -eq 0 ]] || { echo '请用 sudo 执行，以正确配置私有文件目录。'; exit 2; }
+-if [[ -d runtime/mysql/mysql ]]; then echo '已有 MySQL 数据目录：拒绝初始化，请走升级或恢复流程。'; exit 2; fi
+-for f in deploy/tls/fullchain.pem deploy/tls/privkey.pem; do test -s "$f" || { echo "缺少学校 HTTPS 证书：$f"; exit 2; }; done
+-openssl x509 -in deploy/tls/fullchain.pem -noout -checkend 86400 >/dev/null
+-chmod 750 deploy/tls; chown 10001:10001 deploy/tls deploy/tls/*.pem
+-chmod 640 deploy/tls/*.pem
+-chown 10001:10001 runtime/files; chmod 700 runtime/files
+-"${DC[@]}" config --quiet
+-# Runtime images must already have been built and security-reviewed; never silently build on the school server.
+-"${DC[@]}" up -d --no-build --pull never --wait db
+-"${DC[@]}" run --rm --no-deps --pull never migrate python -m app.releasecheck
+-"${DC[@]}" run --rm --no-deps --pull never migrate alembic upgrade head
+-"${DC[@]}" run --rm --no-deps --pull never migrate python -m app.cli init --password-file /run/secrets/admin_password
+-"${DC[@]}" run --rm --no-deps --pull never migrate python -c 'from app.grants import sql; print(sql())' | "${DC[@]}" exec -T db mysql --defaults-extra-file=/run/secrets/root_cnf
+-"${DC[@]}" up -d --no-build --pull never --wait api worker frontend
+-"${DC[@]}" exec -T api python -m app.cli check
+-printf '\n安装命令完成，不等于采购验收通过。admin 临时密码位于 deploy/secrets/admin_password。首次登录必须修改。\n请继续按 acceptance/现场验收.md 执行真实环境验证。\n'
++set -Eeuo pipefail
++ROOT="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd -P)"
++exec python3 "$ROOT/scripts/deploy_control.py" install "$@"
+--- a/scripts/restore.sh
++++ b/scripts/restore.sh
+@@ -1,26 +1,4 @@
+ #!/usr/bin/env bash
+-# NEVER restores over an existing school. Run on a separate NEW configured project/VM.
+-source "$(dirname "$0")/common.sh"
+-require_config
+-[[ "${1:-}" == '--into-empty-school' && -n "${2:-}" ]] || { echo '用法：sudo bash scripts/restore.sh --into-empty-school /绝对路径/备份目录 [原管理员账号]'; exit 2; }
+-[[ $EUID -eq 0 ]] || { echo '请使用 sudo，以正确恢复附件权限。'; exit 2; }
+-backup=$(realpath -- "$2")
+-python3 scripts/backup_manifest.py verify "$backup"
+-[[ ! -d runtime/mysql/mysql ]] || { echo '发现已有 MySQL 数据目录，拒绝覆盖。请换独立空目录 / 虚拟机。'; exit 2; }
+-[[ ! -n $(find runtime/files -mindepth 1 -maxdepth 1 -print -quit) ]] || { echo '目标附件目录不为空，拒绝覆盖。'; exit 2; }
+-for f in deploy/tls/fullchain.pem deploy/tls/privkey.pem; do test -s "$f" || { echo "缺少学校证书 $f"; exit 2; }; done
+-chown 10001:10001 deploy/tls deploy/tls/*.pem; chmod 750 deploy/tls; chmod 640 deploy/tls/*.pem
+-"${DC[@]}" up -d --no-build --pull never --wait db
+-count=$("${DC[@]}" exec -T db mysql --defaults-extra-file=/run/secrets/root_cnf -N -e "SELECT COUNT(*) FROM information_schema.tables WHERE table_schema='nondegree';")
+-[[ "$count" == 0 ]] || { echo '目标库已有表，拒绝恢复。'; exit 2; }
+-gzip -dc "$backup/database.sql.gz" | "${DC[@]}" exec -T db mysql --defaults-extra-file=/run/secrets/root_cnf nondegree
+-cp -a "$backup/files/." runtime/files/
+-chown -R 10001:10001 runtime/files; chmod 700 runtime/files
+-find runtime/files -type f -exec chmod 600 {} +
+-"${DC[@]}" run --rm --no-deps --pull never migrate python -m app.releasecheck
+-"${DC[@]}" run --rm --no-deps --pull never migrate alembic upgrade head
+-"${DC[@]}" run --rm --no-deps --pull never migrate python -m app.maintenance sanitize-restore --username "${3:-admin}" --password-file /run/secrets/admin_password
+-"${DC[@]}" run --rm --no-deps --pull never migrate python -c 'from app.grants import sql; print(sql())' | "${DC[@]}" exec -T db mysql --defaults-extra-file=/run/secrets/root_cnf
+-"${DC[@]}" up -d --no-build --pull never --wait api worker frontend
+-"${DC[@]}" exec -T api python -m app.cli check
+-printf '恢复命令完成。请继续核对教师数、业务数、附件 SHA256、归档校验码和真实登录；不要将原学校地址切到这里，直到人工确认。\n'
++set -Eeuo pipefail
++ROOT="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd -P)"
++exec python3 "$ROOT/scripts/deploy_control.py" restore "$@"
+--- /dev/null
++++ b/scripts/run_p0_tests.sh
+@@ -0,0 +1,16 @@
++#!/usr/bin/env bash
++# No production database, Docker or external school API is contacted by these tests.
++set -Eeuo pipefail
++ROOT="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd -P)"
++cd "$ROOT"
++command -v node >/dev/null
++command -v openssl >/dev/null
++mkdir -p evidence/current
++python3 scripts/check_assembly.py --output evidence/current/source_assembly.json > /dev/null
++python3 -m pytest -q --junitxml=evidence/current/pytest.xml 2>&1 | tee evidence/current/pytest.log
++node --test tests/js/scope.test.mjs 2>&1 | tee evidence/current/node-tests.tap
++python3 -m compileall -q backend scripts
++for script in scripts/*.sh; do bash -n "$script"; done
++node --input-type=module --check < frontend/app.js
++node --input-type=module --check < frontend/scope.js
++printf '\n模块级测试完成；完整工程、真实MySQL、Docker、四角色浏览器和学校采购验收仍须另行验证。\n'
+--- a/scripts/upgrade.sh
++++ b/scripts/upgrade.sh
+@@ -1,25 +1,4 @@
+ #!/usr/bin/env bash
+-# Operate in the existing installation, preserving deploy/.env, secrets, TLS and runtime.
+-source "$(dirname "$0")/common.sh"
+-require_config
+-[[ "${1:-}" == '--allow-maintenance-window' && -n "${2:-}" && -n "${3:-}" ]] || { echo '用法：sudo bash scripts/upgrade.sh --allow-maintenance-window 已核验的API镜像 已核验的前端镜像'; exit 2; }
+-new_api=$2; new_front=$3
+-[[ "$new_api" =~ ^[a-zA-Z0-9./:@_-]+$ && "$new_front" =~ ^[a-zA-Z0-9./:@_-]+$ ]] || exit 2
+-docker image inspect "$new_api" >/dev/null; docker image inspect "$new_front" >/dev/null
+-bash scripts/backup.sh --allow-maintenance-window
+-mkdir -p runtime/logs
+-cp deploy/.env "runtime/logs/pre-upgrade-$(date -u +%Y%m%dT%H%M%SZ).env"; chmod 600 runtime/logs/*.env
+-"${DC[@]}" stop frontend worker api
+-# A failed migration deliberately leaves business services stopped; never auto-rollback an unknown DB state.
+-ND_API_IMAGE="$new_api" ND_FRONTEND_IMAGE="$new_front" "${DC[@]}" run --rm --no-deps --pull never migrate python -m app.releasecheck
+-ND_API_IMAGE="$new_api" ND_FRONTEND_IMAGE="$new_front" "${DC[@]}" run --rm --no-deps --pull never migrate alembic upgrade head
+-ND_API_IMAGE="$new_api" ND_FRONTEND_IMAGE="$new_front" "${DC[@]}" run --rm --no-deps --pull never migrate python -c 'from app.grants import sql; print(sql())' | "${DC[@]}" exec -T db mysql --defaults-extra-file=/run/secrets/root_cnf
+-python3 - "$new_api" "$new_front" <<'PY'
+-from pathlib import Path
+-import sys
+-p=Path('deploy/.env');s=p.read_text().splitlines()
+-values={'ND_API_IMAGE':sys.argv[1],'ND_FRONTEND_IMAGE':sys.argv[2]}
+-p.write_text('\n'.join(k.split('=',1)[0]+'='+values[k.split('=',1)[0]] if k.split('=',1)[0] in values else k for k in s)+'\n');p.chmod(0o600)
+-PY
+-"${DC[@]}" up -d --no-build --pull never --wait api worker frontend
+-echo '升级启动完成；需要执行升级后业务抽查。失败时按备份恢复到独立空实例，不直接降级已迁移的业务库。'
++set -Eeuo pipefail
++ROOT="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd -P)"
++exec python3 "$ROOT/scripts/deploy_control.py" upgrade "$@"
+--- /dev/null
++++ b/tests/conftest.py
+@@ -0,0 +1,66 @@
++"""Isolated test fixtures only. Not the missing school authentication layer."""
++from __future__ import annotations
++from datetime import date
++from pathlib import Path
++import sys
++from types import SimpleNamespace
++import pytest
++from sqlalchemy import create_engine,event,select
++from sqlalchemy.orm import Session,sessionmaker
++from fastapi import HTTPException
++ROOT=Path(__file__).resolve().parents[1]
++sys.path.insert(0,str(ROOT/'backend'));sys.path.insert(0,str(ROOT/'scripts'))
++from app import models as m
++
++class FixtureActor:
++    def __init__(self,ids=('t1','t2','t4'),org_ids=('school','c1','d1')):
++        self.id='admin';self.ids=ids;self.org_ids=org_ids
++    def scope(self,column):return column.in_(self.ids)
++    def check_teacher(self,db,teacher_id,active=True):
++        u=db.get(m.User,teacher_id)
++        if teacher_id not in self.ids or u is None or (active and not u.active):raise HTTPException(403,'fixture scope denied')
++
++@pytest.fixture
++def actor():return FixtureActor()
++
++@pytest.fixture
++def engine(tmp_path):
++    e=create_engine('sqlite:///'+str(tmp_path/'isolated.sqlite'),connect_args={'check_same_thread':False})
++    @event.listens_for(e,'connect')
++    def foreign_keys(connection,_):connection.execute('PRAGMA foreign_keys=ON')
++    m.Base.metadata.create_all(e) # Test database only; never used by production code.
++    with e.begin() as c:
++        c.exec_driver_sql('CREATE TABLE alembic_version (version_num VARCHAR(32) NOT NULL)')
++        c.exec_driver_sql("INSERT INTO alembic_version VALUES ('20260917_0001')")
++    with Session(e) as db:
++        for o in [('school','学校','school',None),('c1','学院一','college','school'),('c2','学院二','college','school'),('d1','教研室一','dept','c1'),('d2','教研室二','dept','c2')]:
++            db.add(m.Org(id=o[0],code=o[0],name=o[1],kind=o[2],parent_id=o[3]));db.flush()
++        for k in ('teacher','dept','college','school'):
++            db.add(m.Role(id='role-'+k,code=k,name=k,kind=k,permissions=['portal.read']))
++        db.flush()
++        for ident,org,role in [('admin','school','school'),('t1','d1','teacher'),('t2','d1','teacher'),('t3','d2','teacher'),('t4','d1','teacher')]:
++            db.add(m.User(id=ident,username=ident,name='隔离样本'+ident,staff_no=ident if role=='teacher' else None,
++                          org_id=org,role_id='role-'+role,password_hash='NOT_A_REAL_LOGIN_CREDENTIAL',must_change_password=True))
++        db.add(m.Period(id='p',name='2026隔离周期',start_date=date(2026,1,1),end_date=date(2026,12,31)))
++        db.add(m.Period(id='old',name='2025隔离周期',start_date=date(2025,1,1),end_date=date(2025,12,31)))
++        for key,value in [('branding',{'school_name':'隔离样本学校'}),('metrics',{'income_note':'样本收入口径','participants_note':'样本人次口径'}),('qualification',{'expiry_days':30,'categories':['样本类别']})]:
++            db.add(m.Setting(key=key,value=value))
++        db.add(m.Guard(key='calculations',version=1));db.flush()
++        db.add(m.Rule(id='r',kind='assessment',name='隔离规则',version_no=1,period_id='p',config={'components':[]},fingerprint='f'*64,created_by='admin',reason='隔离测试'))
++        db.flush()
++        for ident,tid,project,course,day,income,state in [('r1','t1','P1','C1',1,100,'VALID'),('r2','t2','P2','C2',2,200,'VALID'),('r3','t1','P1','C3',3,50,'VALID'),('r4','t3','P1','C1',1,999,'VALID'),('r5','t1','P1','C1',1,999,'VOID')]:
++            db.add(m.TrainingRecord(id=ident,external_key=ident,teacher_id=tid,event_date=date(2026,9,day),project_code=project,
++               project='项目'+project,course_code=course,course='课程'+course,class_code=ident,class_name='班级'+ident,hours=2,participants=10,income=income,state=state))
++        for ident,tid,state,returned in [('a1','t1','TEACHER',True),('a2','t2','ARCHIVED',False),('a3','t3','TEACHER',False),('a4','t4','TEACHER',False)]:
++            db.add(m.Assessment(id=ident,teacher_id=tid,period_id='p',rule_id='r',score=85,detail=[],source_snapshot={'immutable':'sample'},state=state,returned=returned,
++                archive={'frozen':'sample'} if state=='ARCHIVED' else None,archive_sha256='a'*64 if state=='ARCHIVED' else None))
++        db.commit()
++    yield e
++    e.dispose()
++
++@pytest.fixture
++def db(engine):
++    with Session(engine) as s:yield s
++
++@pytest.fixture
++def cfg():return SimpleNamespace(env='test',secure_cookie=False)
+--- /dev/null
++++ b/tests/js/scope.test.mjs
+@@ -0,0 +1,74 @@
++import test from 'node:test';
++import assert from 'node:assert/strict';
++import {readFileSync} from 'node:fs';
++import vm from 'node:vm';
++import {businessFilters,pageFilters,drillFilters,navigationHash,restoreNavigation,selectedPeriod} from '../../frontend/scope.js';
++const titles={home:'首页',cockpit:'驾驶舱',records:'记录',assessment:'考核',organization:'组织',points:'积分'};
++const filters={project_code:'P1',course_code:'C1',start:'2026-09-01',end:'2026-09-30',org_id:'c1',teacher_id:'t1'};
++
++test('all approved scope keys survive a records drill',()=>{
++  const result=drillFilters('records',filters,{org_id:'d1'});
++  assert.deepEqual(result,{...filters,org_id:'d1'});
++});
++test('assessment drill carries business scope marker',()=>{
++  assert.deepEqual(drillFilters('assessment',filters,{state:'TEACHER'}),{...filters,state:'TEACHER',business_scope:'true'});
++});
++test('workflow-only flags never leak into record SQL filters',()=>{
++  assert.deepEqual(pageFilters('records',{...filters,state:'TEACHER',returned:'true',business_scope:'true'}),filters);
++});
++test('URL refresh/back restores exactly the applied context',()=>{
++  const hash=navigationHash('assessment',{...filters,returned:'true',business_scope:'true'},'p');
++  assert.deepEqual(restoreNavigation(hash,titles),{page:'assessment',filter:{...filters,returned:'true',business_scope:'true'},periodId:'p'});
++});
++test('selecting all periods really clears the prior period',()=>{
++  assert.equal(selectedPeriod({value:''},'old-period'),'');
++  assert.equal(selectedPeriod(null,'old-period'),'old-period');
++});
++test('duplicate URL scope is rejected rather than widened',()=>{
++  assert.throws(()=>restoreNavigation('#records?org_id=a&org_id=b',titles));
++});
++test('non-business pages do not inherit workflow flags or business IDs',()=>{
++  assert.deepEqual(pageFilters('points',{...filters,state:'TEACHER'}),{teacher_id:'t1',org_id:'c1'});
++});
++test('unknown and prototype-like page names never become valid routes',()=>{
++  assert.equal(restoreNavigation('#__proto__?org_id=x',titles).page,'home');
++});
++test('malformed values are rejected',()=>{
++  assert.throws(()=>businessFilters({q:'x'.repeat(101)}));
++  assert.throws(()=>businessFilters({org_id:['x']}));
++});
++const source=readFileSync(new URL('../../frontend/app.js',import.meta.url),'utf8');
++function actualNavigationContext(){
++  const context={titles,page:'cockpit',filter:{...filters},periodId:'p',tablePage:2,location:{hash:'#cockpit',pathname:'/',search:''},
++    businessFilters,pageFilters,drillFilters,navigationHash,restoreNavigation,selectedPeriod,
++    $:()=>null,render:()=>{},history:{replaceState(...args){context.location.hash=args[2].slice(args[2].indexOf('#'));}}};
++  vm.createContext(context);
++  for(const name of ['syncLocation','nav','scopeNav']){
++    vm.runInContext(source.split('\n').find(x=>x.startsWith('function '+name+'(')),context);
++  }
++  return context;
++}
++test('actual app scopeNav preserves conditions and persists them into hash',()=>{
++  const c=actualNavigationContext();vm.runInContext("scopeNav('records',{org_id:'d1'})",c);
++  assert.deepEqual(JSON.parse(JSON.stringify(c.filter)),{...filters,org_id:'d1'});
++  assert.equal(restoreNavigation(c.location.hash,titles).periodId,'p');
++});
++test('actual bindFilters clears period and preserves drill identity',()=>{
++  const c=actualNavigationContext();c.page='assessment';c.filter={...filters,business_scope:'true'};
++  let listener;
++  const form={addEventListener(name,fn){listener=fn;}};
++  c.$=s=>s==='#filters'?form:s==='#period-filter'?{value:''}:null;
++  c.FormData=class{*[Symbol.iterator](){yield ['project_code','P1'];yield ['returned','true'];}};
++  c.toast=()=>{};c.teachers=[];
++  const start=source.indexOf('function bindFilters(){'),end=source.indexOf('const listQuery=',start);
++  vm.runInContext(source.slice(start,end),c);vm.runInContext('bindFilters()',c);
++  listener({preventDefault(){}});
++  assert.equal(c.periodId,'');assert.equal(c.filter.business_scope,'true');assert.equal(c.filter.returned,'true');
++  assert.equal(new URLSearchParams(c.location.hash.split('?')[1]).get('period_id'),null);
++});
++test('HTML controls and handlers are connected in the real app source',()=>{
++  assert.ok(source.includes('returned:true'));
++  assert.ok(source.includes("'scope-nav':id=>scopeNav(id)"));
++  assert.ok(source.includes('filtersBar({search:false,period:true,dates:true,project:true})'));
++  assert.ok(!source.includes("?.value||periodId"));
++});
+--- /dev/null
++++ b/tests/p0/test_audit_and_middleware.py
+@@ -0,0 +1,111 @@
++"""Source-function HTTP harness. No real authentication or full project startup."""
++import ast
++import asyncio
++from pathlib import Path
++from types import SimpleNamespace
++import logging,time,uuid
++import pytest
++import httpx
++from fastapi import FastAPI,Request
++from fastapi.responses import JSONResponse
++from starlette.concurrency import run_in_threadpool
++from sqlalchemy import event,select,func
++from sqlalchemy.orm import sessionmaker
++from app import models as m
++from app.access_logging import record_access_best_effort
++from app.maintenance_guard import configured_maintenance
++from app.readiness import collect_readiness
++ROOT=Path(__file__).resolve().parents[2]
++
++
++def source_function(name,namespace):
++    tree=ast.parse((ROOT/'backend/app/main.py').read_text())
++    node=next(n for n in ast.walk(tree) if isinstance(n,(ast.FunctionDef,ast.AsyncFunctionDef)) and n.name==name)
++    node.decorator_list=[]
++    exec(compile(ast.Module(body=[node],type_ignores=[]),'actual_main_function','exec'),namespace)
++    return namespace[name]
++
++
++def harness(engine,cfg):
++    factory=sessionmaker(engine,expire_on_commit=False)
++    log=logging.getLogger('nd-isolated-http')
++    namespace={'Request':Request,'JSONResponse':JSONResponse,'cfg':cfg,'sessions':factory,'log':log,
++               'time':time,'uuid':uuid,'run_in_threadpool':run_in_threadpool,
++               'record_access_best_effort':record_access_best_effort,'configured_maintenance':configured_maintenance}
++    app=FastAPI();app.middleware('http')(source_function('security',namespace))
++    @app.post('/api/checkpoint-fixture',status_code=201)
++    def commit_fixture():
++        with factory.begin() as db:
++            db.add(m.Notice(id='new-notice',title='隔离HTTP事务样本',body='仅用于测试',org_id='school',author_id='admin'))
++        return {'committed':True}
++    health=source_function('health',{'JSONResponse':JSONResponse,'collect_readiness':collect_readiness,'engine':engine,'cfg':cfg,'__version__':'isolated-http'})
++    app.get('/api/health')(health)
++    return app,factory
++
++
++def request(app,method,path):
++    async def perform():
++        async with httpx.AsyncClient(transport=httpx.ASGITransport(app=app),base_url='http://testserver') as c:return await c.request(method,path)
++    return asyncio.run(perform())
++
++
++def test_access_failure_does_not_reverse_committed_201(engine,cfg,caplog):
++    app,factory=harness(engine,cfg)
++    def broken(mapper,conn,target):raise RuntimeError('DO_NOT_LOG_secret_password')
++    event.listen(m.Audit,'before_insert',broken)
++    try:r=request(app,'POST','/api/checkpoint-fixture')
++    finally:event.remove(m.Audit,'before_insert',broken)
++    assert r.status_code==201 and r.json()=={'committed':True}
++    assert 'x-request-id' in r.headers and r.headers['x-content-type-options']=='nosniff'
++    with factory() as db:
++        assert db.get(m.Notice,'new-notice') is not None
++        assert db.scalar(select(func.count()).select_from(m.Audit))==0
++    assert 'access_log_write_failed' in caplog.text
++    assert 'DO_NOT_LOG_secret_password' not in caplog.text
++
++
++def test_maintenance_rejects_before_business_commit(engine,cfg,tmp_path):
++    cfg.maintenance_dir=tmp_path;(tmp_path/'active').write_text('maintenance')
++    app,factory=harness(engine,cfg)
++    r=request(app,'POST','/api/checkpoint-fixture')
++    assert r.status_code==503 and r.json()['code']=='MAINTENANCE'
++    with factory() as db:assert db.get(m.Notice,'new-notice') is None
++    assert request(app,'GET','/api/health').status_code==200
++
++
++def test_actual_health_endpoint_returns_503_for_missing_guard(engine,cfg):
++    app,factory=harness(engine,cfg)
++    with factory.begin() as db:db.delete(db.get(m.Guard,'calculations'))
++    r=request(app,'GET','/api/health')
++    assert r.status_code==503 and r.json()['initialization']['checks']['calculations_guard'] is False
++
++
++def test_broken_fallback_logger_also_does_not_raise(engine):
++    class BrokenFactory:
++        def begin(self):raise RuntimeError('secret')
++    class BrokenLogger:
++        def error(self,*args):raise RuntimeError('broken fallback')
++    assert record_access_best_effort(BrokenFactory(),BrokenLogger(),{'request_id':'controlled'}) is False
++
++
++def test_existing_insert_service_propagates_critical_audit_failure(engine,actor):
++    # Run the existing insert_record body under a real Session transaction.
++    # The original core.audit implementation is missing; only failure propagation
++    # and the service's absence of an inner commit are verified by this test.
++    tree=ast.parse((ROOT/'backend/app/services.py').read_text())
++    node=next(n for n in tree.body if isinstance(n,ast.FunctionDef) and n.name=='insert_record')
++    def serial(obj):return {'id':obj.id,'version':obj.version}
++    def critical_failure(*args,**kwargs):raise RuntimeError('critical audit unavailable')
++    ns={**vars(m),'RecordIn':object,'serial':serial,'audit':critical_failure}
++    exec(compile(ast.Module(body=[node],type_ignores=[]),'existing_insert_record','exec'),ns)
++    class Payload:
++        teacher_id='t1';reason='隔离事务回滚'
++        def model_dump(self,**kwargs):
++            from datetime import date
++            return dict(id='should-rollback',external_key='newkey',teacher_id='t1',event_date=date(2026,9,1),project_code='p',project='p',course_code='c',course='c',class_code='b',class_name='b',hours=1,participants=1,income=1)
++    factory=sessionmaker(engine)
++    with pytest.raises(RuntimeError,match='critical audit'):
++        with factory.begin() as db:ns['insert_record'](db,actor,Payload())
++    with factory() as db:
++        assert db.get(m.TrainingRecord,'should-rollback') is None
++        assert db.scalar(select(func.count()).select_from(m.RecordRevision))==0
+--- /dev/null
++++ b/tests/p0/test_deployment.py
+@@ -0,0 +1,255 @@
++"""Real filesystem/locks plus explicit Docker fault injection, NOT a Docker drill."""
++from pathlib import Path
++import gzip,json,os,subprocess,sys
++import pytest
++from atomic_env import update_images
++from backup_manifest import create,verify
++from deploy_control import Pipeline,Maintenance,MaintenanceBusy,ControlError
++from check_assembly import inspect_assembly
++ROOT=Path(__file__).resolve().parents[2]
++
++@pytest.mark.parametrize('initial',[
++ 'ND_API_IMAGE=old/api:x\nKEEP_ME=yes\n',
++ 'KEEP_ME=yes\n',
++ 'export ND_API_IMAGE="old/api:x"\r\nND_FRONTEND_IMAGE=old/front:x\r\nKEEP_ME=yes\r\n',
++])
++def test_atomic_images_add_replace_preserve_permissions(tmp_path,initial):
++    p=tmp_path/'.env';p.write_bytes(initial.encode());p.chmod(0o640);before=p.stat()
++    update_images(p,'new/api:release','new/front:release')
++    after=p.stat();raw=p.read_bytes()
++    assert b'ND_API_IMAGE=new/api:release' in raw and b'ND_FRONTEND_IMAGE=new/front:release' in raw and b'KEEP_ME=yes' in raw
++    assert (after.st_mode&0o777)==0o640
++    assert (after.st_uid,after.st_gid)==(before.st_uid,before.st_gid)
++    assert after.st_ino!=before.st_ino
++    if '\r\n' in initial:assert b'\r\n' in raw
++
++@pytest.mark.parametrize('reference',['bad\nND_ENV=test','$(bad)','bad image','../bad:tag',''])
++def test_bad_image_refs_do_not_touch_config(tmp_path,reference):
++    p=tmp_path/'.env';p.write_text('KEEP=yes\n');old=p.read_bytes()
++    with pytest.raises(ValueError):update_images(p,reference,'new/front:x')
++    assert p.read_bytes()==old
++
++
++def test_duplicate_image_keys_rejected(tmp_path):
++    p=tmp_path/'.env';p.write_text('ND_API_IMAGE=a\nND_API_IMAGE=b\n');old=p.read_bytes()
++    with pytest.raises(ValueError):update_images(p,'a:new','b:new')
++    assert p.read_bytes()==old
++
++
++def test_atomic_replace_failure_preserves_old_and_cleans_temp(tmp_path,monkeypatch):
++    import atomic_env
++    p=tmp_path/'.env';p.write_text('KEEP=yes\n');old=p.read_bytes()
++    def fail(*args):raise OSError('injected interruption')
++    monkeypatch.setattr(atomic_env.os,'replace',fail)
++    with pytest.raises(OSError):update_images(p,'new/api:x','new/front:x')
++    assert p.read_bytes()==old and not list(tmp_path.glob('.images-*'))
++
++
++def test_symlink_environment_not_followed(tmp_path):
++    real=tmp_path/'real';real.write_text('KEEP=yes\n');link=tmp_path/'.env';link.symlink_to(real)
++    with pytest.raises(OSError):update_images(link,'new/api:x','new/front:x')
++    assert real.read_text()=='KEEP=yes\n'
++
++@pytest.fixture
++def backup_dir(tmp_path):
++    root=tmp_path/'backup';root.mkdir();(root/'files').mkdir()
++    (root/'files/certificate.bin').write_bytes(b'isolated-test-bytes')
++    with gzip.open(root/'database.sql.gz','wb') as f:f.write(b'-- isolated dump, not an actual DB acceptance\n')
++    return root
++
++
++def test_manifest_roundtrip(backup_dir):
++    result=create(backup_dir)
++    assert result==verify(backup_dir) and result['files']==2
++
++@pytest.mark.parametrize('kind',['modify','remove','extra','symlink','traversal'])
++def test_manifest_rejects_tampering(backup_dir,kind):
++    create(backup_dir);target=backup_dir/'files/certificate.bin'
++    if kind=='modify':target.write_bytes(b'tampered')
++    if kind=='remove':target.unlink()
++    if kind=='extra':(backup_dir/'unlisted').write_text('unexpected')
++    if kind=='symlink':target.unlink();target.symlink_to('/etc/hosts')
++    if kind=='traversal':
++        m=json.loads((backup_dir/'manifest.json').read_text());m['files']['../outside']={'sha256':'x'*64,'bytes':1};(backup_dir/'manifest.json').write_text(json.dumps(m))
++    with pytest.raises(ValueError):verify(backup_dir)
++
++class DockerFaultDriver:
++    """Test-only command double. It never starts containers or returns real DB evidence."""
++    def __init__(self,root,fail=None):
++        self.root=root;self.running={'api','worker','frontend'};self.calls=[];self.fail=fail;self.failed=False;self.mismatch=False
++    def image(self,reference):return 'sha256:'+('f'*64 if 'front' in reference else 'a'*64)
++    def run(self,command,**kwargs):
++        active=self.root/'runtime/maintenance/active'
++        stage=json.loads(active.read_text())['stage'] if active.exists() else None
++        args=command[6:] if command[:2]==['docker','compose'] else command
++        self.calls.append({'args':args,'stage':stage,'latch':active.exists()})
++        if self.fail and not self.failed and self.fail(args,stage):
++            self.failed=True;raise ControlError('explicit Docker fault injection')
++        if command[:3]==['docker','image','inspect']:
++            return json.dumps([{'Id':self.image(command[3])}]).encode()
++        if command[:2]==['docker','inspect']:
++            return json.dumps([{'Image':'sha256:'+('z'*64 if self.mismatch else 'f'*64 if ident=='c-frontend' else 'a'*64),
++                               'State':{'Running':True,'Health':{'Status':'healthy'}}} for ident in command[2:]]).encode()
++        if args[:4]==['ps','--status','running','--services']:
++            return ('\n'.join(s for s in ('api','worker','frontend') if s in self.running)).encode()
++        if args[:2]==['ps','-q']:return ('c-'+args[2]).encode() if args[2] in self.running else b''
++        if args==['ps','-aq']:return b'c-api' if self.running else b''
++        if args and args[0]=='stop':self.running.clear();return b''
++        if args and args[0]=='up':self.running.update(a for a in args if a in ('api','worker','frontend'));return b''
++        if 'mysqldump' in args:
++            kwargs['output'].write(b'-- SYNTHETIC SQL FOR ORCHESTRATOR TEST ONLY\nCREATE TABLE checkpoint_fixture(id INTEGER);\n');return b''
++        if 'mysql' in args and '-N' in args:return b'0\n'
++        return b''
++
++class IsolatedPipeline(Pipeline):
++    def preflight(self,operation):
++        # Fixture assembly is intentionally not passed off as the real project.
++        from atomic_env import read_env
++        self.config=read_env(self.root/'deploy/.env')
++    def smoke(self):
++        assert (self.root/'runtime/maintenance/active').is_file()
++        return {'status':'PASS','scope':'TEST_DOUBLE_ONLY','business_e2e':False}
++
++@pytest.fixture
++def pipeline(tmp_path):
++    (tmp_path/'deploy').mkdir();(tmp_path/'deploy/.env').write_text('ND_API_IMAGE=old/api:x\nND_PUBLIC_ORIGIN=https://school.invalid\nKEEP_ME=yes\n')
++    (tmp_path/'deploy/.env').chmod(0o640)
++    (tmp_path/'runtime/files').mkdir(parents=True);(tmp_path/'runtime/files/proof.bin').write_bytes(b'synthetic attachment')
++    runner=DockerFaultDriver(tmp_path)
++    return IsolatedPipeline(tmp_path,runner)
++
++
++def test_upgrade_has_one_lock_no_backup_resume_and_verified_images(pipeline):
++    result=pipeline.run_upgrade('new/api:release','new/front:release')
++    assert result['status']=='UPGRADE_SMOKE_VERIFIED'
++    assert verify(result['backup'])['files']>=3
++    assert not (pipeline.root/'runtime/maintenance/active').exists()
++    assert all(c['latch'] for c in pipeline.runner.calls if c['args'] and c['args'][0]=='up')
++    assert all(c['stage']=='starting_new_services' for c in pipeline.runner.calls if c['args'] and c['args'][0]=='up')
++    assert 'ND_FRONTEND_IMAGE=new/front:release' in (pipeline.root/'deploy/.env').read_text()
++    assert (pipeline.root/'deploy/.env').stat().st_mode&0o777==0o640
++
++@pytest.mark.parametrize('stage',[
++ 'stopping_writers','database_and_file_backup','release_check','schema_migration',
++ 'database_grants','data_consistency_check','starting_new_services','verify_running_images',
++])
++def test_each_command_failure_keeps_latch_and_stops_writers(pipeline,stage):
++    pipeline.runner.fail=lambda args,current:current==stage
++    with pytest.raises(ControlError):pipeline.run_upgrade('new/api:x','new/front:x')
++    assert not pipeline.runner.running
++    marker=json.loads((pipeline.root/'runtime/maintenance/active').read_text())
++    assert marker['stage'].startswith('FAILED_AT_')
++    with pytest.raises(MaintenanceBusy):
++        with Maintenance(pipeline,'retry'):pass
++
++
++def test_smoke_failure_keeps_services_closed(pipeline):
++    def fail():raise ControlError('explicit smoke failure')
++    pipeline.smoke=fail
++    with pytest.raises(ControlError):pipeline.run_upgrade('new/api:x','new/front:x')
++    assert not pipeline.runner.running and (pipeline.root/'runtime/maintenance/active').exists()
++
++
++def test_wrong_running_image_is_not_success(pipeline):
++    pipeline.runner.mismatch=True
++    with pytest.raises(ControlError):pipeline.run_upgrade('new/api:x','new/front:x')
++    assert not pipeline.runner.running
++
++
++def test_standalone_backup_restores_only_originally_running_set(pipeline):
++    pipeline.runner.running={'api','frontend'}
++    r=pipeline.run_backup()
++    assert pipeline.runner.running=={'api','frontend'} and r['restore_tested'] is False
++    assert not (pipeline.root/'runtime/maintenance/active').exists()
++
++
++def test_inherited_owner_backup_never_resumes(pipeline):
++    pipeline.runner.running.clear()
++    with Maintenance(pipeline,'upgrade') as owner:
++        pipeline.create_backup(owner)
++        assert (pipeline.root/'runtime/maintenance/active').exists()
++        assert not any(c['args'][0]=='up' for c in pipeline.runner.calls)
++        owner.success()
++
++
++def test_real_flock_excludes_another_process(pipeline):
++    lock=pipeline.root/'runtime/maintenance.lock'
++    code="import fcntl,sys;f=open(sys.argv[1],'a');\ntry:fcntl.flock(f,fcntl.LOCK_EX|fcntl.LOCK_NB)\nexcept BlockingIOError:sys.exit(7)\n"
++    with Maintenance(pipeline,'backup') as owner:
++        p=subprocess.run([sys.executable,'-c',code,str(lock)],timeout=5)
++        assert p.returncode==7
++        owner.success()
++    p=subprocess.run([sys.executable,'-c',code,str(lock)],timeout=5)
++    assert p.returncode==0
++
++
++def test_empty_restore_never_overwrites_files(pipeline):
++    with pytest.raises(ControlError,match='not empty'):pipeline.empty_school()
++    assert (pipeline.root/'runtime/files/proof.bin').read_bytes()==b'synthetic attachment'
++
++
++def test_actual_source_assembly_blocks_before_docker():
++    class NoCommands:
++        def run(self,*args,**kwargs):raise AssertionError('must not invoke any command with incomplete source')
++    p=Pipeline(ROOT,NoCommands())
++    report=inspect_assembly(ROOT)
++    assert report['status']=='BLOCKED' and not report['observed_alembic_heads']
++    with pytest.raises(ControlError,match='source assembly incomplete'):p.run_upgrade('new/api:x','new/front:x')
++
++
++def test_maintenance_rejects_symlink_ancestor_without_touching_target(tmp_path):
++    outside=tmp_path/'another-school';outside.mkdir()
++    project=tmp_path/'source';project.mkdir();(project/'runtime').symlink_to(outside,target_is_directory=True)
++    p=Pipeline(project,DockerFaultDriver(project))
++    with pytest.raises(ControlError,match='path component'):
++        with Maintenance(p,'upgrade'):pass
++    assert list(outside.iterdir())==[]
++    assert not p.runner.calls
++
++
++def test_maintenance_rejects_hardlinked_lock(tmp_path):
++    (tmp_path/'runtime').mkdir();outside=tmp_path/'other.lock';outside.write_text('preserve')
++    os.link(outside,tmp_path/'runtime/maintenance.lock')
++    p=Pipeline(tmp_path,DockerFaultDriver(tmp_path))
++    with pytest.raises(ControlError,match='regular'):
++        with Maintenance(p,'upgrade'):pass
++    assert outside.read_text()=='preserve'
++    assert not (tmp_path/'runtime/maintenance/active').exists()
++
++
++def test_failed_stop_is_explicitly_not_claimed_as_stopped(pipeline):
++    def cannot_stop():raise ControlError('daemon unavailable')
++    pipeline.stop_writers=cannot_stop
++    with pytest.raises(ControlError):
++        with Maintenance(pipeline,'upgrade') as owner:
++            owner.mark('stopping_writers')
++            pipeline.stop_writers()
++    marker=json.loads((pipeline.root/'runtime/maintenance/active').read_text())
++    assert marker['stop_confirmed'] is False
++    assert marker['manual_isolation_required'] is True
++    assert pipeline.runner.running=={'api','worker','frontend'}
++
++
++def test_failed_operation_reports_confirmed_stop(pipeline):
++    with pytest.raises(ValueError):
++        with Maintenance(pipeline,'upgrade') as owner:raise ValueError('fault')
++    marker=json.loads((pipeline.root/'runtime/maintenance/active').read_text())
++    assert marker['stop_confirmed'] is True
++    assert not marker['manual_isolation_required']
++
++
++def test_quoted_deployment_config_with_comments(tmp_path):
++    from atomic_env import read_env
++    p=tmp_path/'.env';p.write_text('ND_API_IMAGE="my/api:tag" # approved image\nND_FRONTEND_IMAGE=\'my/front:tag\' # local tag\n')
++    assert read_env(p)=={'ND_API_IMAGE':'my/api:tag','ND_FRONTEND_IMAGE':'my/front:tag'}
++
++
++def test_failure_to_durably_save_backup_keeps_upgrade_closed(pipeline,monkeypatch):
++    import deploy_control
++    def disk_failure(root):raise OSError('injected disk fsync failure')
++    monkeypatch.setattr(deploy_control,'sync_backup_tree',disk_failure)
++    with pytest.raises(OSError):pipeline.run_upgrade('new/api:x','new/front:x')
++    assert not pipeline.runner.running
++    assert (pipeline.root/'runtime/maintenance/active').exists()
++    assert list((pipeline.root/'runtime/backups').glob('.partial-*'))
++    assert not list((pipeline.root/'runtime/backups').glob('*.receipt.json'))
+--- /dev/null
++++ b/tests/p0/test_https_smoke.py
+@@ -0,0 +1,52 @@
++"""Real loopback TLS against a synthetic HTTP server, not the school application."""
++import json,ssl,subprocess,threading
++from http.server import HTTPServer,BaseHTTPRequestHandler
++from urllib.error import URLError
++import pytest
++from deployment_smoke import run_smoke
++
++@pytest.fixture
++def tls_fixture(tmp_path):
++    cert,key=tmp_path/'cert.pem',tmp_path/'key.pem'
++    subprocess.run(['openssl','req','-x509','-newkey','rsa:2048','-nodes','-keyout',str(key),'-out',str(cert),'-days','1',
++                    '-subj','/CN=localhost','-addext','subjectAltName=DNS:localhost'],check=True,capture_output=True,timeout=15)
++    state={'bad_asset':False,'maintenance':True,'block_business':True}
++    class Handler(BaseHTTPRequestHandler):
++        def do_GET(self):
++            code=200
++            if self.path=='/':body=b'<html><script type="module" src="/assets/app.js"></script></html>'
++            elif self.path=='/assets/app.js':body=b"import {scope} from './scope.js'; console.log(scope);"
++            elif self.path=='/assets/scope.js':body=state.get('html_fallback',b'<!doctype html>fallback') if state['bad_asset'] else b"export const scope='synthetic HTTPS fixture';"
++            elif self.path=='/api/health':body=json.dumps({'status':'ok','database':{'status':'ok'},'migration':{'status':'ok'},'initialization':{'status':'ok'},'maintenance':'ACTIVE' if state['maintenance'] else 'OPEN','accepting_requests':not state['maintenance']}).encode()
++            elif self.path=='/api/records':
++                code=503 if state['block_business'] else 200;body=b'{"code":"MAINTENANCE"}'
++            else:code=404;body=b'not found'
++            self.send_response(code);self.send_header('Content-Length',str(len(body)));self.end_headers();self.wfile.write(body)
++        def log_message(self,*args):pass
++    server=HTTPServer(('127.0.0.1',0),Handler)
++    ctx=ssl.SSLContext(ssl.PROTOCOL_TLS_SERVER);ctx.load_cert_chain(cert,key);server.socket=ctx.wrap_socket(server.socket,server_side=True)
++    thread=threading.Thread(target=server.serve_forever,daemon=True);thread.start()
++    yield 'https://localhost:'+str(server.server_port),cert,state
++    server.shutdown();server.server_close();thread.join(timeout=3)
++
++
++def test_tls_smoke_checks_imported_modules_and_latch(tls_fixture):
++    origin,cert,state=tls_fixture
++    r=run_smoke(origin,cert)
++    assert r['status']=='PASS' and r['asset_count']==2 and r['business_e2e'] is False
++
++@pytest.mark.parametrize('flag',['bad_asset','maintenance','block_business'])
++def test_smoke_rejects_false_success(tls_fixture,flag):
++    origin,cert,state=tls_fixture;state[flag]=not state[flag]
++    with pytest.raises(ValueError):run_smoke(origin,cert)
++
++
++def test_untrusted_tls_does_not_fall_back_to_insecure(tls_fixture):
++    origin,cert,state=tls_fixture
++    with pytest.raises(URLError):run_smoke(origin)
++
++
++@pytest.mark.parametrize('html',[b'<html>fallback',b' <HEAD>missing resource',b'<body class="fallback">not javascript'])
++def test_html_asset_fallback_without_doctype_is_rejected(tls_fixture,html):
++    origin,cert,state=tls_fixture;state['bad_asset']=True;state['html_fallback']=html
++    with pytest.raises(ValueError,match='asset missing'):run_smoke(origin,cert)
+--- /dev/null
++++ b/tests/p0/test_preservation.py
+@@ -0,0 +1,24 @@
++"""Diff-sensitive preservation checks; these do not prove business E2E."""
++import ast,re
++from pathlib import Path
++ROOT=Path(__file__).resolve().parents[2]
++
++
++def test_existing_models_are_byte_for_byte_preserved():
++    assert (ROOT/'backend/app/models.py').read_bytes()==(ROOT/'evidence/before/backend/app/models.py').read_bytes()
++
++
++def test_existing_scoring_and_ledger_business_functions_are_preserved():
++    def functions(path):
++        return {node.name:ast.dump(node,include_attributes=False) for node in ast.parse(path.read_text()).body if isinstance(node,(ast.FunctionDef,ast.AsyncFunctionDef))}
++    before=functions(ROOT/'evidence/before/backend/app/services.py');after=functions(ROOT/'backend/app/services.py')
++    untouched=set(before)-{'record_query','stats'}
++    assert {'facts','evaluate','calculate_points','calculate_assessments'}<=untouched
++    assert all(before[name]==after[name] for name in untouched)
++
++
++def test_existing_frontend_function_entries_not_removed():
++    pattern=r'(?m)(?:async\s+)?function\s+([A-Za-z_$][\w$]*)\('
++    before=set(re.findall(pattern,(ROOT/'evidence/before/frontend/app.js').read_text()))
++    after=set(re.findall(pattern,(ROOT/'frontend/app.js').read_text()))
++    assert before<=after
+--- /dev/null
++++ b/tests/p0/test_read_queries.py
+@@ -0,0 +1,68 @@
++from datetime import date
++import pytest
++from fastapi import HTTPException
++from sqlalchemy import select,event
++from app import models as m
++from app.read_queries import record_query,stats,assessment_query
++
++@pytest.mark.parametrize('filters,teachers,assessment_count,income',[
++ ({'project_code':'P1'},1,1,'150.00'),
++ ({'course_code':'C2'},1,1,'200.00'),
++ ({'start':'2026-09-03','end':'2026-09-03'},1,1,'50.00'),
++ ({'teacher_id':'t2','project_code':'P1'},0,0,'0.00'),
++ ({'period_id':'old'},0,0,'0.00'),
++ ({'period_id':'p','org_id':'c1','project_code':'P1'},1,1,'150.00'),
++ ({'q':'P2'},1,1,'200.00'),
++ ({'q':'%'},0,0,'0.00'),
++ ({},2,2,'350.00'),
++])
++def test_statistics_scope_matches_business_and_drill(db,actor,filters,teachers,assessment_count,income):
++    result=stats(db,actor,filters)
++    assert result['teachers']==teachers
++    assert sum(result['assessment_states'].values())==assessment_count
++    from decimal import Decimal
++    assert Decimal(result['income'])==Decimal(income)
++    drill=db.scalars(assessment_query(db,actor,result['assessment_scope'])).all()
++    assert len(drill)==assessment_count
++    assert all(x.teacher_id!='t3' for x in drill)
++
++
++def test_native_assessment_keeps_qualification_only_teachers(db,actor):
++    assert {a.teacher_id for a in db.scalars(assessment_query(db,actor,{'period_id':'p'}))}=={'t1','t2','t4'}
++    assert {a.teacher_id for a in db.scalars(assessment_query(db,actor,{'period_id':'p','business_scope':'true'}))}=={'t1','t2'}
++
++
++def test_returned_is_independent_of_stage(db,actor):
++    r=db.scalars(assessment_query(db,actor,{'returned':'true','state':'TEACHER'})).all()
++    assert [a.id for a in r]==['a1']
++    r=db.scalars(assessment_query(db,actor,{'returned':'false','state':'TEACHER'})).all()
++    assert [a.id for a in r]==['a4']
++
++@pytest.mark.parametrize('filters,code',[
++ ({'start':'20260917'},422),({'start':'2026-02-30'},422),({'start':'2026-09-10','end':'2026-01-01'},422),
++ ({'period_id':'missing'},404),({'org_id':'d2'},403),({'org_id':'missing'},403),
++ ({'made_up':'x'},422),({'teacher_id':['t1']},422),({'q':'x'*101},422),
++ ({'returned':'sometimes'},422),({'business_scope':'sometimes'},422),({'state':'APPROVE_ALL'},422),
++])
++def test_invalid_or_unauthorized_scope_fails(db,actor,filters,code):
++    with pytest.raises(HTTPException) as exc:assessment_query(db,actor,filters)
++    assert exc.value.status_code==code
++
++
++def test_filters_never_change_scores_or_archives(db,actor,engine):
++    before=[(a.id,a.score,a.version,a.state,a.archive_sha256,a.archive) for a in db.scalars(select(m.Assessment).order_by(m.Assessment.id))]
++    statements=[]
++    def capture(conn,cursor,statement,parameters,context,executemany):statements.append(statement.lstrip().upper())
++    event.listen(engine,'before_cursor_execute',capture)
++    try:
++        for f in ({},{'project_code':'P1'},{'project_code':'P2'},{'teacher_id':'t1','course_code':'C3'}):stats(db,actor,f)
++    finally:event.remove(engine,'before_cursor_execute',capture)
++    after=[(a.id,a.score,a.version,a.state,a.archive_sha256,a.archive) for a in db.scalars(select(m.Assessment).order_by(m.Assessment.id))]
++    assert before==after
++    assert all(s.startswith('SELECT') for s in statements)
++
++
++def test_missing_statistics_settings_not_silent_defaults(db,actor):
++    db.delete(db.get(m.Setting,'metrics'));db.flush()
++    with pytest.raises(HTTPException) as exc:stats(db,actor,{})
++    assert exc.value.status_code==503
+--- /dev/null
++++ b/tests/p0/test_readiness.py
+@@ -0,0 +1,76 @@
++from types import SimpleNamespace
++import json
++import pytest
++from sqlalchemy import text
++from app import models as m
++from app.readiness import collect_readiness
++from app.maintenance_guard import maintenance_state
++
++
++def test_readiness_reports_all_sections(engine,cfg):
++    r=collect_readiness(engine,cfg,'isolated-test')
++    assert r['status']=='ok' and r['accepting_requests'] is True
++    assert all(r[k]['status']=='ok' for k in ('database','migration','initialization'))
++
++@pytest.mark.parametrize('what',['guard','branding','metrics','qualification','root','teacher_role','dept_role','college_role','school_role'])
++def test_missing_initialization_not_ready(engine,cfg,what):
++    with engine.begin() as conn:
++        if what=='guard':conn.execute(text('DELETE FROM mutation_guards'))
++        elif what in {'branding','metrics','qualification'}:conn.execute(text('DELETE FROM settings WHERE `key`=:key'),{'key':what})
++        elif what=='root':conn.execute(text("UPDATE organizations SET active=0 WHERE id='school'"))
++        else:conn.execute(text('UPDATE roles SET active=0 WHERE kind=:kind'),{'kind':what.removesuffix('_role')})
++    r=collect_readiness(engine,cfg,'isolated-test')
++    assert r['status']=='not_ready' and r['initialization']['status']=='incomplete'
++
++@pytest.mark.parametrize('value',[{}, {'expiry_days':True,'categories':['x']},{'expiry_days':0,'categories':['x']},{'expiry_days':30,'categories':[]}])
++def test_malformed_required_setting_not_ready(db,engine,cfg,value):
++    db.get(m.Setting,'qualification').value=value;db.commit()
++    assert collect_readiness(engine,cfg,'isolated-test')['initialization']['status']=='incomplete'
++
++@pytest.mark.parametrize('head',['wrong','empty','extra'])
++def test_migration_mismatch(engine,cfg,head):
++    with engine.begin() as conn:
++        if head=='empty':conn.execute(text('DELETE FROM alembic_version'))
++        elif head=='extra':conn.execute(text("INSERT INTO alembic_version VALUES ('unrelated_branch')"))
++        else:conn.execute(text("UPDATE alembic_version SET version_num='wrong'"))
++    assert collect_readiness(engine,cfg,'test')['migration']['status']=='mismatch'
++
++
++def test_missing_migration_table_safe_response(engine,cfg):
++    with engine.begin() as conn:conn.execute(text('DROP TABLE alembic_version'))
++    r=collect_readiness(engine,cfg,'test')
++    assert r['status']=='not_ready' and r['migration']['status']=='unavailable'
++    assert 'SELECT' not in json.dumps(r)
++
++
++def test_database_failure_never_echoes_secrets(cfg):
++    from sqlalchemy.exc import OperationalError
++    class BrokenEngine:
++        def connect(self):raise OperationalError('SECRET_SQL',{'password':'VERY_SECRET'},RuntimeError('secret://connection'))
++    r=collect_readiness(BrokenEngine(),cfg,'test')
++    assert r['database']['status']=='unavailable'
++    assert 'SECRET' not in json.dumps(r) and 'connection' not in json.dumps(r)
++
++
++def test_production_sqlite_cannot_pass(engine,tmp_path):
++    r=collect_readiness(engine,SimpleNamespace(env='production',maintenance_dir=tmp_path),'test')
++    assert r['status']=='not_ready' and r['database']['status']=='unsupported'
++
++@pytest.mark.parametrize('key',['ND_SEED_ENABLED','ND_AUTO_CREATE_TABLES','ND_AUTO_CREATE_SCHEMA'])
++def test_production_seed_and_schema_creation_blocked(engine,tmp_path,monkeypatch,key):
++    monkeypatch.setenv(key,'true')
++    r=collect_readiness(engine,SimpleNamespace(env='production',maintenance_dir=tmp_path),'test')
++    assert r['initialization']=={'status':'invalid','reason':'PRODUCTION_POLICY'}
++
++
++def test_active_latch_keeps_probe_inspectable_but_blocks_business(engine,cfg,tmp_path):
++    cfg.maintenance_dir=tmp_path;(tmp_path/'active').write_text('maintenance')
++    r=collect_readiness(engine,cfg,'test')
++    assert r['status']=='ok' and r['maintenance']=='ACTIVE' and r['accepting_requests'] is False
++
++
++def test_guard_fails_closed_on_missing_directory_and_links(tmp_path):
++    assert maintenance_state(tmp_path/'missing',required=True)['blocked']
++    (tmp_path/'link').symlink_to(tmp_path,target_is_directory=True)
++    assert maintenance_state(tmp_path/'link',required=True)['blocked']
++    assert maintenance_state(None,required=True)['blocked']
+--- /dev/null
++++ b/tests/requirements-p0.txt
+@@ -0,0 +1,5 @@
++# Module/fault-injection test environment only. Not application deployment dependencies.
++SQLAlchemy==2.0.50
++fastapi==0.128.2
++httpx==0.28.1
++pytest==9.0.2

@@ -1,0 +1,612 @@
+{
+  "format": "YUEKE_R11_THREE_INTEGRATIONS_V2",
+  "connections": {
+    "sso": {
+      "expected_version": 1,
+      "config": {
+        "endpoint": "",
+        "owner": "",
+        "retry_count": 3,
+        "secret_env": "ND_SSO_SECRET",
+        "frequency_minutes": 30,
+        "auth_mode": "school_sso",
+        "adapter": {
+          "protocol": "",
+          "probe": {},
+          "login_path": "",
+          "validate_path": "",
+          "authorize_path": "",
+          "token_path": "",
+          "userinfo_path": "",
+          "issuer": "",
+          "jwks_path": "",
+          "logout_path": "",
+          "scope": "openid profile",
+          "client_auth_style": "client_secret_post",
+          "identity_root": "",
+          "identity_fields": {
+            "stable_id": "",
+            "account": "",
+            "staff_no": "",
+            "name": "",
+            "org_code": "",
+            "roles": "",
+            "active": ""
+          },
+          "org_map": {},
+          "roles_delimiter": ",",
+          "active_true_values": [
+            true,
+            1,
+            "1",
+            "true",
+            "ACTIVE",
+            "启用"
+          ],
+          "active_false_values": [
+            false,
+            0,
+            "0",
+            "false",
+            "INACTIVE",
+            "停用"
+          ]
+        }
+      },
+      "mappings": []
+    },
+    "middle": {
+      "expected_version": 1,
+      "config": {
+        "endpoint": "",
+        "owner": "",
+        "retry_count": 3,
+        "secret_env": "ND_MIDDLE_SECRET",
+        "frequency_minutes": 30,
+        "auth_mode": "token",
+        "adapter": {
+          "probe": {
+            "method": "GET",
+            "path": "",
+            "headers": {},
+            "query": {},
+            "auth": {
+              "mode": "none"
+            },
+            "credential_bindings": [],
+            "success_path": "",
+            "success_values": [
+              true,
+              0,
+              "0",
+              "SUCCESS",
+              "OK"
+            ]
+          },
+          "data_types": {
+            "teacher_hr": {
+              "request": {
+                "method": "GET",
+                "path": "",
+                "headers": {},
+                "query": {
+                  "cursor": "${cursor}",
+                  "limit": "${limit}",
+                  "mode": "${mode}"
+                },
+                "auth": {
+                  "mode": "none"
+                },
+                "credential_bindings": []
+              },
+              "pagination": {
+                "mode": "cursor",
+                "page_size": 1000,
+                "max_pages": 20,
+                "start_page": 1
+              },
+              "response": {
+                "success_path": "",
+                "success_values": [
+                  true,
+                  0,
+                  "0",
+                  "SUCCESS",
+                  "OK"
+                ],
+                "records_path": "",
+                "next_cursor_path": "",
+                "has_more_path": ""
+              }
+            },
+            "training_income": {
+              "request": {
+                "method": "GET",
+                "path": "",
+                "headers": {},
+                "query": {
+                  "cursor": "${cursor}",
+                  "limit": "${limit}",
+                  "mode": "${mode}"
+                },
+                "auth": {
+                  "mode": "none"
+                },
+                "credential_bindings": []
+              },
+              "pagination": {
+                "mode": "cursor",
+                "page_size": 1000,
+                "max_pages": 20,
+                "start_page": 1
+              },
+              "response": {
+                "success_path": "",
+                "success_values": [
+                  true,
+                  0,
+                  "0",
+                  "SUCCESS",
+                  "OK"
+                ],
+                "records_path": "",
+                "next_cursor_path": "",
+                "has_more_path": ""
+              }
+            },
+            "course_participants": {
+              "request": {
+                "method": "GET",
+                "path": "",
+                "headers": {},
+                "query": {
+                  "cursor": "${cursor}",
+                  "limit": "${limit}",
+                  "mode": "${mode}"
+                },
+                "auth": {
+                  "mode": "none"
+                },
+                "credential_bindings": []
+              },
+              "pagination": {
+                "mode": "cursor",
+                "page_size": 1000,
+                "max_pages": 20,
+                "start_page": 1
+              },
+              "response": {
+                "success_path": "",
+                "success_values": [
+                  true,
+                  0,
+                  "0",
+                  "SUCCESS",
+                  "OK"
+                ],
+                "records_path": "",
+                "next_cursor_path": "",
+                "has_more_path": ""
+              }
+            },
+            "training_project": {
+              "request": {
+                "method": "GET",
+                "path": "",
+                "headers": {},
+                "query": {
+                  "cursor": "${cursor}",
+                  "limit": "${limit}",
+                  "mode": "${mode}"
+                },
+                "auth": {
+                  "mode": "none"
+                },
+                "credential_bindings": []
+              },
+              "pagination": {
+                "mode": "cursor",
+                "page_size": 1000,
+                "max_pages": 20,
+                "start_page": 1
+              },
+              "response": {
+                "success_path": "",
+                "success_values": [
+                  true,
+                  0,
+                  "0",
+                  "SUCCESS",
+                  "OK"
+                ],
+                "records_path": "",
+                "next_cursor_path": "",
+                "has_more_path": ""
+              }
+            },
+            "course": {
+              "request": {
+                "method": "GET",
+                "path": "",
+                "headers": {},
+                "query": {
+                  "cursor": "${cursor}",
+                  "limit": "${limit}",
+                  "mode": "${mode}"
+                },
+                "auth": {
+                  "mode": "none"
+                },
+                "credential_bindings": []
+              },
+              "pagination": {
+                "mode": "cursor",
+                "page_size": 1000,
+                "max_pages": 20,
+                "start_page": 1
+              },
+              "response": {
+                "success_path": "",
+                "success_values": [
+                  true,
+                  0,
+                  "0",
+                  "SUCCESS",
+                  "OK"
+                ],
+                "records_path": "",
+                "next_cursor_path": "",
+                "has_more_path": ""
+              }
+            }
+          }
+        }
+      },
+      "mappings": []
+    },
+    "province": {
+      "expected_version": 1,
+      "config": {
+        "endpoint": "",
+        "owner": "",
+        "retry_count": 3,
+        "secret_env": "ND_PROVINCE_SECRET",
+        "frequency_minutes": 30,
+        "auth_mode": "custom",
+        "adapter": {
+          "probe": {
+            "method": "GET",
+            "path": "",
+            "headers": {},
+            "query": {},
+            "auth": {
+              "mode": "none"
+            },
+            "credential_bindings": [],
+            "success_path": "",
+            "success_values": [
+              true,
+              0,
+              "0",
+              "SUCCESS",
+              "OK"
+            ]
+          },
+          "data_types": {
+            "training_project": {
+              "request": {
+                "method": "POST",
+                "path": "",
+                "headers": {},
+                "query": {},
+                "auth": {
+                  "mode": "none"
+                },
+                "credential_bindings": [],
+                "body": {
+                  "data": "${payload}"
+                }
+              },
+              "response": {
+                "accepted_path": "",
+                "accepted_values": [
+                  true,
+                  1,
+                  "1",
+                  "SUCCESS",
+                  "OK"
+                ],
+                "code_path": "",
+                "receipt_id_path": "",
+                "error_codes": []
+              }
+            },
+            "course": {
+              "request": {
+                "method": "POST",
+                "path": "",
+                "headers": {},
+                "query": {},
+                "auth": {
+                  "mode": "none"
+                },
+                "credential_bindings": [],
+                "body": {
+                  "data": "${payload}"
+                }
+              },
+              "response": {
+                "accepted_path": "",
+                "accepted_values": [
+                  true,
+                  1,
+                  "1",
+                  "SUCCESS",
+                  "OK"
+                ],
+                "code_path": "",
+                "receipt_id_path": "",
+                "error_codes": []
+              }
+            },
+            "plan": {
+              "request": {
+                "method": "POST",
+                "path": "",
+                "headers": {},
+                "query": {},
+                "auth": {
+                  "mode": "none"
+                },
+                "credential_bindings": [],
+                "body": {
+                  "data": "${payload}"
+                }
+              },
+              "response": {
+                "accepted_path": "",
+                "accepted_values": [
+                  true,
+                  1,
+                  "1",
+                  "SUCCESS",
+                  "OK"
+                ],
+                "code_path": "",
+                "receipt_id_path": "",
+                "error_codes": []
+              }
+            },
+            "class": {
+              "request": {
+                "method": "POST",
+                "path": "",
+                "headers": {},
+                "query": {},
+                "auth": {
+                  "mode": "none"
+                },
+                "credential_bindings": [],
+                "body": {
+                  "data": "${payload}"
+                }
+              },
+              "response": {
+                "accepted_path": "",
+                "accepted_values": [
+                  true,
+                  1,
+                  "1",
+                  "SUCCESS",
+                  "OK"
+                ],
+                "code_path": "",
+                "receipt_id_path": "",
+                "error_codes": []
+              }
+            },
+            "teaching": {
+              "request": {
+                "method": "POST",
+                "path": "",
+                "headers": {},
+                "query": {},
+                "auth": {
+                  "mode": "none"
+                },
+                "credential_bindings": [],
+                "body": {
+                  "data": "${payload}"
+                }
+              },
+              "response": {
+                "accepted_path": "",
+                "accepted_values": [
+                  true,
+                  1,
+                  "1",
+                  "SUCCESS",
+                  "OK"
+                ],
+                "code_path": "",
+                "receipt_id_path": "",
+                "error_codes": []
+              }
+            },
+            "participants": {
+              "request": {
+                "method": "POST",
+                "path": "",
+                "headers": {},
+                "query": {},
+                "auth": {
+                  "mode": "none"
+                },
+                "credential_bindings": [],
+                "body": {
+                  "data": "${payload}"
+                }
+              },
+              "response": {
+                "accepted_path": "",
+                "accepted_values": [
+                  true,
+                  1,
+                  "1",
+                  "SUCCESS",
+                  "OK"
+                ],
+                "code_path": "",
+                "receipt_id_path": "",
+                "error_codes": []
+              }
+            },
+            "learning_process": {
+              "request": {
+                "method": "POST",
+                "path": "",
+                "headers": {},
+                "query": {},
+                "auth": {
+                  "mode": "none"
+                },
+                "credential_bindings": [],
+                "body": {
+                  "data": "${payload}"
+                }
+              },
+              "response": {
+                "accepted_path": "",
+                "accepted_values": [
+                  true,
+                  1,
+                  "1",
+                  "SUCCESS",
+                  "OK"
+                ],
+                "code_path": "",
+                "receipt_id_path": "",
+                "error_codes": []
+              }
+            },
+            "training_record": {
+              "request": {
+                "method": "POST",
+                "path": "",
+                "headers": {},
+                "query": {},
+                "auth": {
+                  "mode": "none"
+                },
+                "credential_bindings": [],
+                "body": {
+                  "data": "${payload}"
+                }
+              },
+              "response": {
+                "accepted_path": "",
+                "accepted_values": [
+                  true,
+                  1,
+                  "1",
+                  "SUCCESS",
+                  "OK"
+                ],
+                "code_path": "",
+                "receipt_id_path": "",
+                "error_codes": []
+              }
+            },
+            "assessment_result": {
+              "request": {
+                "method": "POST",
+                "path": "",
+                "headers": {},
+                "query": {},
+                "auth": {
+                  "mode": "none"
+                },
+                "credential_bindings": [],
+                "body": {
+                  "data": "${payload}"
+                }
+              },
+              "response": {
+                "accepted_path": "",
+                "accepted_values": [
+                  true,
+                  1,
+                  "1",
+                  "SUCCESS",
+                  "OK"
+                ],
+                "code_path": "",
+                "receipt_id_path": "",
+                "error_codes": []
+              }
+            },
+            "completion_result": {
+              "request": {
+                "method": "POST",
+                "path": "",
+                "headers": {},
+                "query": {},
+                "auth": {
+                  "mode": "none"
+                },
+                "credential_bindings": [],
+                "body": {
+                  "data": "${payload}"
+                }
+              },
+              "response": {
+                "accepted_path": "",
+                "accepted_values": [
+                  true,
+                  1,
+                  "1",
+                  "SUCCESS",
+                  "OK"
+                ],
+                "code_path": "",
+                "receipt_id_path": "",
+                "error_codes": []
+              }
+            },
+            "certificate": {
+              "request": {
+                "method": "POST",
+                "path": "",
+                "headers": {},
+                "query": {},
+                "auth": {
+                  "mode": "none"
+                },
+                "credential_bindings": [],
+                "body": {
+                  "data": "${payload}"
+                }
+              },
+              "response": {
+                "accepted_path": "",
+                "accepted_values": [
+                  true,
+                  1,
+                  "1",
+                  "SUCCESS",
+                  "OK"
+                ],
+                "code_path": "",
+                "receipt_id_path": "",
+                "error_codes": []
+              }
+            }
+          }
+        }
+      },
+      "mappings": []
+    }
+  },
+  "reason": "学校接口资料整理后导入",
+  "basis": "以学校/省平台正式接口资料为依据；密钥只放服务器环境变量"
+}

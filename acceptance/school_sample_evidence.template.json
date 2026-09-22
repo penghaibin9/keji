@@ -1,0 +1,6 @@
+{
+  "points_match_rate": null,
+  "assessment_match_rate": null,
+  "signed_off": false,
+  "notes": "使用学校真实脱敏代表性样本和 acceptance/学校真实样本双轨比对模板.xlsx，经 scripts/dual_track_acceptance.py 生成；未签认不得手工改成 PASS。"
+}

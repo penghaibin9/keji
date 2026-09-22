@@ -1,0 +1,4 @@
+# Install backend/requirements.txt first. Test fixture databases are local-only.
+pytest==9.0.2
+httpx==0.28.1
+playwright==1.57.0

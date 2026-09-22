@@ -1,0 +1,9 @@
+{
+  "environment": "WAITING_FOR_NATIVE_HTTPS_BROWSER",
+  "base_url": null,
+  "four_roles": false,
+  "native_browser": false,
+  "critical_flows_pass": false,
+  "security_negative_pass": false,
+  "notes": "必须由原生 Chromium 通过真实 HTTPS/Cookie/CSRF/前端资源执行四角色关键流程和越权反向测试；API 测试不能替代。"
+}

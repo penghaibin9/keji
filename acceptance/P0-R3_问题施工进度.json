@@ -1,0 +1,41 @@
+{
+  "checkpoint": "P0-R3.1",
+  "date": "2026-09-18",
+  "deployment_status": "BLOCKED",
+  "tests": {
+    "p0_python": 108,
+    "r2_core_python": 81,
+    "r3_extension_python": 70,
+    "python_total": 259,
+    "node_total": 25,
+    "api_routes_scanned": 94,
+    "api_static_violations": 0
+  },
+  "source_assembly": {
+    "missing_nonmigration_files": 0,
+    "observed_heads": [
+      "20260917_0002"
+    ],
+    "required_historical_revision": "20260917_0001",
+    "migration_graph_verified": false
+  },
+  "external": {
+    "school_sso": "BLOCKED_EXTERNAL_INTERFACE",
+    "school_data_hub": "BLOCKED_EXTERNAL_INTERFACE",
+    "province_platform": "BLOCKED_EXTERNAL_INTERFACE"
+  },
+  "school_sample": "WAITING_FOR_SCHOOL_SAMPLE",
+  "school_environment": "WAITING_FOR_SCHOOL_ENV",
+  "note": "Construction checkpoint. Current code/tests are green; production release remains blocked by historical migration and field evidence.",
+  "performance_acceptance_tool": "READY_NOT_EXECUTED_IN_SCHOOL_ENV",
+  "handover_validator": "PASS_ON_SYNTHETIC_HANDOVER",
+  "release_gate": "BLOCKED",
+  "release_blockers": [
+    "source_assembly",
+    "mysql",
+    "browser",
+    "performance",
+    "school_sample",
+    "external"
+  ]
+}

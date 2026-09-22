@@ -1,0 +1,4033 @@
+{
+  "baseline_revision": "20260918_0001",
+  "scope": "fresh_school_only",
+  "tables": {
+    "assessments": {
+      "checks": [],
+      "columns": {
+        "archive": {
+          "family": "json",
+          "nullable": true
+        },
+        "archive_sha256": {
+          "family": "string",
+          "length": 64,
+          "nullable": true
+        },
+        "created_at": {
+          "family": "datetime",
+          "nullable": false
+        },
+        "detail": {
+          "family": "json",
+          "nullable": false
+        },
+        "id": {
+          "family": "string",
+          "length": 36,
+          "nullable": false
+        },
+        "period_id": {
+          "family": "string",
+          "length": 36,
+          "nullable": false
+        },
+        "returned": {
+          "family": "integer",
+          "nullable": false
+        },
+        "rule_id": {
+          "family": "string",
+          "length": 36,
+          "nullable": false
+        },
+        "score": {
+          "family": "numeric",
+          "nullable": false,
+          "precision": 8,
+          "scale": 2
+        },
+        "source_snapshot": {
+          "family": "json",
+          "nullable": false
+        },
+        "state": {
+          "family": "string",
+          "length": 20,
+          "nullable": false
+        },
+        "teacher_id": {
+          "family": "string",
+          "length": 36,
+          "nullable": false
+        },
+        "version": {
+          "family": "integer",
+          "nullable": false
+        }
+      },
+      "foreign_keys": [
+        [
+          [
+            "period_id"
+          ],
+          "periods",
+          [
+            "id"
+          ]
+        ],
+        [
+          [
+            "rule_id"
+          ],
+          "rules",
+          [
+            "id"
+          ]
+        ],
+        [
+          [
+            "teacher_id"
+          ],
+          "users",
+          [
+            "id"
+          ]
+        ]
+      ],
+      "indexes": [
+        [
+          "ix_assessments_period_id",
+          [
+            "period_id"
+          ],
+          false
+        ],
+        [
+          "ix_assessments_state",
+          [
+            "state"
+          ],
+          false
+        ],
+        [
+          "ix_assessments_teacher_id",
+          [
+            "teacher_id"
+          ],
+          false
+        ]
+      ],
+      "primary_key": [
+        "id"
+      ],
+      "unique": [
+        [
+          "teacher_id",
+          "period_id"
+        ]
+      ]
+    },
+    "attachments": {
+      "checks": [],
+      "columns": {
+        "created_at": {
+          "family": "datetime",
+          "nullable": false
+        },
+        "id": {
+          "family": "string",
+          "length": 36,
+          "nullable": false
+        },
+        "mime": {
+          "family": "string",
+          "length": 80,
+          "nullable": false
+        },
+        "name": {
+          "family": "string",
+          "length": 200,
+          "nullable": false
+        },
+        "object_id": {
+          "family": "string",
+          "length": 36,
+          "nullable": false
+        },
+        "object_type": {
+          "family": "string",
+          "length": 30,
+          "nullable": false
+        },
+        "sha256": {
+          "family": "string",
+          "length": 64,
+          "nullable": false
+        },
+        "size": {
+          "family": "integer",
+          "nullable": false
+        },
+        "storage_key": {
+          "family": "string",
+          "length": 80,
+          "nullable": false
+        },
+        "teacher_id": {
+          "family": "string",
+          "length": 36,
+          "nullable": false
+        },
+        "uploaded_by": {
+          "family": "string",
+          "length": 36,
+          "nullable": false
+        }
+      },
+      "foreign_keys": [
+        [
+          [
+            "teacher_id"
+          ],
+          "users",
+          [
+            "id"
+          ]
+        ],
+        [
+          [
+            "uploaded_by"
+          ],
+          "users",
+          [
+            "id"
+          ]
+        ]
+      ],
+      "indexes": [
+        [
+          "ix_attachments_object_id",
+          [
+            "object_id"
+          ],
+          false
+        ],
+        [
+          "ix_attachments_teacher_id",
+          [
+            "teacher_id"
+          ],
+          false
+        ]
+      ],
+      "primary_key": [
+        "id"
+      ],
+      "unique": [
+        [
+          "storage_key"
+        ]
+      ]
+    },
+    "audit_events": {
+      "checks": [],
+      "columns": {
+        "action": {
+          "family": "string",
+          "length": 120,
+          "nullable": false
+        },
+        "actor_id": {
+          "family": "string",
+          "length": 36,
+          "nullable": true
+        },
+        "actor_name": {
+          "family": "string",
+          "length": 100,
+          "nullable": false
+        },
+        "after": {
+          "family": "json",
+          "nullable": false
+        },
+        "before": {
+          "family": "json",
+          "nullable": false
+        },
+        "created_at": {
+          "family": "datetime",
+          "nullable": false
+        },
+        "id": {
+          "family": "string",
+          "length": 36,
+          "nullable": false
+        },
+        "module": {
+          "family": "string",
+          "length": 50,
+          "nullable": false
+        },
+        "object_id": {
+          "family": "string",
+          "length": 128,
+          "nullable": false
+        },
+        "org_id": {
+          "family": "string",
+          "length": 36,
+          "nullable": true
+        },
+        "reason": {
+          "family": "text",
+          "nullable": false
+        },
+        "request_id": {
+          "family": "string",
+          "length": 36,
+          "nullable": false
+        },
+        "result": {
+          "family": "string",
+          "length": 30,
+          "nullable": false
+        }
+      },
+      "foreign_keys": [],
+      "indexes": [
+        [
+          "ix_audit_events_actor_id",
+          [
+            "actor_id"
+          ],
+          false
+        ],
+        [
+          "ix_audit_events_module",
+          [
+            "module"
+          ],
+          false
+        ],
+        [
+          "ix_audit_events_org_id",
+          [
+            "org_id"
+          ],
+          false
+        ],
+        [
+          "ix_audit_time",
+          [
+            "created_at"
+          ],
+          false
+        ]
+      ],
+      "primary_key": [
+        "id"
+      ],
+      "unique": []
+    },
+    "auth_sessions": {
+      "checks": [],
+      "columns": {
+        "auth_version": {
+          "family": "integer",
+          "nullable": false
+        },
+        "csrf": {
+          "family": "string",
+          "length": 64,
+          "nullable": false
+        },
+        "expires_at": {
+          "family": "datetime",
+          "nullable": false
+        },
+        "last_seen": {
+          "family": "datetime",
+          "nullable": false
+        },
+        "token_hash": {
+          "family": "string",
+          "length": 64,
+          "nullable": false
+        },
+        "user_id": {
+          "family": "string",
+          "length": 36,
+          "nullable": false
+        }
+      },
+      "foreign_keys": [
+        [
+          [
+            "user_id"
+          ],
+          "users",
+          [
+            "id"
+          ]
+        ]
+      ],
+      "indexes": [
+        [
+          "ix_auth_sessions_expires_at",
+          [
+            "expires_at"
+          ],
+          false
+        ],
+        [
+          "ix_auth_sessions_user_id",
+          [
+            "user_id"
+          ],
+          false
+        ]
+      ],
+      "primary_key": [
+        "token_hash"
+      ],
+      "unique": []
+    },
+    "calculation_batches": {
+      "checks": [],
+      "columns": {
+        "actor_id": {
+          "family": "string",
+          "length": 36,
+          "nullable": false
+        },
+        "created_at": {
+          "family": "datetime",
+          "nullable": false
+        },
+        "id": {
+          "family": "string",
+          "length": 36,
+          "nullable": false
+        },
+        "kind": {
+          "family": "string",
+          "length": 20,
+          "nullable": false
+        },
+        "period_id": {
+          "family": "string",
+          "length": 36,
+          "nullable": false
+        },
+        "reason": {
+          "family": "text",
+          "nullable": false
+        },
+        "result": {
+          "family": "json",
+          "nullable": false
+        },
+        "rule_id": {
+          "family": "string",
+          "length": 36,
+          "nullable": false
+        }
+      },
+      "foreign_keys": [
+        [
+          [
+            "actor_id"
+          ],
+          "users",
+          [
+            "id"
+          ]
+        ],
+        [
+          [
+            "period_id"
+          ],
+          "periods",
+          [
+            "id"
+          ]
+        ],
+        [
+          [
+            "rule_id"
+          ],
+          "rules",
+          [
+            "id"
+          ]
+        ]
+      ],
+      "indexes": [],
+      "primary_key": [
+        "id"
+      ],
+      "unique": []
+    },
+    "command_receipts": {
+      "checks": [],
+      "columns": {
+        "actor_id": {
+          "family": "string",
+          "length": 36,
+          "nullable": false
+        },
+        "created_at": {
+          "family": "datetime",
+          "nullable": false
+        },
+        "key": {
+          "family": "string",
+          "length": 64,
+          "nullable": false
+        },
+        "request_hash": {
+          "family": "string",
+          "length": 64,
+          "nullable": false
+        },
+        "response": {
+          "family": "json",
+          "nullable": false
+        }
+      },
+      "foreign_keys": [
+        [
+          [
+            "actor_id"
+          ],
+          "users",
+          [
+            "id"
+          ]
+        ]
+      ],
+      "indexes": [],
+      "primary_key": [
+        "key"
+      ],
+      "unique": []
+    },
+    "connection_checks": {
+      "checks": [],
+      "columns": {
+        "actor_id": {
+          "family": "string",
+          "length": 36,
+          "nullable": false
+        },
+        "adapter_id": {
+          "family": "string",
+          "length": 128,
+          "nullable": false
+        },
+        "configuration_hash": {
+          "family": "string",
+          "length": 64,
+          "nullable": false
+        },
+        "connection_id": {
+          "family": "string",
+          "length": 36,
+          "nullable": false
+        },
+        "created_at": {
+          "family": "datetime",
+          "nullable": false
+        },
+        "expires_at": {
+          "family": "datetime",
+          "nullable": false
+        },
+        "id": {
+          "family": "string",
+          "length": 36,
+          "nullable": false
+        },
+        "mode": {
+          "family": "string",
+          "length": 20,
+          "nullable": false
+        },
+        "passed": {
+          "family": "integer",
+          "nullable": false
+        },
+        "reason_code": {
+          "family": "string",
+          "length": 64,
+          "nullable": false
+        },
+        "receipt": {
+          "family": "json",
+          "nullable": false
+        }
+      },
+      "foreign_keys": [
+        [
+          [
+            "actor_id"
+          ],
+          "users",
+          [
+            "id"
+          ]
+        ],
+        [
+          [
+            "connection_id"
+          ],
+          "connections",
+          [
+            "id"
+          ]
+        ]
+      ],
+      "indexes": [
+        [
+          "ix_connection_checks_connection_id",
+          [
+            "connection_id"
+          ],
+          false
+        ]
+      ],
+      "primary_key": [
+        "id"
+      ],
+      "unique": []
+    },
+    "connections": {
+      "checks": [],
+      "columns": {
+        "code": {
+          "family": "string",
+          "length": 40,
+          "nullable": false
+        },
+        "config": {
+          "family": "json",
+          "nullable": false
+        },
+        "created_at": {
+          "family": "datetime",
+          "nullable": false
+        },
+        "id": {
+          "family": "string",
+          "length": 36,
+          "nullable": false
+        },
+        "mappings": {
+          "family": "json",
+          "nullable": false
+        },
+        "name": {
+          "family": "string",
+          "length": 100,
+          "nullable": false
+        },
+        "state": {
+          "family": "string",
+          "length": 30,
+          "nullable": false
+        },
+        "version": {
+          "family": "integer",
+          "nullable": false
+        }
+      },
+      "foreign_keys": [],
+      "indexes": [],
+      "primary_key": [
+        "id"
+      ],
+      "unique": [
+        [
+          "code"
+        ]
+      ]
+    },
+    "disputes": {
+      "checks": [],
+      "columns": {
+        "created_at": {
+          "family": "datetime",
+          "nullable": false
+        },
+        "id": {
+          "family": "string",
+          "length": 36,
+          "nullable": false
+        },
+        "object_id": {
+          "family": "string",
+          "length": 36,
+          "nullable": false
+        },
+        "object_type": {
+          "family": "string",
+          "length": 30,
+          "nullable": false
+        },
+        "period_id": {
+          "family": "string",
+          "length": 36,
+          "nullable": true
+        },
+        "reason": {
+          "family": "text",
+          "nullable": false
+        },
+        "resolution": {
+          "family": "text",
+          "nullable": false
+        },
+        "resolved_by": {
+          "family": "string",
+          "length": 36,
+          "nullable": true
+        },
+        "state": {
+          "family": "string",
+          "length": 20,
+          "nullable": false
+        },
+        "teacher_id": {
+          "family": "string",
+          "length": 36,
+          "nullable": false
+        },
+        "version": {
+          "family": "integer",
+          "nullable": false
+        }
+      },
+      "foreign_keys": [
+        [
+          [
+            "period_id"
+          ],
+          "periods",
+          [
+            "id"
+          ]
+        ],
+        [
+          [
+            "resolved_by"
+          ],
+          "users",
+          [
+            "id"
+          ]
+        ],
+        [
+          [
+            "teacher_id"
+          ],
+          "users",
+          [
+            "id"
+          ]
+        ]
+      ],
+      "indexes": [
+        [
+          "ix_disputes_object_id",
+          [
+            "object_id"
+          ],
+          false
+        ],
+        [
+          "ix_disputes_teacher_id",
+          [
+            "teacher_id"
+          ],
+          false
+        ]
+      ],
+      "primary_key": [
+        "id"
+      ],
+      "unique": []
+    },
+    "import_jobs": {
+      "checks": [],
+      "columns": {
+        "created_at": {
+          "family": "datetime",
+          "nullable": false
+        },
+        "errors": {
+          "family": "integer",
+          "nullable": false
+        },
+        "filename": {
+          "family": "string",
+          "length": 200,
+          "nullable": false
+        },
+        "id": {
+          "family": "string",
+          "length": 36,
+          "nullable": false
+        },
+        "kind": {
+          "family": "string",
+          "length": 30,
+          "nullable": false
+        },
+        "owner_id": {
+          "family": "string",
+          "length": 36,
+          "nullable": false
+        },
+        "receipt": {
+          "family": "json",
+          "nullable": false
+        },
+        "sha256": {
+          "family": "string",
+          "length": 64,
+          "nullable": false
+        },
+        "state": {
+          "family": "string",
+          "length": 20,
+          "nullable": false
+        },
+        "total": {
+          "family": "integer",
+          "nullable": false
+        },
+        "version": {
+          "family": "integer",
+          "nullable": false
+        }
+      },
+      "foreign_keys": [
+        [
+          [
+            "owner_id"
+          ],
+          "users",
+          [
+            "id"
+          ]
+        ]
+      ],
+      "indexes": [
+        [
+          "ix_import_jobs_owner_id",
+          [
+            "owner_id"
+          ],
+          false
+        ]
+      ],
+      "primary_key": [
+        "id"
+      ],
+      "unique": []
+    },
+    "import_rows": {
+      "checks": [],
+      "columns": {
+        "created_at": {
+          "family": "datetime",
+          "nullable": false
+        },
+        "errors": {
+          "family": "json",
+          "nullable": false
+        },
+        "id": {
+          "family": "string",
+          "length": 36,
+          "nullable": false
+        },
+        "job_id": {
+          "family": "string",
+          "length": 36,
+          "nullable": false
+        },
+        "payload": {
+          "family": "json",
+          "nullable": false
+        },
+        "row_no": {
+          "family": "integer",
+          "nullable": false
+        }
+      },
+      "foreign_keys": [
+        [
+          [
+            "job_id"
+          ],
+          "import_jobs",
+          [
+            "id"
+          ]
+        ]
+      ],
+      "indexes": [
+        [
+          "ix_import_rows_job_id",
+          [
+            "job_id"
+          ],
+          false
+        ]
+      ],
+      "primary_key": [
+        "id"
+      ],
+      "unique": [
+        [
+          "job_id",
+          "row_no"
+        ]
+      ]
+    },
+    "inbound_batches": {
+      "checks": [],
+      "columns": {
+        "configuration_hash": {
+          "family": "string",
+          "length": 64,
+          "nullable": false
+        },
+        "connection_id": {
+          "family": "string",
+          "length": 36,
+          "nullable": false
+        },
+        "content_hash": {
+          "family": "string",
+          "length": 64,
+          "nullable": false
+        },
+        "created_at": {
+          "family": "datetime",
+          "nullable": false
+        },
+        "data_type": {
+          "family": "string",
+          "length": 64,
+          "nullable": false
+        },
+        "errors": {
+          "family": "integer",
+          "nullable": false
+        },
+        "id": {
+          "family": "string",
+          "length": 36,
+          "nullable": false
+        },
+        "owner_id": {
+          "family": "string",
+          "length": 36,
+          "nullable": false
+        },
+        "receipt": {
+          "family": "json",
+          "nullable": false
+        },
+        "source_label": {
+          "family": "string",
+          "length": 160,
+          "nullable": false
+        },
+        "state": {
+          "family": "string",
+          "length": 20,
+          "nullable": false
+        },
+        "total": {
+          "family": "integer",
+          "nullable": false
+        },
+        "version": {
+          "family": "integer",
+          "nullable": false
+        }
+      },
+      "foreign_keys": [
+        [
+          [
+            "connection_id"
+          ],
+          "connections",
+          [
+            "id"
+          ]
+        ],
+        [
+          [
+            "owner_id"
+          ],
+          "users",
+          [
+            "id"
+          ]
+        ]
+      ],
+      "indexes": [
+        [
+          "ix_inbound_batches_connection_id",
+          [
+            "connection_id"
+          ],
+          false
+        ],
+        [
+          "ix_inbound_batches_data_type",
+          [
+            "data_type"
+          ],
+          false
+        ],
+        [
+          "ix_inbound_batches_owner_id",
+          [
+            "owner_id"
+          ],
+          false
+        ],
+        [
+          "ix_inbound_batches_state",
+          [
+            "state"
+          ],
+          false
+        ]
+      ],
+      "primary_key": [
+        "id"
+      ],
+      "unique": []
+    },
+    "inbound_rows": {
+      "checks": [],
+      "columns": {
+        "batch_id": {
+          "family": "string",
+          "length": 36,
+          "nullable": false
+        },
+        "business_key": {
+          "family": "string",
+          "length": 160,
+          "nullable": false
+        },
+        "created_at": {
+          "family": "datetime",
+          "nullable": false
+        },
+        "errors": {
+          "family": "json",
+          "nullable": false
+        },
+        "id": {
+          "family": "string",
+          "length": 36,
+          "nullable": false
+        },
+        "mapped": {
+          "family": "json",
+          "nullable": false
+        },
+        "raw": {
+          "family": "json",
+          "nullable": false
+        },
+        "row_no": {
+          "family": "integer",
+          "nullable": false
+        }
+      },
+      "foreign_keys": [
+        [
+          [
+            "batch_id"
+          ],
+          "inbound_batches",
+          [
+            "id"
+          ]
+        ]
+      ],
+      "indexes": [
+        [
+          "ix_inbound_rows_batch_id",
+          [
+            "batch_id"
+          ],
+          false
+        ],
+        [
+          "ix_inbound_rows_business_key",
+          [
+            "business_key"
+          ],
+          false
+        ]
+      ],
+      "primary_key": [
+        "id"
+      ],
+      "unique": [
+        [
+          "batch_id",
+          "row_no"
+        ]
+      ]
+    },
+    "installation_provenance": {
+      "checks": [
+        "singleton_id=1"
+      ],
+      "columns": {
+        "baseline_revision": {
+          "family": "string",
+          "length": 32,
+          "nullable": false
+        },
+        "contract_sha256": {
+          "family": "string",
+          "length": 64,
+          "nullable": false
+        },
+        "installation_id": {
+          "family": "string",
+          "length": 36,
+          "nullable": false
+        },
+        "installed_at": {
+          "family": "datetime",
+          "nullable": false
+        },
+        "singleton_id": {
+          "family": "integer",
+          "nullable": false
+        },
+        "source_kind": {
+          "family": "string",
+          "length": 40,
+          "nullable": false
+        }
+      },
+      "foreign_keys": [],
+      "indexes": [],
+      "primary_key": [
+        "singleton_id"
+      ],
+      "unique": [
+        [
+          "installation_id"
+        ]
+      ]
+    },
+    "integration_schedules": {
+      "checks": [],
+      "columns": {
+        "active": {
+          "family": "integer",
+          "nullable": false
+        },
+        "approved_by": {
+          "family": "string",
+          "length": 36,
+          "nullable": false
+        },
+        "auto_commit": {
+          "family": "integer",
+          "nullable": false
+        },
+        "connection_id": {
+          "family": "string",
+          "length": 36,
+          "nullable": false
+        },
+        "created_at": {
+          "family": "datetime",
+          "nullable": false
+        },
+        "data_type": {
+          "family": "string",
+          "length": 64,
+          "nullable": false
+        },
+        "frequency_minutes": {
+          "family": "integer",
+          "nullable": false
+        },
+        "id": {
+          "family": "string",
+          "length": 36,
+          "nullable": false
+        },
+        "last_cursor": {
+          "family": "string",
+          "length": 500,
+          "nullable": true
+        },
+        "last_error": {
+          "family": "string",
+          "length": 500,
+          "nullable": false
+        },
+        "last_run_at": {
+          "family": "datetime",
+          "nullable": true
+        },
+        "next_at": {
+          "family": "datetime",
+          "nullable": false
+        },
+        "version": {
+          "family": "integer",
+          "nullable": false
+        }
+      },
+      "foreign_keys": [
+        [
+          [
+            "approved_by"
+          ],
+          "users",
+          [
+            "id"
+          ]
+        ],
+        [
+          [
+            "connection_id"
+          ],
+          "connections",
+          [
+            "id"
+          ]
+        ]
+      ],
+      "indexes": [
+        [
+          "ix_integration_schedule_due",
+          [
+            "active",
+            "next_at"
+          ],
+          false
+        ],
+        [
+          "ix_integration_schedules_active",
+          [
+            "active"
+          ],
+          false
+        ],
+        [
+          "ix_integration_schedules_approved_by",
+          [
+            "approved_by"
+          ],
+          false
+        ],
+        [
+          "ix_integration_schedules_connection_id",
+          [
+            "connection_id"
+          ],
+          false
+        ],
+        [
+          "ix_integration_schedules_data_type",
+          [
+            "data_type"
+          ],
+          false
+        ],
+        [
+          "ix_integration_schedules_next_at",
+          [
+            "next_at"
+          ],
+          false
+        ]
+      ],
+      "primary_key": [
+        "id"
+      ],
+      "unique": [
+        [
+          "connection_id",
+          "data_type"
+        ]
+      ]
+    },
+    "login_throttles": {
+      "checks": [],
+      "columns": {
+        "attempts": {
+          "family": "integer",
+          "nullable": false
+        },
+        "key": {
+          "family": "string",
+          "length": 64,
+          "nullable": false
+        },
+        "window_start": {
+          "family": "datetime",
+          "nullable": false
+        }
+      },
+      "foreign_keys": [],
+      "indexes": [],
+      "primary_key": [
+        "key"
+      ],
+      "unique": []
+    },
+    "mutation_guards": {
+      "checks": [],
+      "columns": {
+        "key": {
+          "family": "string",
+          "length": 80,
+          "nullable": false
+        },
+        "version": {
+          "family": "integer",
+          "nullable": false
+        }
+      },
+      "foreign_keys": [],
+      "indexes": [],
+      "primary_key": [
+        "key"
+      ],
+      "unique": []
+    },
+    "notices": {
+      "checks": [],
+      "columns": {
+        "author_id": {
+          "family": "string",
+          "length": 36,
+          "nullable": false
+        },
+        "body": {
+          "family": "text",
+          "nullable": false
+        },
+        "category": {
+          "family": "string",
+          "length": 40,
+          "nullable": false
+        },
+        "created_at": {
+          "family": "datetime",
+          "nullable": false
+        },
+        "id": {
+          "family": "string",
+          "length": 36,
+          "nullable": false
+        },
+        "org_id": {
+          "family": "string",
+          "length": 36,
+          "nullable": false
+        },
+        "published": {
+          "family": "integer",
+          "nullable": false
+        },
+        "title": {
+          "family": "string",
+          "length": 200,
+          "nullable": false
+        },
+        "version": {
+          "family": "integer",
+          "nullable": false
+        }
+      },
+      "foreign_keys": [
+        [
+          [
+            "author_id"
+          ],
+          "users",
+          [
+            "id"
+          ]
+        ],
+        [
+          [
+            "org_id"
+          ],
+          "organizations",
+          [
+            "id"
+          ]
+        ]
+      ],
+      "indexes": [
+        [
+          "ix_notices_org_id",
+          [
+            "org_id"
+          ],
+          false
+        ]
+      ],
+      "primary_key": [
+        "id"
+      ],
+      "unique": []
+    },
+    "organization_assessment_metric_evidence": {
+      "checks": [],
+      "columns": {
+        "assessment_id": {
+          "family": "string",
+          "length": 36,
+          "nullable": false
+        },
+        "calculated_score": {
+          "family": "numeric",
+          "nullable": false,
+          "precision": 8,
+          "scale": 2
+        },
+        "created_at": {
+          "family": "datetime",
+          "nullable": false
+        },
+        "data_source": {
+          "family": "string",
+          "length": 200,
+          "nullable": false
+        },
+        "formula": {
+          "family": "string",
+          "length": 500,
+          "nullable": false
+        },
+        "id": {
+          "family": "string",
+          "length": 36,
+          "nullable": false
+        },
+        "measured_at": {
+          "family": "datetime",
+          "nullable": false
+        },
+        "metric_code": {
+          "family": "string",
+          "length": 64,
+          "nullable": false
+        },
+        "metric_name": {
+          "family": "string",
+          "length": 100,
+          "nullable": false
+        },
+        "raw_value": {
+          "family": "string",
+          "length": 100,
+          "nullable": false
+        },
+        "rule_version": {
+          "family": "integer",
+          "nullable": false
+        },
+        "scope_snapshot": {
+          "family": "json",
+          "nullable": false
+        },
+        "target_value": {
+          "family": "string",
+          "length": 100,
+          "nullable": false
+        },
+        "weight": {
+          "family": "numeric",
+          "nullable": false,
+          "precision": 7,
+          "scale": 2
+        }
+      },
+      "foreign_keys": [
+        [
+          [
+            "assessment_id"
+          ],
+          "organization_assessments",
+          [
+            "id"
+          ]
+        ]
+      ],
+      "indexes": [
+        [
+          "ix_organization_assessment_metric_evidence_assessment_id",
+          [
+            "assessment_id"
+          ],
+          false
+        ]
+      ],
+      "primary_key": [
+        "id"
+      ],
+      "unique": [
+        [
+          "assessment_id",
+          "metric_code"
+        ]
+      ]
+    },
+    "organization_assessment_rules": {
+      "checks": [],
+      "columns": {
+        "config": {
+          "family": "json",
+          "nullable": false
+        },
+        "created_at": {
+          "family": "datetime",
+          "nullable": false
+        },
+        "created_by": {
+          "family": "string",
+          "length": 36,
+          "nullable": false
+        },
+        "fingerprint": {
+          "family": "string",
+          "length": 64,
+          "nullable": false
+        },
+        "id": {
+          "family": "string",
+          "length": 36,
+          "nullable": false
+        },
+        "name": {
+          "family": "string",
+          "length": 100,
+          "nullable": false
+        },
+        "period_id": {
+          "family": "string",
+          "length": 36,
+          "nullable": false
+        },
+        "reason": {
+          "family": "text",
+          "nullable": false
+        },
+        "state": {
+          "family": "string",
+          "length": 20,
+          "nullable": false
+        },
+        "target_kind": {
+          "family": "string",
+          "length": 20,
+          "nullable": false
+        },
+        "version": {
+          "family": "integer",
+          "nullable": false
+        },
+        "version_no": {
+          "family": "integer",
+          "nullable": false
+        }
+      },
+      "foreign_keys": [
+        [
+          [
+            "created_by"
+          ],
+          "users",
+          [
+            "id"
+          ]
+        ],
+        [
+          [
+            "period_id"
+          ],
+          "periods",
+          [
+            "id"
+          ]
+        ]
+      ],
+      "indexes": [
+        [
+          "ix_organization_assessment_rules_period_id",
+          [
+            "period_id"
+          ],
+          false
+        ],
+        [
+          "ix_organization_assessment_rules_state",
+          [
+            "state"
+          ],
+          false
+        ],
+        [
+          "ix_organization_assessment_rules_target_kind",
+          [
+            "target_kind"
+          ],
+          false
+        ]
+      ],
+      "primary_key": [
+        "id"
+      ],
+      "unique": [
+        [
+          "target_kind",
+          "period_id",
+          "version_no"
+        ]
+      ]
+    },
+    "organization_assessments": {
+      "checks": [],
+      "columns": {
+        "archive": {
+          "family": "json",
+          "nullable": true
+        },
+        "archive_sha256": {
+          "family": "string",
+          "length": 64,
+          "nullable": true
+        },
+        "created_at": {
+          "family": "datetime",
+          "nullable": false
+        },
+        "detail": {
+          "family": "json",
+          "nullable": false
+        },
+        "generated_by": {
+          "family": "string",
+          "length": 36,
+          "nullable": false
+        },
+        "id": {
+          "family": "string",
+          "length": 36,
+          "nullable": false
+        },
+        "period_id": {
+          "family": "string",
+          "length": 36,
+          "nullable": false
+        },
+        "reviewed_by": {
+          "family": "string",
+          "length": 36,
+          "nullable": true
+        },
+        "rule_id": {
+          "family": "string",
+          "length": 36,
+          "nullable": false
+        },
+        "school_audited_by": {
+          "family": "string",
+          "length": 36,
+          "nullable": true
+        },
+        "score": {
+          "family": "numeric",
+          "nullable": false,
+          "precision": 8,
+          "scale": 2
+        },
+        "source_snapshot": {
+          "family": "json",
+          "nullable": false
+        },
+        "state": {
+          "family": "string",
+          "length": 24,
+          "nullable": false
+        },
+        "target_id": {
+          "family": "string",
+          "length": 36,
+          "nullable": false
+        },
+        "target_kind": {
+          "family": "string",
+          "length": 20,
+          "nullable": false
+        },
+        "version": {
+          "family": "integer",
+          "nullable": false
+        }
+      },
+      "foreign_keys": [
+        [
+          [
+            "generated_by"
+          ],
+          "users",
+          [
+            "id"
+          ]
+        ],
+        [
+          [
+            "period_id"
+          ],
+          "periods",
+          [
+            "id"
+          ]
+        ],
+        [
+          [
+            "reviewed_by"
+          ],
+          "users",
+          [
+            "id"
+          ]
+        ],
+        [
+          [
+            "rule_id"
+          ],
+          "organization_assessment_rules",
+          [
+            "id"
+          ]
+        ],
+        [
+          [
+            "school_audited_by"
+          ],
+          "users",
+          [
+            "id"
+          ]
+        ],
+        [
+          [
+            "target_id"
+          ],
+          "organizations",
+          [
+            "id"
+          ]
+        ]
+      ],
+      "indexes": [
+        [
+          "ix_org_assessment_period_state",
+          [
+            "period_id",
+            "state"
+          ],
+          false
+        ],
+        [
+          "ix_organization_assessments_period_id",
+          [
+            "period_id"
+          ],
+          false
+        ],
+        [
+          "ix_organization_assessments_state",
+          [
+            "state"
+          ],
+          false
+        ],
+        [
+          "ix_organization_assessments_target_id",
+          [
+            "target_id"
+          ],
+          false
+        ],
+        [
+          "ix_organization_assessments_target_kind",
+          [
+            "target_kind"
+          ],
+          false
+        ]
+      ],
+      "primary_key": [
+        "id"
+      ],
+      "unique": [
+        [
+          "target_kind",
+          "target_id",
+          "period_id"
+        ]
+      ]
+    },
+    "organization_rule_trials": {
+      "checks": [],
+      "columns": {
+        "actor_id": {
+          "family": "string",
+          "length": 36,
+          "nullable": false
+        },
+        "created_at": {
+          "family": "datetime",
+          "nullable": false
+        },
+        "fingerprint": {
+          "family": "string",
+          "length": 64,
+          "nullable": false
+        },
+        "id": {
+          "family": "string",
+          "length": 36,
+          "nullable": false
+        },
+        "result": {
+          "family": "json",
+          "nullable": false
+        },
+        "rule_id": {
+          "family": "string",
+          "length": 36,
+          "nullable": false
+        },
+        "target_ids": {
+          "family": "json",
+          "nullable": false
+        }
+      },
+      "foreign_keys": [
+        [
+          [
+            "actor_id"
+          ],
+          "users",
+          [
+            "id"
+          ]
+        ],
+        [
+          [
+            "rule_id"
+          ],
+          "organization_assessment_rules",
+          [
+            "id"
+          ]
+        ]
+      ],
+      "indexes": [
+        [
+          "ix_organization_rule_trials_rule_id",
+          [
+            "rule_id"
+          ],
+          false
+        ]
+      ],
+      "primary_key": [
+        "id"
+      ],
+      "unique": []
+    },
+    "organizations": {
+      "checks": [],
+      "columns": {
+        "active": {
+          "family": "integer",
+          "nullable": false
+        },
+        "code": {
+          "family": "string",
+          "length": 64,
+          "nullable": false
+        },
+        "created_at": {
+          "family": "datetime",
+          "nullable": false
+        },
+        "id": {
+          "family": "string",
+          "length": 36,
+          "nullable": false
+        },
+        "kind": {
+          "family": "string",
+          "length": 20,
+          "nullable": false
+        },
+        "name": {
+          "family": "string",
+          "length": 120,
+          "nullable": false
+        },
+        "parent_id": {
+          "family": "string",
+          "length": 36,
+          "nullable": true
+        },
+        "version": {
+          "family": "integer",
+          "nullable": false
+        }
+      },
+      "foreign_keys": [
+        [
+          [
+            "parent_id"
+          ],
+          "organizations",
+          [
+            "id"
+          ]
+        ]
+      ],
+      "indexes": [
+        [
+          "ix_organizations_parent_id",
+          [
+            "parent_id"
+          ],
+          false
+        ]
+      ],
+      "primary_key": [
+        "id"
+      ],
+      "unique": [
+        [
+          "code"
+        ]
+      ]
+    },
+    "periods": {
+      "checks": [],
+      "columns": {
+        "created_at": {
+          "family": "datetime",
+          "nullable": false
+        },
+        "end_date": {
+          "family": "date",
+          "nullable": false
+        },
+        "id": {
+          "family": "string",
+          "length": 36,
+          "nullable": false
+        },
+        "name": {
+          "family": "string",
+          "length": 100,
+          "nullable": false
+        },
+        "start_date": {
+          "family": "date",
+          "nullable": false
+        },
+        "state": {
+          "family": "string",
+          "length": 20,
+          "nullable": false
+        },
+        "version": {
+          "family": "integer",
+          "nullable": false
+        }
+      },
+      "foreign_keys": [],
+      "indexes": [],
+      "primary_key": [
+        "id"
+      ],
+      "unique": [
+        [
+          "name"
+        ]
+      ]
+    },
+    "point_balances": {
+      "checks": [],
+      "columns": {
+        "confirmed": {
+          "family": "integer",
+          "nullable": false
+        },
+        "created_at": {
+          "family": "datetime",
+          "nullable": false
+        },
+        "id": {
+          "family": "string",
+          "length": 36,
+          "nullable": false
+        },
+        "period_id": {
+          "family": "string",
+          "length": 36,
+          "nullable": false
+        },
+        "teacher_id": {
+          "family": "string",
+          "length": 36,
+          "nullable": false
+        },
+        "version": {
+          "family": "integer",
+          "nullable": false
+        }
+      },
+      "foreign_keys": [
+        [
+          [
+            "period_id"
+          ],
+          "periods",
+          [
+            "id"
+          ]
+        ],
+        [
+          [
+            "teacher_id"
+          ],
+          "users",
+          [
+            "id"
+          ]
+        ]
+      ],
+      "indexes": [
+        [
+          "ix_point_balances_period_id",
+          [
+            "period_id"
+          ],
+          false
+        ],
+        [
+          "ix_point_balances_teacher_id",
+          [
+            "teacher_id"
+          ],
+          false
+        ]
+      ],
+      "primary_key": [
+        "id"
+      ],
+      "unique": [
+        [
+          "teacher_id",
+          "period_id"
+        ]
+      ]
+    },
+    "point_entries": {
+      "checks": [],
+      "columns": {
+        "actor_id": {
+          "family": "string",
+          "length": 36,
+          "nullable": false
+        },
+        "amount": {
+          "family": "numeric",
+          "nullable": false,
+          "precision": 18,
+          "scale": 2
+        },
+        "basis": {
+          "family": "text",
+          "nullable": false
+        },
+        "batch_id": {
+          "family": "string",
+          "length": 36,
+          "nullable": true
+        },
+        "created_at": {
+          "family": "datetime",
+          "nullable": false
+        },
+        "formula": {
+          "family": "string",
+          "length": 500,
+          "nullable": false
+        },
+        "id": {
+          "family": "string",
+          "length": 36,
+          "nullable": false
+        },
+        "item_key": {
+          "family": "string",
+          "length": 64,
+          "nullable": false
+        },
+        "kind": {
+          "family": "string",
+          "length": 20,
+          "nullable": false
+        },
+        "period_id": {
+          "family": "string",
+          "length": 36,
+          "nullable": false
+        },
+        "raw_value": {
+          "family": "string",
+          "length": 80,
+          "nullable": false
+        },
+        "reason": {
+          "family": "text",
+          "nullable": false
+        },
+        "rule_id": {
+          "family": "string",
+          "length": 36,
+          "nullable": true
+        },
+        "source_snapshot": {
+          "family": "json",
+          "nullable": false
+        },
+        "teacher_id": {
+          "family": "string",
+          "length": 36,
+          "nullable": false
+        }
+      },
+      "foreign_keys": [
+        [
+          [
+            "actor_id"
+          ],
+          "users",
+          [
+            "id"
+          ]
+        ],
+        [
+          [
+            "batch_id"
+          ],
+          "calculation_batches",
+          [
+            "id"
+          ]
+        ],
+        [
+          [
+            "period_id"
+          ],
+          "periods",
+          [
+            "id"
+          ]
+        ],
+        [
+          [
+            "rule_id"
+          ],
+          "rules",
+          [
+            "id"
+          ]
+        ],
+        [
+          [
+            "teacher_id"
+          ],
+          "users",
+          [
+            "id"
+          ]
+        ]
+      ],
+      "indexes": [
+        [
+          "ix_point_entries_batch_id",
+          [
+            "batch_id"
+          ],
+          false
+        ],
+        [
+          "ix_point_entries_period_id",
+          [
+            "period_id"
+          ],
+          false
+        ],
+        [
+          "ix_point_entries_teacher_id",
+          [
+            "teacher_id"
+          ],
+          false
+        ],
+        [
+          "ix_points_teacher_period",
+          [
+            "teacher_id",
+            "period_id"
+          ],
+          false
+        ]
+      ],
+      "primary_key": [
+        "id"
+      ],
+      "unique": []
+    },
+    "qualification_revisions": {
+      "checks": [],
+      "columns": {
+        "actor_id": {
+          "family": "string",
+          "length": 36,
+          "nullable": false
+        },
+        "attachment_ids": {
+          "family": "json",
+          "nullable": false
+        },
+        "created_at": {
+          "family": "datetime",
+          "nullable": false
+        },
+        "data": {
+          "family": "json",
+          "nullable": false
+        },
+        "id": {
+          "family": "string",
+          "length": 36,
+          "nullable": false
+        },
+        "qualification_id": {
+          "family": "string",
+          "length": 36,
+          "nullable": false
+        },
+        "reason": {
+          "family": "text",
+          "nullable": false
+        },
+        "version": {
+          "family": "integer",
+          "nullable": false
+        }
+      },
+      "foreign_keys": [
+        [
+          [
+            "actor_id"
+          ],
+          "users",
+          [
+            "id"
+          ]
+        ],
+        [
+          [
+            "qualification_id"
+          ],
+          "qualifications",
+          [
+            "id"
+          ]
+        ]
+      ],
+      "indexes": [
+        [
+          "ix_qualification_revisions_qualification_id",
+          [
+            "qualification_id"
+          ],
+          false
+        ]
+      ],
+      "primary_key": [
+        "id"
+      ],
+      "unique": [
+        [
+          "qualification_id",
+          "version"
+        ]
+      ]
+    },
+    "qualifications": {
+      "checks": [],
+      "columns": {
+        "attachment_ids": {
+          "family": "json",
+          "nullable": false
+        },
+        "category": {
+          "family": "string",
+          "length": 80,
+          "nullable": false
+        },
+        "certificate_no": {
+          "family": "string",
+          "length": 128,
+          "nullable": false
+        },
+        "created_at": {
+          "family": "datetime",
+          "nullable": false
+        },
+        "current_revision_id": {
+          "family": "string",
+          "length": 36,
+          "nullable": true
+        },
+        "expires": {
+          "family": "date",
+          "nullable": true
+        },
+        "id": {
+          "family": "string",
+          "length": 36,
+          "nullable": false
+        },
+        "issuer": {
+          "family": "string",
+          "length": 160,
+          "nullable": false
+        },
+        "name": {
+          "family": "string",
+          "length": 160,
+          "nullable": false
+        },
+        "obtained": {
+          "family": "date",
+          "nullable": false
+        },
+        "state": {
+          "family": "string",
+          "length": 20,
+          "nullable": false
+        },
+        "teacher_id": {
+          "family": "string",
+          "length": 36,
+          "nullable": false
+        },
+        "version": {
+          "family": "integer",
+          "nullable": false
+        }
+      },
+      "foreign_keys": [
+        [
+          [
+            "teacher_id"
+          ],
+          "users",
+          [
+            "id"
+          ]
+        ]
+      ],
+      "indexes": [
+        [
+          "ix_qualifications_expires",
+          [
+            "expires"
+          ],
+          false
+        ],
+        [
+          "ix_qualifications_state",
+          [
+            "state"
+          ],
+          false
+        ],
+        [
+          "ix_qualifications_teacher_id",
+          [
+            "teacher_id"
+          ],
+          false
+        ]
+      ],
+      "primary_key": [
+        "id"
+      ],
+      "unique": [
+        [
+          "teacher_id",
+          "certificate_no"
+        ]
+      ]
+    },
+    "record_revisions": {
+      "checks": [],
+      "columns": {
+        "actor_id": {
+          "family": "string",
+          "length": 36,
+          "nullable": false
+        },
+        "created_at": {
+          "family": "datetime",
+          "nullable": false
+        },
+        "data": {
+          "family": "json",
+          "nullable": false
+        },
+        "id": {
+          "family": "string",
+          "length": 36,
+          "nullable": false
+        },
+        "reason": {
+          "family": "text",
+          "nullable": false
+        },
+        "record_id": {
+          "family": "string",
+          "length": 36,
+          "nullable": false
+        },
+        "version": {
+          "family": "integer",
+          "nullable": false
+        }
+      },
+      "foreign_keys": [
+        [
+          [
+            "actor_id"
+          ],
+          "users",
+          [
+            "id"
+          ]
+        ],
+        [
+          [
+            "record_id"
+          ],
+          "training_records",
+          [
+            "id"
+          ]
+        ]
+      ],
+      "indexes": [
+        [
+          "ix_record_revisions_record_id",
+          [
+            "record_id"
+          ],
+          false
+        ]
+      ],
+      "primary_key": [
+        "id"
+      ],
+      "unique": [
+        [
+          "record_id",
+          "version"
+        ]
+      ]
+    },
+    "roles": {
+      "checks": [],
+      "columns": {
+        "active": {
+          "family": "integer",
+          "nullable": false
+        },
+        "code": {
+          "family": "string",
+          "length": 64,
+          "nullable": false
+        },
+        "created_at": {
+          "family": "datetime",
+          "nullable": false
+        },
+        "id": {
+          "family": "string",
+          "length": 36,
+          "nullable": false
+        },
+        "kind": {
+          "family": "string",
+          "length": 20,
+          "nullable": false
+        },
+        "name": {
+          "family": "string",
+          "length": 100,
+          "nullable": false
+        },
+        "permissions": {
+          "family": "json",
+          "nullable": false
+        },
+        "version": {
+          "family": "integer",
+          "nullable": false
+        }
+      },
+      "foreign_keys": [],
+      "indexes": [],
+      "primary_key": [
+        "id"
+      ],
+      "unique": [
+        [
+          "code"
+        ]
+      ]
+    },
+    "rule_trials": {
+      "checks": [],
+      "columns": {
+        "actor_id": {
+          "family": "string",
+          "length": 36,
+          "nullable": false
+        },
+        "created_at": {
+          "family": "datetime",
+          "nullable": false
+        },
+        "fingerprint": {
+          "family": "string",
+          "length": 64,
+          "nullable": false
+        },
+        "id": {
+          "family": "string",
+          "length": 36,
+          "nullable": false
+        },
+        "result": {
+          "family": "json",
+          "nullable": false
+        },
+        "rule_id": {
+          "family": "string",
+          "length": 36,
+          "nullable": false
+        }
+      },
+      "foreign_keys": [
+        [
+          [
+            "actor_id"
+          ],
+          "users",
+          [
+            "id"
+          ]
+        ],
+        [
+          [
+            "rule_id"
+          ],
+          "rules",
+          [
+            "id"
+          ]
+        ]
+      ],
+      "indexes": [
+        [
+          "ix_rule_trials_rule_id",
+          [
+            "rule_id"
+          ],
+          false
+        ]
+      ],
+      "primary_key": [
+        "id"
+      ],
+      "unique": []
+    },
+    "rules": {
+      "checks": [],
+      "columns": {
+        "config": {
+          "family": "json",
+          "nullable": false
+        },
+        "created_at": {
+          "family": "datetime",
+          "nullable": false
+        },
+        "created_by": {
+          "family": "string",
+          "length": 36,
+          "nullable": false
+        },
+        "fingerprint": {
+          "family": "string",
+          "length": 64,
+          "nullable": false
+        },
+        "id": {
+          "family": "string",
+          "length": 36,
+          "nullable": false
+        },
+        "kind": {
+          "family": "string",
+          "length": 20,
+          "nullable": false
+        },
+        "name": {
+          "family": "string",
+          "length": 100,
+          "nullable": false
+        },
+        "period_id": {
+          "family": "string",
+          "length": 36,
+          "nullable": false
+        },
+        "reason": {
+          "family": "text",
+          "nullable": false
+        },
+        "state": {
+          "family": "string",
+          "length": 20,
+          "nullable": false
+        },
+        "version": {
+          "family": "integer",
+          "nullable": false
+        },
+        "version_no": {
+          "family": "integer",
+          "nullable": false
+        }
+      },
+      "foreign_keys": [
+        [
+          [
+            "created_by"
+          ],
+          "users",
+          [
+            "id"
+          ]
+        ],
+        [
+          [
+            "period_id"
+          ],
+          "periods",
+          [
+            "id"
+          ]
+        ]
+      ],
+      "indexes": [
+        [
+          "ix_rules_kind",
+          [
+            "kind"
+          ],
+          false
+        ],
+        [
+          "ix_rules_period_id",
+          [
+            "period_id"
+          ],
+          false
+        ]
+      ],
+      "primary_key": [
+        "id"
+      ],
+      "unique": [
+        [
+          "kind",
+          "period_id",
+          "version_no"
+        ]
+      ]
+    },
+    "runtime_state": {
+      "checks": [],
+      "columns": {
+        "key": {
+          "family": "string",
+          "length": 80,
+          "nullable": false
+        },
+        "updated_at": {
+          "family": "datetime",
+          "nullable": false
+        },
+        "value": {
+          "family": "json",
+          "nullable": false
+        }
+      },
+      "foreign_keys": [],
+      "indexes": [],
+      "primary_key": [
+        "key"
+      ],
+      "unique": []
+    },
+    "settings": {
+      "checks": [],
+      "columns": {
+        "key": {
+          "family": "string",
+          "length": 100,
+          "nullable": false
+        },
+        "value": {
+          "family": "json",
+          "nullable": false
+        },
+        "version": {
+          "family": "integer",
+          "nullable": false
+        }
+      },
+      "foreign_keys": [],
+      "indexes": [],
+      "primary_key": [
+        "key"
+      ],
+      "unique": []
+    },
+    "sync_call_logs": {
+      "checks": [],
+      "columns": {
+        "acknowledged": {
+          "family": "integer",
+          "nullable": false
+        },
+        "attempt": {
+          "family": "integer",
+          "nullable": false
+        },
+        "created_at": {
+          "family": "datetime",
+          "nullable": false
+        },
+        "id": {
+          "family": "string",
+          "length": 36,
+          "nullable": false
+        },
+        "item_id": {
+          "family": "string",
+          "length": 36,
+          "nullable": false
+        },
+        "message": {
+          "family": "text",
+          "nullable": false
+        },
+        "request_digest": {
+          "family": "string",
+          "length": 64,
+          "nullable": false
+        },
+        "response_code": {
+          "family": "string",
+          "length": 40,
+          "nullable": false
+        },
+        "response_digest": {
+          "family": "string",
+          "length": 64,
+          "nullable": false
+        },
+        "result": {
+          "family": "string",
+          "length": 20,
+          "nullable": false
+        }
+      },
+      "foreign_keys": [
+        [
+          [
+            "item_id"
+          ],
+          "sync_items",
+          [
+            "id"
+          ]
+        ]
+      ],
+      "indexes": [
+        [
+          "ix_sync_call_logs_item_id",
+          [
+            "item_id"
+          ],
+          false
+        ]
+      ],
+      "primary_key": [
+        "id"
+      ],
+      "unique": [
+        [
+          "item_id",
+          "attempt"
+        ]
+      ]
+    },
+    "sync_items": {
+      "checks": [],
+      "columns": {
+        "attempts": {
+          "family": "integer",
+          "nullable": false
+        },
+        "business_key": {
+          "family": "string",
+          "length": 160,
+          "nullable": false
+        },
+        "connection_id": {
+          "family": "string",
+          "length": 36,
+          "nullable": false
+        },
+        "created_at": {
+          "family": "datetime",
+          "nullable": false
+        },
+        "data_type": {
+          "family": "string",
+          "length": 64,
+          "nullable": false
+        },
+        "error": {
+          "family": "text",
+          "nullable": false
+        },
+        "id": {
+          "family": "string",
+          "length": 36,
+          "nullable": false
+        },
+        "idempotency_key": {
+          "family": "string",
+          "length": 64,
+          "nullable": false
+        },
+        "next_at": {
+          "family": "datetime",
+          "nullable": false
+        },
+        "payload": {
+          "family": "json",
+          "nullable": false
+        },
+        "payload_hash": {
+          "family": "string",
+          "length": 64,
+          "nullable": false
+        },
+        "result": {
+          "family": "json",
+          "nullable": false
+        },
+        "state": {
+          "family": "string",
+          "length": 20,
+          "nullable": false
+        },
+        "task_id": {
+          "family": "string",
+          "length": 36,
+          "nullable": false
+        },
+        "version": {
+          "family": "integer",
+          "nullable": false
+        }
+      },
+      "foreign_keys": [
+        [
+          [
+            "connection_id"
+          ],
+          "connections",
+          [
+            "id"
+          ]
+        ],
+        [
+          [
+            "task_id"
+          ],
+          "tasks",
+          [
+            "id"
+          ]
+        ]
+      ],
+      "indexes": [
+        [
+          "ix_sync_item_task_state",
+          [
+            "task_id",
+            "state"
+          ],
+          false
+        ],
+        [
+          "ix_sync_items_business_key",
+          [
+            "business_key"
+          ],
+          false
+        ],
+        [
+          "ix_sync_items_connection_id",
+          [
+            "connection_id"
+          ],
+          false
+        ],
+        [
+          "ix_sync_items_data_type",
+          [
+            "data_type"
+          ],
+          false
+        ],
+        [
+          "ix_sync_items_next_at",
+          [
+            "next_at"
+          ],
+          false
+        ],
+        [
+          "ix_sync_items_state",
+          [
+            "state"
+          ],
+          false
+        ],
+        [
+          "ix_sync_items_task_id",
+          [
+            "task_id"
+          ],
+          false
+        ]
+      ],
+      "primary_key": [
+        "id"
+      ],
+      "unique": [
+        [
+          "connection_id",
+          "data_type",
+          "idempotency_key"
+        ]
+      ]
+    },
+    "task_attempts": {
+      "checks": [],
+      "columns": {
+        "attempt": {
+          "family": "integer",
+          "nullable": false
+        },
+        "created_at": {
+          "family": "datetime",
+          "nullable": false
+        },
+        "id": {
+          "family": "string",
+          "length": 36,
+          "nullable": false
+        },
+        "message": {
+          "family": "text",
+          "nullable": false
+        },
+        "result": {
+          "family": "string",
+          "length": 20,
+          "nullable": false
+        },
+        "task_id": {
+          "family": "string",
+          "length": 36,
+          "nullable": false
+        }
+      },
+      "foreign_keys": [
+        [
+          [
+            "task_id"
+          ],
+          "tasks",
+          [
+            "id"
+          ]
+        ]
+      ],
+      "indexes": [
+        [
+          "ix_task_attempts_task_id",
+          [
+            "task_id"
+          ],
+          false
+        ]
+      ],
+      "primary_key": [
+        "id"
+      ],
+      "unique": []
+    },
+    "tasks": {
+      "checks": [],
+      "columns": {
+        "attempts": {
+          "family": "integer",
+          "nullable": false
+        },
+        "created_at": {
+          "family": "datetime",
+          "nullable": false
+        },
+        "error": {
+          "family": "text",
+          "nullable": false
+        },
+        "id": {
+          "family": "string",
+          "length": 36,
+          "nullable": false
+        },
+        "key": {
+          "family": "string",
+          "length": 100,
+          "nullable": false
+        },
+        "kind": {
+          "family": "string",
+          "length": 30,
+          "nullable": false
+        },
+        "lease_token": {
+          "family": "string",
+          "length": 64,
+          "nullable": true
+        },
+        "lease_until": {
+          "family": "datetime",
+          "nullable": true
+        },
+        "next_at": {
+          "family": "datetime",
+          "nullable": false
+        },
+        "owner_id": {
+          "family": "string",
+          "length": 36,
+          "nullable": false
+        },
+        "payload": {
+          "family": "json",
+          "nullable": false
+        },
+        "result": {
+          "family": "json",
+          "nullable": false
+        },
+        "state": {
+          "family": "string",
+          "length": 20,
+          "nullable": false
+        },
+        "version": {
+          "family": "integer",
+          "nullable": false
+        }
+      },
+      "foreign_keys": [
+        [
+          [
+            "owner_id"
+          ],
+          "users",
+          [
+            "id"
+          ]
+        ]
+      ],
+      "indexes": [
+        [
+          "ix_tasks_next_at",
+          [
+            "next_at"
+          ],
+          false
+        ],
+        [
+          "ix_tasks_owner_id",
+          [
+            "owner_id"
+          ],
+          false
+        ],
+        [
+          "ix_tasks_state",
+          [
+            "state"
+          ],
+          false
+        ]
+      ],
+      "primary_key": [
+        "id"
+      ],
+      "unique": [
+        [
+          "key"
+        ]
+      ]
+    },
+    "teacher_hr_profiles": {
+      "checks": [],
+      "columns": {
+        "active": {
+          "family": "integer",
+          "nullable": false
+        },
+        "created_at": {
+          "family": "datetime",
+          "nullable": false
+        },
+        "extra": {
+          "family": "json",
+          "nullable": false
+        },
+        "id": {
+          "family": "string",
+          "length": 36,
+          "nullable": false
+        },
+        "name": {
+          "family": "string",
+          "length": 100,
+          "nullable": false
+        },
+        "org_code": {
+          "family": "string",
+          "length": 64,
+          "nullable": false
+        },
+        "source": {
+          "family": "string",
+          "length": 100,
+          "nullable": false
+        },
+        "source_updated_at": {
+          "family": "datetime",
+          "nullable": true
+        },
+        "staff_no": {
+          "family": "string",
+          "length": 64,
+          "nullable": false
+        },
+        "title": {
+          "family": "string",
+          "length": 80,
+          "nullable": false
+        },
+        "user_id": {
+          "family": "string",
+          "length": 36,
+          "nullable": true
+        },
+        "version": {
+          "family": "integer",
+          "nullable": false
+        }
+      },
+      "foreign_keys": [
+        [
+          [
+            "user_id"
+          ],
+          "users",
+          [
+            "id"
+          ]
+        ]
+      ],
+      "indexes": [
+        [
+          "ix_teacher_hr_profiles_org_code",
+          [
+            "org_code"
+          ],
+          false
+        ],
+        [
+          "ix_teacher_hr_profiles_staff_no",
+          [
+            "staff_no"
+          ],
+          true
+        ],
+        [
+          "ix_teacher_hr_profiles_user_id",
+          [
+            "user_id"
+          ],
+          false
+        ]
+      ],
+      "primary_key": [
+        "id"
+      ],
+      "unique": [
+        [
+          "staff_no"
+        ]
+      ]
+    },
+    "teacher_participations": {
+      "checks": [
+        "hours>=0"
+      ],
+      "columns": {
+        "batch_id": {
+          "family": "string",
+          "length": 36,
+          "nullable": true
+        },
+        "course": {
+          "family": "string",
+          "length": 160,
+          "nullable": false
+        },
+        "course_code": {
+          "family": "string",
+          "length": 64,
+          "nullable": false
+        },
+        "created_at": {
+          "family": "datetime",
+          "nullable": false
+        },
+        "event_date": {
+          "family": "date",
+          "nullable": false
+        },
+        "external_key": {
+          "family": "string",
+          "length": 128,
+          "nullable": false
+        },
+        "hours": {
+          "family": "numeric",
+          "nullable": false,
+          "precision": 12,
+          "scale": 2
+        },
+        "id": {
+          "family": "string",
+          "length": 36,
+          "nullable": false
+        },
+        "project": {
+          "family": "string",
+          "length": 160,
+          "nullable": false
+        },
+        "project_code": {
+          "family": "string",
+          "length": 64,
+          "nullable": false
+        },
+        "source": {
+          "family": "string",
+          "length": 100,
+          "nullable": false
+        },
+        "state": {
+          "family": "string",
+          "length": 20,
+          "nullable": false
+        },
+        "teacher_id": {
+          "family": "string",
+          "length": 36,
+          "nullable": false
+        },
+        "version": {
+          "family": "integer",
+          "nullable": false
+        }
+      },
+      "foreign_keys": [
+        [
+          [
+            "teacher_id"
+          ],
+          "users",
+          [
+            "id"
+          ]
+        ]
+      ],
+      "indexes": [
+        [
+          "ix_teacher_participation_teacher_date",
+          [
+            "teacher_id",
+            "event_date"
+          ],
+          false
+        ],
+        [
+          "ix_teacher_participations_batch_id",
+          [
+            "batch_id"
+          ],
+          false
+        ],
+        [
+          "ix_teacher_participations_course_code",
+          [
+            "course_code"
+          ],
+          false
+        ],
+        [
+          "ix_teacher_participations_event_date",
+          [
+            "event_date"
+          ],
+          false
+        ],
+        [
+          "ix_teacher_participations_project_code",
+          [
+            "project_code"
+          ],
+          false
+        ],
+        [
+          "ix_teacher_participations_state",
+          [
+            "state"
+          ],
+          false
+        ],
+        [
+          "ix_teacher_participations_teacher_id",
+          [
+            "teacher_id"
+          ],
+          false
+        ]
+      ],
+      "primary_key": [
+        "id"
+      ],
+      "unique": [
+        [
+          "external_key"
+        ]
+      ]
+    },
+    "training_classes": {
+      "checks": [],
+      "columns": {
+        "active": {
+          "family": "integer",
+          "nullable": false
+        },
+        "code": {
+          "family": "string",
+          "length": 64,
+          "nullable": false
+        },
+        "course_code": {
+          "family": "string",
+          "length": 64,
+          "nullable": false
+        },
+        "created_at": {
+          "family": "datetime",
+          "nullable": false
+        },
+        "end_date": {
+          "family": "date",
+          "nullable": true
+        },
+        "id": {
+          "family": "string",
+          "length": 36,
+          "nullable": false
+        },
+        "name": {
+          "family": "string",
+          "length": 160,
+          "nullable": false
+        },
+        "project_code": {
+          "family": "string",
+          "length": 64,
+          "nullable": false
+        },
+        "source": {
+          "family": "string",
+          "length": 100,
+          "nullable": false
+        },
+        "start_date": {
+          "family": "date",
+          "nullable": true
+        },
+        "version": {
+          "family": "integer",
+          "nullable": false
+        }
+      },
+      "foreign_keys": [],
+      "indexes": [
+        [
+          "ix_training_classes_active",
+          [
+            "active"
+          ],
+          false
+        ],
+        [
+          "ix_training_classes_code",
+          [
+            "code"
+          ],
+          true
+        ],
+        [
+          "ix_training_classes_course_code",
+          [
+            "course_code"
+          ],
+          false
+        ],
+        [
+          "ix_training_classes_project_code",
+          [
+            "project_code"
+          ],
+          false
+        ]
+      ],
+      "primary_key": [
+        "id"
+      ],
+      "unique": [
+        [
+          "code"
+        ]
+      ]
+    },
+    "training_courses": {
+      "checks": [],
+      "columns": {
+        "active": {
+          "family": "integer",
+          "nullable": false
+        },
+        "code": {
+          "family": "string",
+          "length": 64,
+          "nullable": false
+        },
+        "created_at": {
+          "family": "datetime",
+          "nullable": false
+        },
+        "external_key": {
+          "family": "string",
+          "length": 128,
+          "nullable": true
+        },
+        "id": {
+          "family": "string",
+          "length": 36,
+          "nullable": false
+        },
+        "name": {
+          "family": "string",
+          "length": 160,
+          "nullable": false
+        },
+        "project_code": {
+          "family": "string",
+          "length": 64,
+          "nullable": true
+        },
+        "source": {
+          "family": "string",
+          "length": 100,
+          "nullable": false
+        },
+        "version": {
+          "family": "integer",
+          "nullable": false
+        }
+      },
+      "foreign_keys": [],
+      "indexes": [
+        [
+          "ix_training_courses_active",
+          [
+            "active"
+          ],
+          false
+        ],
+        [
+          "ix_training_courses_code",
+          [
+            "code"
+          ],
+          true
+        ],
+        [
+          "ix_training_courses_external_key",
+          [
+            "external_key"
+          ],
+          false
+        ],
+        [
+          "ix_training_courses_project_code",
+          [
+            "project_code"
+          ],
+          false
+        ]
+      ],
+      "primary_key": [
+        "id"
+      ],
+      "unique": [
+        [
+          "code"
+        ]
+      ]
+    },
+    "training_projects": {
+      "checks": [],
+      "columns": {
+        "active": {
+          "family": "integer",
+          "nullable": false
+        },
+        "code": {
+          "family": "string",
+          "length": 64,
+          "nullable": false
+        },
+        "created_at": {
+          "family": "datetime",
+          "nullable": false
+        },
+        "end_date": {
+          "family": "date",
+          "nullable": true
+        },
+        "external_key": {
+          "family": "string",
+          "length": 128,
+          "nullable": true
+        },
+        "id": {
+          "family": "string",
+          "length": 36,
+          "nullable": false
+        },
+        "name": {
+          "family": "string",
+          "length": 160,
+          "nullable": false
+        },
+        "source": {
+          "family": "string",
+          "length": 100,
+          "nullable": false
+        },
+        "start_date": {
+          "family": "date",
+          "nullable": true
+        },
+        "version": {
+          "family": "integer",
+          "nullable": false
+        }
+      },
+      "foreign_keys": [],
+      "indexes": [
+        [
+          "ix_training_projects_active",
+          [
+            "active"
+          ],
+          false
+        ],
+        [
+          "ix_training_projects_code",
+          [
+            "code"
+          ],
+          true
+        ],
+        [
+          "ix_training_projects_external_key",
+          [
+            "external_key"
+          ],
+          false
+        ]
+      ],
+      "primary_key": [
+        "id"
+      ],
+      "unique": [
+        [
+          "code"
+        ]
+      ]
+    },
+    "training_records": {
+      "checks": [
+        "hours>=0",
+        "participants>=0"
+      ],
+      "columns": {
+        "batch_id": {
+          "family": "string",
+          "length": 36,
+          "nullable": true
+        },
+        "class_code": {
+          "family": "string",
+          "length": 64,
+          "nullable": false
+        },
+        "class_name": {
+          "family": "string",
+          "length": 160,
+          "nullable": false
+        },
+        "course": {
+          "family": "string",
+          "length": 160,
+          "nullable": false
+        },
+        "course_code": {
+          "family": "string",
+          "length": 64,
+          "nullable": false
+        },
+        "created_at": {
+          "family": "datetime",
+          "nullable": false
+        },
+        "event_date": {
+          "family": "date",
+          "nullable": false
+        },
+        "external_key": {
+          "family": "string",
+          "length": 128,
+          "nullable": false
+        },
+        "hours": {
+          "family": "numeric",
+          "nullable": false,
+          "precision": 12,
+          "scale": 2
+        },
+        "id": {
+          "family": "string",
+          "length": 36,
+          "nullable": false
+        },
+        "income": {
+          "family": "numeric",
+          "nullable": false,
+          "precision": 18,
+          "scale": 2
+        },
+        "participants": {
+          "family": "integer",
+          "nullable": false
+        },
+        "project": {
+          "family": "string",
+          "length": 160,
+          "nullable": false
+        },
+        "project_code": {
+          "family": "string",
+          "length": 64,
+          "nullable": false
+        },
+        "source": {
+          "family": "string",
+          "length": 100,
+          "nullable": false
+        },
+        "state": {
+          "family": "string",
+          "length": 20,
+          "nullable": false
+        },
+        "teacher_id": {
+          "family": "string",
+          "length": 36,
+          "nullable": false
+        },
+        "version": {
+          "family": "integer",
+          "nullable": false
+        }
+      },
+      "foreign_keys": [
+        [
+          [
+            "teacher_id"
+          ],
+          "users",
+          [
+            "id"
+          ]
+        ]
+      ],
+      "indexes": [
+        [
+          "ix_records_teacher_date",
+          [
+            "teacher_id",
+            "event_date"
+          ],
+          false
+        ],
+        [
+          "ix_training_records_batch_id",
+          [
+            "batch_id"
+          ],
+          false
+        ],
+        [
+          "ix_training_records_course_code",
+          [
+            "course_code"
+          ],
+          false
+        ],
+        [
+          "ix_training_records_event_date",
+          [
+            "event_date"
+          ],
+          false
+        ],
+        [
+          "ix_training_records_project_code",
+          [
+            "project_code"
+          ],
+          false
+        ],
+        [
+          "ix_training_records_teacher_id",
+          [
+            "teacher_id"
+          ],
+          false
+        ]
+      ],
+      "primary_key": [
+        "id"
+      ],
+      "unique": [
+        [
+          "external_key"
+        ]
+      ]
+    },
+    "users": {
+      "checks": [],
+      "columns": {
+        "active": {
+          "family": "integer",
+          "nullable": false
+        },
+        "auth_version": {
+          "family": "integer",
+          "nullable": false
+        },
+        "created_at": {
+          "family": "datetime",
+          "nullable": false
+        },
+        "failures": {
+          "family": "integer",
+          "nullable": false
+        },
+        "id": {
+          "family": "string",
+          "length": 36,
+          "nullable": false
+        },
+        "is_admin": {
+          "family": "integer",
+          "nullable": false
+        },
+        "locked_until": {
+          "family": "datetime",
+          "nullable": true
+        },
+        "must_change_password": {
+          "family": "integer",
+          "nullable": false
+        },
+        "name": {
+          "family": "string",
+          "length": 100,
+          "nullable": false
+        },
+        "org_id": {
+          "family": "string",
+          "length": 36,
+          "nullable": false
+        },
+        "password_hash": {
+          "family": "string",
+          "length": 255,
+          "nullable": false
+        },
+        "role_id": {
+          "family": "string",
+          "length": 36,
+          "nullable": false
+        },
+        "staff_no": {
+          "family": "string",
+          "length": 64,
+          "nullable": true
+        },
+        "title": {
+          "family": "string",
+          "length": 80,
+          "nullable": false
+        },
+        "username": {
+          "family": "string",
+          "length": 64,
+          "nullable": false
+        },
+        "version": {
+          "family": "integer",
+          "nullable": false
+        }
+      },
+      "foreign_keys": [
+        [
+          [
+            "org_id"
+          ],
+          "organizations",
+          [
+            "id"
+          ]
+        ],
+        [
+          [
+            "role_id"
+          ],
+          "roles",
+          [
+            "id"
+          ]
+        ]
+      ],
+      "indexes": [
+        [
+          "ix_users_org_id",
+          [
+            "org_id"
+          ],
+          false
+        ],
+        [
+          "ix_users_role_id",
+          [
+            "role_id"
+          ],
+          false
+        ]
+      ],
+      "primary_key": [
+        "id"
+      ],
+      "unique": [
+        [
+          "staff_no"
+        ],
+        [
+          "username"
+        ]
+      ]
+    },
+    "workflow_events": {
+      "checks": [],
+      "columns": {
+        "action": {
+          "family": "string",
+          "length": 50,
+          "nullable": false
+        },
+        "actor_id": {
+          "family": "string",
+          "length": 36,
+          "nullable": false
+        },
+        "actor_name": {
+          "family": "string",
+          "length": 100,
+          "nullable": false
+        },
+        "after": {
+          "family": "json",
+          "nullable": false
+        },
+        "basis": {
+          "family": "text",
+          "nullable": false
+        },
+        "before": {
+          "family": "json",
+          "nullable": false
+        },
+        "created_at": {
+          "family": "datetime",
+          "nullable": false
+        },
+        "id": {
+          "family": "string",
+          "length": 36,
+          "nullable": false
+        },
+        "object_id": {
+          "family": "string",
+          "length": 36,
+          "nullable": false
+        },
+        "object_type": {
+          "family": "string",
+          "length": 30,
+          "nullable": false
+        },
+        "org_id": {
+          "family": "string",
+          "length": 36,
+          "nullable": false
+        },
+        "reason": {
+          "family": "text",
+          "nullable": false
+        }
+      },
+      "foreign_keys": [
+        [
+          [
+            "actor_id"
+          ],
+          "users",
+          [
+            "id"
+          ]
+        ]
+      ],
+      "indexes": [
+        [
+          "ix_workflow_events_object_id",
+          [
+            "object_id"
+          ],
+          false
+        ]
+      ],
+      "primary_key": [
+        "id"
+      ],
+      "unique": []
+    }
+  }
+}

@@ -1,0 +1,279 @@
+"""R2 organization/account/role/configuration implementations for existing UI."""
+from fastapi import APIRouter,Request,HTTPException
+from sqlalchemy import select,func,delete
+from ..core import *
+from ..schemas import *
+from ..passwords import hash_password
+from ..permissions import ALLOWED,validate_permissions
+from ..org_assessment import OrganizationAssessment
+from ..readiness import _setting_ok
+from ..settings_catalog import business_dictionary,import_policy
+router=APIRouter(prefix='/api',tags=['组织与配置'])
+
+def need_admin(a): a.require_admin()
+def account_shape(db,org_id,role_id,staff_no):
+    org,role=db.get(Org,org_id),db.get(Role,role_id)
+    if not org or not role or not role.active or not validate_permissions(role.kind,role.permissions):
+        raise HTTPException(422,'组织或角色配置无效')
+    org_scope(db,org,role.kind)
+    if role.kind=='teacher' and not staff_no: raise HTTPException(422,'普通教师必须填写工号')
+    return org,role
+
+def admin_survives(db):
+    db.flush()
+    admins=db.scalars(select(User).where(User.active.is_(True),User.is_admin.is_(True))).all()
+    for u in admins:
+        r=db.get(Role,u.role_id);o=db.get(Org,u.org_id)
+        if r and o and r.active and r.kind=='school' and o.active and o.kind=='school' and {'users.manage','roles.manage'}<=set(r.permissions): return
+    raise HTTPException(409,'不能停用或移除最后一位可用学校管理员')
+
+@router.get('/organizations')
+def organizations(request:Request):
+    # Required by every preserved portal boot, including teachers.
+    return read_operation(request,'portal.read',lambda db,a,s:{'items':db.scalars(select(Org).where(Org.id.in_(a.org_ids)).order_by(Org.code)).all()})
+
+@router.post('/organizations')
+def create_org(data:OrgIn,request:Request):
+    def apply(db,a,s):
+        need_admin(a);parent=db.get(Org,data.parent_id)
+        if not parent or not parent.active or parent.id not in a.org_ids or (parent.kind,data.kind) not in {('school','college'),('college','dept')}:
+            raise HTTPException(422,'上级组织与新增层级不匹配')
+        obj=Org(**data.model_dump(exclude={'reason','basis'}));db.add(obj);db.flush()
+        audit(db,a,'organization',obj.id,'新增组织',after=serial(obj),reason=data.reason);return obj
+    return command(request,data.model_dump(),'organization.manage',apply)
+
+@router.put('/organizations/{ident}')
+def update_org(ident:str,data:OrgUpdate,request:Request):
+    def apply(db,a,s):
+        need_admin(a);obj=db.get(Org,ident)
+        if not obj or ident not in a.org_ids: raise HTTPException(404,'组织不存在')
+        check_version(obj,data.expected_version);before=serial(obj)
+        parent=db.get(Org,data.parent_id) if data.parent_id else None
+        if obj.kind=='school':
+            if data.parent_id: raise HTTPException(422,'学校根组织不能设置上级')
+        elif not parent or parent.id not in a.org_ids or not parent.active or (parent.kind,obj.kind) not in {('school','college'),('college','dept')}:
+            raise HTTPException(422,'上级组织不正确')
+        obj.name=data.name;obj.parent_id=data.parent_id;obj.version+=1
+        audit(db,a,'organization',ident,'调整组织',before,serial(obj),data.reason)
+        return obj
+    return command(request,data.model_dump(),'organization.manage',apply)
+
+@router.post('/organizations/{ident}/state')
+def org_action(ident:str,data:Action,request:Request):
+    def apply(db,a,s):
+        need_admin(a);obj=db.get(Org,ident)
+        if not obj or obj.kind=='school': raise HTTPException(409,'学校根组织不能停用')
+        check_version(obj,data.expected_version)
+        if data.action not in {'enable','disable'}: raise HTTPException(422,'组织操作无效')
+        parent=db.get(Org,obj.parent_id)
+        if not parent or parent.id not in a.org_ids: raise HTTPException(403,'组织不在授权范围')
+        before=serial(obj);obj.active=data.action=='enable';obj.version+=1
+        audit(db,a,'organization',ident,'组织启停',before,serial(obj),data.reason);return obj
+    return command(request,data.model_dump(),'organization.manage',apply)
+
+@router.get('/teachers')
+def teachers(request:Request):
+    f,p,z=filters_from(request,{'q'})
+    def load(db,a,s):
+        q=select(User).where(a.scope(User.id),User.staff_no.is_not(None))
+        if f.get('q'):q=q.where(User.name.contains(f['q'],autoescape=True)|User.staff_no.contains(f['q'],autoescape=True))
+        return page_result(db,q.order_by(User.staff_no),p,z)
+    return read_operation(request,'portal.read',load)
+
+@router.get('/users')
+def users(request:Request):
+    f,p,z=filters_from(request,{'q'})
+    def load(db,a,s):
+        need_admin(a);q=select(User).where(User.org_id.in_(a.org_ids))
+        if f.get('q'): q=q.where(User.name.contains(f['q'],autoescape=True)|User.username.contains(f['q'],autoescape=True))
+        return page_result(db,q.order_by(User.username),p,z)
+    return read_operation(request,'users.manage',load)
+
+@router.post('/users')
+def create_user(data:UserIn,request:Request):
+    def apply(db,a,s):
+        need_admin(a);org,role=account_shape(db,data.org_id,data.role_id,data.staff_no)
+        if org.id not in a.org_ids or not set(role.permissions)<=a.permissions: raise HTTPException(403,'不能创建超出本人授权的账号')
+        values=data.model_dump(exclude={'reason','basis','password'})
+        obj=User(**values,password_hash=hash_password(data.password),is_admin=False,must_change_password=True,active=True)
+        db.add(obj);db.flush();audit(db,a,'users',obj.id,'新增账号',after=serial(obj),reason=data.reason);return obj
+    return command(request,data.model_dump(),'users.manage',apply)
+
+@router.put('/users/{ident}')
+def update_user(ident:str,data:UserUpdate,request:Request):
+    def apply(db,a,s):
+        need_admin(a);obj=db.get(User,ident)
+        if not obj or obj.org_id not in a.org_ids: raise HTTPException(404,'账号不存在')
+        check_version(obj,data.expected_version);org,role=account_shape(db,data.org_id,data.role_id,obj.staff_no)
+        if org.id not in a.org_ids or not set(role.permissions)<=a.permissions: raise HTTPException(403,'不能分配超出本人授权的角色')
+        if data.is_admin and role.kind!='school': raise HTTPException(422,'学校管理员必须绑定学校角色')
+        before=serial(obj)
+        for key,value in data.model_dump(exclude={'reason','basis','expected_version'}).items():setattr(obj,key,value)
+        obj.version+=1;obj.auth_version+=1;db.execute(delete(AuthSession).where(AuthSession.user_id==ident))
+        admin_survives(db);audit(db,a,'users',ident,'调整账号权限',before,serial(obj),data.reason);return obj
+    return command(request,data.model_dump(),'users.manage',apply)
+
+@router.post('/users/{ident}/reset-password')
+def reset_user(ident:str,data:ResetPassword,request:Request):
+    def apply(db,a,s):
+        need_admin(a);obj=db.get(User,ident)
+        if not obj or obj.org_id not in a.org_ids: raise HTTPException(404,'账号不存在')
+        check_version(obj,data.expected_version)
+        obj.password_hash=hash_password(data.password);obj.must_change_password=True;obj.failures=0;obj.locked_until=None
+        obj.version+=1;obj.auth_version+=1;db.execute(delete(AuthSession).where(AuthSession.user_id==ident))
+        audit(db,a,'users',ident,'重置临时密码',after={'must_change_password':True,'sessions_revoked':True},reason=data.reason)
+        return serial(obj)
+    return command(request,data.model_dump(),'users.manage',apply)
+
+@router.get('/roles')
+def roles(request:Request):
+    def load(db,a,s):
+        need_admin(a)
+        return {'items':db.scalars(select(Role).order_by(Role.code)).all(),'available':{k:sorted(v & a.permissions) for k,v in ALLOWED.items()}}
+    return read_operation(request,'users.manage',load)
+
+@router.post('/roles')
+def copy_role(data:RoleCopy,request:Request):
+    def apply(db,a,s):
+        need_admin(a);source=db.get(Role,data.copy_from)
+        if not source or not validate_permissions(source.kind,source.permissions): raise HTTPException(422,'来源角色无效')
+        if not set(source.permissions)<=a.permissions: raise HTTPException(403,'不能复制超授权角色')
+        obj=Role(code=data.code,name=data.name,kind=source.kind,permissions=list(source.permissions),active=source.active)
+        db.add(obj);db.flush();audit(db,a,'roles',obj.id,'复制角色',after=serial(obj),reason=data.reason);return obj
+    return command(request,data.model_dump(),'roles.manage',apply)
+
+@router.put('/roles/{ident}')
+def update_role(ident:str,data:RoleUpdate,request:Request):
+    def apply(db,a,s):
+        need_admin(a);obj=db.get(Role,ident)
+        if not obj:raise HTTPException(404,'角色不存在')
+        check_version(obj,data.expected_version)
+        if not validate_permissions(obj.kind,data.permissions) or not set(data.permissions)<=a.permissions: raise HTTPException(403,'包含超出角色层级或本人授权的权限')
+        if not data.active and db.scalar(select(func.count()).select_from(Role).where(Role.kind==obj.kind,Role.active.is_(True)))<=1:
+            raise HTTPException(409,'须保留各层级至少一个有效角色')
+        before=serial(obj);obj.permissions=data.permissions;obj.active=data.active;obj.version+=1
+        admin_survives(db);audit(db,a,'roles',ident,'调整角色授权',before,serial(obj),data.reason);return obj
+    return command(request,data.model_dump(),'roles.manage',apply)
+
+@router.get('/periods')
+def periods(request:Request):
+    return read_operation(request,'portal.read',lambda db,a,s:{'items':db.scalars(select(Period).order_by(Period.end_date.desc(),Period.id)).all()})
+
+@router.post('/periods')
+def create_period(data:PeriodIn,request:Request):
+    def apply(db,a,s):
+        need_admin(a);obj=Period(**data.model_dump(exclude={'reason','basis'}));db.add(obj);db.flush()
+        audit(db,a,'periods',obj.id,'新增考核周期',after=serial(obj),reason=data.reason);return obj
+    return command(request,data.model_dump(),'settings.manage',apply)
+
+@router.post('/periods/{ident}/close')
+def close_period(ident:str,data:VersionedReason,request:Request):
+    def apply(db,a,s):
+        need_admin(a);obj=require_open_period(db,ident);check_version(obj,data.expected_version)
+        if (db.scalar(select(Assessment.id).where(Assessment.period_id==ident,Assessment.state!='ARCHIVED').limit(1))
+            or db.scalar(select(OrganizationAssessment.id).where(OrganizationAssessment.period_id==ident,OrganizationAssessment.state!='ARCHIVED').limit(1))
+            or db.scalar(select(Dispute.id).where(Dispute.period_id==ident,Dispute.state=='OPEN').limit(1))):
+            raise HTTPException(409,'仍有未归档教师/组织考核或未解决核对申请')
+        before=serial(obj);obj.state='CLOSED';obj.version+=1
+        audit(db,a,'periods',ident,'关闭考核周期',before,serial(obj),data.reason);return obj
+    return command(request,data.model_dump(),'settings.manage',apply)
+
+@router.get('/settings')
+def settings(request:Request):
+    return read_operation(request,'settings.manage',lambda db,a,s:{'items':db.scalars(select(Setting).where(~Setting.key.like('ssoid:%'),~Setting.key.like('ssostate:%')).order_by(Setting.key)).all()})
+
+@router.get('/settings/{key}/history')
+def setting_history(key:str,request:Request):
+    def load(db,a,s):
+        need_admin(a)
+        if key not in {'branding','metrics','qualification','business_dictionary','import_policy'}:
+            raise HTTPException(404,'配置项不存在')
+        rows=db.scalars(select(Audit).where(Audit.module=='settings',Audit.object_id==key)
+            .order_by(Audit.created_at.desc(),Audit.id.desc()).limit(100)).all()
+        return {'key':key,'items':rows}
+    return read_operation(request,'settings.manage',load)
+
+@router.put('/settings/{key}')
+def update_setting(key:str,data:SettingUpdate,request:Request):
+    def apply(db,a,s):
+        need_admin(a);obj=db.get(Setting,key)
+        if key not in {'branding','metrics','qualification','business_dictionary','import_policy'} or not obj: raise HTTPException(404,'配置项不存在')
+        check_version(obj,data.expected_version)
+        if not _setting_ok(key,data.value):raise HTTPException(422,'配置值不符合该项目规范')
+        if len(str(data.value))>12000:raise HTTPException(422,'配置值过长')
+        before=serial(obj);obj.value=data.value;obj.version+=1
+        audit(db,a,'settings',key,'修改基础配置',before,serial(obj),data.reason);return obj
+    return command(request,data.model_dump(),'settings.manage',apply)
+
+@router.get('/dictionaries')
+def dictionaries(request:Request):
+    def load(db,a,s):
+        values=business_dictionary(db)
+        policy=import_policy(db)
+        return {'notice_categories':values['notice_categories'],'record_sources':values['record_sources'],
+                'status_labels':values['status_labels'],'import_max_rows':policy['max_rows']}
+    return read_operation(request,'portal.read',load)
+
+@router.get('/qualification-categories')
+def categories(request:Request):
+    def load(db,a,s):
+        obj=db.get(Setting,'qualification')
+        if not obj or not _setting_ok('qualification',obj.value):raise HTTPException(503,'资质字典未配置')
+        return {'categories':obj.value['categories']}
+    return read_operation(request,'qualification.read',load)
+
+# Notifications posted to a parent are visible downwards, not to siblings.
+def notice_scope(db,a):
+    ids=set(a.org_ids);o=a.org
+    while o and o.parent_id:
+        ids.add(o.parent_id);o=db.get(Org,o.parent_id)
+    return ids
+
+@router.get('/notices')
+def notices(request:Request):
+    f,p,z=filters_from(request,{'q'})
+    def load(db,a,s):
+        q=select(Notice).where(Notice.org_id.in_(notice_scope(db,a)))
+        if 'notice.manage' not in a.permissions:q=q.where(Notice.published.is_(True))
+        else:q=q.where(Notice.published.is_(True)|Notice.org_id.in_(a.org_ids))
+        if f.get('q'):q=q.where(Notice.title.contains(f['q'],autoescape=True)|Notice.body.contains(f['q'],autoescape=True))
+        return page_result(db,q.order_by(Notice.created_at.desc(),Notice.id),p,z)
+    return read_operation(request,'notice.read',load)
+
+@router.post('/notices')
+def create_notice(data:NoticeIn,request:Request):
+    def apply(db,a,s):
+        if data.org_id not in a.org_ids:raise HTTPException(403,'发布范围超出授权')
+        if data.category not in business_dictionary(db)['notice_categories']:raise HTTPException(422,'请选择学校业务字典中的通知分类')
+        obj=Notice(**data.model_dump(exclude={'reason','basis'}),author_id=a.id);db.add(obj);db.flush()
+        audit(db,a,'notices',obj.id,'发布通知',after=serial(obj),reason=data.reason);return obj
+    return command(request,data.model_dump(),'notice.manage',apply)
+
+@router.get('/notices/{ident}')
+def notice_detail(ident:str,request:Request):
+    def load(db,a,s):
+        obj=db.get(Notice,ident)
+        if not obj or obj.org_id not in notice_scope(db,a) or (not obj.published and ('notice.manage' not in a.permissions or obj.org_id not in a.org_ids)):
+            raise HTTPException(404,'通知不存在或未发布')
+        return obj
+    return read_operation(request,'notice.read',load)
+
+@router.put('/notices/{ident}')
+def update_notice(ident:str,data:NoticeUpdate,request:Request):
+    def apply(db,a,s):
+        obj=db.get(Notice,ident)
+        if not obj or obj.org_id not in a.org_ids or data.org_id not in a.org_ids:raise HTTPException(404,'通知不存在')
+        if data.category not in business_dictionary(db)['notice_categories']:raise HTTPException(422,'请选择学校业务字典中的通知分类')
+        check_version(obj,data.expected_version);before=serial(obj)
+        for k,v in data.model_dump(exclude={'reason','basis','expected_version'}).items():setattr(obj,k,v)
+        obj.version+=1;audit(db,a,'notices',ident,'更新通知',before,serial(obj),data.reason);return obj
+    return command(request,data.model_dump(),'notice.manage',apply)
+
+@router.get('/audit')
+def audit_list(request:Request):
+    f,p,z=filters_from(request,{'q','module','result','start','end'})
+    def load(db,a,s):
+        from ..read_queries import audit_query
+        q=audit_query(db,a,f)
+        return page_result(db,q.order_by(Audit.created_at.desc(),Audit.id),p,z)
+    return read_operation(request,'audit.read',load)

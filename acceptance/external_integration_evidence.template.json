@@ -1,0 +1,8 @@
+{
+  "connections": {
+    "school_sso": "NOT_CONNECTED",
+    "school_data_hub": "NOT_CONNECTED",
+    "province_platform": "NOT_CONNECTED"
+  },
+  "notes": "PASS 只能由真实协议、网络、凭据、脱敏真实报文、异常/重试/幂等验证和责任方签认产生。"
+}

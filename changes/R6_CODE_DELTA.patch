@@ -1,0 +1,1716 @@
+diff --git a/README_START_HERE.md b/README_START_HERE.md
+index eb50c39..164efec 100644
+--- a/README_START_HERE.md
++++ b/README_START_HERE.md
+@@ -1,32 +1,25 @@
+-# 跃科 · 一站式非学历教育智慧前台 — P0-R5 新空校增量检查点
++# 跃科｜一站式非学历教育智慧前台 — R6 证据链收口
+ 
+-**本包是完整源码施工基线，不是已通过机房验收的生产发布包。禁止覆盖旧库或直接替换学校正式服务器。**
++**完整源码施工基线；不是学校机房生产验收通过包。禁止覆盖旧库或直接替换正式服务器。**
+ 
+-输入为已校验的 R4 源码包，SHA256 `c069ddf5144cc7f9b3132fb7676b1303773c958a8d3447a1703de93ce7b986b4`。未恢复到上一窗口未封包的 R5 文件或日志；本轮从 R4 增量实现，不把聊天描述当落盘证据。保留已有参训、主数据、入站计划、接口目录与组织考核，不全量重写。
++本轮以 R5 完整 ZIP 为唯一输入，保留已有主数据、参训、入站计划、接口与组织考核。对照原采购 PDF，补教师考核归档/打印/原附件证据链、统一审计日期导出、模块导出权限及完整开放移交，不全量重写。
+ 
+-## 安装边界
++## 先看
+ 
+-唯一正式迁移基线是 `20260918_0001`，仅支持全新空库。旧 `20260917_0002` 原字节保存在 `backend/alembic_legacy_unverified/`，缺失的历史 `20260917_0001` 没有伪造。旧库升级、R4 备份导入本基线、手工 stamp、降级清库均禁止。不得手动补造 `installation_provenance`。
++1. `docs/R6_EVIDENCE_CHAIN_AND_HANDOVER.md`：本轮改动、实测记录、操作说明与未通过项。
++2. `acceptance/R6_PDF_101_Clause_Tracker.xlsx`：14 项、101 条需求映射；“本轮定向验证”不等于整条最终验收。
++3. `evidence/r6/test_summary.json` 与 `release_gate.json`：本轮测试证据与生产 BLOCKED 裁决。
+ 
+-源码组装门已从 R4 的迁移缺失阻断，转为新空校分支 PASS；这不代表旧迁移恢复，也不代表生产放行。
++## 安装与迁移边界
+ 
+-## 本轮增量
++唯一正式迁移头仍为 `20260918_0001`，只接纳全新空库。R6 没有新增数据库表或改写 canonical DDL。
++旧 `20260917_0002` 文件原字节保存在 `backend/alembic_legacy_unverified/`；缺失旧 `20260917_0001` 未伪造。
++禁止手工 stamp、补造 installation_provenance、把旧库或开放业务移交包直接恢复上线。
+ 
+-1. 新空校冻结 DDL、安装来源与结构核验、旧库拒绝、canonical 备份/恢复边界。
+-2. 接口验证、显式启用、失效断开、部署端固定地址及密钥引用、恢复后重新验证。
+-3. 逐笔同步请求/回执摘要、明确应答、重复/缺失校验、失败重试及佐证下载。
+-4. 组织考核规则复制为待试算草稿、同周期/层级/规则排名、归档快照打印。
+-5. 入站预览关联校验、确认重验、内容/配置摘要、整批原子写入及撤销计划检查。
+-6. 首页/驾驶舱/组织页考核状态与退回筛选，穿透保持一致，培训收入口径不随之改变。
++## 当前验证
+ 
+-## 先看这三份
++377 项 Python、45 项 Node、真实 HTTP 102 请求/25 检查通过。数据库实测为隔离 SQLite；浏览器正常导航仍被环境管理员策略阻断。
++MySQL 8.4、原生浏览器/打印、学校 HTTPS 压测、学校双轨样本、真实外部接口仍待实测。生产门保持 BLOCKED。
+ 
+-- `docs/R5_DELTA_ACCEPTANCE.md`：当前实测结果、文件入口、仍未通过的现场门。
+-- `docs/R5_FRESH_CANONICAL_BOUNDARY.md`：新装、旧库、失败现场与恢复边界。
+-- `docs/R5_INTEGRATION_LIFECYCLE.md`：适配器契约和真实联调条件。
+-
+-已有用户手册、管理员手册、部署手册、Excel 模板、双轨样本工具保留；R5 变更以以上文档及本包代码为准。历史 R2/R3/R4 证据不代表本轮或最终验收，历史说明及校验清单保存在 `evidence/r4_original_inputs/`。
+-
+-## 放行边界
+-
+-真实 MySQL 8.4、HTTPS 原生浏览器、性能、学校真实双轨样本和三类外部接口尚未全部通过。当前 `scripts/release_gate.py` 输出必须为 **BLOCKED**。没有连接用户电脑、GitHub、学校生产服务器或真实外部系统。
++原用户/管理员/部署/接口手册仍保留；本轮行为变化以 R6 文档为准。`evidence/r6/synthetic_http/` 的 Excel、附件及 ZIP 都是合成测试样本。
++旧 R5 根校验清单留在 `evidence/r5_original_inputs/`，本包根清单对应本版文件。
+diff --git a/backend/app/__init__.py b/backend/app/__init__.py
+index e1446f4..f19b0d1 100644
+--- a/backend/app/__init__.py
++++ b/backend/app/__init__.py
+@@ -1,2 +1,2 @@
+-"""Non-degree education: R5 canonical fresh-only incremental closeout."""
+-__version__ = '2026.09.18-p0-r5-fresh-only'
++"""Non-degree education: R6 frozen evidence and portable handover incremental closeout."""
++__version__ = '2026.09.18-p0-r6-evidence-chain'
+diff --git a/backend/app/assessment_evidence.py b/backend/app/assessment_evidence.py
+new file mode 100644
+index 0000000..f47d4f0
+--- /dev/null
++++ b/backend/app/assessment_evidence.py
+@@ -0,0 +1,128 @@
++"""PDF 8.5 / 10.5-10.7: frozen teacher assessment projections.
++
++Authorization always uses current membership; snapshots are evidence, not grants.
++Old valid archives lacking identity snapshots are explicitly labelled, never
++silently supplemented with today's teacher, organization, rule or period values.
++"""
++from __future__ import annotations
++from copy import deepcopy
++from decimal import Decimal, InvalidOperation
++from fastapi import HTTPException
++from .models import User, Org, Rule, Period, Attachment, utcnow
++from .core import serial, digest
++
++
++def teacher_identity(db, teacher_id):
++    user = db.get(User, teacher_id)
++    if not user:
++        raise HTTPException(409, '考核人员身份缺失')
++    return {k: getattr(user, k) for k in ('id', 'name', 'staff_no', 'org_id')}
++
++
++def organization_chain(db, org_id):
++    result, seen = [], set()
++    while org_id:
++        if org_id in seen or len(seen) >= 20:
++            raise HTTPException(409, '考核人员组织链异常')
++        seen.add(org_id)
++        org = db.get(Org, org_id)
++        if org is None:
++            raise HTTPException(409, '考核人员组织链不完整')
++        result.append({k: getattr(org, k) for k in ('id', 'code', 'name', 'kind', 'parent_id')})
++        org_id = org.parent_id
++    return result
++
++
++def verified_archive(obj):
++    """Return a detached verified snapshot. No writes, repair or live fallbacks."""
++    payload = obj.archive
++    try:
++        frozen = payload['assessment']
++        valid = (
++            obj.state == 'ARCHIVED' and bool(obj.archive_sha256)
++            and digest(payload) == obj.archive_sha256
++            and frozen['state'] == 'ARCHIVED'
++            and all(frozen[k] == getattr(obj, k) for k in ('id', 'teacher_id', 'period_id', 'rule_id'))
++            and payload['rule']['id'] == frozen['rule_id']
++            and payload['period']['id'] == frozen['period_id']
++            and isinstance(frozen['detail'], list)
++            and Decimal(str(frozen['score'])).is_finite()
++            and Decimal(str(frozen['score'])) == Decimal(str(obj.score))
++            and frozen['version'] == obj.version and frozen['returned'] == obj.returned
++            and digest(frozen['detail']) == digest(obj.detail)
++            and digest(frozen['source_snapshot']) == digest(obj.source_snapshot)
++            and digest(payload['source_snapshot']) == digest(obj.source_snapshot)
++        )
++        if not valid:
++            raise ValueError('archive mismatch')
++        if payload.get('schema_version') == 2:
++            identity=payload['teacher']
++            if (identity.get('id') != obj.teacher_id or not all(isinstance(identity.get(k),str) and identity[k] for k in ('name','staff_no','org_id'))
++                or not isinstance(payload.get('organization_chain'),list) or not payload['organization_chain']
++                or payload['organization_chain'][0].get('id') != identity['org_id']
++                or not isinstance(payload.get('events'),list)):
++                raise ValueError('archive identity incomplete')
++    except (KeyError, TypeError, ValueError, InvalidOperation, AttributeError):
++        raise HTTPException(409, '考核归档证据校验失败，禁止按可信历史结果查看、打印或导出') from None
++    return deepcopy(payload)
++
++
++def attachment_index(source_snapshot, teacher_id):
++    """Index only exact, historically referenced qualification attachments."""
++    out = {}
++    for q in source_snapshot.get('qualifications', []):
++        if not isinstance(q, dict):
++            raise HTTPException(409, '归档资质依据结构异常')
++        for item in q.get('attachments', []):
++            if (not isinstance(item, dict) or not item.get('id')
++                or item.get('teacher_id') != teacher_id
++                or item.get('object_type') != 'qualification'
++                or item.get('object_id') != q.get('id')):
++                raise HTTPException(409, '归档附件与教师、资质的关联不一致')
++            if item['id'] in out and out[item['id']] != item:
++                raise HTTPException(409, '归档附件证据重复且内容冲突')
++            out[item['id']] = deepcopy(item)
++    return out
++
++
++def make_archive(db, obj, actor, events, reason, basis, storage_dir):
++    from .routes.files import verify_file
++    identity = teacher_identity(db, obj.teacher_id)
++    # Verify originally calculated bytes, not a later qualification revision.
++    for item in attachment_index(obj.source_snapshot, obj.teacher_id).values():
++        current = db.get(Attachment, item['id'])
++        if not current or any(getattr(current, k) != item.get(k) for k in ('teacher_id','object_type','object_id','sha256','size')):
++            raise HTTPException(409, '归档所用附件元数据已变化或缺失')
++        verify_file(storage_dir, current)
++    at = utcnow().isoformat()
++    closed_event = {'actor_id': actor.id, 'actor_name': actor.name, 'org_id': actor.org.id,
++        'action': '考核归档', 'created_at': at, 'reason': reason, 'basis': basis}
++    frozen = {k:v for k,v in serial(obj).items() if k not in {'archive','archive_sha256'}}
++    frozen.update(state='ARCHIVED', version=obj.version + 1)
++    return {'schema_version': 2, 'assessment': frozen,
++        'rule': serial(db.get(Rule, obj.rule_id)), 'period': serial(db.get(Period, obj.period_id)),
++        'teacher': identity, 'organization_chain': organization_chain(db, identity['org_id']),
++        'source_snapshot': deepcopy(obj.source_snapshot),
++        'events': [*serial(events), closed_event], 'archived_by': actor.id,
++        'archived_by_name': actor.name, 'archived_at': at, 'reason': reason, 'basis': basis}
++
++
++def assessment_projection(db, obj, live_events=None):
++    if obj.state != 'ARCHIVED':
++        identity = teacher_identity(db, obj.teacher_id)
++        return {'assessment': serial(obj), 'rule': serial(db.get(Rule, obj.rule_id)),
++            'period': serial(db.get(Period, obj.period_id)), 'teacher': identity,
++            'organization_chain': organization_chain(db, identity['org_id']),
++            'events': serial(live_events or []), 'immutable': False,
++            'document_status': 'DRAFT_NOT_FINAL', 'identity_frozen': False}
++    frozen = verified_archive(obj)
++    identity = frozen.get('teacher')
++    identity_frozen = isinstance(identity, dict) and identity.get('id') == obj.teacher_id
++    if not identity_frozen:
++        identity = {'id':obj.teacher_id, 'name':'归档时未冻结姓名', 'staff_no':'未冻结', 'org_id':None}
++    return {'assessment': {**frozen['assessment'], 'archive': frozen, 'archive_sha256': obj.archive_sha256},
++        'rule': frozen['rule'], 'period': frozen['period'], 'teacher': identity,
++        'organization_chain': frozen.get('organization_chain', []),
++        'events': frozen.get('events', []), 'immutable': True, 'identity_frozen': identity_frozen,
++        'document_status': 'ARCHIVED',
++        'identity_note': '' if identity_frozen else '旧归档未保存人员组织快照，不以当前信息补写历史。'}
+diff --git a/backend/app/excel_io.py b/backend/app/excel_io.py
+index e816455..0377508 100644
+--- a/backend/app/excel_io.py
++++ b/backend/app/excel_io.py
+@@ -15,6 +15,7 @@ import csv, json, os, re, secrets, stat, zipfile
+ from fastapi import HTTPException
+ from sqlalchemy import select, func
+ from sqlalchemy.inspection import inspect as sa_inspect
++from sqlalchemy.orm import Session
+ from openpyxl import Workbook, load_workbook
+ from openpyxl.comments import Comment
+ from openpyxl.styles import Font, PatternFill, Alignment
+@@ -24,10 +25,10 @@ from .models import *
+ from .schemas import RecordIn, QualificationIn, ParticipationIn
+ from .services import insert_record, qualification_revision
+ from .passwords import hash_password
+-from .read_queries import record_query, assessment_query, authorized_org_descendants, RECORD_FILTERS, ASSESSMENT_FILTERS
+-from .org_assessment import OrganizationAssessment, OrganizationAssessmentRule, OrganizationAssessmentMetricEvidence
++from .read_queries import record_query, assessment_query, authorized_org_descendants, RECORD_FILTERS, ASSESSMENT_FILTERS, audit_query
++from .org_assessment import OrganizationAssessment, OrganizationAssessmentRule, OrganizationAssessmentMetricEvidence, OrganizationRuleTrial
+ from .settings_catalog import business_dictionary,import_row_limit
+-from .integrations import SyncItem,SyncCallLog,DATA_CATALOG
++from .integrations import SyncItem,SyncCallLog,ConnectionCheck,DATA_CATALOG
+ from .delivery import configuration_snapshot,database_dictionary
+ from .reference_data import TeacherParticipation,TrainingProjectMaster,TrainingCourseMaster,TrainingClassMaster,TeacherHrProfile,InboundBatch,InboundRow,ensure_reference_from_training_record
+ from .inbound_sync import IntegrationSchedule
+@@ -68,8 +69,8 @@ def _safe_text(value,*,limit=200):
+ 
+ 
+ def _safe_excel_value(value):
+-    value=_plain(value)
+-    if isinstance(value,str) and value.startswith(DANGEROUS_PREFIXES):return "'"+value
++    value=value.isoformat() if isinstance(value,datetime) else _plain(value)
++    if isinstance(value,str) and value.lstrip(' \t\r\n').startswith(DANGEROUS_PREFIXES):return "'"+value
+     return value
+ 
+ 
+@@ -325,7 +326,18 @@ def error_xlsx(job_rows):
+     return rows_to_xlsx(headers,rows,'错误行')
+ 
+ 
++def require_export_scope(actor,kind):
++    if kind=='handover':
++        actor.require('data.export');actor.require_admin();return
++    required={'records':'records.read','participations':'records.read','qualifications':'qualification.read',
++        'points':'points.read','assessments':'assessment.read','organization_assessments':'assessment.read','audit':'audit.read'}
++    if kind not in required:raise HTTPException(422,'导出类型无效')
++    actor.require('export');actor.require(required[kind])
++    if kind=='audit':actor.require_admin()
++
++
+ def export_rows(db,actor,kind,filters):
++    require_export_scope(actor,kind)
+     if kind=='records':
+         q=record_query(db,actor,filters)
+         items=db.scalars(q.order_by(TrainingRecord.event_date.desc(),TrainingRecord.id)).all();users={u.id:u for u in db.scalars(select(User).where(User.id.in_({x.teacher_id for x in items})))}
+@@ -358,8 +370,13 @@ def export_rows(db,actor,kind,filters):
+         return ['教师工号','教师姓名','周期ID','积分项','类型','分值','原始值','公式','规则ID','批次ID','时间','原因','依据'],[[users[x.teacher_id].staff_no,users[x.teacher_id].name,x.period_id,x.item_key,x.kind,x.amount,x.raw_value,x.formula,x.rule_id or '',x.batch_id or '',x.created_at,x.reason,x.basis] for x in items]
+     if kind=='assessments':
+         if set(filters)-ASSESSMENT_FILTERS:raise HTTPException(422,'考核导出筛选字段无效')
+-        items=db.scalars(assessment_query(db,actor,filters).order_by(Assessment.score.desc(),Assessment.teacher_id)).all();users={u.id:u for u in db.scalars(select(User).where(User.id.in_({x.teacher_id for x in items})))}
+-        return ['教师工号','教师姓名','周期ID','得分','状态','退回','规则ID','版本','归档SHA256'],[[users[x.teacher_id].staff_no,users[x.teacher_id].name,x.period_id,x.score,x.state,'是' if x.returned else '否',x.rule_id,x.version,x.archive_sha256 or ''] for x in items]
++        from .assessment_evidence import assessment_projection
++        items=db.scalars(assessment_query(db,actor,filters).order_by(Assessment.score.desc(),Assessment.teacher_id)).all()
++        rows=[]
++        for obj in items:
++            d=assessment_projection(db,obj);x=d['assessment'];u=d['teacher']
++            rows.append([u['staff_no'],u['name'],x['period_id'],x['score'],x['state'],'是' if x['returned'] else '否',x['rule_id'],x['version'],obj.archive_sha256 or ''])
++        return ['教师工号','教师姓名','周期ID','得分','状态','退回','规则ID','版本','归档SHA256'],rows
+     if kind=='organization_assessments':
+         if actor.role.kind=='teacher':raise HTTPException(403,'教师不能导出组织考核')
+         allowed={'period_id','target_kind','target_id','state'}
+@@ -368,15 +385,15 @@ def export_rows(db,actor,kind,filters):
+         if actor.role.kind!='school':q=q.where(OrganizationAssessment.target_kind==actor.role.kind,OrganizationAssessment.target_id==actor.org.id)
+         for k,v in filters.items():
+             if v:q=q.where(getattr(OrganizationAssessment,k)==v)
+-        items=db.scalars(q.order_by(OrganizationAssessment.created_at.desc(),OrganizationAssessment.id)).all();orgs={o.id:o for o in db.scalars(select(Org).where(Org.id.in_({x.target_id for x in items})))}
+-        return ['考核对象','对象层级','周期ID','得分','状态','规则ID','版本','归档SHA256'],[[orgs[x.target_id].name,x.target_kind,x.period_id,x.score,x.state,x.rule_id,x.version,x.archive_sha256 or ''] for x in items]
++        from .routes.calculations import _organization_details
++        items=db.scalars(q.order_by(OrganizationAssessment.created_at.desc(),OrganizationAssessment.id)).all()
++        rows=[]
++        for obj in items:
++            d=serial(_organization_details(db,actor,obj.id));x=d['assessment']
++            rows.append([d['target']['name'],x['target_kind'],x['period_id'],x['score'],x['state'],x['rule_id'],x['version'],obj.archive_sha256 or ''])
++        return ['考核对象','对象层级','周期ID','得分','状态','规则ID','版本','归档SHA256'],rows
+     if kind=='audit':
+-        actor.require_admin();allowed={'q','module','result','start','end'}
+-        if set(filters)-allowed:raise HTTPException(422,'审计导出筛选字段无效')
+-        q=select(Audit)
+-        if filters.get('module'):q=q.where(Audit.module==filters['module'])
+-        if filters.get('result'):q=q.where(Audit.result==filters['result'])
+-        if filters.get('q'):q=q.where(Audit.action.contains(filters['q'],autoescape=True)|Audit.actor_name.contains(filters['q'],autoescape=True)|(Audit.request_id==filters['q']))
++        q=audit_query(db,actor,filters)
+         items=db.scalars(q.order_by(Audit.created_at.desc(),Audit.id)).all()
+         return ['时间','用户','组织ID','模块','业务对象','操作','前值','后值','原因','结果','Request-ID'],[[x.created_at,x.actor_name,x.org_id or '',x.module,x.object_id,x.action,json.dumps(x.before,ensure_ascii=False),json.dumps(x.after,ensure_ascii=False),x.reason,x.result,x.request_id] for x in items]
+     raise HTTPException(422,'导出类型无效')
+@@ -409,11 +426,12 @@ def _atomic_write(path,data):
+ 
+ 
+ def process_export_task(db,task,storage_dir):
+-    actor=actor_for_task(db,task);kind=task.payload.get('kind');filters=task.payload.get('filters') or {}
++    kind=task.payload.get('kind');filters=task.payload.get('filters') or {}
+     task.attempts+=1;attempt=task.attempts
+     try:
++        actor=actor_for_task(db,task)
+         if kind=='handover':
+-            actor.require('data.export');actor.require_admin();path,filename=_handover_zip(db,actor,task,storage_dir)
++            actor.require('data.export');actor.require_admin();path,filename=_handover_snapshot(db,task,storage_dir)
+         else:
+             actor.require('export');headers,rows=export_rows(db,actor,kind,filters);data=rows_to_xlsx(headers,rows,kind[:31]);root=_ensure_export_root(storage_dir);filename=f'{kind}_{task.id}.xlsx';path=root/(task.id+'.xlsx');_atomic_write(path,data)
+         data_hash=sha256(path.read_bytes()).hexdigest();task.state='DONE';task.error='';task.result={'filename':filename,'storage_name':path.name,'sha256':data_hash,'size':path.stat().st_size,'mime':'application/zip' if kind=='handover' else 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'};task.version+=1
+@@ -429,9 +447,33 @@ def _csv_bytes(headers,rows):
+     return ('\ufeff'+out.getvalue()).encode('utf-8')
+ 
+ 
++def _handover_snapshot(db, task, storage_dir):
++    # A separate read-only transaction gives every exported table the same view.
++    # SQLite requires explicit BEGIN; MySQL uses REPEATABLE READ. Neither is a
++    # claim that the live school's MySQL deployment has passed acceptance.
++    engine=db.get_bind()
++    with engine.connect() as conn:
++        if conn.dialect.name == 'mysql':
++            conn=conn.execution_options(isolation_level='REPEATABLE READ')
++            conn.exec_driver_sql('START TRANSACTION WITH CONSISTENT SNAPSHOT, READ ONLY')
++        elif conn.dialect.name == 'sqlite':
++            conn.exec_driver_sql('BEGIN')
++        else:
++            raise RuntimeError('开放移交仅支持已定义的 MySQL/隔离 SQLite 快照协议')
++        try:
++            with Session(bind=conn,expire_on_commit=False) as snapshot:
++                actor=actor_for_task(snapshot,task);actor.require('data.export');actor.require_admin()
++                return _handover_zip(snapshot,actor,task,storage_dir)
++        finally:
++            conn.rollback()
++
++
+ def _handover_zip(db,actor,task,storage_dir):
+     root=_ensure_export_root(storage_dir);path=root/(task.id+'.zip');tmp=path.with_name('.'+task.id+'.tmp.zip')
+-    manifest={'format':'Yueke NonDegree open handover v1','generated_at':utcnow().isoformat()+'Z','files':[],'excluded':['password_hash','sessions','login throttles','command receipts','external secret values']}
++    manifest={'format':'Yueke NonDegree open handover v2','generated_at':utcnow().isoformat()+'Z',
++        'files':[],'tables':[],'data_encoding':'UTF-8 JSONL: SQL Numeric/Date/DateTime use exact decimal/ISO strings; null/bool/int/JSON retain type',
++        'consistency':'single_read_only_database_snapshot','disaster_restore_proven':False,
++        'excluded':['password_hash','sessions','login throttles','command receipts','external secret values','installation provenance','worker runtime leases']}
+     def add_bytes(z,name,data):
+         z.writestr(name,data);manifest['files'].append({'path':name,'size':len(data),'sha256':sha256(data).hexdigest()})
+     tables=[
+@@ -449,41 +491,63 @@ def _handover_zip(db,actor,task,storage_dir):
+       ('inbound_batches',InboundBatch,[c.key for c in sa_inspect(InboundBatch).columns]),('inbound_rows',InboundRow,[c.key for c in sa_inspect(InboundRow).columns]),
+       ('integration_schedules',IntegrationSchedule,[c.key for c in sa_inspect(IntegrationSchedule).columns]),
+       ('sync_items',SyncItem,[c.key for c in sa_inspect(SyncItem).columns]),('sync_call_logs',SyncCallLog,[c.key for c in sa_inspect(SyncCallLog).columns]),
++      ('record_revisions',RecordRevision,[c.key for c in sa_inspect(RecordRevision).columns]),
++      ('calculation_batches',CalculationBatch,[c.key for c in sa_inspect(CalculationBatch).columns]),
++      ('rule_trials',RuleTrial,[c.key for c in sa_inspect(RuleTrial).columns]),
++      ('organization_rule_trials',OrganizationRuleTrial,[c.key for c in sa_inspect(OrganizationRuleTrial).columns]),
++      ('disputes',Dispute,[c.key for c in sa_inspect(Dispute).columns]),
++      ('import_jobs',ImportJob,[c.key for c in sa_inspect(ImportJob).columns]),
++      ('import_rows',ImportRow,[c.key for c in sa_inspect(ImportRow).columns]),
++      ('tasks',Task,[c.key for c in sa_inspect(Task).columns]),
++      ('task_attempts',TaskAttempt,[c.key for c in sa_inspect(TaskAttempt).columns]),
++      ('notices',Notice,[c.key for c in sa_inspect(Notice).columns]),
++      ('connection_checks',ConnectionCheck,[c.key for c in sa_inspect(ConnectionCheck).columns]),
++      ('attachments',Attachment,[c.key for c in sa_inspect(Attachment).columns]),
+       ('connections',Connection,[c.key for c in sa_inspect(Connection).columns]),('audit_events',Audit,[c.key for c in sa_inspect(Audit).columns]),
+     ]
+-    with zipfile.ZipFile(tmp,'w',compression=zipfile.ZIP_DEFLATED,compresslevel=6) as z:
+-        for name,model,columns in tables:
+-            safe=[c for c in columns if c not in {'password_hash','auth_version','failures','locked_until','storage_key','token_hash','csrf'}]
+-            items=db.scalars(select(model).order_by(*[getattr(model,k) for k in ('created_at','id') if hasattr(model,k)])).all()
+-            rows=[]
+-            for obj in items:
+-                row=[]
+-                for c in safe:
+-                    v=getattr(obj,c)
+-                    if isinstance(v,(dict,list)):v=json.dumps(serial(v),ensure_ascii=False,separators=(',',':'))
+-                    row.append(v)
+-                rows.append(row)
+-            add_bytes(z,f'data/{name}.csv',_csv_bytes(safe,rows))
+-        structure={t.name:{'columns':[{'name':c.name,'type':str(c.type),'nullable':c.nullable,'primary_key':c.primary_key,'foreign_keys':[str(fk.target_fullname) for fk in c.foreign_keys]} for c in t.columns]} for t in Base.metadata.sorted_tables}
+-        add_bytes(z,'database_structure.json',json.dumps(structure,ensure_ascii=False,indent=2).encode())
+-        add_bytes(z,'delivery/initialization_configuration.json',json.dumps(configuration_snapshot(db),ensure_ascii=False,indent=2).encode())
+-        add_bytes(z,'delivery/database_dictionary.json',json.dumps(database_dictionary(),ensure_ascii=False,indent=2).encode())
+-        add_bytes(z,'delivery/interface_data_catalog.json',json.dumps(DATA_CATALOG,ensure_ascii=False,indent=2).encode())
+-        attachments=[]
+-        for item in db.scalars(select(Attachment).order_by(Attachment.id)):
+-            src=Path(storage_dir)/item.storage_key
+-            try:
+-                fd=os.open(src,os.O_RDONLY|os.O_NOFOLLOW)
+-                with os.fdopen(fd,'rb') as f:data=f.read(item.size+1)
+-            except OSError:raise RuntimeError(f'附件缺失 {item.id}') from None
+-            if len(data)!=item.size or sha256(data).hexdigest()!=item.sha256:raise RuntimeError(f'附件校验失败 {item.id}')
+-            ext=Path(item.name).suffix.lower();arc=f'attachments/{item.id}{ext if re.fullmatch(r"\\.[a-z0-9]{1,8}",ext) else ""}'
+-            add_bytes(z,arc,data);attachments.append({'id':item.id,'original_name':item.name,'archive_path':arc,'sha256':item.sha256,'size':item.size,'object_type':item.object_type,'object_id':item.object_id})
+-        add_bytes(z,'attachments_manifest.json',json.dumps(attachments,ensure_ascii=False,indent=2).encode())
+-        add_bytes(z,'README.txt','UTF-8 CSV + JSON + 原始附件；不含密码、会话、命令回执或外部接口密钥。\n'.encode('utf-8'))
+-        # Manifest intentionally does not hash itself.
+-        z.writestr('manifest.json',json.dumps(manifest,ensure_ascii=False,indent=2).encode())
+-    os.replace(tmp,path);os.chmod(path,0o600);return path,f'学校业务开放格式移交_{task.id}.zip'
++    try:
++        with zipfile.ZipFile(tmp,'w',compression=zipfile.ZIP_DEFLATED,compresslevel=6) as z:
++            for name,model,columns in tables:
++                safe=[c for c in columns if c not in {'password_hash','auth_version','failures','locked_until','storage_key','token_hash','csrf','lease_token','lease_until'}]
++                items=db.scalars(select(model).order_by(*[getattr(model,k) for k in ('created_at','id') if hasattr(model,k)])).all()
++                # Validate sealed results before allowing them into portable evidence.
++                if model is Assessment:
++                    from .assessment_evidence import verified_archive
++                    for obj in items:
++                        if obj.state=='ARCHIVED':verified_archive(obj)
++                if model is OrganizationAssessment:
++                    for obj in items:
++                        if obj.state=='ARCHIVED' and (not obj.archive or digest(obj.archive)!=obj.archive_sha256):
++                            raise RuntimeError('组织考核归档证据不一致: '+obj.id)
++                typed=[{c:serial(getattr(obj,c)) for c in safe} for obj in items]
++                rows=[[json.dumps(row[c],ensure_ascii=False,separators=(',',':')) if isinstance(row[c],(dict,list)) else row[c]
++                    for c in safe] for row in typed]
++                csv_path=f'data/{name}.csv';typed_path=f'typed/{name}.jsonl'
++                add_bytes(z,csv_path,_csv_bytes(safe,rows))
++                add_bytes(z,typed_path,(''.join(json.dumps(row,ensure_ascii=False,separators=(',',':'),allow_nan=False)+'\n' for row in typed)).encode('utf-8'))
++                manifest['tables'].append({'name':name,'model_table':model.__tablename__,'columns':safe,'rows':len(typed),
++                    'csv_path':csv_path,'typed_path':typed_path,
++                    'primary_key':[c.key for c in sa_inspect(model).primary_key],
++                    'column_types':{c:str(sa_inspect(model).columns[c].type) for c in safe}})
++            structure={t.name:{'columns':[{'name':c.name,'type':str(c.type),'nullable':c.nullable,'primary_key':c.primary_key,'foreign_keys':[str(fk.target_fullname) for fk in c.foreign_keys]} for c in t.columns]} for t in Base.metadata.sorted_tables}
++            add_bytes(z,'database_structure.json',json.dumps(structure,ensure_ascii=False,indent=2).encode())
++            add_bytes(z,'delivery/initialization_configuration.json',json.dumps(configuration_snapshot(db),ensure_ascii=False,indent=2).encode())
++            add_bytes(z,'delivery/database_dictionary.json',json.dumps(database_dictionary(),ensure_ascii=False,indent=2).encode())
++            add_bytes(z,'delivery/interface_data_catalog.json',json.dumps(DATA_CATALOG,ensure_ascii=False,indent=2).encode())
++            attachments=[]
++            for item in db.scalars(select(Attachment).order_by(Attachment.id)):
++                from .routes.files import verify_file
++                data=verify_file(storage_dir,item)
++                ext=Path(item.name).suffix.lower();arc=f'attachments/{item.id}{ext if re.fullmatch(r"\\.[a-z0-9]{1,8}",ext) else ""}'
++                add_bytes(z,arc,data);attachments.append({'id':item.id,'original_name':item.name,'archive_path':arc,'sha256':item.sha256,'size':item.size,'object_type':item.object_type,'object_id':item.object_id,'teacher_id':item.teacher_id,'uploaded_by':item.uploaded_by,'mime':item.mime,'created_at':item.created_at.isoformat()})
++            add_bytes(z,'attachments_manifest.json',json.dumps(attachments,ensure_ascii=False,indent=2).encode())
++            add_bytes(z,'README.txt','UTF-8 CSV（电子表格安全显示）+ typed/*.jsonl（精确值与JSON结构）+ 原始附件。\nCSV可能用单引号防公式，数据迁移请读取JSONL；SQL金额/日期/时间为精确字符串，按manifest column_types解释。\n不含密码、会话、命令回执、安装来源凭证或外部接口密钥；本包不是灾备文件，禁止直接恢复成可用安装。\n'.encode('utf-8'))
++            # Manifest intentionally does not hash itself.
++            z.writestr('manifest.json',json.dumps(manifest,ensure_ascii=False,indent=2).encode())
++        os.replace(tmp,path);os.chmod(path,0o600);return path,f'学校业务开放格式移交_{task.id}.zip'
++    finally:
++        try:tmp.unlink()
++        except FileNotFoundError:pass
+ 
+ 
+ def read_export_file(storage_dir,task):
+diff --git a/backend/app/grants.py b/backend/app/grants.py
+index fb15ccb..ba2eee5 100644
+--- a/backend/app/grants.py
++++ b/backend/app/grants.py
+@@ -1,13 +1,18 @@
+ """Generate least-privilege MySQL grants for runtime and migration accounts.
+ 
+ Passwords are never embedded here; users are provisioned by mysql-init from
+-private secret SQL. Runtime receives DML only. Migration receives DDL + DML.
++private secret SQL. Runtime has no DDL; append-only evidence receives only
++SELECT/INSERT and installation/version tables are SELECT-only. Migration has DDL/DML.
+ """
+ from . import installation  # register immutable installation provenance
+ from .models import Base
+ # Register extension tables before reading metadata.
+ from . import org_assessment, integrations, reference_data, inbound_sync  # noqa: F401
+ 
++APPEND_ONLY_TABLES = frozenset({'audit_events','workflow_events','record_revisions',
++    'qualification_revisions','point_entries','rule_trials','organization_rule_trials',
++    'task_attempts','sync_call_logs','attachments'})
++
+ def q(name):return '`'+name.replace('`','``')+'`'
+ 
+ def sql(schema='nondegree',runtime_user='nondegree_app',migration_user='nondegree_migration'):
+@@ -16,7 +21,8 @@ def sql(schema='nondegree',runtime_user='nondegree_app',migration_user='nondegre
+       f"REVOKE ALL PRIVILEGES, GRANT OPTION FROM '{migration_user}'@'%';",
+     ]
+     for table in sorted(Base.metadata.tables):
+-        privileges = "SELECT" if table == "installation_provenance" else "SELECT, INSERT, UPDATE, DELETE"
++        privileges = ("SELECT" if table == "installation_provenance" else
++                      "SELECT, INSERT" if table in APPEND_ONLY_TABLES else "SELECT, INSERT, UPDATE, DELETE")
+         statements.append(f"GRANT {privileges} ON {q(schema)}.{q(table)} TO '{runtime_user}'@'%';")
+     statements.append(f"GRANT SELECT ON {q(schema)}.`alembic_version` TO '{runtime_user}'@'%';")
+     statements.append(f"GRANT SELECT, INSERT, UPDATE, DELETE, CREATE, ALTER, INDEX, DROP, REFERENCES, CREATE VIEW, SHOW VIEW, TRIGGER ON {q(schema)}.* TO '{migration_user}'@'%';")
+diff --git a/backend/app/read_queries.py b/backend/app/read_queries.py
+index fb61868..0a18b2f 100644
+--- a/backend/app/read_queries.py
++++ b/backend/app/read_queries.py
+@@ -5,12 +5,12 @@ reconstruct the missing authentication layer. These queries perform no writes.
+ """
+ from __future__ import annotations
+ from collections.abc import Mapping
+-from datetime import date, datetime
++from datetime import date, datetime, time, timedelta
+ from decimal import Decimal
+ import re
+ from fastapi import HTTPException
+ from sqlalchemy import select, func, distinct, case
+-from .models import Org, User, Period, TrainingRecord, Assessment, Setting
++from .models import Org, User, Period, TrainingRecord, Assessment, Setting, Audit
+ from .reference_data import TrainingProjectMaster,TrainingCourseMaster,TrainingClassMaster
+ 
+ RECORD_FILTERS = frozenset({'q','teacher_id','org_id','start','end','project_code','course_code','period_id'})
+@@ -199,3 +199,37 @@ def stats(db, actor, filters=None):
+         'state_filter_note':'考核环节和退回状态只筛选考核统计；不改变培训营收、授课台账、待办及全校主数据数量',
+         'master_data_counts':master_counts,
+         'metric_notes':metrics.value,'qualification_warning_days':qualification.value['expiry_days']})
++
++
++AUDIT_FILTERS = frozenset({'q','module','result','start','end'})
++
++def audit_query(db, actor, filters=None):
++    """Identical date and text semantics for the audit screen and XLSX export."""
++    actor.require_admin()
++    f = clean_filters(filters, AUDIT_FILTERS)
++    q = select(Audit)
++    for key in ('module','result'):
++        if key in f:
++            q = q.where(getattr(Audit, key) == f[key])
++    if 'q' in f:
++        q = q.where(Audit.action.contains(f['q'], autoescape=True)
++            | Audit.actor_name.contains(f['q'], autoescape=True) | (Audit.request_id == f['q']))
++    bounds = {}
++    for key in ('start','end'):
++        if key in f:
++            try:
++                if not re.fullmatch(r'\d{4}-\d{2}-\d{2}', f[key]):
++                    raise ValueError('date shape')
++                bounds[key] = date.fromisoformat(f[key])
++            except ValueError:
++                raise HTTPException(422, '日期格式应为 YYYY-MM-DD') from None
++    if bounds.get('start', date.min) > bounds.get('end', date.max):
++        raise HTTPException(422, '开始日期不能晚于结束日期')
++    if 'start' in bounds:
++        q = q.where(Audit.created_at >= datetime.combine(bounds['start'], time.min))
++    if 'end' in bounds:
++        if bounds['end'] == date.max:
++            q = q.where(Audit.created_at <= datetime.max)
++        else:
++            q = q.where(Audit.created_at < datetime.combine(bounds['end'] + timedelta(days=1), time.min))
++    return q
+diff --git a/backend/app/routes/admin.py b/backend/app/routes/admin.py
+index 0855313..1f2a0cb 100644
+--- a/backend/app/routes/admin.py
++++ b/backend/app/routes/admin.py
+@@ -263,14 +263,7 @@ def update_notice(ident:str,data:NoticeUpdate,request:Request):
+ def audit_list(request:Request):
+     f,p,z=filters_from(request,{'q','module','result','start','end'})
+     def load(db,a,s):
+-        need_admin(a);q=select(Audit)
+-        for k in ('module','result'):
+-            if f.get(k):q=q.where(getattr(Audit,k)==f[k])
+-        if f.get('q'):q=q.where(Audit.action.contains(f['q'],autoescape=True)|Audit.actor_name.contains(f['q'],autoescape=True)|(Audit.request_id==f['q']))
+-        for k in ('start','end'):
+-            if f.get(k):
+-                try:d=date.fromisoformat(f[k])
+-                except ValueError:raise HTTPException(422,'日期格式无效')
+-                q=q.where(Audit.created_at>=d) if k=='start' else q.where(Audit.created_at<d+timedelta(days=1))
++        from ..read_queries import audit_query
++        q=audit_query(db,a,f)
+         return page_result(db,q.order_by(Audit.created_at.desc(),Audit.id),p,z)
+     return read_operation(request,'audit.read',load)
+diff --git a/backend/app/routes/calculations.py b/backend/app/routes/calculations.py
+index 6bd040e..1f7fd84 100644
+--- a/backend/app/routes/calculations.py
++++ b/backend/app/routes/calculations.py
+@@ -5,10 +5,14 @@ Department/college/school assessments use separate R3 models, evidence and workf
+ real school calculation policy still requires school sample confirmation.
+ """
+ from fastapi import APIRouter,Request,HTTPException
++from fastapi.responses import Response
++from urllib.parse import quote
++from types import SimpleNamespace
+ from sqlalchemy import select,func
+ from decimal import Decimal
+ from ..core import *
+ from ..schemas import *
++from ..assessment_evidence import assessment_projection, make_archive
+ from ..services import facts,evaluate,calculate_points,calculate_assessments,rounded
+ from ..read_queries import assessment_query,ASSESSMENT_FILTERS,authorized_org_descendants
+ from .business import owned_object,events
+@@ -180,15 +184,20 @@ def assessments(request:Request):
+         q=assessment_query(db,a,f)
+         ordered=q.order_by(Assessment.score.desc(),Assessment.teacher_id)
+         out=page_result(db,ordered,p,z)
+-        for i,item in enumerate(out['items']):item['scope_rank']=(p-1)*z+i+1
++        for i,item in enumerate(out['items']):
++            item['scope_rank']=(p-1)*z+i+1
++            if item['state']=='ARCHIVED':
++                frozen=assessment_projection(db,SimpleNamespace(**item))
++                item['teacher_display_name']=frozen['teacher']['name']
++                item['period_display_name']=frozen['period']['name']
++                item['identity_frozen']=frozen['identity_frozen']
+         out['rank_note']='当前授权与筛选范围的得分排序序号；同分按教师编号稳定排序，不代表全校名次。'
+         return out
+     return read_operation(request,'assessment.read',load)
+ 
+ def assessment_details(db,a,ident,permission='assessment.read'):
+     obj=owned_object(db,a,Assessment,ident,permission)
+-    return {'assessment':obj,'rule':db.get(Rule,obj.rule_id),'period':db.get(Period,obj.period_id),
+-      'teacher':db.get(User,obj.teacher_id),'events':events(db,'assessment',ident)}
++    return assessment_projection(db,obj,events(db,'assessment',ident) if obj.state!='ARCHIVED' else None)
+ 
+ @router.get('/assessments/{ident}')
+ def assessment_detail(ident:str,request:Request):
+@@ -198,10 +207,43 @@ def assessment_detail(ident:str,request:Request):
+ def assessment_print(ident:str,request:Request):
+     def load(db,a,s):
+         result=assessment_details(db,a,ident)
+-        audit(db,a,'assessment',ident,'打印考核结果',after={'version':result['assessment'].version},reason='授权打印考核结果')
++        audit(db,a,'assessment',ident,'打印考核结果',after={'version':result['assessment']['version'],'immutable':result['immutable']},reason='授权打印考核结果')
+         return result
+     return read_operation(request,'export',load)
+ 
++@router.get('/assessments/{ident}/evidence')
++def assessment_evidence_download(ident:str,request:Request):
++    with request.app.state.sessions.begin() as db:
++        a,s=current_actor(db,request);a.require('export')
++        result=assessment_details(db,a,ident)
++        if not result['immutable']:raise HTTPException(409,'仅已归档考核可以下载冻结证据')
++        payload={'format':'Yueke teacher assessment evidence v2','archive':result['assessment']['archive'],
++                 'archive_sha256':result['assessment']['archive_sha256']}
++        data=json.dumps(payload,ensure_ascii=False,indent=2).encode('utf-8')
++        audit(db,a,'assessment',ident,'下载教师考核归档证据',after={'archive_sha256':payload['archive_sha256']},reason='当前权限核验后下载原归档快照')
++    return Response(data,media_type='application/json',headers={'Content-Disposition':"attachment; filename*=UTF-8''"+quote('教师考核归档证据_'+ident+'.json'),'X-Content-Type-Options':'nosniff'})
++
++@router.get('/assessments/{ident}/attachments/{attachment_id}/download')
++def assessment_frozen_attachment(ident:str,attachment_id:str,request:Request):
++    from ..assessment_evidence import attachment_index
++    from .files import verify_file
++    with request.app.state.sessions.begin() as db:
++        a,s=current_actor(db,request);a.require('file.read')
++        result=assessment_details(db,a,ident)
++        if not result['immutable']:raise HTTPException(409,'当前考核尚未归档')
++        frozen=result['assessment']['archive']
++        item=attachment_index(frozen['source_snapshot'],result['assessment']['teacher_id']).get(attachment_id)
++        if item is None:raise HTTPException(404,'该附件不在本次归档依据中')
++        stored=db.get(Attachment,attachment_id)
++        if not stored or any(getattr(stored,k)!=item.get(k) for k in ('teacher_id','object_type','object_id')):
++            raise HTTPException(409,'归档附件业务关联校验失败')
++        # Physical key is never exported; digest and size are taken from the archive,
++        # so rewriting live attachment metadata cannot bless replacement bytes.
++        expected=SimpleNamespace(storage_key=stored.storage_key,sha256=item['sha256'],size=item['size'])
++        data=verify_file(request.app.state.settings.storage_dir,expected)
++        audit(db,a,'assessment',ident,'下载归档时资质附件',after={'attachment_id':attachment_id,'sha256':item['sha256']},reason='仅下载本次归档引用的原版本附件')
++    return Response(data,media_type=item['mime'],headers={'Content-Disposition':"attachment; filename*=UTF-8''"+quote(item['name']),'X-Content-Type-Options':'nosniff'})
++
+ @router.post('/assessments/{ident}/actions')
+ def assessment_action(ident:str,data:Action,request:Request):
+     def apply(db,a,s):
+@@ -233,12 +275,8 @@ def assessment_action(ident:str,data:Action,request:Request):
+             if a.role.kind!='school' or obj.state!='READY' or obj.teacher_id==a.id:raise HTTPException(403,'仅学校可归档已审核结果')
+             if db.scalar(select(Dispute.id).where(Dispute.teacher_id==obj.teacher_id,Dispute.state=='OPEN',((Dispute.period_id==obj.period_id)|(Dispute.period_id.is_(None)))).limit(1)):
+                 raise HTTPException(409,'仍有未解决核对申请，不能归档')
++            obj.archive=make_archive(db,obj,a,events(db,'assessment',ident),data.reason,data.basis,request.app.state.settings.storage_dir)
+             obj.state='ARCHIVED'
+-            obj.archive={'assessment':{k:v for k,v in serial(obj).items() if k not in {'archive','archive_sha256'}},
+-               'rule':serial(db.get(Rule,obj.rule_id)),'period':serial(db.get(Period,obj.period_id)),
+-               'source_snapshot':obj.source_snapshot,'events':serial(events(db,'assessment',ident)),
+-               'archived_by':a.id,'archived_at':utcnow().isoformat(),'reason':data.reason,'basis':data.basis}
+-            obj.archive['assessment']['version']=obj.version+1
+             obj.archive_sha256=digest(obj.archive)
+         else:raise HTTPException(422,'考核操作无效')
+         obj.version+=1
+diff --git a/backend/app/routes/tasks.py b/backend/app/routes/tasks.py
+index b171629..fd90e60 100644
+--- a/backend/app/routes/tasks.py
++++ b/backend/app/routes/tasks.py
+@@ -113,7 +113,11 @@ def create_export(data:ExportRequest,request:Request):
+     if data.kind=='handover' and (data.filters or not data.confirmed):raise HTTPException(422,'业务移交必须明确确认且不接收局部筛选')
+     permission='data.export' if data.kind=='handover' else 'export'
+     def apply(db,a,s):
+-        if data.kind=='handover':a.require_admin()
++        from ..excel_io import require_export_scope
++        require_export_scope(a,data.kind)
++        if data.kind=='audit':
++            from ..read_queries import audit_query
++            audit_query(db,a,data.filters)
+         task=Task(kind='export',owner_id=a.id,key='export-'+uuid.uuid4().hex,payload={'kind':data.kind,'filters':data.filters,'authorization':a.fingerprint()},state='PENDING')
+         db.add(task);db.flush();audit(db,a,'exports',task.id,'创建后台导出任务',after={'kind':data.kind,'filters':data.filters},reason='按当前授权范围后台生成')
+         return _public_task(task)
+diff --git a/backend/app/services.py b/backend/app/services.py
+index 0bf7f83..8f41bad 100644
+--- a/backend/app/services.py
++++ b/backend/app/services.py
+@@ -44,6 +44,8 @@ def facts(db,teacher_id,period):
+     previous=db.scalar(select(Assessment).join(Period,Period.id==Assessment.period_id)
+         .where(Assessment.teacher_id==teacher_id,Assessment.state=="ARCHIVED",Period.end_date<period.start_date)
+         .order_by(Period.end_date.desc()).limit(1))
++    from .assessment_evidence import verified_archive
++    previous_frozen=verified_archive(previous) if previous else None
+     snapshots=[]
+     for q in quals:
+         rev=db.get(QualificationRevision,q.current_revision_id) if q.current_revision_id else None
+@@ -53,10 +55,10 @@ def facts(db,teacher_id,period):
+          "participants":D(sum(r.participants for r in records)),
+          "income":sum((D(str(r.income)) for r in records),D(0)),
+          "qualifications":D(len(quals)),"points":sum((D(str(p.amount)) for p in points),D(0)),
+-         "assessment_score":D(str(previous.score)) if previous else D(0)}
++         "assessment_score":D(str(previous_frozen["assessment"]["score"])) if previous_frozen else D(0)}
+     snapshot={"as_of":utcnow().isoformat(),"period":serial(period),"training_records":serial(records),
+               "qualifications":snapshots,"point_entries":[{"id":p.id,"item_key":p.item_key,"amount":str(p.amount),"rule_id":p.rule_id,"batch_id":p.batch_id,"evidence_sha256":digest(p.source_snapshot)} for p in points],
+-              "previous_archived_assessment":({"id":previous.id,"period_id":previous.period_id,"score":str(previous.score),"archive_sha256":previous.archive_sha256} if previous else None),
++              "previous_archived_assessment":({"id":previous.id,"period_id":previous.period_id,"score":str(previous_frozen["assessment"]["score"]),"archive_sha256":previous.archive_sha256} if previous else None),
+               "values":serial(raw),"qualification_basis":"审核通过、取得日期不晚于周期结束、有效期覆盖周期结束日；无有效期视为长期有效",
+               "assessment_score_basis":"本周期开始日前最近一个已归档考核结果，不引用当期未完成考核"}
+     return raw,snapshot
+diff --git a/docs/ADMIN_OPERATIONS_MANUAL.md b/docs/ADMIN_OPERATIONS_MANUAL.md
+index e637203..6115f4d 100644
+--- a/docs/ADMIN_OPERATIONS_MANUAL.md
++++ b/docs/ADMIN_OPERATIONS_MANUAL.md
+@@ -1,3 +1,5 @@
++> R6 更新：教师考核历史投影、原附件、审计导出及开放移交 v2 详见 `R6_EVIDENCE_CHAIN_AND_HANDOVER.md`；原手册其余功能继续适用。
++
+ # 管理员操作手册
+ 
+ ## 1. 首次初始化原则
+diff --git a/docs/API_ENDPOINT_CATALOG.md b/docs/API_ENDPOINT_CATALOG.md
+index 0c005fc..ef4f760 100644
+--- a/docs/API_ENDPOINT_CATALOG.md
++++ b/docs/API_ENDPOINT_CATALOG.md
+@@ -2,7 +2,7 @@
+ 
+ > 由 `scripts/generate_api_catalog.py` 从当前源码自动生成。认证原语列只表示源码入口使用标准服务端认证/事务原语，不能替代运行时越权测试。
+ 
+-当前 API 路由：**119**；静态认证门：**PASS**。
++当前 API 路由：**121**；静态认证门：**PASS**。
+ 
+ | 方法 | 路径 | 模块文件 | 处理函数 | 认证/事务原语 | 公开 |
+ |---|---|---|---|---|---|
+@@ -12,6 +12,8 @@
+ | GET | `/api/assessments/{ident}` | `backend/app/routes/calculations.py` | `assessment_detail` | read_operation | 否 |
+ | POST | `/api/assessments/{ident}/actions` | `backend/app/routes/calculations.py` | `assessment_action` | command | 否 |
+ | POST | `/api/assessments/{ident}/adjust` | `backend/app/routes/calculations.py` | `assessment_adjust` | command | 否 |
++| GET | `/api/assessments/{ident}/attachments/{attachment_id}/download` | `backend/app/routes/calculations.py` | `assessment_frozen_attachment` | current_actor | 否 |
++| GET | `/api/assessments/{ident}/evidence` | `backend/app/routes/calculations.py` | `assessment_evidence_download` | current_actor | 否 |
+ | GET | `/api/assessments/{ident}/print` | `backend/app/routes/calculations.py` | `assessment_print` | read_operation | 否 |
+ | POST | `/api/attachments/{ident}/detach` | `backend/app/routes/files.py` | `detach` | command | 否 |
+ | GET | `/api/attachments/{ident}/download` | `backend/app/routes/files.py` | `download` | current_actor | 否 |
+diff --git a/docs/DATA_DICTIONARY_AND_HANDOVER.md b/docs/DATA_DICTIONARY_AND_HANDOVER.md
+index c379820..7360893 100644
+--- a/docs/DATA_DICTIONARY_AND_HANDOVER.md
++++ b/docs/DATA_DICTIONARY_AND_HANDOVER.md
+@@ -1,3 +1,5 @@
++> R6 更新：教师考核历史投影、原附件、审计导出及开放移交 v2 详见 `R6_EVIDENCE_CHAIN_AND_HANDOVER.md`；原手册其余功能继续适用。
++
+ # 数据字典与移交说明
+ 
+ ## 1. 数据类别
+diff --git a/docs/R6_EVIDENCE_CHAIN_AND_HANDOVER.md b/docs/R6_EVIDENCE_CHAIN_AND_HANDOVER.md
+new file mode 100644
+index 0000000..09040ed
+--- /dev/null
++++ b/docs/R6_EVIDENCE_CHAIN_AND_HANDOVER.md
+@@ -0,0 +1,88 @@
++# R6｜教师考核证据链与开放移交收口
++
++日期：2026-09-18。输入为 R5 完整源码包，SHA256：
++`850e553bb1b1d21c0803372a615995e160faebfa9032d0ece13d8a3b7497b8e2`。
++
++**这是完整源码施工基线，不是生产验收放行。** 当前生产门仍为 BLOCKED。没有接触用户电脑、GitHub、学校服务器或真实外部系统。
++
++## 1. 本轮为何做这些
++
++唯一需求依据为原《一站式非学历教育智慧前台建设项目采购清单》，9 页、14 项、101 条。
++本轮聚焦第 2.3、8.5、9.3/9.6、10.5/10.6/10.7、12.1/12.2/12.5、14.6 条中的内部实现。
++原 PDF 已随包保存在 `acceptance/79a6e12c-5e54-4a9a-9d54-7dc1afb72ee3.pdf`。
++
++本轮没有重写参训分表、主数据、接口目录、入站计划或组织考核，也没有放开旧库升级。
++
++## 2. 已修复的真实缺口
++
++| 缺口 | 改动与实测 |
++|---|---|
++| 教师考核详情/打印读取当前姓名、规则、周期 | 新归档保存教师、工号、组织链、规则、周期及终态事件；列表、详情、打印、Excel 使用冻结数据。更名后仍显示当期姓名，当前权限仍按最新组织校验。 |
++| 旧归档没有人员快照 | 保留旧归档原值及摘要；明确显示“归档时未冻结姓名”，不拿今天的信息补写历史。无法校验的归档直接拒绝，不自动修复。 |
++| 归档附件只从当前资质入口读取 | 新增归档证据 JSON 下载与当期原附件下载。附件必须被该归档实际引用，并通过当前权限、教师/业务归属和当期字节摘要核验。当前附件换版本不覆盖历史。 |
++| 历史依据损坏仍可用于计算 | 已归档记录的摘要、关键字段与冻结内容不一致时，详情、打印、证据下载、导出和后续引用拒绝。归档前检查当期附件存在且内容一致，失败不改变 READY 状态。 |
++| 组织考核 Excel 导出读取当前组织名称 | 导出使用既有冻结组织考核投影，保持当期组织名称。未改动组织评分公式、排名算法或状态机。 |
++| 审计导出未应用日期筛选且时间被截为日期 | 页面与导出共用日期查询。起止日均包含，倒序/非法日期拒绝；Excel 保留完整操作时间。 |
++| 拥有 export 权限可能导出已无查看权限的模块 | 创建与执行导出均检查相应模块读取权限；组织/角色/账号变化后任务明确失败并记录尝试，不生成文件。下载仍重新检查最新授权。 |
++| 业务移交缺计算批次、异议、任务等证据 | v2 移交包含 40 张业务/证据表、CSV、精确 JSONL、字段类型、主键、SQL 外键与附件关联。40 表不是数据库总表数；认证会话等内部表有意排除。 |
++| CSV 防公式处理可能改变迁移原值 | CSV 保持安全显示，JSONL 保留原始文本、Decimal 精确字符串、完整时间、null/bool/int/JSON 结构。电子表格使用 CSV，数据迁移使用 JSONL 与字段类型清单。 |
++| 移交多表读取可能跨时间点，失败可能留临时包 | 单独只读事务读取；MySQL 路径显式设置 REPEATABLE READ 和一致性快照，SQLite 隔离路径显式 BEGIN。失败清理敏感临时 ZIP。MySQL 路径尚未在真实 MySQL 执行。 |
++| 不可变证据仅靠应用约定 | MySQL runtime grants 生成器为 10 张证据表仅生成 SELECT/INSERT；来源表与 Alembic 表仍只读。只验证了生成 SQL 与代码行为，未声称已在真实 MySQL 验证授权。 |
++
++## 3. 本轮实测记录
++
++- Python：**377 项通过，0 失败、0 错误、0 跳过**。R5 原有 336 项，加 R6 新增 41 项。正式计数来自 `evidence/r6/test_summary.json` 列明的 8 组 JUnit，重复运行不重复计数。
++- Node：**45 项通过**。其中新增 5 项执行当前打印函数的最小 DOM 测试，验证冻结内容、转义、过程稿标识及打印异常后的页面状态；不是 Chromium 端到端验收。
++- 原生 HTTP：**102 次请求、25 个检查通过**。使用真正启动的 FastAPI 服务、Cookie/CSRF、四角色、临时 SQLite 数据库及独立 worker 调用；不是 TestClient 替代此项记录。
++- HTTP 主链：首次改密 → 教师资质上传/退回/补充/重提/审核 → 积分试算/确认/冲正 → 考核异议与逐级确认 → 归档 → 后续资质更新 → 原附件与证据下载 → Excel/开放移交 → 组织调整后的权限失效。
++- 开放移交实物：**88 个 ZIP 成员，40 张类型化表，208 行合成数据，61 条 SQL 外键关系检查，1 个原始附件**；哈希、精确值/CSV 对照、行数、主键和关联检查 PASS。不是灾备恢复证明。
++- API 静态认证入口：**121 个路由，0 个认证原语漏挂**；这不是“所有安全问题已排除”的结论。
++- 新空校源码组装门：PASS；唯一迁移头仍为 `20260918_0001`。
++
++`tests/p0/test_preservation.py` 原来把 facts() 也要求 AST 完全不变；R6 明确只放开其中“前期归档分数取证校验”这一项，并新增损坏归档拒绝测试。evaluate、calculate_points、calculate_assessments 等公式与台账写入函数仍按原 AST 保留。没有修改历史对照源文件来掩盖差异。
++
++## 4. 看哪些文件
++
++- `backend/app/assessment_evidence.py`：教师冻结投影、归档创建、原附件索引。
++- `backend/app/routes/calculations.py`：归档/详情/打印/证据下载及授权入口。
++- `backend/app/excel_io.py`：模块导出权限、冻结导出、开放移交 v2、异常任务记录。
++- `backend/app/read_queries.py` / `routes/admin.py`：统一审计日期筛选。
++- `backend/app/grants.py`：证据表 append-only SQL 生成。
++- `scripts/verify_handover.py`：v2 精确值、CSV、主键、外键及附件检查；仍可识别旧 v1，但明确标注旧覆盖范围。
++- `tests/r2/test_r6_evidence_chain.py`、`test_r6_portability.py`：41 项新增回归。
++- `scripts/run_r6_http.py`：新的隔离 HTTP 核验及正常 Chromium 导航探测；不会覆盖已有库。
++- `evidence/r6/synthetic_http/`：本轮真实 HTTP 请求记录、导出 Excel、归档证据及开放移交样本。**全部是合成测试样本，不能当作学校实际验收材料。**
++
++已有 canonical 安装切换 R6 时，需要由授权运维重新应用并核验 `grants.py` 生成的权限；仅替换应用代码不会自动收回数据库里原有的权限。
++
++## 5. 新手操作说明
++
++**查看/打印当期考核：** 进入“三级考核 → 教师考核”，找到“已归档”记录，点击“查看/办理”。详情显示当期姓名、周期、规则、结果与摘要；“打印结果”显示归档件，未归档记录明确显示过程稿。
++
++**下载当期证据：** 在归档详情点“下载归档证据”；“归档时资质附件（原版本）”区域可下载被当期结果实际引用的原件。没有权限或文件损坏时会拒绝，不自动换成新版附件。
++
++**审计按日导出：** 学校管理员进入审计页，选择起止日和模块，再导出。后台任务只导出同一筛选范围，并保留时分秒；账号权限变化时需要重新创建任务。
++
++**资料移交：** 学校管理员使用原“完整业务移交”入口并确认，等待后台生成后下载。包内 `data/*.csv` 适合查看，`typed/*.jsonl` 用于精确迁移。不要把开放移交 ZIP 当作可直接恢复上线的数据库备份。
++
++## 6. 仍未通过的门
++
++| 门 | 当前真实状态 |
++|---|---|
++| MySQL 8.4 | 当前沙箱没有 mysqld/mysql/docker。官方二进制下载未成功；未执行真实建库、授权、并发、升级/恢复验收。SQLite 或 MySQL 方言编译不替代该门。 |
++| 原生浏览器/打印 | 本轮实际启动 Chromium，HTTP 服务正常返回 200，但浏览器导航报 ERR_BLOCKED_BY_ADMINISTRATOR。没有绕过策略；页面交互、打印分页、125% 缩放仍待等效正常浏览器环境实测。 |
++| 3 秒/5 秒、100 并发、3000 在线 | 没有本轮学校等效 HTTPS 环境压测报告，不能据单元测试判通过。 |
++| 学校真实双轨样本 | 本轮仅合成数据；积分/考核 100% 对账与学校签认仍待现场。 |
++| SSO/数据中台/湘培 | 未连接真实网络/凭据/协议责任方，不把适配器测试替身当作真实联调。 |
++| 质保、培训、试运行 | 继续属于真实履约与人工验收，代码不能代为签认。 |
++
++SHA256 与普通数据库来源记录是完整性检查，不是对拥有数据库与签名文件全部写权限人员的密码学防伪。v2 不含安装来源凭证，不能用于绕过 fresh-only 安装限制。
++
++MySQL 事务语法核对来源：MySQL 8.4 官方手册 15.3.1：
++https://dev.mysql.com/doc/refman/8.4/en/commit.html
++仅作代码设计依据，不是实际 MySQL 运行证据。
++
++## 7. 下一步
++
++以本包为唯一新源码基线，仍先做**独立真实 MySQL 8.4 新空校安装 → 来源/结构校验 → 四角色主链 → 导出与只读移交快照 → append-only 授权 → 备份恢复**。
++只允许同一 canonical 来源的恢复；旧库、旧迁移与旧备份继续拒绝。没有获准的现场条件前，生产门保持 BLOCKED。
+diff --git a/docs/TEST_AND_ACCEPTANCE_GUIDE.md b/docs/TEST_AND_ACCEPTANCE_GUIDE.md
+index b9939a2..8afa598 100644
+--- a/docs/TEST_AND_ACCEPTANCE_GUIDE.md
++++ b/docs/TEST_AND_ACCEPTANCE_GUIDE.md
+@@ -1,3 +1,5 @@
++> R6 更新：教师考核历史投影、原附件、审计导出及开放移交 v2 详见 `R6_EVIDENCE_CHAIN_AND_HANDOVER.md`；原手册其余功能继续适用。
++
+ # R5 测试与验收指南
+ 
+ 所有命令从工程根目录运行。分组保存日志，外层超时时先检查对应日志/退出信息，不将截断直接判定为通过或失败。
+diff --git a/docs/USER_MANUAL.md b/docs/USER_MANUAL.md
+index 9f4ce7a..385bf85 100644
+--- a/docs/USER_MANUAL.md
++++ b/docs/USER_MANUAL.md
+@@ -1,3 +1,5 @@
++> R6 更新：教师考核历史投影、原附件、审计导出及开放移交 v2 详见 `R6_EVIDENCE_CHAIN_AND_HANDOVER.md`；原手册其余功能继续适用。
++
+ # 用户操作手册｜一站式非学历教育智慧前台
+ 
+ 适用版本：P0-R4 内部收口检查点。采购依据为《一站式非学历教育智慧前台建设项目采购清单》。本手册描述当前源码中真实存在的功能；学校统一认证、学校数据中台和湘培直通车在完成现场联调前均保持 `NOT_CONNECTED`，不得把本地校验当成外部联通。
+diff --git a/frontend/app.js b/frontend/app.js
+index 6f1fef5..784c156 100644
+--- a/frontend/app.js
++++ b/frontend/app.js
+@@ -122,7 +122,7 @@ const pages={
+  async records(){const[d,pa]=await Promise.all([api('/records?'+listQuery(true)),api('/participations?'+listQuery(false))]);view={...d,participations:pa.items};return pageHead('授课业务台账与教师本人参训记录分开保存；收入、人次只来自授课/业务事实，不因教师参训重复累计。',can('records.write')?act('新增业务记录','record-form','','primary','plus'):'')+`<div class="card"><div class="card-head"><h2>授课 / 培训业务台账</h2><span class="subtle">收入、人次、授课学时</span></div>${filtersBar({period:true,dates:true,teacher:true,organization:me.role.kind!=='teacher',project:true,exportKind:'records'})}${table(['业务日期 / 来源编号','教师','项目 / 课程','班级','学时','人次','归属收入（元）','操作'],d.items.map(x=>[`<strong>${esc(x.event_date)}</strong><div class="cell-sub">${esc(x.external_key)}</div>`,esc(teacherName(x.teacher_id)),`<strong>${esc(x.project)}</strong><div class="cell-sub">${esc(x.course)}</div>`,esc(x.class_name),number(x.hours,2),number(x.participants),number(x.income,2),link('查看依据','record',x.id)+(can('records.write')?link('更正','record-form',x.id):'')]))}${pager(d)}</div><div class="card mt20"><div class="card-head"><div><h2>教师参训记录</h2><p>教师作为培训参与者的记录，不参与授课收入/人次累加。</p></div>${can('export')?act('导出参训 Excel','export','participations','','export'):''}</div>${table(['参训日期','教师','项目 / 课程','参训学时','来源'],pa.items.map(x=>[esc(x.event_date),esc(teacherName(x.teacher_id)),`<strong>${esc(x.project)}</strong><div class="cell-sub">${esc(x.course)}</div>`,number(x.hours,2),esc(x.source)]))}</div>`},
+  async qualifications(){const d=await api('/qualifications?'+listQuery());view=d;return pageHead('上传真实佐证 → 教师提交 → 授权审核 → 版本归档与到期提醒。',can('qualification.write')&&me.user.staff_no?act('新增我的资质','qualification-form','','primary','plus'):'')+`<div class="card">${filtersBar({states:['DRAFT','SUBMITTED','RETURNED','APPROVED'],teacher:me.role.kind!=='teacher',exportKind:'qualifications'})}${table(['证书名称 / 类别','教师','证书编号','有效期至','状态','版本','操作'],d.items.map(x=>[`<strong>${esc(x.name)}</strong><div class="cell-sub">${esc(x.category)}</div>`,esc(teacherName(x.teacher_id)),esc(x.certificate_no),esc(x.expires||'长期有效'),badge(x.state),'v'+x.version,link('查看 / 办理','qualification',x.id)]))}${pager(d)}</div>`},
+  async points(){const[d,b]=await Promise.all([api('/points?'+listQuery(true)),api('/point-balances?'+query({period_id:periodId,teacher_id:filter.teacher_id||''}))]);view={...d,balances:b.items};return pageHead('查看原始值、计算公式与规则版本；纠错只追加调整项。',(can('points.calculate')?act('计算 / 重算','calculate','points','primary','refresh'):'')+(can('points.adjust')?act('追加调整项','point-adjust','','','plus'):''))+`<div class="summary-row"><div class="summary-item"><label>当前范围积分合计</label><strong>${number(d.sum,2)}<small>分</small></strong></div><div class="summary-item"><label>积分流水</label><strong>${d.total}<small>笔</small></strong></div><div class="summary-item"><label>已确认台账</label><strong>${b.items.filter(x=>x.confirmed).length}<small>份</small></strong></div><div class="summary-item"><label>当前周期</label><p class="mt12 small">${esc(periodId?periodName(periodId):'全部周期')}</p></div></div><div class="card">${filtersBar({search:false,period:true,teacher:me.role.kind!=='teacher',exportKind:'points'})}${table(['教师','积分项','变动类型','分值','计算时间','操作'],d.items.map(x=>[esc(teacherName(x.teacher_id)),esc(x.item_key),badge(x.kind),`<strong>${Number(x.amount)>0?'+':''}${number(x.amount,2)}</strong>`,ts(x.created_at),link('计算依据','point',x.id)]))}${pager(d)}</div><div class="card mt20"><div class="card-head"><h2>教师积分确认</h2><span class="subtle">确认后冻结；授权解锁必须填写原因</span></div>${table(['教师','周期','确认状态','操作'],b.items.map(x=>[esc(teacherName(x.teacher_id)),esc(periodName(x.period_id)),badge(x.confirmed?'已确认':'待本人确认'),x.teacher_id===me.user.id&&!x.confirmed?act('本人确认','balance-action',x.id,'sm'):x.confirmed&&can('points.adjust')?act('留痕解锁','balance-action',x.id,'sm'):'—']))}</div>`},
+- async assessment(){const tabs=me.role.kind==='school'?['teacher','dept','college','school']:me.role.kind==='college'?['teacher','college']:me.role.kind==='dept'?['teacher','dept']:['teacher'];if(!tabs.includes(assessmentTab))assessmentTab='teacher';const tabLabels={teacher:'教师考核',dept:'教研室考核',college:'学院考核',school:'学校考核'};const tabbar=`<div class="subtabs">${tabs.map(k=>`<button class="${assessmentTab===k?'active':''}" data-action="assessment-tab" data-id="${k}">${tabLabels[k]}</button>`).join('')}</div>`;if(assessmentTab==='teacher'){const d=await api('/assessments?'+listQuery(true));view=d;return pageHead('自动取数与评分 → 教师 → 教研室 → 学院 → 学校 → 归档。',can('assessment.calculate')?act('生成 / 重算教师考核','calculate','assessment','primary','refresh'):'')+tabbar+`<div class="flow-strip">${['数据采集','自动计算','教师确认 / 核对','教研室确认','学院确认','学校审核','归档'].map((x,i)=>`<div class="flow-step"><i>${i+1}</i>${x}</div>`).join('')}</div><div class="card">${filtersBar({search:false,period:true,teacher:me.role.kind!=='teacher',states:['TEACHER','DEPARTMENT','COLLEGE','SCHOOL','READY','ARCHIVED'],returned:true,dates:true,project:true,organization:me.role.kind!=='teacher',exportKind:'assessments'})}${table(['范围序号','教师','考核周期','得分','当前环节','是否退回','操作'],d.items.map(x=>[x.scope_rank,esc(teacherName(x.teacher_id)),esc(periodName(x.period_id)),`<strong class="blue">${number(x.score,2)}</strong>`,badge(x.state),x.returned?badge('RETURNED'):'—',link('查看 / 办理','assessment',x.id)]))}${pager(d)}<div class="card-foot">${esc(d.rank_note)}</div></div>`}const q=query({period_id:periodId,target_kind:assessmentTab,...(filter.state?{state:filter.state}:{})});const d=await api('/organization-assessments?'+q);view=d;const actions=(me.role.kind==='school'&&can('assessment.calculate')?act('生成 / 重算'+tabLabels[assessmentTab],'org-assessment-calc',assessmentTab,'primary','refresh'):'')+(can('export')?act('导出组织考核','export','organization_assessments','','export'):'');return pageHead('组织自身考核与教师考核分开保存；组织结果按规则聚合授权范围业务数据。',actions)+tabbar+`<div class="card">${filtersBar({search:false,period:true,states:['GENERATED','REVIEWED','SCHOOL_APPROVED','ARCHIVED']})}${table(['考核对象','周期','得分','状态','版本','操作'],d.items.map(x=>[esc(orgName(x.target_id)),esc(periodName(x.period_id)),`<strong class="blue">${number(x.score,2)}</strong>`,badge(x.state),'v'+x.version,link('查看 / 办理','org-assessment',x.id)]))}${pager(d)}<div class="card-foot">组织考核保存逐指标原始值、数据来源、统计范围、公式、权重、规则版本和取数时间；归档后不可覆盖。</div></div>`},
++ async assessment(){const tabs=me.role.kind==='school'?['teacher','dept','college','school']:me.role.kind==='college'?['teacher','college']:me.role.kind==='dept'?['teacher','dept']:['teacher'];if(!tabs.includes(assessmentTab))assessmentTab='teacher';const tabLabels={teacher:'教师考核',dept:'教研室考核',college:'学院考核',school:'学校考核'};const tabbar=`<div class="subtabs">${tabs.map(k=>`<button class="${assessmentTab===k?'active':''}" data-action="assessment-tab" data-id="${k}">${tabLabels[k]}</button>`).join('')}</div>`;if(assessmentTab==='teacher'){const d=await api('/assessments?'+listQuery(true));view=d;return pageHead('自动取数与评分 → 教师 → 教研室 → 学院 → 学校 → 归档。',can('assessment.calculate')?act('生成 / 重算教师考核','calculate','assessment','primary','refresh'):'')+tabbar+`<div class="flow-strip">${['数据采集','自动计算','教师确认 / 核对','教研室确认','学院确认','学校审核','归档'].map((x,i)=>`<div class="flow-step"><i>${i+1}</i>${x}</div>`).join('')}</div><div class="card">${filtersBar({search:false,period:true,teacher:me.role.kind!=='teacher',states:['TEACHER','DEPARTMENT','COLLEGE','SCHOOL','READY','ARCHIVED'],returned:true,dates:true,project:true,organization:me.role.kind!=='teacher',exportKind:'assessments'})}${table(['范围序号','教师','考核周期','得分','当前环节','是否退回','操作'],d.items.map(x=>[x.scope_rank,esc(x.teacher_display_name||teacherName(x.teacher_id)),esc(x.period_display_name||periodName(x.period_id)),`<strong class="blue">${number(x.score,2)}</strong>`,badge(x.state),x.returned?badge('RETURNED'):'—',link('查看 / 办理','assessment',x.id)]))}${pager(d)}<div class="card-foot">${esc(d.rank_note)}</div></div>`}const q=query({period_id:periodId,target_kind:assessmentTab,...(filter.state?{state:filter.state}:{})});const d=await api('/organization-assessments?'+q);view=d;const actions=(me.role.kind==='school'&&can('assessment.calculate')?act('生成 / 重算'+tabLabels[assessmentTab],'org-assessment-calc',assessmentTab,'primary','refresh'):'')+(can('export')?act('导出组织考核','export','organization_assessments','','export'):'');return pageHead('组织自身考核与教师考核分开保存；组织结果按规则聚合授权范围业务数据。',actions)+tabbar+`<div class="card">${filtersBar({search:false,period:true,states:['GENERATED','REVIEWED','SCHOOL_APPROVED','ARCHIVED']})}${table(['考核对象','周期','得分','状态','版本','操作'],d.items.map(x=>[esc(orgName(x.target_id)),esc(periodName(x.period_id)),`<strong class="blue">${number(x.score,2)}</strong>`,badge(x.state),'v'+x.version,link('查看 / 办理','org-assessment',x.id)]))}${pager(d)}<div class="card-foot">组织考核保存逐指标原始值、数据来源、统计范围、公式、权重、规则版本和取数时间；归档后不可覆盖。</div></div>`},
+  async disputes(){const d=await api('/disputes?'+listQuery(true));view=d;return pageHead('从业务明细发起核对，复核人与申请人分离；未解决前阻止考核确认。')+`<div class="card">${filtersBar({search:false,states:['OPEN','RESOLVED'],period:true})}${table(['提交时间','教师','业务对象','核对原因','状态','操作'],d.items.map(x=>[ts(x.created_at),esc(teacherName(x.teacher_id)),esc({record:'培训数据',points:'积分',assessment:'考核'}[x.object_type]),`<span title="${esc(x.reason)}">${esc(x.reason.slice(0,45))}</span>`,badge(x.state),link('查看 / 复核','dispute',x.id)]))}${pager(d)}</div>`},
+  async organization(){const scope={...filter,...(periodId?{period_id:periodId}:{})};const w=await api('/organization-workbench?'+query(scope));const s=w.statistics;view={s,workbench:w};return pageHead('按组织自动限定业务范围，集中查看运行指标、待办与考核进度。',act('组织考核排名','org-ranking','','','chart'))+`<div class="card mb16">${filtersBar({period:true,organization:true,teacher:true,dates:true,project:true,states:['TEACHER','DEPARTMENT','COLLEGE','SCHOOL','READY','ARCHIVED'],returned:true,exportKind:'records'})}${note(s.state_filter_note)}</div>`+metricsHTML(s)+`<div class="equal2 mt20"><div class="card"><div class="card-head"><h2>本范围待处理事项</h2><span class="subtle">${w.todos.total} 项</span></div>${todosHTML(w.todos.items)}</div><div class="card"><div class="card-head"><h2>教师考核处理进度</h2><span class="subtle">当前筛选范围</span></div>${table(['环节','教师数量'],Object.entries(w.assessment_states).map(([k,v])=>[badge(k),link(String(v),'drill-state',k)]))}</div></div><div class="card mt20"><div class="card-head"><h2>组织运行概览</h2></div>${table(['组织','归属培训收入（元）','课程人次','参与教师','查看'],s.ranking.map(x=>[esc(x.name),number(x.income,2),number(x.participants),x.teachers,link('穿透业务明细','drill-org',x.org_id)]))}<div class="card-foot">待办、考核进度与指标均受当前组织、周期、项目、课程和日期范围约束；筛选只改变显示范围，不改正式考核结果。</div></div>`},
+  async rules(){const[d,o]=await Promise.all([api('/rules?'+query({period_id:periodId})),api('/organization-assessment-rules?'+query({period_id:periodId}))]);view={items:d.items,orgRules:o.items};return pageHead('教师积分/考核与组织考核规则分别版本化；正式启用前必须试算。',(can('settings.manage')?act('新增周期','period-form','','','plus'):'')+act('新增教师规则','rule-form','','primary','plus')+act('新增组织规则','org-rule-form','','','plus'))+`<div class="card">${filtersBar({search:false,period:true})}${table(['规则名称','类型','周期','版本','状态','操作'],d.items.map(x=>[esc(x.name),x.kind==='points'?'教师积分':'教师考核',esc(periodName(x.period_id)),x.version_no,badge(x.state),link('详情 / 试算','rule',x.id)+link('复制新规则','rule-form',x.id)]))}</div><div class="card mt20"><div class="card-head"><h2>组织考核规则</h2><span class="subtle">教研室 / 二级学院 / 学校分别配置</span></div>${table(['规则名称','考核对象','周期','版本','状态','操作'],o.items.map(x=>[esc(x.name),esc({dept:'教研室',college:'二级学院',school:'学校'}[x.target_kind]),esc(periodName(x.period_id)),x.version_no,badge(x.state),link('详情 / 试算','org-rule',x.id)+(me.user.is_admin?link('复制新版本','org-rule-copy',x.id):'')]))}</div><div class="card mt20"><div class="card-head"><h2>考核周期</h2><span class="subtle">关闭周期前，教师与组织考核须归档且无未解决核对</span></div>${table(['周期','开始','结束','状态','操作'],periods.map(p=>[esc(p.name),p.start_date,p.end_date,badge(p.state),p.state==='OPEN'?link('关闭周期','close-period',p.id):'—']))}</div>`},
+@@ -160,17 +160,28 @@ async function calculate(kind){if(!periods.some(p=>p.state==='OPEN'))throw Error
+  formModal(kind==='points'?'计算 / 重算教师积分':'生成 / 重算三级考核',field('period_id','适用周期','select',periodId||options[0]?.[0],{options,full:true})+`<div class="form-field full"><label>选择教师（每批最多 200 人） <b>*</b></label><div class="flex"><input id="calc-search" placeholder="输入姓名或工号检索"><button type="button" class="btn" data-action="calc-search">检索</button><button type="button" class="btn" data-action="calc-all">选择当前列表</button></div><div id="calc-people" class="checkbox-list mt12">${teachers.filter(t=>t.active).map(t=>`<label><input type="checkbox" name="person" value="${t.id}">${esc(t.name)} · ${esc(t.staff_no)}</label>`).join('')}</div><p class="hint">通过检索选择教师；已归档或未经退回的考核不会被重算覆盖。</p></div>`+(kind==='points'?field('item_keys','仅重算指定积分项编码','text','',{required:false,full:true,hint:'多个编码用英文逗号分隔；留空计算全部规则项。'}):'')+reasonFields(),async(v,f)=>{const ids=$$('input[name=person]:checked',f).map(i=>i.value);if(!ids.length)throw Error('至少选择一名教师');const body={period_id:v.period_id,teacher_ids:ids,reason:v.reason,basis:v.basis};if(kind==='points'&&v.item_keys)body.item_keys=v.item_keys.split(',').map(x=>x.trim()).filter(Boolean);const d=await api('/'+(kind==='points'?'points':'assessments')+'/calculate',{method:'POST',body});periodId=v.period_id;closeModal();await render();modal('计算批次已完成',note('结果已真实写入业务表；计算成功不等于学校已确认考核结果。')+json({batch_id:d.batch_id,teachers:d.items?.length,summary:d.summary}),act('返回台账','close'));},{wide:true,submit:'确认计算入库'})}
+ async function pointAdjust(){const open=periods.filter(p=>p.state==='OPEN');formModal('追加积分调整项',teacherField('')+field('period_id','考核周期','select',periodId||open[0]?.id,{options:open.map(p=>[p.id,p.name])})+field('item_key','调整项编码','text','manual_review')+field('amount','调整分值（负数为冲销）','number',0,{step:0.01})+reasonFields(),async v=>{delete v.teacher_id_search;if(!v.basis||v.basis.length<2)throw Error('人工调整必须填写依据');await api('/points/adjust',{method:'POST',body:v});await saved('已追加调整流水，原始明细没有被改写')},{wide:true,submit:'追加调整项'})}
+ async function showAssessment(id){const d=await api('/assessments/'+id),x=d.assessment;modalContext=x;const match={TEACHER:'teacher',DEPARTMENT:'dept',COLLEGE:'college',SCHOOL:'school',READY:'school'}[x.state]===me.role.kind;
+- let actions=act('关闭','close');if(can('export'))actions+=act('打印结果','print',id,'','print');if(x.teacher_id===me.user.id&&x.state!=='ARCHIVED')actions+=act('提出核对','new-dispute','assessment|'+id);
++ let actions=act('关闭','close');if(can('export'))actions+=act('打印结果','print',id,'','print');if(d.immutable&&can('export'))actions+=act('下载归档证据','assessment-proof',id); if(x.teacher_id===me.user.id&&x.state!=='ARCHIVED')actions+=act('提出核对','new-dispute','assessment|'+id);
+  if(match){if(me.role.kind!=='teacher')actions+=act('退回教师核对','assess-action','return|'+id,'danger');actions+=act(x.state==='READY'?'归档结果':me.role.kind==='teacher'?'本人确认':'确认并提交下一级','assess-action',(x.state==='READY'?'archive':'confirm')+'|'+id,'primary','check')}
+  if(x.state==='TEACHER'&&can('assessment.calculate'))actions+=act('留痕更正分值','score-adjust',id);
+  const stages=['TEACHER','DEPARTMENT','COLLEGE','SCHOOL','READY','ARCHIVED'];
+- modal('考核详情 · '+teacherName(x.teacher_id),`<div class="between"><div><h2>${esc(periodName(x.period_id))}</h2><p class="muted small mt8">${esc(d.rule.name)} · 规则版本 ${d.rule.version_no}</p></div><div><strong class="assessment-total">${number(x.score,2)}</strong><span class="muted"> 分</span></div></div><div class="flow-strip mt20">${stages.map((s,i)=>`<div class="flow-step ${s===x.state?'active':i<stages.indexOf(x.state)?'done':''}"><i>${i+1}</i>${labels[s]}</div>`).join('')}</div>${table(['指标','原始值','计算公式','分值'],x.detail.map(t=>[esc(t.label),esc(t.raw),`<span class="small">${esc(t.formula)}</span>`,number(t.score,2)]))}${x.state==='ARCHIVED'?`<div class="state-lock mt16">${icon('lock')}已归档 · 规则、业务数据与材料快照已冻结</div><p class="mono mt8">SHA256 ${esc(x.archive_sha256)}</p>`:''}<h3 class="mt20">办理轨迹</h3>${eventsHtml(d.events)}${detailSections(x.state==='ARCHIVED'?x.archive:x.source_snapshot)}`,actions,true);
++ modal('考核详情 · '+d.teacher.name,`<div class="between"><div><h2>${esc(d.period.name)}</h2><p class="muted small mt8">${esc(d.rule.name)} · 规则版本 ${d.rule.version_no}</p></div><div><strong class="assessment-total">${number(x.score,2)}</strong><span class="muted"> 分</span></div></div><div class="flow-strip mt20">${stages.map((s,i)=>`<div class="flow-step ${s===x.state?'active':i<stages.indexOf(x.state)?'done':''}"><i>${i+1}</i>${labels[s]}</div>`).join('')}</div>${table(['指标','原始值','计算公式','分值'],x.detail.map(t=>[esc(t.label),esc(t.raw),`<span class="small">${esc(t.formula)}</span>`,number(t.score,2)]))}${x.state==='ARCHIVED'?`<div class="state-lock mt16">${icon('lock')}已归档 · 规则、业务数据与材料快照已冻结</div><p class="mono mt8">SHA256 ${esc(x.archive_sha256)}</p>`:''}${d.identity_note?note(d.identity_note):''}${frozenAssessmentFiles(d,id)}<h3 class="mt20">办理轨迹</h3>${eventsHtml(d.events)}${detailSections(x.state==='ARCHIVED'?x.archive:x.source_snapshot)}`,actions,true);
+ }
+-async function showOrgAssessment(id){const d=await api('/organization-assessments/'+id),x=d.assessment;modalContext=x;let actions=act('关闭','close')+(can('export')?act('打印组织考核','org-print',id,'','export'):'');if(x.state==='GENERATED'&&me.role.kind===x.target_kind&&me.user.org_id===x.target_id)actions+=act('组织复核','org-assessment-action','review|'+id,'primary','check');if(me.role.kind==='school'&&x.state==='REVIEWED')actions+=act('退回复核','org-assessment-action','return|'+id,'danger')+act('学校审核','org-assessment-action','school_audit|'+id,'primary','check');if(me.role.kind==='school'&&x.state==='SCHOOL_APPROVED')actions+=act('退回复核','org-assessment-action','return|'+id,'danger')+act('归档结果','org-assessment-action','archive|'+id,'primary','lock');modal('组织考核 · '+d.target.name,`<div class="between"><div><h2>${esc(periodName(x.period_id))}</h2><p class="small muted mt8">${esc(d.rule.name)} · ${esc({dept:'教研室',college:'二级学院',school:'学校'}[x.target_kind])} · 规则v${d.rule.version_no}</p></div><strong class="assessment-total">${number(x.score,2)}</strong></div>${table(['指标','原始值','来源','目标值','权重','公式','得分'],d.evidence.map(e=>[esc(e.metric_name),esc(e.raw_value),esc(e.data_source),esc(e.target_value),number(e.weight,2),`<span class="small">${esc(e.formula)}</span>`,number(e.calculated_score,2)]))}${x.state==='ARCHIVED'?`<div class="state-lock mt16">${icon('lock')}已归档 · 组织考核证据与规则快照冻结</div><p class="mono mt8">SHA256 ${esc(x.archive_sha256)}</p>`:''}<h3 class="mt20">办理轨迹</h3>${eventsHtml(d.events)}${detailSections(x.state==='ARCHIVED'?x.archive:x.source_snapshot)}`,actions,true)}
++async function showOrgAssessment(id){const d=await api('/organization-assessments/'+id),x=d.assessment;modalContext=x;let actions=act('关闭','close')+(can('export')?act('打印组织考核','org-print',id,'','export'):'');if(x.state==='GENERATED'&&me.role.kind===x.target_kind&&me.user.org_id===x.target_id)actions+=act('组织复核','org-assessment-action','review|'+id,'primary','check');if(me.role.kind==='school'&&x.state==='REVIEWED')actions+=act('退回复核','org-assessment-action','return|'+id,'danger')+act('学校审核','org-assessment-action','school_audit|'+id,'primary','check');if(me.role.kind==='school'&&x.state==='SCHOOL_APPROVED')actions+=act('退回复核','org-assessment-action','return|'+id,'danger')+act('归档结果','org-assessment-action','archive|'+id,'primary','lock');modal('组织考核 · '+d.target.name,`<div class="between"><div><h2>${esc(d.period.name)}</h2><p class="small muted mt8">${esc(d.rule.name)} · ${esc({dept:'教研室',college:'二级学院',school:'学校'}[x.target_kind])} · 规则v${d.rule.version_no}</p></div><strong class="assessment-total">${number(x.score,2)}</strong></div>${table(['指标','原始值','来源','目标值','权重','公式','得分'],d.evidence.map(e=>[esc(e.metric_name),esc(e.raw_value),esc(e.data_source),esc(e.target_value),number(e.weight,2),`<span class="small">${esc(e.formula)}</span>`,number(e.calculated_score,2)]))}${x.state==='ARCHIVED'?`<div class="state-lock mt16">${icon('lock')}已归档 · 组织考核证据与规则快照冻结</div><p class="mono mt8">SHA256 ${esc(x.archive_sha256)}</p>`:''}<h3 class="mt20">办理轨迹</h3>${eventsHtml(d.events)}${detailSections(x.state==='ARCHIVED'?x.archive:x.source_snapshot)}`,actions,true)}
+ async function calculateOrgAssessment(kind){const choices=orgs.filter(o=>o.kind===kind&&o.active);if(!choices.length)throw Error('当前没有可考核的'+({dept:'教研室',college:'学院',school:'学校'}[kind]));formModal('生成'+({dept:'教研室',college:'学院',school:'学校'}[kind])+'考核',field('period_id','适用周期','select',periodId||periods.find(p=>p.state==='OPEN')?.id,{options:periods.filter(p=>p.state==='OPEN').map(p=>[p.id,p.name]),full:true})+`<div class="form-field full"><label>选择考核对象 <b>*</b></label><div class="checkbox-list">${choices.map(o=>`<label><input type="checkbox" name="org-target" value="${o.id}">${esc(o.name)}</label>`).join('')}</div></div>`+reasonFields(),async(v,f)=>{const ids=$$('input[name=org-target]:checked',f).map(x=>x.value);if(!ids.length)throw Error('至少选择一个考核对象');await api('/organization-assessments/calculate',{method:'POST',body:{period_id:v.period_id,target_kind:kind,target_ids:ids,reason:v.reason,basis:v.basis}});periodId=v.period_id;closeModal();await render()},{wide:true,submit:'生成正式组织考核'})}
+ async function orgAssessmentAction(code){const[action,id]=code.split('|'),x=(await api('/organization-assessments/'+id)).assessment;actionForm({review:'组织复核',school_audit:'学校审核',return:'退回组织复核',archive:'归档组织考核'}[action],'/organization-assessments/'+id+'/actions',x,action,{basis:true,after:async()=>{await render();await showOrgAssessment(id)}})}
+ async function scoreAdjust(id){const x=(await api('/assessments/'+id)).assessment;formModal('追加考核复核更正项',field('delta','调整分值（可为负数）','number',0,{min:-100,max:100,step:0.01,full:true})+reasonFields(),async v=>{if(!v.basis||v.basis.length<2)throw Error('请填写更正依据');await api('/assessments/'+id+'/adjust',{method:'POST',body:{...v,expected_version:x.version}});closeModal();await render();await showAssessment(id)},{submit:'保存更正项',hint:'更正只在教师确认环节允许。保留原始评分项，新增调整项及依据，不改写已归档结果。'})}
+-async function printAssessment(id){const d=await api('/assessments/'+id+'/print'),x=d.assessment;$('.print-sheet')?.remove();const el=document.createElement('section');el.className='print-sheet';el.innerHTML=`<h1>非学历教育考核结果</h1><p>学校：${esc(me.school_name)}　教师：${esc(d.teacher.name)}　工号：${esc(d.teacher.staff_no)}</p><p>周期：${esc(d.period.name)}　状态：${esc(labels[x.state])}　总分：${number(x.score,2)}</p><table><thead><tr><th>指标</th><th>原始值</th><th>计算过程</th><th>分值</th></tr></thead><tbody>${x.detail.map(i=>`<tr><td>${esc(i.label)}</td><td>${esc(i.raw)}</td><td>${esc(i.formula)}</td><td>${number(i.score,2)}</td></tr>`).join('')}</tbody></table><p>归档校验：${esc(x.archive_sha256||'尚未归档，本打印件不替代最终确认结果')}</p><small>业务编号 ${esc(x.id)}　打印人 ${esc(me.user.name)}　时间 ${new Date().toLocaleString('zh-CN')}</small>`;document.body.append(el);document.body.classList.add('print-mode');window.print();document.body.classList.remove('print-mode')}
++function frozenAssessmentFiles(d,id){
++ if(!d.immutable||!can('file.read'))return '';
++ const items=(d.assessment.archive.source_snapshot?.qualifications||[]).flatMap(q=>q.attachments||[]);
++ return items.length?`<h3 class="mt20">归档时资质附件（原版本）</h3>${table(['附件名称','SHA256','操作'],items.map(a=>[esc(a.name),`<span class="mono">${esc(a.sha256.slice(0,16))}…</span>`,act('下载原件','assessment-file',id+'|'+a.id)]))}`:'';
++}
++async function printAssessment(id){
++ const d=await api('/assessments/'+id+'/print'),x=d.assessment;
++ $('.print-sheet')?.remove();const el=document.createElement('section');el.className='print-sheet';
++ const school=d.organization_chain?.find(o=>o.kind==='school')?.name||(d.immutable?'归档时未冻结学校名称':me.school_name);
++ el.innerHTML=`<h1>非学历教育考核结果 · ${d.immutable?'归档件':'过程稿（非最终结果）'}</h1><p>学校：${esc(school)}　教师：${esc(d.teacher.name)}　工号：${esc(d.teacher.staff_no)}</p><p>周期：${esc(d.period.name)}　规则：${esc(d.rule.name)} v${esc(d.rule.version_no)}　状态：${esc(labels[x.state])}　总分：${number(x.score,2)}</p>${d.identity_note?`<p>${esc(d.identity_note)}</p>`:''}<table><thead><tr><th>指标</th><th>原始值</th><th>计算过程</th><th>分值</th></tr></thead><tbody>${x.detail.map(i=>`<tr><td>${esc(i.label)}</td><td>${esc(i.raw)}</td><td>${esc(i.formula)}</td><td>${number(i.score,2)}</td></tr>`).join('')}</tbody></table><p>归档校验：${esc(x.archive_sha256||'尚未归档，本打印件不替代最终确认结果')}</p><small>业务编号 ${esc(x.id)}　打印人 ${esc(me.user.name)}　时间 ${new Date().toLocaleString('zh-CN')}</small>`;
++ document.body.append(el);document.body.classList.add('print-mode');try{window.print()}finally{document.body.classList.remove('print-mode')}
++}
+ async function newDispute(code){const[k,id]=code.split('|');formModal('提交本人数据核对申请',reasonFields(),async v=>{const d=await api('/disputes',{method:'POST',body:{...v,object_type:k,object_id:id}});closeModal();await nav('disputes');await showDispute(d.id)},{submit:'提交核对申请',hint:'请描述有异议的基础数据或计算依据。未解决的申请会阻止相关考核确认。'})}
+ async function showDispute(id){const d=await api('/disputes/'+id),x=d.dispute;modalContext=x;let actions=act('关闭','close');if(x.state==='OPEN'){actions+=act('补充佐证','upload','dispute|'+id);if(can('dispute.resolve')&&x.teacher_id!==me.user.id)actions+=act('完成复核','resolve',id,'primary','check')}
+  modal('数据核对申请',`<dl class="kv"><dt>教师</dt><dd>${esc(teacherName(x.teacher_id))}</dd><dt>状态</dt><dd>${badge(x.state)}</dd><dt>核对原因</dt><dd>${esc(x.reason)}</dd><dt>目标业务</dt><dd>${act('查看原业务','todo',`${x.object_type}|${x.object_id}`,'text')}</dd><dt>复核结果</dt><dd>${esc(x.resolution||'等待授权人员核对')}</dd></dl><h3 class="mt20">佐证材料</h3>${downloads(d.attachments)}<h3 class="mt20">办理轨迹</h3>${eventsHtml(d.events)}`,actions,true)}
+@@ -290,7 +301,7 @@ const handlers={
+  'calc-search':async()=>{const q=$('#calc-search').value,d=await api('/teachers?'+query({q,size:200}));for(const t of d.items)if(!teachers.find(x=>x.id===t.id))teachers.push(t);$('#calc-people').innerHTML=d.items.filter(t=>t.active).map(t=>`<label><input type="checkbox" name="person" value="${t.id}">${esc(t.name)} · ${esc(t.staff_no)}</label>`).join('');},
+  'calc-all':()=>$$('#calc-people input').forEach(i=>i.checked=true),
+  'assess-action':async code=>{const[action,id]=code.split('|'),x=(await api('/assessments/'+id)).assessment;actionForm({confirm:'确认当前考核环节',return:'退回教师重新核对',archive:'确认归档结果'}[action],'/assessments/'+id+'/actions',x,action,{after:async()=>{await render();await showAssessment(id)}})},
+- 'score-adjust':scoreAdjust,print:printAssessment,'new-dispute':newDispute,resolve:resolveDispute,'period-form':periodForm,
++ 'score-adjust':scoreAdjust,print:printAssessment,'assessment-proof':id=>download('/assessments/'+id+'/evidence'),'assessment-file':code=>{const[id,aid]=code.split('|');return download('/assessments/'+id+'/attachments/'+aid+'/download')},'new-dispute':newDispute,resolve:resolveDispute,'period-form':periodForm,
+  'close-period':id=>actionForm('关闭考核周期','/periods/'+id+'/close',periods.find(p=>p.id===id),undefined,{after:async()=>{periods=(await api('/periods')).items;await render()}}),
+  'rule-form':ruleForm,rule:showRule,'rule-add':()=>$('#rule-rows').insertAdjacentHTML('beforeend',ruleRow()),'rule-remove':(id,el)=>el.closest('.rule-row').remove(),trial,'org-rule-form':()=>orgRuleForm(),'org-rule-copy':copyOrganizationRule,'org-rule':showOrgRule,'org-rule-trial':id=>orgRuleTrial(id),'org-rule-action':id=>orgRuleAction(id),'org-rule-add':()=>$('#org-rule-rows').insertAdjacentHTML('beforeend',orgRuleRow()),'org-rule-remove':(id,el)=>el.closest('.org-rule-row')?.remove(),
+  'rule-action':async code=>{const[action,id]=code.split('|'),x=(await api('/rules')).items.find(x=>x.id===id);actionForm(action==='activate'?'启用此规则版本':'停用此规则版本','/rules/'+id+'/actions',x,action,{after:async()=>{await render();await showRule(id)}})},
+diff --git a/scripts/check_assembly.py b/scripts/check_assembly.py
+index 8fefe49..5294432 100644
+--- a/scripts/check_assembly.py
++++ b/scripts/check_assembly.py
+@@ -9,7 +9,7 @@ from pathlib import Path
+ 
+ REQUIRED = [
+  'backend/app/__init__.py','backend/app/config.py','backend/app/core.py','backend/app/schemas.py',
+- 'backend/app/main.py','backend/app/models.py','backend/app/services.py','backend/app/read_queries.py',
++ 'backend/app/main.py','backend/app/models.py','backend/app/services.py','backend/app/assessment_evidence.py','backend/app/read_queries.py',
+  'backend/app/readiness.py','backend/app/access_logging.py','backend/app/excel_io.py','backend/app/integrations.py',
+  'backend/app/org_assessment.py','backend/app/reference_data.py','backend/app/inbound_sync.py','backend/app/delivery.py',
+  *['backend/app/routes/'+x+'.py' for x in ('auth','admin','business','calculations','files','tasks','integrations','reference','delivery')],
+diff --git a/scripts/run_r6_http.py b/scripts/run_r6_http.py
+new file mode 100644
+index 0000000..a9ff317
+--- /dev/null
++++ b/scripts/run_r6_http.py
+@@ -0,0 +1,48 @@
++#!/usr/bin/env python3
++"""One new loopback-only synthetic lab; no existing databases are reset.
++
++Runs real HTTP, then a normal native Chromium navigation attempt. An environment
++administrator block is recorded as BLOCKED, never bypassed or reclassified PASS.
++"""
++import json,os,socket,subprocess,sys,tempfile,time
++from pathlib import Path
++import httpx
++ROOT=Path(__file__).resolve().parents[1];OUT=ROOT/'evidence/r6';OUT.mkdir(parents=True,exist_ok=True)
++with socket.socket() as s:
++    s.bind(('127.0.0.1',8768))
++lab=Path(tempfile.mkdtemp(prefix='nd-r2-test-r6-http-'))
++env={**os.environ,'ND_R6_HTTP_LAB':str(lab),'PYTHONPATH':str(ROOT/'backend')}
++with (OUT/'http_server.log').open('w') as log:
++    server=subprocess.Popen([sys.executable,str(ROOT/'tests/r2/browser_lab.py'),str(lab)],stdout=log,stderr=subprocess.STDOUT,cwd=ROOT,env=env)
++    try:
++        for _ in range(60):
++            try:
++                if httpx.get('http://127.0.0.1:8768/',timeout=.5,trust_env=False).status_code==200:break
++            except httpx.RequestError:pass
++            if server.poll() is not None:raise RuntimeError('synthetic server exited')
++            time.sleep(.1)
++        else:raise RuntimeError('synthetic server did not start')
++        ran=subprocess.run([sys.executable,str(ROOT/'tests/r2/r6_http_flows.py')],cwd=ROOT,env=env,capture_output=True,text=True,timeout=30)
++        (OUT/'http_flow.log').write_text(ran.stdout+ran.stderr)
++        browser_result={'status':'BLOCKED','native_browser':False,'four_roles':False,'critical_flows_pass':False,
++            'security_negative_pass':False,'synthetic':True,'mysql_tested':False,'tls_tested':False,
++            'http_status':200,'purpose':'normal navigation capability probe, not full browser acceptance'}
++        try:
++            from playwright.sync_api import sync_playwright
++            with sync_playwright() as p:
++                browser=p.chromium.launch(executable_path='/usr/bin/chromium',headless=True,args=['--no-sandbox'])
++                browser_result['browser_started']=True
++                try:
++                    page=browser.new_page();response=page.goto('http://127.0.0.1:8768/',wait_until='domcontentloaded',timeout=10000)
++                    browser_result.update(status='NAVIGATION_ONLY',navigation_status=response.status if response else None)
++                    page.screenshot(path=str(OUT/'browser_initial_page.png'),full_page=True)
++                finally:browser.close()
++        except Exception as exc:browser_result['error']=str(exc)[:3000]
++        (OUT/'browser_probe.json').write_text(json.dumps(browser_result,ensure_ascii=False,indent=2))
++        print(ran.stdout);print(json.dumps(browser_result,ensure_ascii=False,indent=2))
++        if ran.returncode:raise SystemExit(ran.returncode)
++    finally:
++        server.terminate()
++        try:server.wait(timeout=5)
++        except subprocess.TimeoutExpired:server.kill();server.wait()
++        (OUT/'http_lab_boundary.json').write_text(json.dumps({'lab':str(lab),'synthetic':True,'server_stopped':True,'database_packaged':False,'production_accessed':False},indent=2))
+diff --git a/scripts/run_r6_tests.py b/scripts/run_r6_tests.py
+new file mode 100644
+index 0000000..862e73f
+--- /dev/null
++++ b/scripts/run_r6_tests.py
+@@ -0,0 +1,40 @@
++#!/usr/bin/env python3
++"""Repeatable synthetic regression in independently runnable groups.
++
++Examples: python scripts/run_r6_tests.py --group r6_evidence
++          python scripts/run_r6_tests.py --group installation
++          python scripts/run_r6_tests.py --group all
++Each group writes a separate log/XML, so a timed-out group need not restart all.
++Does not access production systems or install dependencies.
++"""
++import argparse,json,os,subprocess,sys
++from pathlib import Path
++ROOT=Path(__file__).resolve().parents[1]
++GROUPS={
++ 'p0_queries':['tests/p0/'+n+'.py' for n in ['test_read_queries','test_readiness','test_audit_and_middleware','test_https_smoke']],
++ 'p0_deployment':['tests/p0/test_deployment.py','tests/p0/test_preservation.py'],
++ 'installation':['tests/p0/test_r5_installation.py'],
++ 'r2_core':['tests/r2/'+n+'.py' for n in ['test_api','test_hardening','test_r3_authorization_matrix']],
++ 'r3_extension':['tests/r2/'+n+'.py' for n in ['test_r3_deploy_support','test_r3_excel','test_r3_handover_validator','test_r3_integrations','test_r3_org_assessment','test_r3_performance_acceptance','test_r3_release_gate','test_r3_route_security_audit','test_r3_settings','test_r3_workbenches']],
++ 'r4_r5':['tests/r2/'+n+'.py' for n in ['test_r4_dual_track','test_r4_inbound_schedule','test_r4_internal_closeout','test_r5_closeout']],
++ 'r6_evidence':['tests/r2/test_r6_evidence_chain.py'],
++ 'r6_portability':['tests/r2/test_r6_portability.py'],
++}
++def main():
++    ap=argparse.ArgumentParser(description=__doc__);ap.add_argument('--group',choices=['all',*GROUPS],default='all');args=ap.parse_args()
++    out=ROOT/'evidence/r6/retest';out.mkdir(parents=True,exist_ok=True)
++    env={**os.environ,'PYTHONPATH':str(ROOT/'backend')+os.pathsep+os.environ.get('PYTHONPATH','')}
++    names=GROUPS if args.group=='all' else [args.group];results=[]
++    for name in names:
++        print('Running',name,flush=True)
++        with (out/(name+'.log')).open('w') as log:
++            run=subprocess.run([sys.executable,'-m','pytest',*GROUPS[name],'-q','--tb=short','--junitxml='+str(out/(name+'.xml'))],cwd=ROOT,env=env,stdout=log,stderr=subprocess.STDOUT)
++        results.append({'group':name,'exit_code':run.returncode,'log':str(out/(name+'.log'))})
++        (out/'latest_group_results.json').write_text(json.dumps(results,indent=2))
++        if run.returncode:return run.returncode
++    if args.group=='all':
++        with (out/'node.log').open('w') as log:
++            run=subprocess.run(['node','--test',*[str(p) for p in sorted((ROOT/'tests/js').glob('*.test.mjs'))]],cwd=ROOT,stdout=log,stderr=subprocess.STDOUT)
++        if run.returncode:return run.returncode
++    print('Synthetic groups completed; production gates are separate.');return 0
++if __name__=='__main__':raise SystemExit(main())
+diff --git a/scripts/verify_handover.py b/scripts/verify_handover.py
+index 0190889..b599aa2 100644
+--- a/scripts/verify_handover.py
++++ b/scripts/verify_handover.py
+@@ -20,7 +20,9 @@ REQUIRED={
+  'delivery/initialization_configuration.json','delivery/database_dictionary.json','delivery/interface_data_catalog.json',
+ }
+ FORBIDDEN_DATA_BASENAMES={'auth_sessions.csv','login_throttles.csv','command_receipts.csv'}
+-FORBIDDEN_USER_HEADERS={'password_hash','auth_version','failures','locked_until','token_hash','csrf','storage_key'}
++FORBIDDEN_USER_HEADERS={'password_hash','auth_version','failures','locked_until','token_hash','csrf','storage_key','lease_token','lease_until'}
++R6_TABLES={'record_revisions','calculation_batches','rule_trials','organization_rule_trials','disputes',
++ 'import_jobs','import_rows','tasks','task_attempts','notices','connection_checks','attachments'}
+ 
+ def sha(data):return hashlib.sha256(data).hexdigest()
+ 
+@@ -37,13 +39,16 @@ def verify(path):
+             for info in infos:
+                 if not safe_name(info.filename):errors.append('ZIP路径不安全: '+info.filename)
+                 if (info.external_attr>>16)&0o170000==0o120000:errors.append('ZIP不允许符号链接: '+info.filename)
++            if len(infos)>100000 or sum(x.file_size for x in infos)>1024**3 or any(x.file_size>512*1024**2 for x in infos):
++                return {'status':'FAIL','errors':['移交包超过校验资源上限，必须分卷后按现场方案验证'],'disaster_restore_proven':False}
+             missing=sorted(REQUIRED-set(names))
+             if missing:errors.append('缺少必需文件: '+','.join(missing))
+             if FORBIDDEN_DATA_BASENAMES & {PurePosixPath(x).name for x in names if x.startswith('data/')}:
+                 errors.append('业务移交包包含认证/会话数据表')
+             if 'manifest.json' not in names:return {'status':'FAIL','errors':errors or ['manifest.json缺失']}
+             manifest=json.loads(z.read('manifest.json'))
+-            if manifest.get('format')!='Yueke NonDegree open handover v1':errors.append('移交格式版本不匹配')
++            version=manifest.get('format')
++            if version not in {'Yueke NonDegree open handover v1','Yueke NonDegree open handover v2'}:errors.append('移交格式版本不匹配')
+             entries=manifest.get('files') or [];seen=set()
+             for item in entries:
+                 n=item.get('path');
+@@ -78,11 +83,95 @@ def verify(path):
+                     if arc not in names:errors.append('附件清单引用文件缺失: '+str(arc));continue
+                     data=z.read(arc)
+                     if len(data)!=item.get('size') or sha(data)!=item.get('sha256'):errors.append('附件字节校验失败: '+str(item.get('id')))
++            if version=='Yueke NonDegree open handover v2':
++                verify_typed(z,manifest,errors,details)
++            else:
++                details['typed_roundtrip_verified']=False
++                details['coverage_note']='旧v1包仅做旧格式完整性校验，不代表R6完整证据移交'
+             details.update({'zip_files':len(names),'manifest_files':len(entries),'attachments':len(json.loads(z.read('attachments_manifest.json'))) if 'attachments_manifest.json' in names else 0})
+-    except (OSError,zipfile.BadZipFile,json.JSONDecodeError,UnicodeDecodeError) as e:
++    except (OSError,zipfile.BadZipFile,json.JSONDecodeError,UnicodeDecodeError,KeyError,TypeError,ValueError,AttributeError) as e:
+         errors.append(type(e).__name__)
+     return {'status':'PASS' if not errors else 'FAIL','errors':errors,'details':details,'kind':'OPEN_HANDOVER_PORTABILITY_CHECK','disaster_restore_proven':False}
+ 
++def _csv_cell(value):
++    if value is None:return ''
++    if isinstance(value,(dict,list)):
++        return json.dumps(value,ensure_ascii=False,separators=(',',':'))
++    text=str(value)
++    return "'"+text if isinstance(value,str) and text.lstrip(' \t\r\n').startswith(('=','+','-','@')) else text
++
++
++def verify_typed(z,manifest,errors,details):
++    """Check raw-value roundtrip, declared row counts and exported SQL foreign keys.
++
++    SHA manifests detect accidental corruption, not forgery by a database owner.
++    Credentials and installation attestations intentionally cannot be roundtripped.
++    """
++    import csv,io
++    tables=manifest.get('tables')
++    if not isinstance(tables,list):
++        errors.append('v2缺少结构化表清单');return
++    names=[t.get('name') for t in tables]
++    expected={PurePosixPath(x).stem for x in REQUIRED if x.startswith('data/')}|R6_TABLES
++    if len(names)!=len(set(names)) or not expected<=set(names):
++        errors.append('v2表清单重复或缺少必需证据表')
++    csv_members={n for n in z.namelist() if n.startswith('data/') and n.endswith('.csv')}
++    json_members={n for n in z.namelist() if n.startswith('typed/') and n.endswith('.jsonl')}
++    if csv_members!={t.get('csv_path') for t in tables} or json_members!={t.get('typed_path') for t in tables}:
++        errors.append('v2实际数据文件与表清单不一致')
++    by_model={};row_count=0
++    for t in tables:
++        name=t['name'];cols=t['columns'];keys=t['primary_key']
++        if not cols or len(cols)!=len(set(cols)) or not set(keys)<=set(cols) or not keys:
++            errors.append('表字段或主键声明无效: '+name);continue
++        if FORBIDDEN_USER_HEADERS&set(cols):errors.append('JSONL包含禁止移交的内部字段: '+name)
++        lines=z.read(t['typed_path']).decode('utf-8').splitlines()
++        rows=[json.loads(line) for line in lines]
++        if len(rows)!=t.get('rows'):errors.append('JSONL行数与清单不一致: '+name)
++        pk=set()
++        for row in rows:
++            if not isinstance(row,dict) or set(row)!=set(cols):
++                errors.append('JSONL字段集合不一致: '+name);continue
++            key=tuple(row[k] for k in keys)
++            if None in key or key in pk:errors.append('JSONL主键缺失或重复: '+name)
++            pk.add(key)
++        csv_rows=list(csv.reader(io.StringIO(z.read(t['csv_path']).decode('utf-8-sig'))))
++        desired=[cols]+[[_csv_cell(row[c]) for c in cols] for row in rows]
++        if csv_rows!=desired:errors.append('CSV显示值与JSONL精确值不一致: '+name)
++        if t['model_table'] in by_model:errors.append('数据库表映射重复: '+name)
++        by_model[t['model_table']]=(t,rows);row_count+=len(rows)
++    structure=json.loads(z.read('database_structure.json'))
++    lookup={}
++    for model,(t,rows) in by_model.items():
++        for c in t['columns']:
++            if all(not isinstance(row[c],(list,dict)) for row in rows):
++                lookup[(model,c)]={row[c] for row in rows}
++    fk_checks=0
++    for model,(t,rows) in by_model.items():
++        if model not in structure:errors.append('数据库结构缺少移交表: '+model);continue
++        for c in structure[model]['columns']:
++            if c['name'] not in t['columns']:continue
++            for ref in c.get('foreign_keys',[]):
++                target,column=ref.rsplit('.',1)
++                if target not in by_model:
++                    errors.append('移交外键目标表遗漏: '+ref);continue
++                values=lookup.get((target,column),set())
++                if any(row[c['name']] is not None and row[c['name']] not in values for row in rows):
++                    errors.append('移交存在悬空外键: '+model+'.'+c['name']+' -> '+ref)
++                fk_checks+=1
++    attachment_rows=by_model.get('attachments',({},[]))[1]
++    attachments=json.loads(z.read('attachments_manifest.json'))
++    metadata={row['id']:row for row in attachment_rows}
++    if len(attachments)!=len(metadata) or {a['id'] for a in attachments}!=set(metadata):
++        errors.append('附件清单与附件业务表不一致')
++    for item in attachments:
++        row=metadata.get(item['id'],{})
++        for key in ('sha256','size','teacher_id','object_type','object_id','uploaded_by','mime'):
++            if row.get(key)!=item.get(key):errors.append('附件证据关联不一致: '+str(item.get('id')));break
++    details.update(typed_tables=len(tables),typed_rows=row_count,foreign_key_checks=fk_checks,
++                   typed_roundtrip_verified=not errors,coverage_note='v2完整证据表、精确值、CSV显示与SQL外键校验；不是灾备恢复验收')
++
++
+ if __name__=='__main__':
+     p=argparse.ArgumentParser();p.add_argument('zip');p.add_argument('--output');a=p.parse_args();r=verify(a.zip);payload=json.dumps(r,ensure_ascii=False,indent=2);print(payload)
+     if a.output:Path(a.output).write_text(payload+'\n',encoding='utf-8')
+diff --git a/tests/js/r6_evidence.test.mjs b/tests/js/r6_evidence.test.mjs
+new file mode 100644
+index 0000000..4bca22d
+--- /dev/null
++++ b/tests/js/r6_evidence.test.mjs
+@@ -0,0 +1,40 @@
++// Executes the actual print function using a minimal DOM harness. Not Chromium E2E.
++import test from 'node:test';
++import assert from 'node:assert/strict';
++import fs from 'node:fs';
++import vm from 'node:vm';
++const source=fs.readFileSync(new URL('../../frontend/app.js',import.meta.url),'utf8');
++const start=source.indexOf('async function printAssessment(id){');
++const end=source.indexOf('async function newDispute(',start);
++const body=source.slice(start,end);
++const esc=x=>String(x??'').replaceAll('&','&amp;').replaceAll('<','&lt;').replaceAll('>','&gt;').replaceAll('"','&quot;');
++const frozen=()=>({immutable:true,teacher:{name:'旧教师 <script>',staff_no:'J001'},period:{name:'旧周期'},rule:{name:'旧规则',version_no:2},
++    organization_chain:[{kind:'school',name:'旧学校'}],assessment:{id:'a1',state:'ARCHIVED',score:'99',detail:[{label:'学时',raw:'10',formula:'10 × 2',score:20}],archive_sha256:'ab'.repeat(32)}});
++async function render(data,fail=false){
++ const state={html:'',classes:new Set(),printed:0,paths:[]};
++ const context=vm.createContext({api:async path=>{state.paths.push(path);return data},$:()=>null,esc,number:Number,
++   labels:{ARCHIVED:'已归档',TEACHER:'教师确认'},me:{school_name:'当前学校不能替代归档',user:{name:'当前打印操作者'}},
++   teacherName:()=>{throw Error('must not read live identity')},periodName:()=>{throw Error('must not read live period')},
++   document:{createElement:()=>({innerHTML:'',className:''}),body:{append:el=>{state.html=el.innerHTML},classList:{add:x=>state.classes.add(x),remove:x=>state.classes.delete(x)}}},
++   window:{print:()=>{state.printed++;if(fail)throw Error('print unavailable')}}});
++ vm.runInContext(body,context);try{await context.printAssessment('a1')}catch(error){state.error=error.message}return state;
++}
++test('actual print function uses frozen identity, rule and school; escapes text',async()=>{
++ const r=await render(frozen());assert.deepEqual(r.paths,['/assessments/a1/print']);assert.equal(r.printed,1);
++ for(const x of ['旧教师 &lt;script&gt;','旧学校','旧周期','旧规则 v2','归档件','当前打印操作者'])assert.ok(r.html.includes(x));
++ assert.ok(!r.html.includes('当前学校不能替代归档'));assert.ok(!r.classes.has('print-mode'));
++});
++test('legacy missing identity is explicitly labelled, no live school fallback',async()=>{
++ const d=frozen();d.organization_chain=[];d.teacher.name='归档时未冻结姓名';d.identity_note='旧归档未保存人员组织快照';
++ const r=await render(d);assert.ok(r.html.includes('归档时未冻结学校名称'));assert.ok(r.html.includes(d.identity_note));
++});
++test('unarchived print says process copy, not final result',async()=>{
++ const d=frozen();d.immutable=false;d.assessment.state='TEACHER';d.assessment.archive_sha256=null;
++ const r=await render(d);assert.ok(r.html.includes('过程稿（非最终结果）'));assert.ok(r.html.includes('尚未归档'));
++});
++test('print failure still restores page layout',async()=>{
++ const r=await render(frozen(),true);assert.equal(r.error,'print unavailable');assert.ok(!r.classes.has('print-mode'));
++});
++test('archive evidence and original attachment actions are wired',()=>{
++ for(const x of ["'assessment-proof':id=>download", "'assessment-file':code=>",'frozenAssessmentFiles(d,id)','x.teacher_display_name||teacherName'])assert.ok(source.includes(x));
++});
+diff --git a/tests/p0/test_preservation.py b/tests/p0/test_preservation.py
+index d8ab51c..b3550c8 100644
+--- a/tests/p0/test_preservation.py
++++ b/tests/p0/test_preservation.py
+@@ -12,8 +12,11 @@ def test_existing_scoring_and_ledger_business_functions_are_preserved():
+     def functions(path):
+         return {node.name:ast.dump(node,include_attributes=False) for node in ast.parse(path.read_text()).body if isinstance(node,(ast.FunctionDef,ast.AsyncFunctionDef))}
+     before=functions(ROOT/'evidence/before/backend/app/services.py');after=functions(ROOT/'backend/app/services.py')
+-    untouched=set(before)-{'record_query','stats'}
+-    assert {'facts','evaluate','calculate_points','calculate_assessments'}<=untouched
++    # R6 intentionally validates previously archived evidence before reusing its score.
++    # Formula evaluation and all ledger/calculation mutations remain AST-identical.
++    untouched=set(before)-{'record_query','stats','facts'}
++    assert {'evaluate','calculate_points','calculate_assessments'}<=untouched
++    assert 'verified_archive' in after['facts'] and 'previous_frozen' in after['facts']
+     assert all(before[name]==after[name] for name in untouched)
+ 
+ 
+diff --git a/tests/r2/r6_http_flows.py b/tests/r2/r6_http_flows.py
+new file mode 100644
+index 0000000..c518429
+--- /dev/null
++++ b/tests/r2/r6_http_flows.py
+@@ -0,0 +1,158 @@
++"""Real loopback HTTP acceptance of R2 contracts; explicitly NOT browser/MySQL.
++Run browser_lab.py on a NEW disposable fixture directory before this script.
++"""
++from pathlib import Path
++from hashlib import sha256
++import io,json,uuid,sys,os
++sys.path.insert(0,str(Path(__file__).resolve().parents[2]/'backend'))
++import httpx
++from PIL import Image
++ROOT=Path(__file__).resolve().parents[2]
++OUT=ROOT/'evidence/r6/synthetic_http';OUT.mkdir(parents=True,exist_ok=True)
++BASE='http://127.0.0.1:8768'
++OLD='FixtureOnly_2026_Local';NEW='HttpChanged_2026_Local'
++REASON={'reason':'真实HTTP合成业务核验','basis':'隔离测试材料，不是学校正式样本'}
++result={'mode':'NATIVE_HTTP_COOKIE_FULL_APP_SQLITE','browser_tested':False,'mysql_tested':False,'tls_tested':False,
++        'release':'R6','synthetic_school_sample':True,'school_acceptance':False,'requests':[],'checks':[]}
++class Net:
++    def __init__(self,name):self.name=name;self.c=httpx.Client(base_url=BASE,headers={'Origin':BASE},timeout=15)
++    def req(self,method,path,body=None,expected=200,**kwargs):
++        headers=kwargs.pop('headers',{})
++        if method not in ('GET','HEAD'):headers.setdefault('Idempotency-Key',str(uuid.uuid4()))
++        r=self.c.request(method,path,json=body,headers=headers,**kwargs)
++        result['requests'].append({'role':self.name,'method':method,'path':path,'status':r.status_code,'expected':expected})
++        assert r.status_code==expected,(method,path,r.status_code,r.text[:400])
++        return r
++    def get(self,path):return self.req('GET',path).json()
++    def post(self,path,body,**kw):return self.req('POST',path,body,**kw).json()
++    def login(self):
++        r=self.req('POST','/api/auth/login',{'username':self.name,'password':OLD})
++        assert 'HttpOnly' in r.headers['set-cookie'] and 'SameSite=strict' in r.headers['set-cookie']
++        me=self.get('/api/auth/me');assert me['user']['must_change_password']
++        self.c.headers['X-CSRF-Token']=me['csrf']
++        self.req('GET','/api/records',expected=403)
++        self.post('/api/auth/password',{'old_password':OLD,'new_password':NEW})
++        self.req('GET','/api/auth/me',expected=401)
++        self.post('/api/auth/login',{'username':self.name,'password':NEW})
++        me=self.get('/api/auth/me');self.c.headers['X-CSRF-Token']=me['csrf']
++        assert not me['user']['must_change_password']
++        result['checks'].append({'check':self.name+' first-password-cookie-login','status':'PASS'})
++
++def check(name):result['checks'].append({'check':name,'status':'PASS'})
++people={name:Net(name) for name in ('teacher','depthead','collegehead','schooladmin')}
++try:
++    school=people['schooladmin'];teacher=people['teacher'];dept=people['depthead'];college=people['collegehead']
++    for path in ['/','/assets/app.js','/assets/scope.js','/assets/icons.js','/assets/styles.css','/assets/integration.css']:
++        school.req('GET',path)
++    check('real HTTP frontend resources and module URLs')
++    school.req('GET','/api/health',expected=503);check('synthetic fixture has no canonical installation provenance and remains NOT_READY')
++    for c in people.values():c.login()
++    qdata={'teacher_id':'teacher','category':'职业资格','name':'真实HTTP材料证书','certificate_no':'NATIVE-HTTP-'+str(uuid.uuid4()),'issuer':'隔离样本发证单位','obtained':'2026-01-01','expires':'2026-12-31',**REASON}
++    q=teacher.post('/api/qualifications',qdata);qid=q['id']
++    image=io.BytesIO();Image.new('RGB',(120,70)).save(image,format='PNG');bytes_=image.getvalue()
++    attachment=teacher.req('POST','/api/attachments/qualification/'+qid,files={'file':('真实HTTP佐证.png',bytes_,'image/png')},data={'expected_version':q['version'],'reason':'真实HTTP文件上传核验'}).json()
++    def qualification_action(client,action):
++        obj=client.get('/api/qualifications/'+qid)['qualification']
++        return client.post('/api/qualifications/'+qid+'/actions',{'action':action,'expected_version':obj['version'],**REASON})
++    assert qualification_action(teacher,'submit')['state']=='SUBMITTED'
++    assert qualification_action(dept,'return')['state']=='RETURNED'
++    q=teacher.get('/api/qualifications/'+qid)['qualification']
++    teacher.req('PUT','/api/qualifications/'+qid,{**qdata,'name':'补充后HTTP材料证书','expected_version':q['version']})
++    qualification_action(teacher,'submit');qualification_action(dept,'approve')
++    assert len(teacher.get('/api/qualifications/'+qid)['revisions'])==7
++    check('qualification -> actual PNG -> submit -> return -> amend -> resubmit -> approve -> 7 revisions')
++    assert teacher.req('GET','/api/attachments/'+attachment['id']+'/download').content==bytes_
++    check('authorized original attachment bytes match')
++    for kind in ['points','assessment']:
++        r=school.post('/api/rules',{'kind':kind,'name':'真实HTTP规则-'+kind,'period_id':'period2026',
++             'config':{'components':[{'key':'hours','label':'授课学时','source':'hours','factor':'2','weight':'100','target':'10','cap':None}]},**REASON})
++        trial=school.post('/api/rules/'+r['id']+'/trial',{'teacher_ids':['teacher']})
++        assert trial['items'][0]['total']==('20.00' if kind=='points' else '100.00')
++        school.post('/api/rules/'+r['id']+'/actions',{'action':'activate','expected_version':r['version'],**REASON})
++        calculated=school.post('/api/'+('points' if kind=='points' else 'assessments')+'/calculate',{'period_id':'period2026','teacher_ids':['teacher'],**REASON})
++        check(kind+' rule draft -> trial -> activate -> original calculation service -> persisted result')
++        if kind=='points':
++            balance=teacher.get('/api/point-balances?teacher_id=teacher')['items'][0]
++            balance=teacher.post('/api/point-balances/'+balance['id']+'/actions',{'action':'confirm','expected_version':balance['version'],**REASON})
++            school.req('POST','/api/points/calculate',{'period_id':'period2026','teacher_ids':['teacher'],**REASON},expected=409)
++            balance=school.post('/api/point-balances/'+balance['id']+'/actions',{'action':'reopen','expected_version':balance['version'],**REASON})
++            school.post('/api/points/adjust',{'teacher_id':'teacher','period_id':'period2026','item_key':'manual_review','amount':'-2',**REASON})
++            assert teacher.get('/api/points?teacher_id=teacher')['sum']=='18.00'
++            balance=teacher.get('/api/point-balances?teacher_id=teacher')['items'][0]
++            teacher.post('/api/point-balances/'+balance['id']+'/actions',{'action':'confirm','expected_version':balance['version'],**REASON})
++            check('points 20 -> owner confirmation -> recalc refusal -> authorized reopen -> append -2 -> 18 -> reconfirm')
++        else:assessment_id=calculated['items'][0]['id']
++    ass=school.get('/api/assessments/'+assessment_id)['assessment']
++    ass=school.post('/api/assessments/'+assessment_id+'/adjust',{'delta':'-5','expected_version':ass['version'],**REASON});assert ass['score']=='95.00'
++    dispute=teacher.post('/api/disputes',{'object_type':'assessment','object_id':assessment_id,**REASON})
++    teacher.req('POST','/api/assessments/'+assessment_id+'/actions',{'action':'confirm','expected_version':ass['version'],**REASON},expected=409)
++    dept.post('/api/disputes/'+dispute['id']+'/resolve',{'resolution':'合成案例核验后完成复核','expected_version':dispute['version'],**REASON})
++    check('assessment correction + dispute blocks confirmation + authorized resolution')
++    for who,state in [('teacher','DEPARTMENT'),('depthead','COLLEGE'),('collegehead','SCHOOL'),('schooladmin','READY')]:
++        ass=people[who].post('/api/assessments/'+assessment_id+'/actions',{'action':'confirm','expected_version':ass['version'],**REASON});assert ass['state']==state
++        check(who+' assessment transition '+state)
++    ass=school.post('/api/assessments/'+assessment_id+'/actions',{'action':'archive','expected_version':ass['version'],**REASON})
++    checksum=ass['archive_sha256'];assert ass['archive']['assessment']['version']==ass['version']
++    check('school archive and final version in immutable snapshot')
++    school.req('POST','/api/assessments/calculate',{'period_id':'period2026','teacher_ids':['teacher'],**REASON},expected=409)
++    assert school.get('/api/assessments/'+assessment_id+'/print')['assessment']['score']=='95.00'
++    check('archived recalc refused and authorized print data is 95')
++    q=teacher.get('/api/qualifications/'+qid)['qualification']
++    teacher.req('PUT','/api/qualifications/'+qid,{**qdata,'name':'归档后新资质版本','expected_version':q['version']})
++    frozen=school.get('/api/assessments/'+assessment_id)['assessment']
++    assert frozen['archive']==ass['archive'] and frozen['archive_sha256']==checksum
++    check('current qualification revised but archived source/snapshot/SHA256 unchanged')
++    stats=school.get('/api/statistics?project_code=P1')
++    assert stats['teachers']==1 and stats['assessment_states']=={'ARCHIVED':1} and stats['income']=='100.00'
++    assert school.get('/api/statistics?project_code=P2')['assessment_states']=={}
++    assert school.get('/api/assessments?project_code=P1&business_scope=true')['total']==1
++    assert school.get('/api/assessments?project_code=P2&business_scope=true')['total']==0
++    check('R1 shared business scope wired through actual statistics and assessment routes')
++    proof=school.req('GET','/api/assessments/'+assessment_id+'/evidence')
++    (OUT/'sample_teacher_archive.json').write_bytes(proof.content)
++    print_data=school.get('/api/assessments/'+assessment_id+'/print')
++    (OUT/'sample_teacher_print_payload.json').write_text(json.dumps(print_data,ensure_ascii=False,indent=2))
++    assert print_data['teacher']['name']=='测试教师一' and print_data['events'][-1]['action']=='考核归档'
++    original=teacher.req('GET','/api/assessments/'+assessment_id+'/attachments/'+attachment['id']+'/download')
++    assert original.content==bytes_
++    (OUT/'sample_archived_attachment.png').write_bytes(original.content)
++    check('R6 archive proof + frozen identity/final event + original historical attachment')
++    from app.config import Settings
++    from app.worker import run_once
++    lab=Path(os.environ['ND_R6_HTTP_LAB']).resolve()
++    assert str(lab).startswith('/tmp/nd-r2-test-')
++    cfg=Settings(env='test',database_url='sqlite:///'+str(lab/'browser.sqlite'),secure_cookie=False,
++        allowed_hosts='127.0.0.1,localhost',public_origin=BASE,storage_dir=lab/'files')
++    for kind in ('assessments','audit','handover'):
++        task=school.post('/api/exports',{'kind':kind,'filters':{},'confirmed':kind=='handover'})
++        ran=run_once(cfg);assert ran['status']=='DONE',ran
++        data=school.req('GET','/api/tasks/'+task['id']+'/download').content
++        (OUT/('sample_'+kind+('.zip' if kind=='handover' else '.xlsx'))).write_bytes(data)
++    check('R6 actual HTTP queue -> separate worker -> XLSX and typed handover download')
++    sys.path.insert(0,str(ROOT/'scripts'))
++    from verify_handover import verify
++    verified=verify(OUT/'sample_handover.zip');assert verified['status']=='PASS',verified
++    (OUT/'handover_validation.json').write_text(json.dumps(verified,ensure_ascii=False,indent=2))
++    check('R6 handover file hashes + exact JSONL/CSV + foreign keys + original attachment checks')
++    user=next(x for x in school.get('/api/users')['items'] if x['id']=='teacher')
++    school.req('PUT','/api/users/teacher',{'name':'归档后更名教师','title':user['title'],'org_id':'dept2','role_id':'role-teacher',
++          'active':True,'is_admin':False,'expected_version':user['version'],**REASON})
++    teacher.req('GET','/api/auth/me',expected=401)
++    dept.req('GET','/api/qualifications/'+qid,expected=403)
++    dept.req('GET','/api/attachments/'+attachment['id']+'/download',expected=403)
++    dept.req('GET','/api/assessments/'+assessment_id+'/evidence',expected=403)
++    dept.req('GET','/api/assessments/'+assessment_id+'/attachments/'+attachment['id']+'/download',expected=403)
++    assert school.get('/api/assessments/'+assessment_id+'/print')['teacher']['name']=='测试教师一'
++    check('real organizational reassignment revokes old login and old organizational attachment/proof access while historical identity stays frozen')
++    audits=school.get('/api/audit?size=200')['items']
++    assert any(x['module']=='assessment' for x in audits)
++    check('critical business and access audit query available with real Request-ID')
++    result['readback']={'qualification_id':qid,'assessment_id':assessment_id,'archive_sha256':checksum,'archived_score':'95.00',
++       'points_after_correction':'18.00','attachment_sha256':sha256(bytes_).hexdigest()}
++    result['status']='PASS'
++except Exception as ex:
++    result['status']='FAIL';result['failure']=str(ex);raise
++finally:
++    for c in people.values():c.c.close()
++    (OUT/'http-results.json').write_text(json.dumps(result,ensure_ascii=False,indent=2))
++print(json.dumps({'status':result['status'],'checks':len(result['checks']),'requests':len(result['requests'])}))
+diff --git a/tests/r2/test_r6_evidence_chain.py b/tests/r2/test_r6_evidence_chain.py
+new file mode 100644
+index 0000000..294784e
+--- /dev/null
++++ b/tests/r2/test_r6_evidence_chain.py
+@@ -0,0 +1,201 @@
++"""R6 procurement 8.5/10.5/10.7/12.5 regression, synthetic SQLite only."""
++import io,json,uuid
++from copy import deepcopy
++from datetime import date
++import pytest
++from sqlalchemy import select
++from openpyxl import load_workbook
++from app.models import Assessment,Rule,Period,User,Org,Attachment,Qualification,Task,TaskAttempt
++from app.core import digest
++from app.services import facts
++from app.worker import run_once
++from app.grants import sql, APPEND_ONLY_TABLES
++from conftest import auth,post
++from test_api import make_assessment,qual,png,REASON
++
++
++def ready(c):
++    x=make_assessment(c)
++    for who in ('teacher','depthead','collegehead','schooladmin'):
++        auth(c,who)
++        r=post(c,f"/api/assessments/{x['id']}/actions",{'action':'confirm','expected_version':x['version'],**REASON})
++        assert r.status_code==200,r.text;x=r.json()
++    return x
++
++
++def archive(c):
++    x=ready(c)
++    r=post(c,f"/api/assessments/{x['id']}/actions",{'action':'archive','expected_version':x['version'],**REASON})
++    assert r.status_code==200,r.text
++    return r.json()
++
++
++def approved_qualification(c):
++    auth(c,'teacher');q=qual(c)
++    r=c.post(f"/api/attachments/qualification/{q['id']}",files={'file':('当期证据.png',png(),'image/png')},
++        data={'reason':'隔离证据上传','expected_version':q['version']},headers={'Idempotency-Key':str(uuid.uuid4())})
++    assert r.status_code==200,r.text;attachment=r.json()
++    r=post(c,f"/api/qualifications/{q['id']}/actions",{'action':'submit','expected_version':2,**REASON});assert r.status_code==200,r.text
++    auth(c,'depthead');r=post(c,f"/api/qualifications/{q['id']}/actions",{'action':'approve','expected_version':3,**REASON});assert r.status_code==200,r.text
++    return q,attachment
++
++
++def export(c,app,kind,filters=None):
++    r=post(c,'/api/exports',{'kind':kind,'filters':filters or {},'confirmed':kind=='handover'});assert r.status_code==200,r.text
++    task=r.json();r=run_once(app.state.settings);assert r['status']=='DONE',r
++    r=c.get(f"/api/tasks/{task['id']}/download");assert r.status_code==200,r.text
++    return r.content
++
++
++def test_archive_freezes_identity_period_rule_and_final_event(client2,app2):
++    c=client2;x=archive(c);before=c.get(f"/api/assessments/{x['id']}/print").json()
++    with app2.state.sessions.begin() as db:
++        db.get(User,'teacher').name='更名后的教师'
++        db.get(Org,'dept1').name='更名后的教研室'
++        db.get(Org,'school').name='更名后的学校'
++        db.get(Period,'period2026').name='更名后的周期'
++        db.get(Rule,x['rule_id']).name='更名后的规则'
++    for suffix in ('','/print'):
++        r=c.get(f"/api/assessments/{x['id']}"+suffix);assert r.status_code==200,r.text;d=r.json()
++        assert d['teacher']['name']=='测试教师一' and d['identity_frozen']
++        assert d['period']==before['period'] and d['rule']==before['rule']
++        assert d['organization_chain']==before['organization_chain']
++        assert d['events'][-1]['action']=='考核归档' and d['events'][-1]['actor_id']=='schooladmin'
++        assert d['assessment']['archive_sha256']==x['archive_sha256']
++    proof=c.get(f"/api/assessments/{x['id']}/evidence");assert proof.status_code==200
++    assert digest(proof.json()['archive'])==proof.json()['archive_sha256']
++    assert 'storage_key' not in proof.text
++    wb=load_workbook(io.BytesIO(export(c,app2,'assessments')),read_only=True)
++    rows=list(wb.active.values);wb.close()
++    assert rows[1][1]=='测试教师一' and str(rows[1][3])=='100.00'
++
++
++@pytest.mark.parametrize('mutation',['hash','score','detail','payload','source'])
++def test_corrupted_archive_fails_detail_print_evidence_and_export(client2,app2,mutation):
++    c=client2;x=archive(c)
++    with app2.state.sessions.begin() as db:
++        obj=db.get(Assessment,x['id'])
++        if mutation=='hash':obj.archive_sha256='0'*64
++        elif mutation=='score':obj.score=1
++        elif mutation=='detail':obj.detail=[]
++        elif mutation=='source':obj.source_snapshot={}
++        else:obj.archive={**obj.archive,'reason':'静默改写'}
++    for suffix in ('','/print','/evidence'):
++        assert c.get(f"/api/assessments/{x['id']}"+suffix).status_code==409
++    r=post(c,'/api/exports',{'kind':'assessments','filters':{},'confirmed':False})
++    # Depending on validation location, reject before enqueue or produce a failed task.
++    if r.status_code==200:
++        assert run_once(app2.state.settings)['status']=='FAILED'
++        assert c.get(f"/api/tasks/{r.json()['id']}/download").status_code==409
++    else:assert r.status_code==409
++
++
++def test_old_valid_archive_is_explicitly_unfrozen_not_silently_backfilled(client2,app2):
++    c=client2;x=archive(c)
++    with app2.state.sessions.begin() as db:
++        obj=db.get(Assessment,x['id']);old=deepcopy(obj.archive)
++        for key in ('schema_version','teacher','organization_chain','archived_by_name'):old.pop(key,None)
++        obj.archive=old;obj.archive_sha256=digest(old)
++        db.get(User,'teacher').name='当前姓名不能补历史'
++    r=c.get(f"/api/assessments/{x['id']}/print");assert r.status_code==200
++    assert r.json()['identity_frozen'] is False and '未冻结' in r.json()['teacher']['name']
++    assert '当前姓名不能补历史' not in r.text
++
++
++def test_process_print_label_and_no_proof_before_archive(client2):
++    c=client2;x=make_assessment(c)
++    d=c.get(f"/api/assessments/{x['id']}/print").json()
++    assert not d['immutable'] and d['document_status']=='DRAFT_NOT_FINAL'
++    assert c.get(f"/api/assessments/{x['id']}/evidence").status_code==409
++
++
++def test_archival_attachment_uses_frozen_reference_and_live_permissions(client2,app2):
++    c=client2;q,a=approved_qualification(c);x=archive(c)
++    path=f"/api/assessments/{x['id']}/attachments/{a['id']}/download"
++    auth(c,'teacher');assert c.get(path).content==png()
++    with app2.state.sessions.begin() as db:
++        # Simulate later replacement of current association, not historical bytes.
++        db.get(Qualification,q['id']).attachment_ids=[]
++    assert c.get(path).content==png()
++    assert c.get(path.replace(a['id'],'not-associated')).status_code==404
++    auth(c,'otherteacher');assert c.get(path).status_code==403
++    auth(c,'depthead');assert c.get(path).status_code==200
++    with app2.state.sessions.begin() as db:db.get(User,'teacher').org_id='dept2'
++    assert c.get(path).status_code==403
++    auth(c,'schooladmin');assert c.get(path).status_code==200
++
++
++def test_archive_refuses_missing_evidence_and_rolls_back(client2,app2):
++    c=client2;q,a=approved_qualification(c);x=ready(c)
++    with app2.state.sessions() as db:key=db.get(Attachment,a['id']).storage_key
++    (app2.state.settings.storage_dir/key).unlink()
++    r=post(c,f"/api/assessments/{x['id']}/actions",{'action':'archive','expected_version':x['version'],**REASON})
++    assert r.status_code==503,r.text
++    with app2.state.sessions() as db:
++        obj=db.get(Assessment,x['id']);assert obj.state=='READY' and obj.version==x['version'] and not obj.archive
++
++
++def test_archive_download_uses_original_hash_not_rewritten_attachment_hash(client2,app2):
++    from hashlib import sha256
++    c=client2;q,a=approved_qualification(c);x=archive(c)
++    with app2.state.sessions.begin() as db:
++        item=db.get(Attachment,a['id']);key=item.storage_key
++        changed=b'!'*item.size;(app2.state.settings.storage_dir/key).write_bytes(changed)
++        item.sha256=sha256(changed).hexdigest()
++    r=c.get(f"/api/assessments/{x['id']}/attachments/{a['id']}/download")
++    assert r.status_code==503,r.text
++
++
++def test_next_period_cannot_use_tampered_archived_score(client2,app2):
++    from fastapi import HTTPException
++    x=archive(client2)
++    with app2.state.sessions.begin() as db:
++        db.get(Assessment,x['id']).score=999
++        period=Period(id='p2027',name='下期',start_date=date(2027,1,1),end_date=date(2027,12,31));db.add(period);db.flush()
++        with pytest.raises(HTTPException) as exc:facts(db,'teacher',period)
++        assert exc.value.status_code==409
++
++
++@pytest.mark.parametrize('change',['disabled','role','organization'])
++def test_export_worker_records_failure_when_authorization_changes(client2,app2,change):
++    c=client2;auth(c,'schooladmin')
++    task=post(c,'/api/exports',{'kind':'records','filters':{},'confirmed':False}).json()
++    with app2.state.sessions.begin() as db:
++        if change=='disabled':db.get(User,'schooladmin').active=False
++        elif change=='role':db.get(User,'schooladmin').role_id='role-college'
++        else:db.get(User,'teacher').org_id='dept2';db.get(User,'schooladmin').auth_version+=1
++    assert run_once(app2.state.settings)['status']=='FAILED'
++    with app2.state.sessions() as db:
++        t=db.get(Task,task['id']);assert t.attempts==1 and t.lease_token is None and not t.result
++        assert db.scalar(select(TaskAttempt).where(TaskAttempt.task_id==t.id)).result=='ERROR'
++
++
++def test_runtime_mysql_grants_make_evidence_append_only_not_installer():
++    statements=sql()
++    assert len(APPEND_ONLY_TABLES)==10
++    for table in APPEND_ONLY_TABLES:
++        lines=[x for x in statements.splitlines() if f'`{table}`' in x]
++        assert len(lines)==1 and 'GRANT SELECT, INSERT ON ' in lines[0] and 'UPDATE' not in lines[0] and 'DELETE' not in lines[0]
++    assert "GRANT SELECT ON `nondegree`.`installation_provenance` TO 'nondegree_app'@'%';" in statements
++
++
++def test_archived_teacher_list_uses_frozen_names_and_period(client2,app2):
++    x=archive(client2)
++    with app2.state.sessions.begin() as db:
++        db.get(User,'teacher').name='现在改名'
++        db.get(Period,'period2026').name='现在改周期名'
++    r=client2.get('/api/assessments');assert r.status_code==200
++    row=r.json()['items'][0]
++    assert row['teacher_display_name']=='测试教师一'
++    assert row['period_display_name']=='2026隔离测试周期'
++
++
++def test_organization_export_uses_frozen_target_not_current_name(client2,app2):
++    from test_r3_org_assessment import make_rule,calculate,action
++    c=client2;auth(c,'schooladmin');make_rule(c,'dept','dept1');x=calculate(c,'dept','dept1')
++    auth(c,'depthead');x=action(c,x,'review').json()
++    auth(c,'schooladmin');x=action(c,x,'school_audit').json();r=action(c,x,'archive');assert r.status_code==200,r.text
++    with app2.state.sessions.begin() as db:db.get(Org,'dept1').name='新部门名'
++    wb=load_workbook(io.BytesIO(export(c,app2,'organization_assessments')),read_only=True)
++    rows=list(wb.active.values);wb.close()
++    assert rows[1][0]=='测试教研室一'
+diff --git a/tests/r2/test_r6_portability.py b/tests/r2/test_r6_portability.py
+new file mode 100644
+index 0000000..1a47a8f
+--- /dev/null
++++ b/tests/r2/test_r6_portability.py
+@@ -0,0 +1,125 @@
++"""PDF 12.2,14.6: whole evidence graph and precise portable values."""
++import csv,io,json,zipfile,hashlib
++from datetime import datetime
++from pathlib import Path
++import pytest
++from sqlalchemy import select
++from openpyxl import load_workbook
++from app.models import Audit,User,TrainingRecord,Attachment,Assessment,Task
++from app.excel_io import _safe_excel_value
++from app.worker import run_once
++from conftest import auth,post
++from test_r6_evidence_chain import export,archive,approved_qualification
++from test_r3_handover_validator import mod
++
++
++def put_audit(db,ident,at):
++    db.add(Audit(id=ident,created_at=at,actor_id='schooladmin',actor_name='测试管理员',org_id='school',
++      module='r6_boundary',object_id=ident,action='精确时间核对',before={},after={},reason='合成验收',result='SUCCESS',request_id=ident))
++
++
++def test_audit_page_and_export_use_identical_inclusive_days_and_keep_time(client2,app2):
++    c=client2;auth(c,'schooladmin')
++    with app2.state.sessions.begin() as db:
++        for ident,at in [('before',datetime(2026,9,17,23,59,59)),('start',datetime(2026,9,18)),('end',datetime(2026,9,18,23,59,59,999999)),('after',datetime(2026,9,19))]:put_audit(db,ident,at)
++    f={'module':'r6_boundary','start':'2026-09-18','end':'2026-09-18'}
++    r=c.get('/api/audit',params=f);assert r.status_code==200
++    assert [x['id'] for x in r.json()['items']]==['end','start']
++    wb=load_workbook(io.BytesIO(export(c,app2,'audit',f)),read_only=True)
++    rows=list(wb.active.values);wb.close()
++    assert len(rows)==3 and [x[4] for x in rows[1:]]==['end','start']
++    assert rows[1][0]=='2026-09-18T23:59:59.999999'
++
++
++@pytest.mark.parametrize('f',[{'start':'2026-09-19','end':'2026-09-18'},{'start':'20260918'},{'end':'not-date'},{'end':'2026-02-30'}])
++def test_invalid_audit_bounds_rejected_consistently(client2,f):
++    auth(client2,'schooladmin')
++    assert client2.get('/api/audit',params=f).status_code==422
++    assert post(client2,'/api/exports',{'kind':'audit','filters':f,'confirmed':False}).status_code==422
++
++
++def test_audit_date_max_has_no_overflow(client2):
++    auth(client2,'schooladmin');assert client2.get('/api/audit?end=9999-12-31').status_code==200
++
++
++@pytest.mark.parametrize('value',['=1+1','  =SUM(1,2)','\t+cmd','\r@payload','-12.34'])
++def test_spreadsheet_display_escapes_control_prefix_without_losing_raw_value(value):
++    assert _safe_excel_value(value)=="'"+value
++
++
++def save_zip(path,items):
++    with zipfile.ZipFile(path,'w',zipfile.ZIP_DEFLATED) as z:
++        for name,data in items.items():z.writestr(name,data)
++
++
++def rehash(items):
++    m=json.loads(items['manifest.json'])
++    m['files']=[{'path':n,'size':len(d),'sha256':hashlib.sha256(d).hexdigest()} for n,d in items.items() if n!='manifest.json']
++    items['manifest.json']=json.dumps(m,ensure_ascii=False).encode()
++
++
++def test_handover_contains_complete_evidence_and_lossless_jsonl(client2,app2,tmp_path):
++    c=client2;q,att=approved_qualification(c);x=archive(c)
++    with app2.state.sessions.begin() as db:
++        db.get(User,'teacher').name='  =不能被Excel执行'
++        db.get(TrainingRecord,'rec1').income='-12.30'
++    data=export(c,app2,'handover');path=tmp_path/'all-evidence.zip';path.write_bytes(data)
++    result=mod.verify(path);assert result['status']=='PASS',result
++    assert result['details']['typed_tables']==40 and result['details']['foreign_key_checks']>40
++    assert result['details']['typed_roundtrip_verified'] and not result['disaster_restore_proven']
++    with zipfile.ZipFile(io.BytesIO(data)) as z:
++        m=json.loads(z.read('manifest.json'));assert m['format'].endswith('v2')
++        assert m['consistency']=='single_read_only_database_snapshot'
++        users=[json.loads(l) for l in z.read('typed/users.jsonl').decode().splitlines()]
++        assert next(u for u in users if u['id']=='teacher')['name']=='  =不能被Excel执行'
++        values=list(csv.DictReader(io.StringIO(z.read('data/users.csv').decode('utf-8-sig'))))
++        assert next(u for u in values if u['id']=='teacher')['name']=="'  =不能被Excel执行"
++        records=[json.loads(l) for l in z.read('typed/training_records.jsonl').decode().splitlines()]
++        assert next(r for r in records if r['id']=='rec1')['income']=='-12.30'
++        archived=json.loads(z.read('typed/assessments.jsonl').decode().splitlines()[0]);assert archived['archive']['teacher']['name']=='测试教师一'
++        assert z.read(json.loads(z.read('attachments_manifest.json'))[0]['archive_path'])
++        for n in ('typed/users.jsonl','typed/tasks.jsonl','typed/connection_checks.jsonl'):
++            text=z.read(n).decode();assert 'password_hash' not in text and 'storage_key' not in text and 'lease_token' not in text and 'FixtureOnly' not in text
++
++
++@pytest.mark.parametrize('mutation',['typed_value','foreign_key','row_count','missing_table','attachment_owner'])
++def test_validator_rejects_structural_damage_even_if_member_hashes_recomputed(client2,app2,tmp_path,mutation):
++    c=client2;approved_qualification(c);archive(c);data=export(c,app2,'handover')
++    with zipfile.ZipFile(io.BytesIO(data)) as z:items={n:z.read(n) for n in z.namelist()}
++    if mutation=='typed_value':
++        rows=[json.loads(l) for l in items['typed/users.jsonl'].decode().splitlines()];rows[0]['name']='CSV没有同步的改名'
++        items['typed/users.jsonl']=(''.join(json.dumps(r,ensure_ascii=False,separators=(',',':'))+'\n' for r in rows)).encode()
++    elif mutation=='foreign_key':
++        key='typed/users.jsonl';rows=[json.loads(l) for l in items[key].decode().splitlines()];rows[0]['org_id']='missing-org'
++        items[key]=(''.join(json.dumps(r,ensure_ascii=False,separators=(',',':'))+'\n' for r in rows)).encode()
++        m=json.loads(items['manifest.json']);t=next(t for t in m['tables'] if t['name']=='users')
++        out=io.StringIO(newline='');w=csv.writer(out);w.writerow(t['columns']);w.writerows([[mod._csv_cell(row[k]) for k in t['columns']] for row in rows]);items['data/users.csv']=('\ufeff'+out.getvalue()).encode()
++    elif mutation=='row_count':
++        m=json.loads(items['manifest.json']);m['tables'][0]['rows']+=1;items['manifest.json']=json.dumps(m).encode()
++    elif mutation=='missing_table':
++        items.pop('typed/disputes.jsonl');items.pop('data/disputes.csv')
++        m=json.loads(items['manifest.json']);m['tables']=[t for t in m['tables'] if t['name']!='disputes'];items['manifest.json']=json.dumps(m).encode()
++    else:
++        a=json.loads(items['attachments_manifest.json']);a[0]['teacher_id']='otherteacher';items['attachments_manifest.json']=json.dumps(a).encode()
++    rehash(items);p=tmp_path/'broken.zip';save_zip(p,items)
++    result=mod.verify(p);assert result['status']=='FAIL' and result['errors'],result
++
++
++def test_handover_failed_attachment_cleans_temporary_sensitive_archive(client2,app2):
++    c=client2;q,a=approved_qualification(c);auth(c,'schooladmin')
++    with app2.state.sessions() as db:key=db.get(Attachment,a['id']).storage_key
++    (app2.state.settings.storage_dir/key).unlink()
++    task=post(c,'/api/exports',{'kind':'handover','filters':{},'confirmed':True}).json()
++    assert run_once(app2.state.settings)['status']=='FAILED'
++    root=app2.state.settings.storage_dir/'.exports'
++    assert not list(root.glob('*.zip')) and not list(root.glob('.*.tmp.zip'))
++    with app2.state.sessions() as db:assert not db.get(Task,task['id']).result
++
++@pytest.mark.parametrize('kind,permission',[('records','records.read'),('participations','records.read'),('qualifications','qualification.read'),('points','points.read'),('assessments','assessment.read')])
++def test_export_alone_does_not_grant_hidden_module_data(client2,app2,kind,permission):
++    from app.models import Role
++    auth(client2,'schooladmin')
++    with app2.state.sessions.begin() as db:
++        role=db.get(Role,'role-school');role.permissions=[p for p in role.permissions if p!=permission]
++    r=post(client2,'/api/exports',{'kind':kind,'filters':{},'confirmed':False})
++    assert r.status_code==403,r.text

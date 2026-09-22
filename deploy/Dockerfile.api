@@ -1,0 +1,19 @@
+ARG PYTHON_IMAGE=python:3.13-slim-bookworm
+FROM ${PYTHON_IMAGE}
+ENV PYTHONDONTWRITEBYTECODE=1 PYTHONUNBUFFERED=1 PYTHONPATH=/opt/nondegree/backend
+RUN groupadd -g 10001 nondegree && useradd -r -u 10001 -g 10001 -d /opt/nondegree -s /usr/sbin/nologin nondegree
+WORKDIR /opt/nondegree
+COPY backend/requirements.txt /tmp/requirements.txt
+ARG PIP_INDEX_URL=https://mirrors.cloud.tencent.com/pypi/simple
+RUN PIP_INDEX_URL=${PIP_INDEX_URL} pip install --no-cache-dir -r /tmp/requirements.txt && rm -f /tmp/requirements.txt
+COPY --chown=10001:10001 backend /opt/nondegree/backend
+COPY --chown=10001:10001 scripts/check_assembly.py /opt/nondegree/scripts/check_assembly.py
+# Include exactly the non-secret source inputs required by the assembly guard.
+COPY --chown=10001:10001 frontend /opt/nondegree/frontend
+COPY --chown=10001:10001 deploy/Dockerfile.api deploy/Dockerfile.frontend deploy/compose.yml deploy/nginx.conf /opt/nondegree/deploy/
+COPY --chown=10001:10001 deploy/mysql-init/01-users.sh /opt/nondegree/deploy/mysql-init/
+# Only a new canonical empty-school installation is supported. Never copy .env/secrets.
+USER 10001:10001
+WORKDIR /opt/nondegree/backend
+EXPOSE 8000
+CMD ["python","-m","uvicorn","app.main:create_app","--factory","--host","0.0.0.0","--port","8000","--workers","2","--proxy-headers","--forwarded-allow-ips","127.0.0.1"]

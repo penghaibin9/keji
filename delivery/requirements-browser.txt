@@ -1,0 +1,3 @@
+# Dedicated implementation workstation, not the school's application container.
+# Browser/CA trust must be prepared with the owner's approval. Never disable TLS checks.
+playwright==1.57.0

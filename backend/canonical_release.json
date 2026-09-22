@@ -1,0 +1,10 @@
+{
+  "baseline_revision": "20260918_0001",
+  "installation_scope": "fresh_school_only",
+  "sha256": {
+    "backend/alembic/versions/20260918_0001_canonical_fresh_school.py": "cdd74d1f111b318f3a376414f540901e5bd760089b0ea217d5dc042e7c40dec6",
+    "backend/alembic_legacy_unverified/20260917_0002_org_assessment_and_sync.py": "4189c4e40192edf320277a76538df6cc3e86e911af1f8a1d02156e95ccf3f938",
+    "backend/canonical_schema.json": "e84f2068a5aa4fb5ad9205b62a643bee651a94ff211e5411f9e7207007c647f8"
+  },
+  "table_count": 46
+}

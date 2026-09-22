@@ -1,0 +1,83 @@
+{
+  "status": "RESOURCE_PACK_VALIDATED_TARGET_DEPLOYMENT_PENDING",
+  "date": "2026-09-19",
+  "source": "R11 original complete package",
+  "source_zip_sha256": "fe432df0c3edb39e8ff0078f13453e9be885b639556785a6174532c8eafe758b",
+  "original_files_retained_unchanged": 679,
+  "original_application_or_database_schema_changed": false,
+  "baseline_python": {
+    "tests": 592,
+    "failures": 0,
+    "errors": 0,
+    "skipped": 0
+  },
+  "new_delivery_python": {
+    "tests": 37,
+    "failures": 0,
+    "errors": 0,
+    "skipped": 0
+  },
+  "frontend_node": {
+    "tests": 89,
+    "failures": 0,
+    "skipped": 0
+  },
+  "https_synthetic_bootstrap": {
+    "real_https": true,
+    "engine": "SQLite",
+    "canonical_empty_school": true,
+    "request_count": 219,
+    "status_counts": {
+      "401": 9,
+      "200": 210
+    },
+    "note": "9 initial-password discovery 401 responses followed by legitimate mandatory password changes; 210 successful 200 responses. Not all requests were 200.",
+    "repeat_no_writes": true
+  },
+  "synthetic_data": {
+    "users": 9,
+    "teachers": 6,
+    "org_nodes": 6,
+    "projects": 3,
+    "courses": 4,
+    "classes": 4,
+    "training_records": 33,
+    "participations": 25,
+    "qualifications": 6,
+    "teacher_assessments": 7,
+    "organization_assessments": 2,
+    "notices": 3
+  },
+  "resource_limits": {
+    "db_mib": 1536,
+    "api_mib": 1536,
+    "worker_mib": 1024,
+    "frontend_mib": 256,
+    "sum_mib": 4352,
+    "docker_host_overhead_additional": true
+  },
+  "real_mysql_8_4_tested": false,
+  "docker_images_built": false,
+  "normal_browser_business_tested": false,
+  "windows_runtime_tested": false,
+  "user_server_contacted": false,
+  "user_server_changed": false,
+  "browser_probe": {
+    "status": "BLOCKED",
+    "reason": "ERR_BLOCKED_BY_ADMINISTRATOR",
+    "policy_changed": false,
+    "tls_verification_disabled": false
+  },
+  "external_connections": "NOT_CONNECTED",
+  "public_access_configured": false,
+  "production_acceptance": false,
+  "stable_demo_claimed": false,
+  "pending": [
+    "Owner confirmation of actual target precheck",
+    "Docker builds and actual MySQL 8.4 installation / grants / business / backup-restore checks",
+    "Trusted HTTPS via loopback SSH",
+    "Normal browser UI full flow and printer pagination",
+    "Any public access plan requires separate owner approval"
+  ],
+  "evidence_boundary": "All new evidence is in delivery/evidence. Existing evidence/ and reports in the original R11 tree are historical, not reclassified as current checks."
+}

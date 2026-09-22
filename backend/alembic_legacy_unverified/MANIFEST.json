@@ -1,0 +1,8 @@
+{
+  "status": "UNVERIFIED_HISTORY_NOT_EXECUTABLE",
+  "missing_parent": "20260917_0001",
+  "upgrade_allowed": false,
+  "files": {
+    "20260917_0002_org_assessment_and_sync.py": "4189c4e40192edf320277a76538df6cc3e86e911af1f8a1d02156e95ccf3f938"
+  }
+}

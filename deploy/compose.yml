@@ -1,0 +1,117 @@
+name: ${ND_PROJECT_NAME:-nondegree}
+x-api: &api
+  image: ${ND_API_IMAGE:-yueke/nondegree-api:2026.09.19-r11}
+  build:
+    context: ..
+    dockerfile: deploy/Dockerfile.api
+    args:
+      PYTHON_IMAGE: ${ND_PYTHON_IMAGE:-python:3.13-slim-bookworm}
+  env_file: .env
+  environment:
+    ND_ENV: production
+    ND_DATABASE_URL_FILE: /run/secrets/runtime_url
+    ND_STORAGE_DIR: /var/lib/nondegree/files
+    ND_SECURE_COOKIE: "true"
+    ND_SEED_ENABLED: "false"
+    ND_MAINTENANCE_DIR: /run/nondegree-maintenance
+  secrets: [runtime_url]
+  volumes: ["../runtime/files:/var/lib/nondegree/files", "../runtime/maintenance:/run/nondegree-maintenance:ro"]
+  read_only: true
+  tmpfs: ["/tmp:size=256m,mode=1777"]
+  cap_drop: [ALL]
+  security_opt: [no-new-privileges:true]
+  restart: unless-stopped
+  stop_grace_period: 45s
+  pids_limit: 128
+  mem_limit: 3g
+  networks: [internal]
+  logging:
+    driver: json-file
+    options: {max-size: "20m", max-file: "5"}
+services:
+  db:
+    image: ${ND_MYSQL_IMAGE:-mysql:8.4}
+    environment:
+      MYSQL_ROOT_PASSWORD_FILE: /run/secrets/db_root_password
+      MYSQL_DATABASE: nondegree
+      TZ: UTC
+    command: ["--character-set-server=utf8mb4","--collation-server=utf8mb4_0900_ai_ci","--max-connections=250","--skip-name-resolve","--local-infile=0","--secure-file-priv=NULL"]
+    secrets: [db_root_password,root_cnf,db_init_sql]
+    volumes:
+      - ../runtime/mysql:/var/lib/mysql
+      - ./mysql-init/01-users.sh:/docker-entrypoint-initdb.d/01-users.sh:ro
+    networks: [internal]
+    restart: unless-stopped
+    healthcheck:
+      test: [CMD-SHELL, "mysqladmin --defaults-extra-file=/run/secrets/root_cnf ping --silent"]
+      interval: 5s
+      timeout: 4s
+      retries: 36
+    mem_limit: 3g
+    logging:
+      driver: json-file
+      options: {max-size: "20m", max-file: "5"}
+  api:
+    <<: *api
+    depends_on:
+      db: {condition: service_healthy}
+    healthcheck:
+      test: [CMD,python,-c,"import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/api/health',timeout=3)"]
+      interval: 20s
+      timeout: 5s
+      retries: 3
+      start_period: 30s
+  worker:
+    <<: *api
+    command: [python,-m,app.worker]
+    depends_on:
+      api: {condition: service_healthy}
+    healthcheck:
+      test: [CMD,python,-m,app.healthcheck,worker]
+      interval: 30s
+      timeout: 6s
+      retries: 3
+  migrate:
+    <<: *api
+    profiles: [maintenance]
+    restart: "no"
+    environment:
+      ND_ENV: production
+      ND_DATABASE_URL_FILE: /run/secrets/migration_url
+      ND_MIGRATION_DATABASE_URL_FILE: /run/secrets/migration_url
+      ND_STORAGE_DIR: /var/lib/nondegree/files
+      ND_SECURE_COOKIE: "true"
+      ND_SEED_ENABLED: "false"
+      ND_MAINTENANCE_DIR: /run/nondegree-maintenance
+    secrets: [migration_url,admin_password]
+    command: [alembic,upgrade,head]
+  frontend:
+    image: ${ND_FRONTEND_IMAGE:-yueke/nondegree-frontend:2026.09.19-r11}
+    build:
+      context: ..
+      dockerfile: deploy/Dockerfile.frontend
+      args:
+        NGINX_IMAGE: ${ND_NGINX_IMAGE:-nginx:stable-bookworm}
+    ports: ["${ND_BIND_IP:-0.0.0.0}:${ND_HTTPS_PORT:-443}:8443"]
+    volumes: ["./tls:/run/tls:ro"]
+    read_only: true
+    tmpfs: ["/tmp:size=128m,mode=1777"]
+    cap_drop: [ALL]
+    security_opt: [no-new-privileges:true]
+    restart: unless-stopped
+    networks: [internal,edge]
+    depends_on:
+      api: {condition: service_healthy}
+    logging:
+      driver: json-file
+      options: {max-size: "20m", max-file: "5"}
+networks:
+  internal: {internal: true}
+  edge: {}
+secrets:
+  db_root_password: {file: ./secrets/db_root_password}
+  root_cnf: {file: ./secrets/root.cnf}
+  db_init_sql: {file: ./secrets/db-init.sql}
+  runtime_url: {file: ./secrets/runtime_url}
+  migration_url: {file: ./secrets/migration_url}
+  admin_password: {file: ./secrets/admin_password}

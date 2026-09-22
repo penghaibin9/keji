@@ -1,0 +1,10 @@
+{
+  "environment": "WAITING_FOR_HTTPS_PREPRODUCTION_OR_SCHOOL",
+  "tls_verified": false,
+  "overall_pass": false,
+  "normal_p95_seconds": null,
+  "complex_p95_seconds": null,
+  "online_sessions": 0,
+  "concurrent_users": 0,
+  "notes": "使用 scripts/run_performance_acceptance.sh 在学校或等效 HTTPS 环境生成正式结果；本模板本身永远不是 PASS 证据。"
+}

@@ -1,0 +1,10 @@
+ARG NGINX_IMAGE=nginx:stable-bookworm
+FROM ${NGINX_IMAGE}
+COPY frontend/ /usr/share/nginx/html/
+COPY deploy/nginx.conf /etc/nginx/nginx.conf
+RUN groupadd -g 10001 nondegree && useradd -r -u 10001 -g 10001 -d /nonexistent -s /usr/sbin/nologin nondegree \
+    && mkdir -p /tmp/client_body /tmp/proxy /tmp/fastcgi_temp /tmp/uwsgi_temp /tmp/scgi_temp \
+    && chown -R 10001:10001 /tmp/client_body /tmp/proxy /tmp/fastcgi_temp /tmp/uwsgi_temp /tmp/scgi_temp /usr/share/nginx/html
+USER 10001:10001
+EXPOSE 8443
+CMD ["nginx","-g","daemon off;"]

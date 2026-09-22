@@ -1,0 +1,15 @@
+# Restricted showcase limits; merged only into this instance, not host/global config.
+# Original deploy/compose.yml is unchanged. No authentication/network/volume overrides.
+services:
+  db:
+    mem_limit: 1536m
+    cpus: 1.0
+  api:
+    mem_limit: 1536m
+    cpus: 2.0
+  worker:
+    mem_limit: 1024m
+    cpus: 1.0
+  frontend:
+    mem_limit: 256m
+    cpus: 0.5
