@@ -5,9 +5,10 @@ import zipfile
 from datetime import timedelta
 from urllib.parse import urlsplit, parse_qs
 import pytest
+from openpyxl import load_workbook
 from sqlalchemy import select, func
 from app.models import Connection, Setting, AuthSession, User, utcnow
-from app.integrations import ADAPTERS, ConnectionCheck
+from app.integrations import ADAPTERS, ConnectionCheck, configuration_hash, credential_fingerprint
 from app.inbound_sync import IntegrationSchedule
 from app.adapters.contracts import AdapterContractError
 from conftest import auth, post, put
@@ -149,9 +150,16 @@ def test_materials_and_handover_do_not_imply_acceptance(client2, app2):
     assert w['statuses']['acceptance'] == '待学校签认'
     archive = client2.get('/api/connections/'+ident+'/handover.zip')
     assert archive.status_code == 200
-    data = zipfile.ZipFile(io.BytesIO(archive.content)).read('implementation.json').decode()
+    handover = zipfile.ZipFile(io.BytesIO(archive.content))
+    assert '接口实施交接工作簿.xlsx' in handover.namelist()
+    data = handover.read('implementation.json').decode()
     assert '_credential_sha256' not in data and 'token_hash' not in data
-    assert json.loads(data)['school_acceptance'] == 'PENDING_SCHOOL_CONFIRMATION'
+    workbook = load_workbook(io.BytesIO(handover.read('接口实施交接工作簿.xlsx')), read_only=True)
+    assert workbook.sheetnames == ['状态总览','资料清单','字段映射','凭据证书元数据','学校验收台账']
+    payload = json.loads(data)
+    assert payload['format'] == 'YUEKE_INTEGRATION_HANDOVER_R2'
+    assert payload['school_acceptance']['summary']['state'] == '待学校签认'
+    assert payload['credential_metadata']['values_returned'] is False
 
 
 @pytest.mark.parametrize('username', ['teacher', 'depthead', 'collegehead'])
@@ -163,3 +171,164 @@ def test_non_admin_cannot_access_implementation_or_drafts(client2, app2, usernam
         assert client2.get('/api/connections/'+ident+'/'+endpoint).status_code == 403
     r = post(client2, '/api/connections/'+ident+'/health', {**REASON, 'expected_version': 1})
     assert r.status_code == 403
+
+def _acceptance_items(workspace, status='PASSED'):
+    return [{'code': item['code'], 'status': status,
+             'evidence_ref': 'SYNTHETIC-EVIDENCE-'+str(index+1),
+             'school_contact': '合成学校联系人', 'checked_on': '2026-09-23'}
+            for index, item in enumerate(workspace['acceptance']['summary']['requirements'])]
+
+
+def test_credential_metadata_records_only_safe_lifecycle_facts(client2):
+    auth(client2, 'schooladmin')
+    ident = connection_id(client2)
+    action = make_draft(client2, ident)
+    payload = {**REASON, 'expected_version': 0, 'expected_connection_version': action['expected_version'],
+        'expected_draft_version': action['draft_version'], 'credential_type': 'certificate',
+        'managed_by': 'file_mount', 'owner': '学校服务器管理员',
+        'certificate_fingerprint_sha256': 'a'*64, 'certificate_subject': 'CN=synthetic.example',
+        'certificate_issuer': 'Synthetic CA', 'valid_from': '2026-09-01',
+        'valid_until': '2099-12-31', 'last_rotated_on': '2026-09-01',
+        'next_rotation_on': '2099-11-30'}
+    result = put(client2, '/api/connections/'+ident+'/credential-metadata', payload)
+    assert result.status_code == 200, result.text
+    assert result.json()['secret_values_stored'] is False
+    workspace = client2.get('/api/connections/'+ident+'/implementation').json()
+    assert workspace['credential']['metadata']['certificate_fingerprint_sha256'] == 'a'*64
+    assert workspace['credential']['asset_status']['state'] == '安全资产有效'
+    assert workspace['credential']['values_returned'] is False
+    assert 'synthetic-test-credential-only' not in json.dumps(workspace, ensure_ascii=False)
+
+def test_credential_metadata_rejects_bad_dates_and_secret_shaped_extra_fields(client2):
+    auth(client2, 'schooladmin')
+    ident = connection_id(client2)
+    action = make_draft(client2, ident)
+    base = {**REASON, 'expected_version': 0, 'expected_connection_version': action['expected_version'],
+        'expected_draft_version': action['draft_version'], 'credential_type': 'certificate',
+        'managed_by': 'server_env', 'owner': '合成管理员',
+        'certificate_fingerprint_sha256': 'b'*64, 'certificate_subject': '',
+        'certificate_issuer': '', 'valid_from': '2026-10-01',
+        'valid_until': '2026-09-01', 'last_rotated_on': None, 'next_rotation_on': None}
+    bad = put(client2, '/api/connections/'+ident+'/credential-metadata', base)
+    assert bad.status_code == 422
+    extra = put(client2, '/api/connections/'+ident+'/credential-metadata',
+        {**base, 'valid_until': '2099-01-01', 'private_key': 'SHOULD-NOT-BE-ACCEPTED'})
+    assert extra.status_code == 422
+
+
+def test_acceptance_evidence_does_not_auto_sign_and_stales_after_config_change(client2, app2):
+    auth(client2, 'schooladmin')
+    ident = connection_id(client2)
+    workspace = client2.get('/api/connections/'+ident+'/implementation').json()
+    items = _acceptance_items(workspace)
+    saved = put(client2, '/api/connections/'+ident+'/acceptance',
+        {**REASON, 'expected_version': 0, 'expected_connection_version': workspace['connection_version'], 'items': items,
+         'signed_by': '', 'signed_on': None, 'signed_reference': ''})
+    assert saved.status_code == 200, saved.text
+    assert saved.json()['summary']['passed'] == 6
+    assert saved.json()['summary']['signed'] is False
+    blocked = put(client2, '/api/connections/'+ident+'/acceptance',
+        {**REASON, 'expected_version': 1, 'expected_connection_version': workspace['connection_version'], 'items': items,
+         'signed_by': '学校验收人', 'signed_on': '2026-09-23',
+         'signed_reference': 'SYNTHETIC-SIGNOFF'})
+    assert blocked.status_code == 409
+    with app2.state.sessions.begin() as db:
+        db.get(Connection, ident).version += 1
+    current = client2.get('/api/connections/'+ident+'/implementation').json()
+    assert current['statuses']['acceptance'] == '配置已变化，验收需重新确认'
+    assert current['acceptance']['summary']['stale'] is True
+
+
+def test_province_source_gaps_block_final_signoff(client2):
+    auth(client2, 'schooladmin')
+    ident = connection_id(client2, 'province')
+    workspace = client2.get('/api/connections/'+ident+'/implementation').json()
+    items = _acceptance_items(workspace)
+    result = put(client2, '/api/connections/'+ident+'/acceptance',
+        {**REASON, 'expected_version': 0, 'expected_connection_version': workspace['connection_version'], 'items': items,
+         'signed_by': '学校验收人', 'signed_on': '2026-09-23',
+         'signed_reference': 'SYNTHETIC-SIGNOFF'})
+    assert result.status_code == 409
+    assert '权威来源' in result.text
+
+
+@pytest.mark.parametrize('username', ['teacher', 'depthead', 'collegehead'])
+def test_non_admin_cannot_write_credential_or_acceptance(client2, app2, username):
+    with app2.state.sessions() as db:
+        ident = db.scalar(select(Connection.id).where(Connection.code == 'sso'))
+    auth(client2, username)
+    credential = put(client2, '/api/connections/'+ident+'/credential-metadata', {
+        **REASON, 'expected_version': 0, 'expected_connection_version': 1, 'expected_draft_version': 0, 'credential_type': 'token',
+        'managed_by': 'server_env', 'owner': '无权限账号',
+        'certificate_fingerprint_sha256': '', 'certificate_subject': '',
+        'certificate_issuer': '', 'valid_from': None, 'valid_until': None,
+        'last_rotated_on': None, 'next_rotation_on': None})
+    assert credential.status_code == 403
+    acceptance = put(client2, '/api/connections/'+ident+'/acceptance', {
+        **REASON, 'expected_version': 0, 'expected_connection_version': 1, 'items': [],
+        'signed_by': '', 'signed_on': None, 'signed_reference': ''})
+    assert acceptance.status_code == 403
+
+def test_current_real_health_and_complete_evidence_can_record_school_signoff(client2, app2, monkeypatch):
+    auth(client2, 'schooladmin')
+    ident = connection_id(client2, 'sso')
+    monkeypatch.setenv('ND_ACCEPTANCE_SECRET', 'synthetic-acceptance-secret')
+    with app2.state.sessions.begin() as db:
+        obj = db.get(Connection, ident)
+        obj.config = {'endpoint': 'https://synthetic.invalid', 'secret_env': 'ND_ACCEPTANCE_SECRET'}
+        obj.state = 'CONNECTED'
+        db.flush()
+        db.add(Setting(key='integration.health:'+ident, value={
+            'passed': True, 'mode': 'REAL', 'configuration_hash': configuration_hash(obj),
+            '_credential_sha256': credential_fingerprint(obj)}, version=1))
+        db.add(Setting(key='integration.credential:'+ident, value={
+            'credential_type': 'token', 'managed_by': 'server_env', 'owner': 'synthetic-admin',
+            'credential_reference': 'ND_ACCEPTANCE_SECRET'}, version=1))
+    workspace = client2.get('/api/connections/'+ident+'/implementation').json()
+    materials = [{'name': name, 'owner': '学校信息中心', 'reference': 'DOC-'+str(index+1),
+                  'confirmed_on': '2026-09-23'}
+                 for index, name in enumerate(workspace['materials']['required'])]
+    saved = put(client2, '/api/connections/'+ident+'/materials',
+                {**REASON, 'expected_version': 0, 'items': materials})
+    assert saved.status_code == 200, saved.text
+    workspace = client2.get('/api/connections/'+ident+'/implementation').json()
+    items = _acceptance_items(workspace)
+    signed = put(client2, '/api/connections/'+ident+'/acceptance', {
+        **REASON, 'expected_version': 0, 'expected_connection_version': workspace['connection_version'], 'items': items,
+        'signed_by': '学校验收人', 'signed_on': '2026-09-23',
+        'signed_reference': 'SYNTHETIC-SIGNOFF-001'})
+    assert signed.status_code == 200, signed.text
+    assert signed.json()['summary']['state'] == '学校已签认'
+    assert signed.json()['summary']['signed'] is True
+    current = client2.get('/api/connections/'+ident+'/implementation').json()
+    assert current['statuses']['acceptance'] == '学校已签认'
+    monkeypatch.setenv('ND_ACCEPTANCE_SECRET', 'synthetic-rotated-after-signoff')
+    runtime_changed = client2.get('/api/connections/'+ident+'/implementation').json()
+    assert runtime_changed['statuses']['acceptance'] == '运行凭据或健康状态已变化，验收需复核'
+    assert runtime_changed['acceptance']['summary']['signed'] is False
+    monkeypatch.setenv('ND_ACCEPTANCE_SECRET', 'synthetic-acceptance-secret')
+    with app2.state.sessions.begin() as db:
+        obj = db.get(Connection, ident)
+        obj.config = {**obj.config, 'owner': '配置发生变化'}
+        obj.version += 1
+    stale = client2.get('/api/connections/'+ident+'/implementation').json()
+    assert stale['statuses']['acceptance'] == '配置已变化，验收需重新确认'
+    assert stale['acceptance']['summary']['signed'] is False
+
+
+def test_security_metadata_and_acceptance_are_version_bound(client2):
+    auth(client2, 'schooladmin')
+    ident = connection_id(client2)
+    action = make_draft(client2, ident)
+    stale_credential = put(client2, '/api/connections/'+ident+'/credential-metadata', {
+        **REASON, 'expected_version': 0, 'expected_connection_version': action['expected_version'],
+        'expected_draft_version': action['draft_version']-1, 'credential_type': 'token',
+        'managed_by': 'server_env', 'owner': 'synthetic-admin',
+        'certificate_fingerprint_sha256': '', 'certificate_subject': '', 'certificate_issuer': '',
+        'valid_from': None, 'valid_until': None, 'last_rotated_on': None, 'next_rotation_on': None})
+    assert stale_credential.status_code == 409
+    workspace = client2.get('/api/connections/'+ident+'/implementation').json()
+    stale_acceptance = put(client2, '/api/connections/'+ident+'/acceptance', {
+        **REASON, 'expected_version': 0, 'expected_connection_version': workspace['connection_version']+1,
+        'items': _acceptance_items(workspace), 'signed_by': '', 'signed_on': None, 'signed_reference': ''})
+    assert stale_acceptance.status_code == 409

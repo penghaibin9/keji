@@ -6,7 +6,9 @@ DROP, runtime permission changes or connections to remote school databases.
 from pathlib import Path
 import argparse
 import json
+import io
 import os
+import zipfile
 import sys
 import tempfile
 import uuid
@@ -76,11 +78,33 @@ def main():
         client.headers['x-csrf-token'] = me['csrf']
         ident = next(x['connection']['id'] for x in client.get('/api/connections/catalog').json()['items'] if x['connection']['code'] == 'sso')
         response = client.put('/api/connections/'+ident+'/draft', headers={'idempotency-key': uuid.uuid4().hex},
-            json={'expected_version': 1, 'expected_draft_version': 0, 'config': {}, 'mappings': [], 'reason': '独立MySQL草稿验证'})
+            json={'expected_version': 1, 'expected_draft_version': 0, 'config': {'secret_env':'ND_SSO_SECRET'}, 'mappings': [], 'reason': '独立MySQL草稿验证'})
         assert response.status_code == 200, response.text
         assert client.get('/api/connections/'+ident+'/draft').json()['draft_version'] == 1
         report = client.get('/api/connections/'+ident+'/implementation').json()
         assert report['statuses']['acceptance'] == '待学校签认'
+        credential = client.put('/api/connections/'+ident+'/credential-metadata',
+            headers={'idempotency-key': uuid.uuid4().hex}, json={
+              'expected_version':0, 'expected_connection_version':report['connection_version'],
+              'expected_draft_version':report['draft_version'], 'credential_type':'token',
+              'managed_by':'server_env', 'owner':'合成服务器管理员',
+              'certificate_fingerprint_sha256':'', 'certificate_subject':'', 'certificate_issuer':'',
+              'valid_from':None, 'valid_until':None, 'last_rotated_on':None, 'next_rotation_on':None,
+              'reason':'独立MySQL安全元数据验证'})
+        assert credential.status_code == 200, credential.text
+        items = [{'code': item['code'], 'status':'PENDING', 'evidence_ref':'',
+                  'school_contact':'', 'checked_on':None}
+                 for item in report['acceptance']['summary']['requirements']]
+        acceptance = client.put('/api/connections/'+ident+'/acceptance',
+            headers={'idempotency-key': uuid.uuid4().hex}, json={
+              'expected_version':0, 'expected_connection_version':report['connection_version'],
+              'items':items, 'signed_by':'', 'signed_on':None, 'signed_reference':'',
+              'reason':'独立MySQL验收台账验证'})
+        assert acceptance.status_code == 200, acceptance.text
+        handover = client.get('/api/connections/'+ident+'/handover.zip')
+        assert handover.status_code == 200, handover.text
+        with zipfile.ZipFile(io.BytesIO(handover.content)) as archive:
+            assert '接口实施交接工作簿.xlsx' in archive.namelist()
     command.upgrade(migration, 'head')
     with engine.connect() as conn:
         assert require_canonical(conn, require_mysql=True) == provenance
@@ -91,6 +115,8 @@ def main():
         'fresh_migration': True, 'repeat_migration_keeps_provenance': True,
         'schema_baseline': '20260918_0001', 'migration_hash_guard_bypassed': False,
         'initialization': True, 'http_login_draft_save_read': True,
+        'credential_metadata_mysql': True, 'acceptance_ledger_mysql': True,
+        'handover_workbook_xlsx': True,
         'paged_rows': count, 'interrupted_second_page_resumed': True,
         'synthetic_school_data': True, 'school_system_contacted': False,
         'external_adapter': 'synthetic transport', 'production_acceptance': False}

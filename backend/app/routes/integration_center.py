@@ -1,5 +1,6 @@
 """Versioned drafts, safe tests, explicit publication and non-destructive health."""
 from datetime import date, timedelta
+from typing import Literal
 from fastapi import APIRouter, Request, HTTPException
 from pydantic import Field
 from sqlalchemy import select
@@ -7,8 +8,9 @@ from ..models import Connection, Setting, utcnow
 from ..schemas import ConnectionUpdate, VersionedReason, Reason, Input
 from ..core import read_operation, command, check_version, serial, audit
 from ..integration_center import candidate, stored, save_stored, workspace, configuration_issues, run_probe, MATERIALS
+from ..integration_security import credential_summary, acceptance_requirements, acceptance_summary
 from ..integrations import (ADAPTERS, DATA_CATALOG, ConnectionCheck, configuration_hash,
-    credential_fingerprint, normalize_mappings, activate_connection, pause_schedules)
+    credential_fingerprint, normalize_mappings, activate_connection, pause_schedules, live_connection)
 
 router = APIRouter(prefix='/api', tags=['统一认证与接口适配中心'])
 
@@ -32,6 +34,39 @@ class Material(Input):
 class MaterialsUpdate(Reason):
     expected_version: int = Field(ge=0)
     items: list[Material] = Field(max_length=6)
+
+
+class CredentialMetadataUpdate(Reason):
+    expected_version: int = Field(ge=0)
+    expected_connection_version: int = Field(ge=1)
+    expected_draft_version: int = Field(ge=0)
+    credential_type: Literal['token','oauth_client','hmac','certificate','mtls','custom']
+    managed_by: Literal['server_env','secret_manager','file_mount','hardware','other']
+    owner: str = Field(min_length=1, max_length=120)
+    certificate_fingerprint_sha256: str = Field(default='', pattern=r'^(?:[0-9A-Fa-f]{64})?$')
+    certificate_subject: str = Field(default='', max_length=240)
+    certificate_issuer: str = Field(default='', max_length=240)
+    valid_from: date | None = None
+    valid_until: date | None = None
+    last_rotated_on: date | None = None
+    next_rotation_on: date | None = None
+
+
+class AcceptanceItem(Input):
+    code: str = Field(min_length=1, max_length=40, pattern=r'^[a-z0-9_]+$')
+    status: Literal['PENDING','PASSED','FAILED'] = 'PENDING'
+    evidence_ref: str = Field(default='', max_length=400)
+    school_contact: str = Field(default='', max_length=120)
+    checked_on: date | None = None
+
+
+class AcceptanceUpdate(Reason):
+    expected_version: int = Field(ge=0)
+    expected_connection_version: int = Field(ge=1)
+    items: list[AcceptanceItem] = Field(max_length=6)
+    signed_by: str = Field(default='', max_length=120)
+    signed_on: date | None = None
+    signed_reference: str = Field(default='', max_length=400)
 
 
 def connection(db, ident):
@@ -208,6 +243,94 @@ def update_materials(ident: str, data: MaterialsUpdate, request: Request):
     return command(request, data.model_dump(), 'sync.manage', apply)
 
 
+@router.put('/connections/{ident}/credential-metadata')
+def update_credential_metadata(ident: str, data: CredentialMetadataUpdate, request: Request):
+    def apply(db, a, s):
+        a.require_admin()
+        obj = connection(db, ident)
+        check_version(obj, data.expected_connection_version)
+        item, draft = candidate(db, obj)
+        if (draft.version if draft else 0) != data.expected_draft_version:
+            raise HTTPException(409, '接口草稿已变化，请刷新后重新登记安全元数据')
+        reference = item.config.get('secret_env', '')
+        if not reference:
+            raise HTTPException(409, '请先在草稿中登记服务器凭据引用')
+        if data.valid_from and data.valid_until and data.valid_until < data.valid_from:
+            raise HTTPException(422, '证书到期日不能早于生效日')
+        if data.last_rotated_on and data.next_rotation_on and data.next_rotation_on < data.last_rotated_on:
+            raise HTTPException(422, '下次轮换日期不能早于上次轮换日期')
+        old = stored(db, 'credential', ident)
+        if (old.version if old else 0) != data.expected_version:
+            raise HTTPException(409, '凭据资产登记已被其他人员修改')
+        before = serial(old) if old else {}
+        value = data.model_dump(mode='json', exclude={'reason','basis','expected_version',
+            'expected_connection_version','expected_draft_version'})
+        value.update(credential_reference=reference, recorded_at=utcnow().isoformat())
+        row = save_stored(db, 'credential', ident, value)
+        summary = credential_summary(value)
+        audit(db, a, 'connections', ident, '登记凭据/证书安全元数据', before, serial(row), data.reason)
+        return {'version': row.version, 'asset_status': summary, 'secret_values_stored': False}
+    return command(request, data.model_dump(), 'sync.manage', apply)
+
+
+@router.put('/connections/{ident}/acceptance')
+def update_acceptance(ident: str, data: AcceptanceUpdate, request: Request):
+    def apply(db, a, s):
+        a.require_admin()
+        obj = connection(db, ident)
+        check_version(obj, data.expected_connection_version)
+        required = acceptance_requirements(obj.code)
+        required_codes = {key for key, _ in required}
+        supplied_codes = [item.code for item in data.items]
+        if len(set(supplied_codes)) != len(supplied_codes) or set(supplied_codes) != required_codes:
+            raise HTTPException(422, '学校验收项必须完整且不能重复')
+        for item in data.items:
+            if item.status != 'PENDING' and (not item.evidence_ref or not item.school_contact or not item.checked_on):
+                raise HTTPException(422, '已核对的验收项必须填写学校联系人、日期和证据编号')
+        sign_values = (bool(data.signed_by), bool(data.signed_on), bool(data.signed_reference))
+        if any(sign_values) and not all(sign_values):
+            raise HTTPException(422, '学校最终签认人、签认日期和签认依据必须同时填写')
+        source_gaps = [name for _, name, status in DATA_CATALOG[obj.code] if status == 'WAITING_SOURCE']
+        if all(sign_values):
+            if any(item.status != 'PASSED' for item in data.items):
+                raise HTTPException(409, '仍有未通过或待确认验收项，不能登记最终签认')
+            if source_gaps:
+                raise HTTPException(409, '仍有业务数据权威来源未确认，不能登记最终签认')
+            if not live_connection(db, obj):
+                raise HTTPException(409, '当前生效连接无有效发布授权，不能登记最终签认')
+            materials = stored(db, 'materials', ident)
+            complete = {x.get('name') for x in ((materials.value or {}).get('items', []) if materials else [])
+                        if x.get('reference') and x.get('owner') and x.get('confirmed_on')}
+            if not set(MATERIALS) <= complete:
+                raise HTTPException(409, '实施资料尚未登记齐全，不能登记最终签认')
+            credential = stored(db, 'credential', ident)
+            credential_value = dict(credential.value or {}) if credential else {}
+            asset = credential_summary(credential_value)
+            if (not credential or credential_value.get('credential_reference') != (obj.config or {}).get('secret_env', '')
+                    or asset['issues'] or asset['state'] in {'证书已过期','凭据轮换已到期'}):
+                raise HTTPException(409, '当前发布版本的凭据/证书安全资产登记不完整或已失效')
+            health = stored(db, 'health', ident)
+            health_value = dict(health.value or {}) if health else {}
+            if (not health_value.get('passed') or health_value.get('mode') != 'REAL'
+                    or health_value.get('configuration_hash') != configuration_hash(obj)
+                    or health_value.get('_credential_sha256') != credential_fingerprint(obj)):
+                raise HTTPException(409, '缺少当前发布版本的真实健康检查通过记录')
+        old = stored(db, 'acceptance', ident)
+        if (old.version if old else 0) != data.expected_version:
+            raise HTTPException(409, '学校验收登记已被其他人员修改')
+        before = serial(old) if old else {}
+        value = data.model_dump(mode='json', exclude={'reason','basis','expected_version',
+            'expected_connection_version'})
+        value.update(connection_version=obj.version, configuration_hash=configuration_hash(obj),
+                     recorded_by=a.id, recorded_at=utcnow().isoformat())
+        row = save_stored(db, 'acceptance', ident, value)
+        summary = acceptance_summary(value, obj.code, connection_version=obj.version,
+            configuration_hash=configuration_hash(obj), source_gaps=source_gaps)
+        audit(db, a, 'connections', ident, '登记学校接口验收证据', before, serial(row), data.reason)
+        return {'version': row.version, 'summary': summary, 'automatic_acceptance': False}
+    return command(request, data.model_dump(), 'sync.manage', apply)
+
+
 class DraftPreview(DraftAction):
     data_type: str = Field(max_length=64)
     records: list[dict] = Field(min_length=1, max_length=100)
@@ -248,21 +371,26 @@ def handover(ident: str, request: Request):
         a.require('export')
         obj = connection(db, ident)
         item, row = candidate(db, obj)
-        result = {'format': 'YUEKE_INTEGRATION_HANDOVER_R1',
-            'workspace': workspace(db, obj, request.app.state.settings),
+        current_workspace = workspace(db, obj, request.app.state.settings)
+        result = {'format': 'YUEKE_INTEGRATION_HANDOVER_R2',
+            'workspace': current_workspace,
             'active': {'config': obj.config, 'mappings': obj.mappings, 'version': obj.version},
             'draft': {'config': item.config, 'mappings': item.mappings, 'version': row.version} if row else None,
-            'school_acceptance': 'PENDING_SCHOOL_CONFIRMATION'}
+            'credential_metadata': current_workspace['credential'],
+            'school_acceptance': current_workspace['acceptance']}
         audit(db, a, 'connections', ident, '导出接口实施交接包',
               after={'contains_credentials': False}, reason='实施配置和资料移交；不是验收证书')
         return result
     data = read_operation(request, 'sync.manage', load)
+    from ..integration_handover import build_handover_workbook
+    workbook = build_handover_workbook(data)
     stream = io.BytesIO()
     with zipfile.ZipFile(stream, 'w', zipfile.ZIP_DEFLATED) as archive:
         archive.writestr('implementation.json', json.dumps(data, ensure_ascii=False, indent=2))
+        archive.writestr('接口实施交接工作簿.xlsx', workbook)
         archive.writestr('README.md', '# 接口实施交接包\n\n'
-            '包含生效配置、草稿、字段映射、正式回调、资料登记和验证摘要。\n'
-            '不包含服务器真实凭据、密码或私钥。请通过学校安全渠道单独交接。\n'
+            '包含生效配置、草稿、字段映射、正式回调、资料登记、凭据/证书安全元数据、验证摘要和学校验收台账。\n'
+            '不包含服务器真实凭据、密码、令牌、私钥或证书正文。请通过学校安全渠道单独交接。\n'
             '真实接口联调、脱敏样本、权限验证及学校签认应另附证据，不能用本包代替验收。\n'
             '分页采集中断会保留已确认批次；恢复从未完成页继续，不承诺整次历史入库自动回滚。\n')
     return Response(stream.getvalue(), media_type='application/zip', headers={

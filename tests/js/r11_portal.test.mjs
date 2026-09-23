@@ -444,3 +444,39 @@ test('secondary shortcuts are preserved in a native disclosure, not removed',asy
  assert.match(html,/data-id="points"/);assert.match(html,/data-id="cockpit"/);
  assert.match(html,/查看全部待办/);assert.doesNotMatch(html,/设计预览|合成示例/);
 });
+
+function closeoutWorkspaceFixture(){
+ return {connection_id:'c-sso',code:'sso',name:'学校统一认证',connection_version:2,draft_version:1,has_draft:true,issues:[],
+  statuses:{materials:'资料待登记',configuration:'配置校验通过',tests:'待真实测试',published:'已发布',health:'最近检查通过',acceptance:'待学校签认'},
+  callbacks:{login:'https://school.example/api/auth/sso/callback',test_login:'https://school.example/api/auth/sso/implementation-callback',logout_return:'https://school.example/',readonly:true},
+  credential:{reference:'ND_SSO_SECRET',configured:true,values_returned:false,version:1,
+   metadata:{credential_type:'certificate',managed_by:'file_mount',owner:'信息中心',certificate_fingerprint_sha256:'a'.repeat(64),valid_from:'2026-09-01',valid_until:'2027-09-01',next_rotation_on:'2027-08-01'},
+   asset_status:{state:'安全资产有效',issues:[],credential_type_name:'服务证书',managed_by_name:'受控文件挂载'}},
+  materials:{version:0,required:[],items:[]},health:{},check:null,data_types:[],source_gaps:[],
+  acceptance:{version:0,record:{items:[]},summary:{state:'待学校签认',passed:0,total:1,signed:false,stale:false,source_gaps:[],requirements:[{code:'real_login',label:'真实单点登录与状态校验'}]}}};
+}
+
+test('credential step exposes certificate lifecycle metadata and safe edit entry',async()=>{
+ const e=engine(url=>url.includes('/implementation')?closeoutWorkspaceFixture():integrationResponder(url));
+ e.t.setState('sso',{tab:'implementation',impl_step:'credentials'});
+ const html=await e.t.pages.sso(),visible=customerVisible(html);
+ for(const label of ['安全资产状态','凭据类型','安全保管方式','轮换责任人','证书SHA-256指纹'])assert.match(visible,new RegExp(label));
+ assert.match(html,/data-action="impl-credential-meta"/);assert.equal(typeof e.t.handlers['impl-credential-meta'],'function');
+});
+
+test('diagnostics step keeps school acceptance evidence separate from release',async()=>{
+ const fixture=closeoutWorkspaceFixture();
+ fixture.acceptance.record.items=[{code:'real_login',status:'PENDING',evidence_ref:'',school_contact:'',checked_on:null}];
+ const e=engine(url=>url.includes('/implementation')?fixture:integrationResponder(url));
+ e.t.setState('sso',{tab:'implementation',impl_step:'diagnostics'});
+ const html=await e.t.pages.sso(),visible=customerVisible(html);
+ assert.match(visible,/学校验收台账/);assert.match(visible,/真实单点登录与状态校验/);assert.match(visible,/待学校签认/);
+ assert.match(html,/data-action="impl-acceptance"/);assert.equal(typeof e.t.handlers['impl-acceptance'],'function');
+ assert.doesNotMatch(visible,/自动验收通过/);
+});
+
+test('implementation step survives URL roundtrip',()=>{
+ const hash=scope.navigationHash('sso',{tab:'implementation',impl_step:'credentials'});
+ const restored=scope.restoreNavigation(hash,{sso:'学校统一认证'});
+ assert.equal(restored.filter.tab,'implementation');assert.equal(restored.filter.impl_step,'credentials');
+});

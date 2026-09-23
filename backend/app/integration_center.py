@@ -10,6 +10,7 @@ from sqlalchemy import select
 from .models import Setting, utcnow
 from .integrations import ADAPTERS, ConnectionCheck, configuration_hash, credential_fingerprint, live_connection
 from .integration_diagnostics import diagnostic, safe_code
+from .integration_security import credential_summary, acceptance_summary
 
 MATERIALS = ('正式接口规范', '责任边界与联系人', '字段与组织字典',
              '同步或登录规则', '脱敏样本与异常规则', '凭据安全交接记录')
@@ -133,6 +134,23 @@ def workspace(db, connection, settings):
     live = live_connection(db, connection)
     verified = bool(check and check.passed and check.mode == 'REAL'
         and check.configuration_hash == configuration_hash(item))
+    source_gaps = [name for _, name, status in DATA_CATALOG[connection.code] if status == 'WAITING_SOURCE']
+    credential_row = stored(db, 'credential', connection.id)
+    credential_value = deepcopy(credential_row.value) if credential_row else {}
+    credential_info = credential_summary(credential_value)
+    if credential_value and credential_value.get('credential_reference') != item.config.get('secret_env', ''):
+        credential_info = {**credential_info, 'state': '凭据引用已变化，需重新登记',
+                           'issues': [*credential_info['issues'], '凭据引用与当前草稿不一致']}
+    acceptance_row = stored(db, 'acceptance', connection.id)
+    acceptance_value = deepcopy(acceptance_row.value) if acceptance_row else {}
+    credential_current = bool(credential_row
+        and credential_value.get('credential_reference') == (connection.config or {}).get('secret_env', '')
+        and not credential_info['issues']
+        and credential_info['state'] not in {'证书已过期','凭据轮换已到期'})
+    health_current = bool(health_value.get('passed') and health_value.get('mode') == 'REAL')
+    acceptance = acceptance_summary(acceptance_value, connection.code,
+        connection_version=connection.version, configuration_hash=configuration_hash(connection),
+        source_gaps=source_gaps, runtime_current=live and health_current and credential_current)
     return {'connection_id': connection.id, 'code': connection.code, 'name': connection.name,
         'connection_version': connection.version, 'draft_version': draft.version if draft else 0,
         'has_draft': draft is not None, 'issues': issues,
@@ -141,17 +159,21 @@ def workspace(db, connection, settings):
             'tests': '真实鉴权已验证' if verified else '待真实测试',
             'published': '已发布' if live else '未发布或授权失效',
             'health': '最近检查通过' if health_value.get('passed') and health_value.get('mode') == 'REAL' else '最近检查未通过' if health_value else '未检查',
-            'acceptance': '待学校签认'},
+            'acceptance': acceptance['state']},
         'callbacks': {'login': settings.public_origin + '/api/auth/sso/callback',
                       'test_login': settings.public_origin + '/api/auth/sso/implementation-callback',
                       'logout_return': settings.public_origin + '/', 'readonly': True},
         'credential': {'reference': item.config.get('secret_env', ''),
-                       'configured': bool(credential_fingerprint(item)), 'values_returned': False},
+                       'configured': bool(credential_fingerprint(item)), 'values_returned': False,
+                       'version': credential_row.version if credential_row else 0,
+                       'metadata': serial(credential_value), 'asset_status': credential_info},
         'materials': {'version': materials.version if materials else 0, 'required': list(MATERIALS), 'items': entries},
+        'acceptance': {'version': acceptance_row.version if acceptance_row else 0,
+                       'record': serial(acceptance_value), 'summary': acceptance},
         'health': serial(health_value),
         'check': serial(check) if check else None,
         'data_types': [{'code': code, 'name': name, 'source_status': status} for code,name,status in DATA_CATALOG[connection.code]],
-        'source_gaps': [name for _, name, status in DATA_CATALOG[connection.code] if status == 'WAITING_SOURCE'],
+        'source_gaps': source_gaps,
         'notes': ['配置发布不等于学校验收', '健康检查不撤销发布授权',
                   '改变地址、映射、适配器或凭据后，必须重新验证和发布',
                   '证书私钥及真实令牌只能通过服务器安全渠道管理']}
