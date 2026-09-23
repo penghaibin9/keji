@@ -118,8 +118,15 @@ def connection_catalog(request:Request):
     def load(db,a,s):
         out=[]
         for connection in db.scalars(select(Connection).order_by(Connection.code)):
-            out.append({'connection':{**serial(connection),'state':'CONNECTED' if live_connection(db,connection) else 'NOT_CONNECTED'},'data_types':[{**d,'connection_state':'CONNECTED' if live_connection(db,connection) else 'NOT_CONNECTED'} for d in catalog_for(connection)]})
-            from ..integration_center import MATERIALS,stored
+            from ..integration_center import MATERIALS,stored,source_record_map,source_record_complete
+            _,source_map=source_record_map(db,connection.id)
+            data_types=[]
+            for d in catalog_for(connection):
+                record=source_map.get(d['data_type']) or {}
+                data_types.append({**d,'connection_state':'CONNECTED' if live_connection(db,connection) else 'NOT_CONNECTED',
+                    'source_confirmed':source_record_complete(record),
+                    'source_system':record.get('source_system',''),'source_reference':record.get('reference','')})
+            out.append({'connection':{**serial(connection),'state':'CONNECTED' if live_connection(db,connection) else 'NOT_CONNECTED'},'data_types':data_types})
             material_row=stored(db,'materials',connection.id)
             out[-1]['material_records']={'required':list(MATERIALS),'items':(material_row.value or {}).get('items',[]) if material_row else []}
         return {'items':out}

@@ -99,6 +99,7 @@ def acceptance_summary(value, code, *, connection_version, configuration_hash, s
     failed = [label for key, label in required if by_code.get(key, {}).get('status') == 'FAILED']
     stale = bool(value) and (value.get('connection_version') != connection_version
         or value.get('configuration_hash') != configuration_hash)
+    invalidated = bool(value.get('invalidated_at'))
     signed = bool(value.get('signed_by') and value.get('signed_on') and value.get('signed_reference'))
     evidence_complete = all(
         by_code.get(key, {}).get('status') == 'PASSED'
@@ -107,11 +108,13 @@ def acceptance_summary(value, code, *, connection_version, configuration_hash, s
         and by_code.get(key, {}).get('checked_on')
         for key, _ in required
     )
-    current_signed = signed and evidence_complete and not stale and not source_gaps and runtime_current
+    current_signed = signed and evidence_complete and not stale and not invalidated and not source_gaps and runtime_current
     if current_signed:
         state = '学校已签认'
     elif stale:
         state = '配置已变化，验收需重新确认'
+    elif invalidated:
+        state = '实施资料已变化，验收需重新确认'
     elif failed:
         state = '验收存在失败项'
     elif signed and (not evidence_complete or source_gaps):
@@ -121,6 +124,6 @@ def acceptance_summary(value, code, *, connection_version, configuration_hash, s
     else:
         state = '待学校签认'
     return {'state': state, 'passed': passed, 'total': len(required), 'signed': current_signed,
-            'stale': stale, 'runtime_current': bool(runtime_current), 'failed': failed,
+            'stale': stale, 'invalidated': invalidated, 'runtime_current': bool(runtime_current), 'failed': failed,
             'source_gaps': list(source_gaps),
             'requirements': [{'code': key, 'label': label} for key, label in required]}

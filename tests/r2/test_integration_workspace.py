@@ -155,7 +155,7 @@ def test_materials_and_handover_do_not_imply_acceptance(client2, app2):
     data = handover.read('implementation.json').decode()
     assert '_credential_sha256' not in data and 'token_hash' not in data
     workbook = load_workbook(io.BytesIO(handover.read('接口实施交接工作簿.xlsx')), read_only=True)
-    assert workbook.sheetnames == ['状态总览','资料清单','字段映射','凭据证书元数据','学校验收台账']
+    assert workbook.sheetnames == ['状态总览','资料清单','字段映射','凭据证书元数据','统一认证角色确认','权威来源台账','学校验收台账']
     payload = json.loads(data)
     assert payload['format'] == 'YUEKE_INTEGRATION_HANDOVER_R2'
     assert payload['school_acceptance']['summary']['state'] == '待学校签认'

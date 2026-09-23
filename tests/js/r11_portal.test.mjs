@@ -480,3 +480,22 @@ test('implementation step survives URL roundtrip',()=>{
  const restored=scope.restoreNavigation(hash,{sso:'学校统一认证'});
  assert.equal(restored.filter.tab,'implementation');assert.equal(restored.filter.impl_step,'credentials');
 });
+
+test('one-stop integration center exposes school intake download and draft-only import entries',async()=>{
+ const e=engine(integrationResponder);e.t.setState('sync');const html=await e.t.pages.sync();
+ assert.match(html,/下载学校资料采集表/);assert.match(html,/导入学校填写表/);
+ assert.match(html,/data-action="integration-intake-download"/);
+ assert.match(html,/data-action="integration-intake-import"/);
+ assert.equal(typeof e.t.handlers['integration-intake-download'],'function');
+ assert.equal(typeof e.t.handlers['integration-intake-import'],'function');
+ assert.equal(typeof e.t.handlers['integration-intake-confirm'],'function');
+});
+
+test('confirmed province source becomes visible without claiming interface readiness',()=>{
+ const e=engine();
+ const confirmed={data_type:'plan',name:'培训计划',local_status:'WAITING_SOURCE',mapping_count:0,
+  source_confirmed:true,source_system:'学校教务系统'};
+ const html=e.t.sourceAvailability('province',confirmed);
+ assert.match(html,/权威来源已确认/);assert.match(html,/学校教务系统/);
+ assert.doesNotMatch(html,/待确认权威来源/);
+});

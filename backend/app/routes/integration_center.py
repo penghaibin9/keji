@@ -7,7 +7,8 @@ from sqlalchemy import select
 from ..models import Connection, Setting, utcnow
 from ..schemas import ConnectionUpdate, VersionedReason, Reason, Input
 from ..core import read_operation, command, check_version, serial, audit
-from ..integration_center import candidate, stored, save_stored, workspace, configuration_issues, run_probe, MATERIALS
+from ..integration_center import (candidate, stored, save_stored, workspace, configuration_issues,
+    run_probe, MATERIALS, confirmed_source_codes, invalidate_acceptance)
 from ..integration_security import credential_summary, acceptance_requirements, acceptance_summary
 from ..integrations import (ADAPTERS, DATA_CATALOG, ConnectionCheck, configuration_hash,
     credential_fingerprint, normalize_mappings, activate_connection, pause_schedules, live_connection)
@@ -149,7 +150,7 @@ def test_draft(ident: str, data: DraftAction, request: Request):
     def apply(db, a, s):
         a.require_admin()
         obj, item, row = draft_for_action(db, ident, data)
-        issues = configuration_issues(item)
+        issues = configuration_issues(item, confirmed_source_codes(db, obj.id))
         if issues:
             raise HTTPException(422, {'message': '请先补齐草稿配置', 'issues': issues})
         code, receipt = run_probe(item, production=request.app.state.settings.env == 'production')
@@ -187,7 +188,7 @@ def publish_draft(ident: str, data: DraftAction, request: Request):
         obj, item, row = draft_for_action(db, ident, data)
         if not data.confirm_schedule_pause:
             raise HTTPException(422, '请明确确认发布后需重新批准同步计划')
-        issues = configuration_issues(item)
+        issues = configuration_issues(item, confirmed_source_codes(db, obj.id))
         if issues:
             raise HTTPException(422, {'message': '配置不完整', 'issues': issues})
         proof_id = row.value.get('check_id')
@@ -238,6 +239,7 @@ def update_materials(ident: str, data: MaterialsUpdate, request: Request):
             raise HTTPException(422, '资料项重复或不在清单中')
         before = serial(old) if old else {}
         row = save_stored(db, 'materials', ident, {'items': [x.model_dump(mode='json') for x in data.items]})
+        invalidate_acceptance(db, ident, a.id, '接口实施资料发生变化')
         audit(db, a, 'connections', ident, '登记接口实施资料', before, serial(row), data.reason)
         return {'version': row.version, 'school_accepted': False}
     return command(request, data.model_dump(), 'sync.manage', apply)
@@ -267,6 +269,7 @@ def update_credential_metadata(ident: str, data: CredentialMetadataUpdate, reque
             'expected_connection_version','expected_draft_version'})
         value.update(credential_reference=reference, recorded_at=utcnow().isoformat())
         row = save_stored(db, 'credential', ident, value)
+        invalidate_acceptance(db, ident, a.id, '凭据或证书安全元数据发生变化')
         summary = credential_summary(value)
         audit(db, a, 'connections', ident, '登记凭据/证书安全元数据', before, serial(row), data.reason)
         return {'version': row.version, 'asset_status': summary, 'secret_values_stored': False}

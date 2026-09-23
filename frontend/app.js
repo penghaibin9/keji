@@ -102,9 +102,10 @@ const orgName=id=>orgs.find(o=>o.id===id)?.name||'—';
 const query=o=>{const q=new URLSearchParams;for(const[k,v]of Object.entries(o))if(v!==''&&v!==null&&v!==undefined)q.set(k,String(v));return q.toString()};
 const requestKey=()=>typeof crypto.randomUUID==='function'?crypto.randomUUID():Array.from(crypto.getRandomValues(new Uint8Array(24)),x=>x.toString(16).padStart(2,'0')).join('');
 const reasonFields=()=>field('reason','办理意见 / 调整原因','textarea','',{required:true,full:true,hint:'所有关键操作保存原值、新值、经办人、时间与原因。'})+field('basis','依据说明或材料编号','text','',{full:true,required:false});
-async function api(path,{method='GET',body,raw=false,key}={}){
- const headers={};if(method!=='GET'){headers['X-CSRF-Token']=csrf;if(method!=='DELETE')headers['Idempotency-Key']=key||requestKey()}
- if(body!==undefined&&!(body instanceof FormData)){headers['Content-Type']='application/json';body=JSON.stringify(body)}
+async function api(path,{method='GET',body,raw=false,key,headers:providedHeaders={}}={}){
+ const headers={...providedHeaders};if(method!=='GET'){headers['X-CSRF-Token']=csrf;if(method!=='DELETE')headers['Idempotency-Key']=key||requestKey()}
+ const isBlob=typeof Blob!=='undefined'&&body instanceof Blob;
+ if(body!==undefined&&!(body instanceof FormData)&&!isBlob){headers['Content-Type']='application/json';body=JSON.stringify(body)}
  let response;try{response=await fetch('/api'+path,{method,body,headers,credentials:'same-origin',cache:'no-store'})}catch{throw Error('网络连接中断。请检查学校网络后刷新；不要重复确认未知结果。')}
  if(!response.ok){let data;try{data=await response.json()}catch{data={detail:'服务暂不可用'}}
   if(response.status===401&&path!=='/auth/login'){me=null;loginView('登录已失效，请重新登录');closeModal()}
@@ -681,11 +682,11 @@ function dataRuleReady(connection,type){
  const adapter=connection.config?.adapter||{};if(connection.code==='sso'){const fields=adapter.identity_fields||{},identifier=fields.stable_id||fields.account||fields.staff_no;return !!(adapter.protocol&&fields.name&&identifier&&(fields.active||typeof adapter.active_default==='boolean'))}
  const rule=adapter.data_types?.[type.data_type]||{},request=rule.request||{},response=rule.response||{};if(!request.path||!type.mapping_count)return false;
  if(connection.code==='middle'){const paging=rule.pagination||{},hasLimit=findTemplateBinding(request,'${limit}').name,hasPosition=paging.mode==='page'?(findTemplateBinding(request,'${page}').name||findTemplateBinding(request,'${offset}').name):findTemplateBinding(request,'${cursor}').name;return !!(response.records_path&&hasLimit&&hasPosition)}
- return !!((response.accepted_path||response.success_path)&&findTemplateBinding(request,'${payload}').name&&type.local_status!=='WAITING_SOURCE');
+ return !!((response.accepted_path||response.success_path)&&findTemplateBinding(request,'${payload}').name&&(type.local_status!=='WAITING_SOURCE'||type.source_confirmed===true));
 }
 function materialStates(entry){const records=entry.material_records,items=records?.items||[];return (records?.required||integrationMaterials[entry.connection.code].map(x=>x[0])).map(name=>items.some(x=>x.name===name&&x.owner&&x.reference&&x.confirmed_on))}
 function integrationReadiness(entry){const states=materialStates(entry),ruleCount=entry.data_types.filter(x=>dataRuleReady(entry.connection,x)).length,mapCount=entry.data_types.filter(x=>x.mapping_count>0).length;return {states,done:states.filter(Boolean).length,total:states.length,ruleCount,mapCount,connected:entry.connection.state==='CONNECTED'}}
-function activationIssues(entry){const c=entry.connection,a=c.config?.adapter||{},issues=[];if(!c.config?.endpoint)issues.push('正式接口地址');if(!c.config?.owner)issues.push('对方责任单位');if(c.config?.secret_env!==credentialReferences[c.code])issues.push('服务器凭据固定引用');if(c.code==='sso'){if(!a.probe?.kind)issues.push('真实身份验证方式');if(!entry.data_types.every(x=>dataRuleReady(c,x)))issues.push('身份字段、启停和组织规则')}else{const required=entry.data_types.filter(x=>x.local_status!=='WAITING_SOURCE'),missing=required.filter(x=>!dataRuleReady(c,x));if(!a.probe?.path||!a.probe?.success_path||(a.probe?.auth?.mode||'none')==='none')issues.push('已认证的连接检查规则');if(missing.length)issues.push(missing.map(x=>x.name).join('、')+'接口规则')}return issues}
+function activationIssues(entry){const c=entry.connection,a=c.config?.adapter||{},issues=[];if(!c.config?.endpoint)issues.push('正式接口地址');if(!c.config?.owner)issues.push('对方责任单位');if(c.config?.secret_env!==credentialReferences[c.code])issues.push('服务器凭据固定引用');if(c.code==='sso'){if(!a.probe?.kind)issues.push('真实身份验证方式');if(!entry.data_types.every(x=>dataRuleReady(c,x)))issues.push('身份字段、启停和组织规则')}else{const required=entry.data_types.filter(x=>x.local_status!=='WAITING_SOURCE'||x.source_confirmed===true),missing=required.filter(x=>!dataRuleReady(c,x));if(!a.probe?.path||!a.probe?.success_path||(a.probe?.auth?.mode||'none')==='none')issues.push('已认证的连接检查规则');if(missing.length)issues.push(missing.map(x=>x.name).join('、')+'接口规则')}return issues}
 function integrationMaterialPanel(entry){const readiness=integrationReadiness(entry),materials=entry.material_records?entry.material_records.required.map(name=>[name,'以双方正式资料和登记记录为准','实施流程 → 接入资料']):integrationMaterials[entry.connection.code]||[];return `<section class="card integration-materials"><div class="card-head"><div><h2>学校资料清单</h2><p>拿到资料后按“填写位置”逐项登记；登记完成不等于已经接通。</p></div><span class="progress-count">已登记 ${readiness.done} / ${readiness.total}</span></div><div class="material-list">${materials.map(([name,detail,location],index)=>`<div class="material-row" data-material-state="${readiness.states[index]?'done':'pending'}"><span class="material-mark">${readiness.states[index]?icon('check'):icon('time')}</span><div><strong>${esc(name)}</strong><p>${esc(detail)}</p></div><span class="material-location">填到：${esc(location)}</span>${checkedText(readiness.states[index],'已登记','待学校提供')}</div>`).join('')}</div></section>`}
 function pageAllowed(dest){
  const permission={home:'portal.read',todos:'portal.read',cockpit:'portal.read',records:'records.read',qualifications:'qualification.read',points:'points.read',assessment:'assessment.read',disputes:'dispute.write',organization:'organization.read',rules:'rules.manage',imports:'import',exports:'export',permissions:'users.manage',settings:'settings.manage',audit:'audit.read',sync:'sync.manage',sso:'sync.manage',hub:'sync.manage',province:'sync.manage',guide:'sync.manage',operations:'operations.read',notices:'notice.read',help:'portal.read'}[dest];
@@ -702,6 +703,7 @@ function integrationFilterForm(dataTypes,states){
  return `<form id="integration-filters" class="filterbar"><label class="filter-inline">数据类型<select name="data_type"><option value="">全部类型</option>${dataTypes.map(x=>`<option value="${esc(x.data_type)}" ${filter.data_type===x.data_type?'selected':''}>${esc(x.name)}</option>`).join('')}</select></label>${states?.length?`<label class="filter-inline">状态<select name="state"><option value="">全部状态</option>${states.map(x=>`<option value="${esc(x)}" ${filter.state===x?'selected':''}>${esc(labels[x]||x)}</option>`).join('')}</select></label>`:''}<button type="submit" class="btn primary">查询</button>${act('清除筛选','integration-clear')}</form>`;
 }
 function sourceAvailability(code,type){
+ if(type.local_status==='WAITING_SOURCE'&&type.source_confirmed)return `<span class="badge green-b">权威来源已确认${type.source_system?' · '+esc(type.source_system):''}</span>`;
  if(type.local_status==='WAITING_SOURCE')return '<span class="badge red-b">待确认权威来源</span>';
  if(type.local_status==='WAITING_PROTOCOL')return '<span class="badge blue-b">待学校协议适配</span>';
  if(code==='middle'&&['training_income','course_participants'].includes(type.data_type))return '<span class="badge blue-b">本地事实已有 · 自动入站待适配</span>';
@@ -759,7 +761,7 @@ async function renderIntegrationCenter(){
  const catalog=await api('/connections/catalog');
  const summary=me.role.kind==='school'?await api('/connections/summary'):{items:[]};
  view={catalog:catalog.items};
- if(me.user.is_admin){const workspaces=await Promise.all(catalog.items.map(x=>api('/connections/'+x.connection.id+'/implementation')));return pageHead('统一实施、分别验证、明确发布；学校验收不自动通过。',act('下载对接沟通清单','coordination-checklist','','','download'))+renderCenterStatus(workspaces,implementationContext())}
+ if(me.user.is_admin){const workspaces=await Promise.all(catalog.items.map(x=>api('/connections/'+x.connection.id+'/implementation')));return pageHead('学校资料先收齐并预检，再进入真实联调；导入只写草稿，不改生效连接。',act('下载学校资料采集表','integration-intake-download','','primary','download')+act('导入学校填写表','integration-intake-import','','','upload')+act('旧版沟通清单','coordination-checklist','','','download'))+renderCenterStatus(workspaces,implementationContext())}
  const order={sso:0,middle:1,province:2};
  const entries=catalog.items.map(x=>({...x,latest_task:summary.items.find(y=>y.code===x.connection.code)?.latest_task})).sort((a,b)=>(order[a.connection.code]??9)-(order[b.connection.code]??9));
  const total=entries.reduce((sum,item)=>sum+integrationReadiness(item).done,0),maximum=entries.reduce((sum,item)=>sum+integrationReadiness(item).total,0);
@@ -782,6 +784,25 @@ async function mappingEditor(id){
  mappingRowFactory=()=>row();
 }
 let mappingRowFactory=null;
+async function downloadIntegrationIntake(){return download('/connections/intake-template.xlsx','跃科_三大接口学校资料采集表.xlsx')}
+let pendingIntegrationIntakeFile=null;
+async function importIntegrationIntake(){
+ const input=document.createElement('input');input.type='file';input.accept='.xlsx,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet';
+ input.onchange=async()=>{const file=input.files?.[0];if(!file)return;if(file.size>5*1024*1024){toast('学校资料Excel不能超过 5 MB',true);return}
+  const uploadHeaders={'Content-Type':'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet','X-Intake-Filename':encodeURIComponent(file.name)};
+  const preview=await api('/connections/intake-preview',{method:'POST',body:file,headers:uploadHeaders});pendingIntegrationIntakeFile=file;
+  const rows=preview.connectors.map(x=>[esc(x.name),x.configuration_issues.length?`<span class="red">${esc(x.configuration_issues.join('；'))}</span>`:'配置结构可进入联调准备',`${number(x.materials_complete)} / ${number(x.materials_total)}`,x.source_gaps.length?esc(x.source_gaps.join('、')):'已登记范围无权威来源缺口',esc(x.credential_state)]);
+  modal('学校接口资料预检',note('预检没有修改生效接口、草稿或学校验收状态。请先核对下面结果，再决定是否导入实施草稿。')+table(['对接项目','配置预检','资料登记','权威来源缺口','凭据/证书'],rows)+note('确认导入后只更新：配置草稿、资料登记、凭据证书元数据和权威来源台账；不会自动联网、发布或验收。'),act('取消','close')+act('确认导入草稿','integration-intake-confirm','','primary','upload'),true);
+ };input.click();
+}
+async function confirmIntegrationIntake(){
+ const file=pendingIntegrationIntakeFile;if(!file)throw Error('学校资料文件已失效，请重新选择');
+ formModal('确认导入学校接口资料',note('这一步会写入三大接口的实施草稿，但不会改变当前生效连接。旧Excel若已过期，服务端会拒绝覆盖新资料。')+reasonFields(),async v=>{
+  const uploadHeaders={'Content-Type':'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet','X-Intake-Filename':encodeURIComponent(file.name),'X-Intake-Reason':encodeURIComponent(v.reason),'X-Intake-Basis':encodeURIComponent(v.basis||'')};
+  const result=await api('/connections/intake-apply',{method:'POST',body:file,headers:uploadHeaders});pendingIntegrationIntakeFile=null;closeModal();await render();
+  toast(result.applied?'学校资料已进入实施草稿；下一步按七步流程做样本预览和真实测试':'学校资料未导入');
+ },{wide:true,submit:'写入实施草稿'});
+}
 async function downloadCoordinationChecklist(){return download('/connections/coordination.xlsx','明天去学校_三大接口资料收集与剩余工作表.xlsx')}
 async function downloadIntegrationProfile(){return download('/connections/profile-template.json','跃科R11_三大接口参数模板.json')}
 async function importIntegrationProfile(){
@@ -872,6 +893,7 @@ const handlers={
  'integration-clear':()=>{filter=pageFilters(page,{tab:filter.tab||'overview'});tablePage=1;syncLocation(true);return render()},
  'mapping-editor':mappingEditor,'map-row-remove':(id,el)=>el.closest('.mapping-grid')?.remove(),
  'map-row-add':()=>{if(mappingRowFactory&&$('#mapping-rows'))$('#mapping-rows').insertAdjacentHTML('beforeend',mappingRowFactory())},
+ 'integration-intake-download':downloadIntegrationIntake,'integration-intake-import':importIntegrationIntake,'integration-intake-confirm':confirmIntegrationIntake,
  'coordination-checklist':downloadCoordinationChecklist,'integration-profile-download':downloadIntegrationProfile,'integration-profile-import':importIntegrationProfile,
  'inbound-page':code=>{const[id,p]=code.split('|');return showInbound(id,Number(p))},
  nav:id=>nav(id),refresh:()=>render(),close:()=>closeModal(),prev:()=>{tablePage=Math.max(1,tablePage-1);return render()},next:()=>{tablePage++;return render()},'reset-filters':()=>{filter={};periodId='';tablePage=1;participationPage=1;syncLocation(true);return render()},

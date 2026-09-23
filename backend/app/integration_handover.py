@@ -72,6 +72,23 @@ def build_handover_workbook(data):
         credential.append([label, safe.get(key,'')])
     credential.append(['真实密码/令牌/私钥', '不进入本工作簿；按学校安全渠道交接'])
 
+    roles = _sheet(workbook, '统一认证角色确认', ['本地角色层级','学校外部角色/身份标识','本地授权策略','数据范围','学校确认人','确认日期'])
+    for item in (workspace.get('identity_policy') or {}).get('record', {}).get('items', []):
+        if not isinstance(item, dict):
+            continue
+        roles.append([item.get('kind',''), item.get('external_roles',''),
+                      item.get('authorization_strategy',''), item.get('scope',''),
+                      item.get('confirmed_by',''), item.get('confirmed_on','')])
+
+    sources = _sheet(workbook, '权威来源台账',
+        ['数据类型','权威来源系统','数据提供方式','同步/调用频率','历史数据范围','责任人','责任边界','确认依据/文档编号','确认日期'])
+    for item in (workspace.get('source_registry') or {}).get('items', []):
+        if not isinstance(item, dict):
+            continue
+        sources.append([item.get('data_type',''), item.get('source_system',''), item.get('data_method',''),
+                        item.get('frequency',''), item.get('history_range',''), item.get('owner',''),
+                        item.get('responsibility',''), item.get('reference',''), item.get('confirmed_on','')])
+
     acceptance = _sheet(workbook, '学校验收台账', ['验收项目','结果','证据编号','学校联系人','核对日期'])
     acceptance_data = workspace.get('acceptance') or {}
     record = acceptance_data.get('record') or {}

@@ -12,6 +12,7 @@ sys.path[:0] = [str(ROOT/'backend'), str(ROOT/'tests/r2')]
 from app.main import create_app
 from app.config import Settings
 from support import populate, FIXTURE_PASSWORD
+from test_integration_intake import prepare_school_workbook
 import uvicorn
 from playwright.sync_api import sync_playwright
 
@@ -53,6 +54,24 @@ def main():
                 assert page.locator('#content').inner_text().count('待学校签认') == 3
                 checks.append('实际登录与三个接口六项独立状态')
                 page.screenshot(path=str(out/'01-center.png'), full_page=True)
+                with page.expect_download() as intake_download:
+                    page.locator('[data-action=integration-intake-download]').click()
+                intake_path = Path(temporary)/'school-intake.xlsx'
+                intake_download.value.save_as(str(intake_path))
+                filled_path = Path(temporary)/'school-intake-filled.xlsx'
+                filled_path.write_bytes(prepare_school_workbook(intake_path.read_bytes()))
+                with page.expect_file_chooser() as chooser:
+                    page.locator('[data-action=integration-intake-import]').click()
+                chooser.value.set_files(str(filled_path))
+                page.get_by_text('学校接口资料预检', exact=True).wait_for()
+                assert '不会自动联网、发布或验收' in page.locator('#modal-root').inner_text()
+                page.locator('#modal-root [data-action=integration-intake-confirm]').click()
+                form = page.locator('#edit-form')
+                form.locator('[name=reason]').fill('浏览器验证学校资料只写实施草稿')
+                page.locator('button[form=edit-form][type=submit]').click()
+                page.locator('#modal-root').wait_for(state='hidden')
+                page.get_by_role('heading', name='统一认证与接口适配中心', exact=True).first.wait_for()
+                checks.append('学校资料采集表下载、预检、确认导入只写草稿')
                 page.locator('#content [data-action=nav][data-id=sso]').click()
                 page.locator('[data-action=impl-step][data-id=credentials]').click()
                 page.get_by_text('正式登录回调', exact=True).wait_for()

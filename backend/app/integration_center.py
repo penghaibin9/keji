@@ -41,7 +41,44 @@ def candidate(db, connection):
     return item, row
 
 
-def configuration_issues(item):
+def source_records(db, connection_id):
+    row = stored(db, 'sources', connection_id)
+    items = deepcopy((row.value or {}).get('items', [])) if row else []
+    return row, items
+
+
+def source_record_complete(item):
+    return bool(isinstance(item, dict) and item.get('data_type') and item.get('source_system')
+                and item.get('data_method') and item.get('frequency') and item.get('history_range')
+                and item.get('owner') and item.get('responsibility')
+                and item.get('reference') and item.get('confirmed_on'))
+
+
+def source_record_map(db, connection_id):
+    row, items = source_records(db, connection_id)
+    return row, {item.get('data_type'): item for item in items
+                 if isinstance(item, dict) and item.get('data_type')}
+
+
+def confirmed_source_codes(db, connection_id):
+    _, items = source_records(db, connection_id)
+    return {item.get('data_type') for item in items if source_record_complete(item)}
+
+
+def invalidate_acceptance(db, connection_id, actor_id, reason):
+    row = stored(db, 'acceptance', connection_id)
+    if not row or not (row.value or {}).get('signed_by'):
+        return None
+    value = deepcopy(row.value or {})
+    value.update(invalidated_at=utcnow().isoformat(), invalidated_by=actor_id,
+                 invalidation_reason=str(reason)[:400])
+    row.value = value
+    row.version += 1
+    db.flush()
+    return row
+
+
+def configuration_issues(item, confirmed_sources=()):
     config, issues = item.config, []
     adapter = config.get('adapter') or {}
     for key, label in [('endpoint', '正式 HTTPS 总地址'), ('owner', '责任单位'), ('secret_env', '服务器凭据引用')]:
@@ -62,8 +99,9 @@ def configuration_issues(item):
             issues.append('账号启停判定规则')
     else:
         from .integrations import DATA_CATALOG
+        confirmed_sources = set(confirmed_sources or ())
         for code, name, status in DATA_CATALOG[item.code]:
-            if status == 'WAITING_SOURCE':
+            if status == 'WAITING_SOURCE' and code not in confirmed_sources:
                 continue
             spec = (adapter.get('data_types') or {}).get(code) or {}
             response = spec.get('response') or {}
@@ -119,7 +157,9 @@ def workspace(db, connection, settings):
     from .core import serial
     from .integrations import DATA_CATALOG, current_connection_check
     item, draft = candidate(db, connection)
-    issues = configuration_issues(item)
+    source_row, sources = source_record_map(db, connection.id)
+    confirmed_sources = {code for code, record in sources.items() if source_record_complete(record)}
+    issues = configuration_issues(item, confirmed_sources)
     materials = stored(db, 'materials', connection.id)
     entries = (materials.value or {}).get('items', []) if materials else []
     complete = {x.get('name') for x in entries if x.get('reference') and x.get('owner') and x.get('confirmed_on')}
@@ -134,7 +174,8 @@ def workspace(db, connection, settings):
     live = live_connection(db, connection)
     verified = bool(check and check.passed and check.mode == 'REAL'
         and check.configuration_hash == configuration_hash(item))
-    source_gaps = [name for _, name, status in DATA_CATALOG[connection.code] if status == 'WAITING_SOURCE']
+    source_gaps = [name for code, name, status in DATA_CATALOG[connection.code]
+                   if status == 'WAITING_SOURCE' and code not in confirmed_sources]
     credential_row = stored(db, 'credential', connection.id)
     credential_value = deepcopy(credential_row.value) if credential_row else {}
     credential_info = credential_summary(credential_value)
@@ -143,6 +184,10 @@ def workspace(db, connection, settings):
                            'issues': [*credential_info['issues'], '凭据引用与当前草稿不一致']}
     acceptance_row = stored(db, 'acceptance', connection.id)
     acceptance_value = deepcopy(acceptance_row.value) if acceptance_row else {}
+    intake_row = stored(db, 'intake', connection.id)
+    intake_value = deepcopy(intake_row.value) if intake_row else {}
+    identity_policy_row = stored(db, 'identity_policy', connection.id)
+    identity_policy_value = deepcopy(identity_policy_row.value) if identity_policy_row else {}
     credential_current = bool(credential_row
         and credential_value.get('credential_reference') == (connection.config or {}).get('secret_env', '')
         and not credential_info['issues']
@@ -172,7 +217,16 @@ def workspace(db, connection, settings):
                        'record': serial(acceptance_value), 'summary': acceptance},
         'health': serial(health_value),
         'check': serial(check) if check else None,
-        'data_types': [{'code': code, 'name': name, 'source_status': status} for code,name,status in DATA_CATALOG[connection.code]],
+        'data_types': [{'code': code, 'name': name, 'source_status': status,
+                        'source_confirmed': code in confirmed_sources,
+                        'source_system': (sources.get(code) or {}).get('source_system', ''),
+                        'source_reference': (sources.get(code) or {}).get('reference', '')}
+                       for code,name,status in DATA_CATALOG[connection.code]],
+        'source_registry': {'version': source_row.version if source_row else 0,
+                            'items': serial(list(sources.values()))},
+        'intake': {'version': intake_row.version if intake_row else 0, 'record': serial(intake_value)},
+        'identity_policy': {'version': identity_policy_row.version if identity_policy_row else 0,
+                            'record': serial(identity_policy_value)},
         'source_gaps': source_gaps,
         'notes': ['配置发布不等于学校验收', '健康检查不撤销发布授权',
                   '改变地址、映射、适配器或凭据后，必须重新验证和发布',

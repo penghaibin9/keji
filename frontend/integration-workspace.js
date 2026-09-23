@@ -18,10 +18,14 @@ export async function renderImplementationWorkspace(id,step,c){
  let body='';
  if(step==='materials'){
   const rows=w.materials.required.map(name=>{const x=w.materials.items.find(x=>x.name===name)||{};return [c.esc(name),c.esc(x.owner||'待登记'),c.esc(x.reference||'待提供'),c.esc(x.confirmed_on||'待确认')];});
-  body=c.note('按学校真实资料登记责任人、文档编号和确认日期。连接成功不会自动把资料标成齐全。')+c.table(['资料项目','责任人','文档 / 证据编号','确认日期'],rows)+buttons(c.act('登记学校资料','impl-materials',id,'primary'));
+  const imported=w.intake?.record||{};
+  body=c.note('优先下载统一学校资料采集表，让信息处/实施人员按表填写；导入先预检，只写草稿和资料台账，不会自动发布。')+(imported.imported_at?c.note('最近导入：'+c.ts(imported.imported_at)+' · 文件校验 '+c.esc(String(imported.file_sha256||'').slice(0,12))+'…'):'')+c.table(['资料项目','责任人','文档 / 证据编号','确认日期'],rows)+buttons(c.act('下载学校资料采集表','integration-intake-download','','primary'),c.act('导入学校填写表','integration-intake-import',''),c.act('单独登记当前接口资料','impl-materials',id));
  }else if(step==='protocol'){
   body=c.note('当前支持 CAS、OIDC、OAuth2 和 JSON-ticket。请按学校正式规范选择协议，不把未实现的协议标成已支持。')+buttons(edit)+`<h3 class="mt20">草稿配置校验</h3>${w.issues.length?c.note(w.issues.join('；'),true):c.note('配置结构检查通过，仍需真实连接和身份验证。')}`;
-  if(w.code!=='sso')body+=c.table(['业务类型','权威来源','采集或报送规则'],(w.data_types||[]).map(x=>[c.esc(x.name),x.source_status==='WAITING_SOURCE'?'待确认权威来源':'本地处理能力已有',c.act('编辑这类规则','data-type-adapter',id+'|'+x.code)]));
+  if(w.code!=='sso'){
+   const sourceByType=new Map((w.source_registry?.items||[]).map(x=>[x.data_type,x]));
+   body+=c.table(['业务类型','权威来源','提供方式 / 频率','历史范围 / 责任边界','采集或报送规则'],(w.data_types||[]).map(x=>{const s=sourceByType.get(x.code)||{};return [c.esc(x.name),x.source_confirmed?'已确认：'+c.esc(x.source_system||'权威来源'):x.source_status==='WAITING_SOURCE'?'待确认权威来源':'本地处理能力已有',c.esc([s.data_method,s.frequency].filter(Boolean).join(' · ')||'待确认'),c.esc([s.history_range,s.responsibility].filter(Boolean).join(' · ')||'待确认'),c.act('编辑这类规则','data-type-adapter',id+'|'+x.code)];}));
+  }
  }else if(step==='credentials'){
   const callbackRows=[['login','正式登录回调'],['test_login','实施试登录回调'],['logout_return','退出后返回地址']].map(([key,label])=>[label,`<code>${c.esc(w.callbacks[key])}</code>`,c.act('复制','impl-copy',id+'|'+key)]);
   const meta=w.credential.metadata||{},asset=w.credential.asset_status||{};
@@ -30,6 +34,11 @@ export async function renderImplementationWorkspace(id,step,c){
   body=c.note('下列地址由服务器网站来源生成，只读。请将正式回调和实施试登录回调分别交给学校登记，网页填写探测地址不会改变正式回调。')+c.table(['用途','学校需登记的地址','操作'],callbackRows)+`<p class="mt16">凭据引用：<code>${c.esc(w.credential.reference||'待配置')}</code> · ${w.credential.configured?'服务器已配置凭据':'服务器尚未配置凭据'}</p>`+c.table(['安全资产信息','当前登记'],assetRows)+buttons(c.act('登记证书/凭据元数据','impl-credential-meta',id,'primary'))+(asset.issues?.length?c.note(asset.issues.join('；'),true):'')+c.note('这里只登记类型、责任人、证书指纹和有效期等元数据。真实密钥、私钥和学校私有 CA 仍由服务器管理员通过安全渠道管理，页面不接收或回显。');
  }else if(step==='identity'){
   body=c.note('编辑的是草稿。统一认证样本使用真实登录的同一身份解析器，并预览本地账号、组织和权限范围；不会创建会话或自动授权。')+buttons(c.act(w.code==='sso'?'编辑身份映射':'编辑字段映射',w.code==='sso'?'connection':'mapping-editor',id,'primary'),c.act('预览脱敏样本','mapping-trial',id));
+  if(w.code==='sso'){
+   const labels={teacher:'普通教师',dept:'教研室',college:'二级学院',school:'学校管理部门'};
+   const policies=w.identity_policy?.record?.items||[];
+   body+=`<h3 class="mt20">外部身份与本地权限确认</h3>`+c.note('学校返回的角色/身份标识只用于核对“是谁”；本系统角色、组织和数据范围仍由本地权限模型决定，不会因外部管理员标识自动提权。')+c.table(['本地层级','学校外部角色/身份标识','本地数据范围','学校确认人','确认日期'],policies.map(x=>[c.esc(labels[x.kind]||x.kind),c.esc(x.external_roles||'待确认'),c.esc(x.scope||'—'),c.esc(x.confirmed_by||'待确认'),c.esc(x.confirmed_on||'待确认')]));
+  }
  }else if(step==='tests'){
   const check=w.check,preview=check?.receipt?.preview;
   body=c.note('配置检查、真实鉴权、浏览器身份核对是不同测试。测试替身和本地样本不能发布正式连接；退出登录仍需学校真实环境验证。')+buttons(c.act('测试草稿连通与鉴权','impl-probe',id,'primary'),...(w.code==='sso'?[c.act('浏览器试登录（不切换本地账号）','impl-login-test',id)]:[]),c.act('预览脱敏样本','mapping-trial',id));

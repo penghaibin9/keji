@@ -21,7 +21,7 @@ from .readiness import collect_readiness
 from .maintenance_guard import configured_maintenance
 from .access_logging import record_access_best_effort
 from . import __version__
-from .routes import auth, sso, admin, business, calculations, files, tasks, integrations, reference, delivery, integration_center, sso_trial
+from .routes import auth, sso, admin, business, calculations, files, tasks, integrations, reference, delivery, integration_center, integration_intake, sso_trial
 
 log = logging.getLogger("nondegree")
 
@@ -131,7 +131,7 @@ def create_app(settings: Settings | None = None):
     def health():
         report = collect_readiness(engine,cfg,__version__)
         return JSONResponse(report,200 if report['status']=='ok' else 503)
-    for router in (auth.router,sso.router,admin.router,business.router,calculations.router,files.router,tasks.router,integrations.router,reference.router,delivery.router,integration_center.router,sso_trial.router):app.include_router(router)
+    for router in (auth.router,sso.router,admin.router,business.router,calculations.router,files.router,tasks.router,integrations.router,reference.router,delivery.router,integration_center.router,integration_intake.router,sso_trial.router):app.include_router(router)
     # A local review server only. Production frontend is served by the separate nginx service.
     if cfg.env=="test":
         frontend=Path(__file__).resolve().parents[2]/"frontend"
