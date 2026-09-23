@@ -15,6 +15,9 @@ PUBLIC={
     ('GET','/api/auth/sso/status'),
     ('GET','/api/auth/sso/start'),
     ('GET','/api/auth/sso/callback'),
+    # A one-time, admin-owned trial state is revalidated before processing identity.
+    # This callback creates no business session and cannot be used without the trial cookie.
+    ('GET','/api/auth/sso/implementation-callback'),
 }
 
 

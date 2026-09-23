@@ -18,6 +18,9 @@ def latest_task_status(db, connection, data_type=None):
         success=sum(x.state=='DONE' for x in rows);failed=sum(x.state in {'FAILED','BLOCKED'} for x in rows)
         last_call=db.scalar(select(func.max(SyncCallLog.created_at)).where(SyncCallLog.item_id.in_([x.id for x in rows])))
         if last_call:activity=max(activity,last_call)
+    elif (task.result or {}).get('paged'):
+        from .paged_inbound import run_counts
+        success,failed,pending,stage=run_counts(db,task,connection)
     else:
         result=task.result or {};batch=db.get(InboundBatch,result.get('batch_id')) if result.get('batch_id') else None
         if batch and batch.connection_id==connection.id and batch.data_type==(task.payload or {}).get('data_type'):

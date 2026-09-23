@@ -3,6 +3,8 @@ import test from 'node:test';import assert from 'node:assert/strict';import fs f
 import {connectorInfo,connectorCards,connectorStatus,incomeChart,guideCards,scopedDateFilters} from '../../frontend/portal-ui.js';
 import * as scope from '../../frontend/scope.js';
 import {icons} from '../../frontend/icons.js';
+import * as workspace from '../../frontend/integration-workspace.js';
+import * as drafts from '../../frontend/integration-drafts.js';
 const source=fs.readFileSync(new URL('../../frontend/app.js',import.meta.url),'utf8');
 const customerVisible=html=>String(html??'').replace(/<details\b[\s\S]*?<\/details>/g,'');
 const implementationDetailTags=html=>[...String(html??'').matchAll(/<details\b[^>]*class="[^"]*implementation-details[^"]*"[^>]*>/g)].map(x=>x[0]);
@@ -10,9 +12,9 @@ function engine(responder=async()=>({items:[],total:0,page:1,size:20}), role='sc
  const requests=[], nodes=new Map();
  function node(id){if(!nodes.has(id)){const classes=new Set(),attrs=new Map();nodes.set(id,{innerHTML:'',textContent:'',value:'',classList:{add(v){classes.add(v)},remove(v){classes.delete(v)},contains(v){return classes.has(v)},toggle(v,force){const on=force??!classes.has(v);if(on)classes.add(v);else classes.delete(v);return on}},setAttribute(k,v){attrs.set(k,v)},getAttribute(k){return attrs.get(k)??null},removeAttribute(k){attrs.delete(k)},focus(){},addEventListener(){},append(){},querySelector(){return node(id+'-child')},querySelectorAll(){return []}})}return nodes.get(id)}
  const ctx=vm.createContext({console,URLSearchParams,URL,Blob,FormData,Number,String,Object,Array,Date,Math,Set,Map,JSON,RegExp,Error,Promise,crypto:globalThis.crypto,setTimeout:()=>0,clearTimeout(){},
-  ...scope,connectorInfo,connectorCards,connectorStatus,incomeChart,guideCards,scopedDateFilters,icons,
+  ...scope,...workspace,...drafts,connectorInfo,connectorCards,connectorStatus,incomeChart,guideCards,scopedDateFilters,icons,
   document:{querySelector:node,querySelectorAll:()=>[],addEventListener(){},createElement:()=>node('created'),body:node('body')},window:{addEventListener(){}},location:{hash:'',pathname:'/',search:''},history:{replaceState(){}},
-  fetch:async(url,options)=>{requests.push({url,options});const answer=await responder(url,options);return {ok:true,status:200,json:async()=>answer}},
+  fetch:async(url,options)=>{requests.push({url,options});let answer=await responder(url,options);if(url.endsWith('/draft')&&options.method==='GET'&&!answer.connection){const cat=await responder('/api/connections/catalog',options),ident=url.split('/').at(-2),entry=cat.items.find(x=>x.connection.id===ident);answer={connection:entry.connection,draft_version:0,active_version:entry.connection.version||1}}if(url.endsWith('/implementation')&&!answer.statuses){const cat=await responder('/api/connections/catalog',options),ident=url.split('/').at(-2),entry=cat.items.find(x=>x.connection.id===ident);answer={connection_id:ident,code:entry.connection.code,name:entry.connection.name,statuses:{materials:'资料待登记',configuration:'配置待完善',tests:'待真实测试',published:'未发布或授权失效',health:'未检查',acceptance:'待学校签认'}}}return {ok:true,status:200,json:async()=>answer}},
  });
  let program=source.replace(/^import .*?;\n/gm,'').replace(/\(async\(\)=>\{try\{await boot\(\)\}[\s\S]*$/,'');
  program+=`\nglobalThis.T={pages,handlers,api,nav,render,pageAllowed,sidebarNavigation,syncMenuAccessibility,connectionOverview,integrationPage,sourceAvailability,bindPortalControls,pager,query,connectionForm,mappingEditor,showInbound,ts,evidenceHtml,pointLabel,calculationSummary,
@@ -138,7 +140,7 @@ for(const [tab,endpoint] of [['tasks','/tasks'],['batches','/inbound-batches'],[
  if(tab==='tasks')assert.match(r.url,/kind=integration/);
 });
 test('SSO page does not create fake login or mutate connection',async()=>{
- const e=engine(url=>url.includes('/catalog')?{items:[{connection:{...connection,id:'sso',code:'sso',name:'统一认证'},data_types:[{data_type:'identity',name:'身份',local_status:'WAITING_PROTOCOL'}]}]}:{items:[]});e.t.setState('sso');const html=await e.t.pages.sso();
+ const e=engine(url=>url.includes('/catalog')?{items:[{connection:{...connection,id:'sso',code:'sso',name:'统一认证'},data_types:[{data_type:'identity',name:'身份',local_status:'WAITING_PROTOCOL'}]}]}:{items:[]});e.t.setState('sso',{tab:'overview'});const html=await e.t.pages.sso();
  assert.match(html,/学校统一认证尚未真实联调/);assert.match(html,/本地账号仍可继续演示现有业务/);assert.ok(e.requests.every(x=>x.options.method==='GET'));
  assert.doesNotMatch(customerVisible(html),/\b(?:NOT_CONNECTED|CONNECTED|REAL|TEST)\b/);
 });
@@ -206,12 +208,12 @@ test('adapter code configuration stays collapsed for customer-facing settings',(
  return e.t.connectionForm('c-middle').then(()=>{const html=e.t.getForm().body,tags=implementationDetailTags(html),visible=customerVisible(html);assert.ok(tags.length>=2);assert.ok(tags.every(tag=>!/[\s>]open(?:[\s=>]|$)/.test(tag)));assert.match(html,/实施人员使用：高级参数与原始配置/);assert.doesNotMatch(visible,/高级协议参数 JSON|字段对应 JSON|X-Api-Key|X-Timestamp|X-Nonce|X-Signature/);});
 });
 test('data hub exposes five real Chinese configuration entries and the confirmation chain',async()=>{
- const e=engine(integrationResponder);e.t.setState('hub');const html=await e.t.pages.hub();
+ const e=engine(integrationResponder);e.t.setState('hub',{tab:'overview'});const html=await e.t.pages.hub();
  for(const name of middleTypes.map(x=>x.name))assert.match(html,new RegExp(name));
  assert.equal((html.match(/data-action="data-type-adapter"/g)||[]).length,5);assert.equal(typeof e.t.handlers['data-type-adapter'],'function');assert.equal(typeof e.t.handlers['inbound-confirm'],'function');
 });
 test('province connector exposes all eleven Chinese configuration entries',async()=>{
- const e=engine(integrationResponder);e.t.setState('province');const html=await e.t.pages.province();
+ const e=engine(integrationResponder);e.t.setState('province',{tab:'overview'});const html=await e.t.pages.province();
  for(const name of provinceTypes.map(x=>x.name))assert.match(html,new RegExp(name));
  assert.equal((html.match(/data-action="data-type-adapter"/g)||[]).length,11);assert.equal(typeof e.t.handlers['data-type-adapter'],'function');
 });
@@ -221,11 +223,11 @@ test('each of the three connectors renders its six-item school material checklis
   ['hub',['五类接口清单','正式字段字典','分页与增量规则','成功与错误规则','脱敏正常与异常样本','凭据交付方式']],
   ['province',['省平台正式规范','机构与应用登记','签名与防重复规则','十一类数据字段字典','回执与错误码','脱敏正常与异常样本']],
  ];
- for(const[route,names]of cases){const e=engine(integrationResponder);e.t.setState(route);const html=await e.t.pages[route](),visible=customerVisible(html);assert.match(visible,/学校资料清单/);assert.match(visible,/已登记 0 \/ 6/);assert.equal((html.match(/class="material-row"/g)||[]).length,6);assert.equal((html.match(/data-material-state="pending"/g)||[]).length,6);for(const name of names)assert.match(visible,new RegExp(name));assert.doesNotMatch(visible,/\b(?:NOT_CONNECTED|CONNECTED|WAITING_SOURCE|WAITING_PROTOCOL|ADAPTER_NOT_INSTALLED|REAL|TEST)\b/);assert.ok(e.requests.every(x=>x.options.method==='GET'));}
+ for(const[route,names]of cases){const e=engine(integrationResponder);e.t.setState(route,{tab:'overview'});const html=await e.t.pages[route](),visible=customerVisible(html);assert.match(visible,/学校资料清单/);assert.match(visible,/已登记 0 \/ 6/);assert.equal((html.match(/class="material-row"/g)||[]).length,6);assert.equal((html.match(/data-material-state="pending"/g)||[]).length,6);for(const name of names)assert.match(visible,new RegExp(name));assert.doesNotMatch(visible,/\b(?:NOT_CONNECTED|CONNECTED|WAITING_SOURCE|WAITING_PROTOCOL|ADAPTER_NOT_INSTALLED|REAL|TEST)\b/);assert.ok(e.requests.every(x=>x.options.method==='GET'));}
 });
 test('one-stop integration center totals the material checklist without English implementation states',async()=>{
  const e=engine(integrationResponder);e.t.setState('sync');const html=await e.t.pages.sync(),visible=customerVisible(html);
- assert.match(visible,/资料登记进度/);assert.match(visible,/0 \/ 18/);assert.match(visible,/一站式系统协同/);assert.match(visible,/三大接口配置一览/);assert.match(visible,/对接项目[\s\S]*学校需提供[\s\S]*当前完成度[\s\S]*真实状态/);assert.equal((html.match(/data-action="connection"/g)||[]).length,3);assert.doesNotMatch(visible,/INTEGRATION CENTER|\b(?:NOT_CONNECTED|CONNECTED|WAITING_SOURCE|WAITING_PROTOCOL)\b/);
+ for(const label of ['资料齐备','配置有效','测试结果','配置发布','运行健康','学校验收'])assert.match(visible,new RegExp(label));assert.match(visible,/统一认证与接口适配中心/);assert.equal((html.match(/data-action="nav"/g)||[]).length,3);assert.doesNotMatch(visible,/0 \/ 18|当前完成度|\b(?:NOT_CONNECTED|CONNECTED|WAITING_SOURCE|WAITING_PROTOCOL)\b/);
 });
 test('middle data-type form covers request, pagination and response rules with technical details folded',async()=>{
  const e=engine(integrationResponder);e.t.captureForm();assert.equal(typeof e.t.handlers['data-type-adapter'],'function');await e.t.handlers['data-type-adapter']('c-middle|teacher_hr');

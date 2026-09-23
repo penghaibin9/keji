@@ -102,6 +102,9 @@ def process_pull_task_once(db,task,registry=ADAPTERS):
         return task
     from .sync_policy import retry_budget
     retry_budget(connection)
+    if callable(getattr(adapter,'pull_chunk',None)):
+        from .paged_inbound import process_page
+        return process_page(db,task,connection,actor,schedule,adapter,registry)
     task.attempts+=1;attempt=task.attempts
     try:
         result=adapter.pull(data_type=task.payload['data_type'],mode=task.payload['mode'],cursor=task.payload.get('cursor'),limit=1000,**transport_kwargs(connection,registry))
@@ -167,7 +170,8 @@ def enqueue_due_schedules(db,now=None,registry=ADAPTERS):
         # Avoid overlapping runs for one schedule.
         pending=db.scalar(select(Task.id).where(Task.kind=='inbound_pull',Task.state.in_(['PENDING','RUNNING','RETRY']),
             Task.payload['schedule_id'].as_string()==schedule.id).limit(1))
-        if pending is not None:
+        from .paged_inbound import has_unfinished_run
+        if pending is not None or has_unfinished_run(db,schedule):
             schedule.next_at=now+timedelta(minutes=schedule.frequency_minutes);schedule.version+=1;continue
         mode='INCREMENTAL' if schedule.last_run_at else 'FULL'
         task=create_pull_task(db,actor,connection,schedule.data_type,mode,'定时同步计划',schedule=schedule);created.append(task.id)

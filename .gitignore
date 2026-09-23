@@ -7,3 +7,6 @@ node_modules/
 .env
 *.sqlite
 *.sqlite3
+.venv/
+evidence/
+.keji-closeout-backup-*/

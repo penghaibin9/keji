@@ -1,0 +1,3 @@
+backend/alembic/versions/20260918_0001_canonical_fresh_school.py text eol=lf
+backend/alembic_legacy_unverified/20260917_0002_org_assessment_and_sync.py text eol=lf
+backend/canonical_schema.json text eol=lf

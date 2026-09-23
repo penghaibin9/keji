@@ -11,3 +11,14 @@ body{margin:0;font-family:Inter,"Microsoft YaHei","Noto Sans CJK SC",Arial,sans-
    Allow the grid item and form to shrink; do not hide overflow to mask it. */
 .login-form-shell{min-width:0}
 .login-form{min-width:0}
+
+/* Implementation workspace: same application shell, independently stated facts. */
+.implementation-status{display:grid;grid-template-columns:repeat(6,minmax(0,1fr));gap:12px;margin:0 0 16px}
+.implementation-status section{border:1px solid var(--border,#dce3ed);background:var(--surface,#fff);border-radius:10px;padding:14px;min-width:0}
+.implementation-status span{display:block;font-size:13px;margin-bottom:8px;color:var(--muted,#66758a)}
+.implementation-status strong{display:block;font-size:16px;line-height:1.5;overflow-wrap:anywhere}
+.implementation-steps{display:flex;flex-wrap:wrap;gap:8px;margin-bottom:16px;padding:12px 0}
+.implementation-steps .btn{white-space:normal;text-align:left;line-height:1.6;min-height:42px}
+.implementation-status~.card code{white-space:normal;overflow-wrap:anywhere;user-select:all}
+@media(max-width:1250px){.implementation-status{grid-template-columns:repeat(3,minmax(0,1fr))}}
+@media(max-width:650px){.implementation-status{grid-template-columns:repeat(2,minmax(0,1fr))}.implementation-steps .btn{flex:1 1 45%}}

@@ -7,7 +7,7 @@ const PAGE_KEYS = Object.freeze({
   points: ['teacher_id','org_id'], disputes: ['teacher_id','state'],
   qualifications: ['q','teacher_id','state'], rules: [],
   audit: ['q','module','result','start','end'], imports: ['q'], notices: ['q'], permissions: ['q'],
-  todos: ['q','type'], sync: [], sso:['tab'], hub:['tab','data_type','state'], province:['tab','data_type','state'], guide:[], operations: [], exports: [], help: [],
+  todos: ['q','type'], sync: [], sso:['tab','impl_step'], hub:['tab','impl_step','data_type','state'], province:['tab','impl_step','data_type','state'], guide:[], operations: [], exports: [], help: [],
 });
 function valuesFor(keys, values = {}) {
   const result = {};

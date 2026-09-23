@@ -140,7 +140,7 @@ def tasks(request:Request):
             if f.get('connection_id') or f.get('data_type'):
                 raise HTTPException(422,'导出任务不接受外部连接筛选')
         if f.get('state'):
-            if f['state'] not in {'PENDING','RUNNING','RETRY','FAILED','BLOCKED','DONE'}:
+            if f['state'] not in {'PENDING','RUNNING','RETRY','FAILED','BLOCKED','DONE','WAITING_CONFIRMATION'}:
                 raise HTTPException(422,'任务状态筛选无效')
             q=q.where(Task.state==f['state'])
         if f.get('connection_id'):

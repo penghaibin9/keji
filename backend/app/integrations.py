@@ -226,8 +226,11 @@ def live_connection(db,connection,registry=ADAPTERS):
     if not registry.production:return True  # Isolated development fixtures only; production startup sets True.
     adapter=registry.get(connection.code)
     if adapter is None or not registry.is_real(connection.code) or not registry.endpoint_matches(connection) or not registry.credential_matches(connection):return False
+    # The 24h TTL is the window for approving a NEW release, not its runtime lifetime.
+    # Published authorization remains bound to exact config, adapter and credential.
+    # Health checks are independent and do not revoke the release merely as time passes.
     check=current_connection_check(db,connection,activated=True)
-    return bool(check and check.mode=='REAL' and check.passed and check.expires_at>utcnow()
+    return bool(check and check.mode=='REAL' and check.passed and bool(credential_fingerprint(connection))
                 and check.configuration_hash==configuration_hash(connection)
                 and check.adapter_id==getattr(adapter,'adapter_id',None)
                 and check.receipt.get('_credential_sha256')==credential_fingerprint(connection))
@@ -266,7 +269,10 @@ def probe_connection(db,actor,connection,registry=ADAPTERS,*,production=False):
                             'authenticated':response.get('authenticated') is True,
                             'tls_verified':response.get('tls_verified') is True,
                             'protocol_verified':response.get('protocol_verified') is True,'_credential_sha256':credential_fingerprint(connection)}
-                except Exception:code='PROBE_FAILED'  # No exception text/URL/credential is persisted.
+                except Exception as exc:
+                    from .integration_diagnostics import safe_code, diagnostic
+                    code=safe_code(exc)
+                    receipt={'diagnostic':diagnostic(code,status=getattr(exc,'status',None))}
     receipt={**receipt,'_connection_revision':connection.version+1}
     check=ConnectionCheck(connection_id=connection.id,configuration_hash=configuration_hash(connection),
         adapter_id=str(getattr(adapter,'adapter_id',''))[:128],mode=mode,passed=passed,reason_code=code,

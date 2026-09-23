@@ -15,6 +15,9 @@ REQUIRED = [
  *['backend/app/routes/'+x+'.py' for x in ('auth','admin','business','calculations','files','tasks','integrations','reference','delivery')],
  'backend/app/database_snapshot.py','backend/app/installation.py','backend/canonical_release.json','backend/canonical_schema.json','backend/alembic_legacy_unverified/MANIFEST.json',
  'backend/app/worker.py','backend/app/healthcheck.py','backend/app/releasecheck.py',
+ 'backend/app/integration_center.py','backend/app/integration_diagnostics.py','backend/app/sso_identity.py',
+ 'backend/app/paged_inbound.py','backend/app/adapters/paged_datahub.py','backend/app/routes/integration_center.py','backend/app/routes/sso_trial.py',
+ 'frontend/integration-workspace.js','frontend/integration-drafts.js',
  'backend/app/cli.py','backend/app/grants.py','backend/app/maintenance.py',
  'backend/requirements.txt','backend/app/resources/integration-coordination.xlsx','frontend/index.html','frontend/icons.js','frontend/app.js','frontend/scope.js','frontend/styles.css','frontend/integration.css','frontend/portal.css','frontend/portal-ui.js',
  'deploy/Dockerfile.api','deploy/Dockerfile.frontend','deploy/compose.yml','deploy/nginx.conf','deploy/mysql-init/01-users.sh',
@@ -32,7 +35,7 @@ def inspect_assembly(root):
     for p in (root/'backend/alembic/versions').glob('*.py'):
         if p.name=='__init__.py':continue
         try:
-            tree=ast.parse(p.read_text());values={}
+            tree=ast.parse(p.read_text(encoding='utf-8'));values={}
             for n in tree.body:
                 if isinstance(n,ast.Assign):
                     for t in n.targets:

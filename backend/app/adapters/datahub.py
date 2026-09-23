@@ -47,7 +47,11 @@ class ConfigurableDataHubAdapter(ConfigurableRestBase):
             elif paging.get('mode')!='page':raise AdapterContractError('PULL_PAGING_INVALID')
         raise AdapterContractError('PULL_PAGE_LIMIT_EXCEEDED')
 
-    def _page(self,config,request_spec,response_spec,context,credentials,timeout_seconds):
+    def pull_chunk(self, **kwargs):
+        from .paged_datahub import pull_chunk
+        return pull_chunk(self, **kwargs)
+
+    def _page(self,config,request_spec,response_spec,context,credentials,timeout_seconds, *, with_metadata=False):
         response = self._request_json(endpoint=str(config.get('endpoint', '')).strip(), spec=request_spec,
                                       context=context, credentials=credentials, timeout_seconds=timeout_seconds)
         if not isinstance(response_spec, dict):
@@ -72,4 +76,10 @@ class ConfigurableDataHubAdapter(ConfigurableRestBase):
                     raise AdapterContractError('PULL_CURSOR_INVALID')
         has_more_path = str(response_spec.get('has_more_path', '')).strip()
         has_more = normalized_bool(path_get(response, has_more_path)) if has_more_path else False
+        if with_metadata:
+            total=path_get(response,str(response_spec['total_path'])) if response_spec.get('total_path') else None
+            if total is not None and (type(total) is not int or total<0):raise AdapterContractError('PULL_RESPONSE_TOTAL_MISMATCH')
+            watermark=path_get(response,str(response_spec['watermark_path'])) if response_spec.get('watermark_path') else None
+            if watermark is not None and (not isinstance(watermark,str) or not watermark.strip() or len(watermark)>500):raise AdapterContractError('PULL_CURSOR_INVALID')
+            return records,next_cursor,has_more,{'total':total,'watermark':watermark}
         return records,next_cursor,has_more

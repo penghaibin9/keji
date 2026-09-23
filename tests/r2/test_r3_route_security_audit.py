@@ -10,6 +10,7 @@ def test_all_api_routes_have_canonical_auth_primitive_except_explicit_auth_boots
     assert result['route_count']>=90
     assert result['public_routes']==[
         'GET /api/auth/sso/callback',
+        'GET /api/auth/sso/implementation-callback',
         'GET /api/auth/sso/start',
         'GET /api/auth/sso/status',
         'POST /api/auth/login',

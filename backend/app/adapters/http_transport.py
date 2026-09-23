@@ -17,6 +17,17 @@ from urllib.request import Request, build_opener, HTTPSHandler, HTTPRedirectHand
 from urllib.error import HTTPError, URLError
 
 
+def _failure_code(error):
+    reason = error.reason if isinstance(error, URLError) else error
+    if isinstance(reason, ssl.SSLCertVerificationError):
+        return 'UPSTREAM_TLS_VERIFY_FAILED'
+    if isinstance(reason, socket.gaierror):
+        return 'UPSTREAM_DNS_FAILED'
+    if isinstance(reason, (TimeoutError, socket.timeout)):
+        return 'UPSTREAM_TIMEOUT'
+    return 'UPSTREAM_TRANSPORT_ERROR'
+
+
 class TransportError(RuntimeError):
     def __init__(self, code: str, status: int | None = None):
         super().__init__(code)
@@ -49,7 +60,7 @@ class _PinnedConnection(http.client.HTTPSConnection):
                 return
             except OSError as exc:
                 sock.close();last=exc
-        raise TransportError('UPSTREAM_TRANSPORT_ERROR') from None
+        raise TransportError(_failure_code(last)) from None
 
 
 class _PinnedHandler(HTTPSHandler):
@@ -126,8 +137,8 @@ class PinnedHttpsTransport:
                 return status, content_type, raw
         except HTTPError as exc:
             raise TransportError('UPSTREAM_HTTP_ERROR', getattr(exc, 'code', None)) from None
-        except (URLError, TimeoutError, OSError, ssl.SSLError):
-            raise TransportError('UPSTREAM_TRANSPORT_ERROR') from None
+        except (URLError, TimeoutError, OSError, ssl.SSLError) as exc:
+            raise TransportError(_failure_code(exc)) from None
 
     def request_json(self, method: str, relative_path: str, *, headers: dict | None = None,
                      payload: dict | list | None = None, timeout_seconds: int = 10) -> dict | list:

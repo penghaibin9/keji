@@ -322,7 +322,7 @@ def _confirm_inbound(db,actor,batch:InboundBatch,expected_version,reason,basis='
             else:obj=TrainingCourseMaster(**normalized);db.add(obj);db.flush()
             audit(db,actor,'course',obj.id,'确认数据中台课程主数据入库',before=before,after=serial(obj),reason=reason)
         written.append({'row_no':row.row_no,'business_key':row.business_key,'object_id':obj.id})
-    batch.state='COMMITTED';batch.version+=1;batch.receipt={'written':len(written),'rows':written,'unmapped_teacher_accounts':unmapped_accounts,'authorization_changes':revoked_sessions,'committed_at':utcnow().isoformat(),'configuration_hash':batch.configuration_hash,'content_hash':batch.content_hash}
+    batch.state='COMMITTED';batch.version+=1;batch.receipt={**(batch.receipt or {}),'written':len(written),'rows':written,'unmapped_teacher_accounts':unmapped_accounts,'authorization_changes':revoked_sessions,'committed_at':utcnow().isoformat(),'configuration_hash':batch.configuration_hash,'content_hash':batch.content_hash}
     audit(db,actor,'inbound',batch.id,'确认数据中台入站整批入库',after=batch.receipt,reason=reason)
     return batch
 
