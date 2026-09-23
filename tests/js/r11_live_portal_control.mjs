@@ -17,7 +17,7 @@ const c=vm.createContext({console,...ui,...scope,icons,URL,URLSearchParams,Blob,
    for(const cookie of response.headers.getSetCookie()){const pair=cookie.split(';')[0],i=pair.indexOf('=');jar.set(pair.slice(0,i),pair.slice(i+1));}
    log.push({method:opts.method,url,status:response.status});return response;
  }});
-vm.runInContext(original.replace(/^import .*?;\n/gm,'').replace(/\(async\(\)=>\{try\{await boot\(\)\}[\s\S]*$/,'')+`
+vm.runInContext(original.replace(/^import .*?;\r?\n/gm,'').replace(/\(async\(\)=>\{try\{await boot\(\)\}[\s\S]*$/,'')+`
 globalThis.T={api,pages,handlers,shell,loginView,pageAllowed,connectionForm,mappingEditor,showInbound,showTask,showSyncItem,
  setUser(user){me=user;csrf=user.csrf},setPage(p,f={},n=1){page=p;filter=f;tablePage=n;participationPage=1;periodId=''},
  setData(p,t,o,d){periods=p;teachers=t;orgs=o;businessConfig=d},captureForm(){formModal=(title,body,callback,options)=>{globalThis.F={title,body,callback,options}}},getForm(){return globalThis.F}, getView(){return view}};`,c);
