@@ -91,7 +91,7 @@ def credential_summary(value, *, today=None):
             'credential_type_name': CREDENTIAL_TYPES.get(kind, '待登记'),
             'managed_by_name': MANAGED_BY.get(value.get('managed_by'), '待登记')}
 
-def acceptance_summary(value, code, *, connection_version, configuration_hash, source_gaps=(), runtime_current=True):
+def acceptance_summary(value, code, *, connection_version, configuration_hash, source_gaps=(), runtime_current=True, identity_policy_current=True):
     value = dict(value or {})
     required = acceptance_requirements(code)
     by_code = {x.get('code'): x for x in value.get('items', []) if isinstance(x, dict)}
@@ -108,13 +108,16 @@ def acceptance_summary(value, code, *, connection_version, configuration_hash, s
         and by_code.get(key, {}).get('checked_on')
         for key, _ in required
     )
-    current_signed = signed and evidence_complete and not stale and not invalidated and not source_gaps and runtime_current
+    current_signed = (signed and evidence_complete and not stale and not invalidated and not source_gaps
+                      and runtime_current and identity_policy_current)
     if current_signed:
         state = '学校已签认'
     elif stale:
         state = '配置已变化，验收需重新确认'
     elif invalidated:
         state = '实施资料已变化，验收需重新确认'
+    elif signed and not identity_policy_current:
+        state = '身份权限确认不完整，验收需复核'
     elif failed:
         state = '验收存在失败项'
     elif signed and (not evidence_complete or source_gaps):
@@ -124,6 +127,7 @@ def acceptance_summary(value, code, *, connection_version, configuration_hash, s
     else:
         state = '待学校签认'
     return {'state': state, 'passed': passed, 'total': len(required), 'signed': current_signed,
-            'stale': stale, 'invalidated': invalidated, 'runtime_current': bool(runtime_current), 'failed': failed,
+            'stale': stale, 'invalidated': invalidated, 'runtime_current': bool(runtime_current),
+            'identity_policy_current': bool(identity_policy_current), 'failed': failed,
             'source_gaps': list(source_gaps),
             'requirements': [{'code': key, 'label': label} for key, label in required]}

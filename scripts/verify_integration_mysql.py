@@ -105,6 +105,29 @@ def main():
         assert handover.status_code == 200, handover.text
         with zipfile.ZipFile(io.BytesIO(handover.content)) as archive:
             assert '接口实施交接工作簿.xlsx' in archive.namelist()
+
+        # Current R2 intake workflow on real MySQL 8.4: download -> preview
+        # (read-only) -> explicit draft-only apply.
+        from test_integration_intake import (
+            template_bytes, prepare_school_workbook, preview as preview_intake,
+            apply as apply_intake, connection_snapshot
+        )
+        intake = prepare_school_workbook(template_bytes(client))
+        before_intake = connection_snapshot(app)
+        intake_preview = preview_intake(client, intake)
+        assert intake_preview.status_code == 200, intake_preview.text
+        assert intake_preview.json()['effects']['drafts_changed'] is False
+        assert connection_snapshot(app) == before_intake
+        intake_apply = apply_intake(client, intake, '独立MySQL学校资料采集链验证')
+        assert intake_apply.status_code == 200, intake_apply.text
+        assert intake_apply.json()['published'] is False
+        assert connection_snapshot(app) == before_intake
+        catalog = client.get('/api/connections/catalog').json()['items']
+        province = next(x for x in catalog if x['connection']['code'] == 'province')
+        province_workspace = client.get('/api/connections/'+province['connection']['id']+'/implementation').json()
+        assert province_workspace['source_gaps'] == []
+        sso_workspace = client.get('/api/connections/'+ident+'/implementation').json()
+        assert sso_workspace['acceptance']['summary']['identity_policy_current'] is True
     command.upgrade(migration, 'head')
     with engine.connect() as conn:
         assert require_canonical(conn, require_mysql=True) == provenance
@@ -117,6 +140,9 @@ def main():
         'initialization': True, 'http_login_draft_save_read': True,
         'credential_metadata_mysql': True, 'acceptance_ledger_mysql': True,
         'handover_workbook_xlsx': True,
+        'school_intake_xlsx_mysql': True, 'intake_preview_read_only': True,
+        'intake_apply_draft_only': True, 'source_registry_mysql': True,
+        'identity_policy_mysql': True,
         'paged_rows': count, 'interrupted_second_page_resumed': True,
         'synthetic_school_data': True, 'school_system_contacted': False,
         'external_adapter': 'synthetic transport', 'production_acceptance': False}

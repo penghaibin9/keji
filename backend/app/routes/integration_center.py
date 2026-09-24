@@ -8,7 +8,7 @@ from ..models import Connection, Setting, utcnow
 from ..schemas import ConnectionUpdate, VersionedReason, Reason, Input
 from ..core import read_operation, command, check_version, serial, audit
 from ..integration_center import (candidate, stored, save_stored, workspace, configuration_issues,
-    run_probe, MATERIALS, confirmed_source_codes, invalidate_acceptance)
+    run_probe, MATERIALS, confirmed_source_codes, invalidate_acceptance, identity_policy_complete)
 from ..integration_security import credential_summary, acceptance_requirements, acceptance_summary
 from ..integrations import (ADAPTERS, DATA_CATALOG, ConnectionCheck, configuration_hash,
     credential_fingerprint, normalize_mappings, activate_connection, pause_schedules, live_connection)
@@ -293,12 +293,20 @@ def update_acceptance(ident: str, data: AcceptanceUpdate, request: Request):
         sign_values = (bool(data.signed_by), bool(data.signed_on), bool(data.signed_reference))
         if any(sign_values) and not all(sign_values):
             raise HTTPException(422, '学校最终签认人、签认日期和签认依据必须同时填写')
-        source_gaps = [name for _, name, status in DATA_CATALOG[obj.code] if status == 'WAITING_SOURCE']
+        confirmed_sources = confirmed_source_codes(db, ident)
+        source_gaps = [name for code, name, status in DATA_CATALOG[obj.code]
+                       if status == 'WAITING_SOURCE' and code not in confirmed_sources]
+        policy_current = True
+        if obj.code == 'sso':
+            policy = stored(db, 'identity_policy', ident)
+            policy_current = identity_policy_complete((policy.value or {}) if policy else {})
         if all(sign_values):
             if any(item.status != 'PASSED' for item in data.items):
                 raise HTTPException(409, '仍有未通过或待确认验收项，不能登记最终签认')
             if source_gaps:
                 raise HTTPException(409, '仍有业务数据权威来源未确认，不能登记最终签认')
+            if not policy_current:
+                raise HTTPException(409, '统一认证四级外部身份与本地权限边界尚未由学校确认，不能登记最终签认')
             if not live_connection(db, obj):
                 raise HTTPException(409, '当前生效连接无有效发布授权，不能登记最终签认')
             materials = stored(db, 'materials', ident)
@@ -328,7 +336,8 @@ def update_acceptance(ident: str, data: AcceptanceUpdate, request: Request):
                      recorded_by=a.id, recorded_at=utcnow().isoformat())
         row = save_stored(db, 'acceptance', ident, value)
         summary = acceptance_summary(value, obj.code, connection_version=obj.version,
-            configuration_hash=configuration_hash(obj), source_gaps=source_gaps)
+            configuration_hash=configuration_hash(obj), source_gaps=source_gaps,
+            identity_policy_current=policy_current)
         audit(db, a, 'connections', ident, '登记学校接口验收证据', before, serial(row), data.reason)
         return {'version': row.version, 'summary': summary, 'automatic_acceptance': False}
     return command(request, data.model_dump(), 'sync.manage', apply)

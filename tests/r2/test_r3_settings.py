@@ -69,5 +69,5 @@ def test_setting_history_is_directly_readable_from_configuration_page(client2):
     assert row['reason']=='验证配置历史'
     assert row['before']['value']['school_name']=='隔离测试学校'
     assert row['after']['value']['school_name']=='历史测试学校'
-    js=(Path(__file__).resolve().parents[2]/'frontend/app.js').read_text()
+    js=(Path(__file__).resolve().parents[2]/'frontend/app.js').read_text(encoding='utf-8')
     assert "setting-history" in js and "async function settingHistory" in js

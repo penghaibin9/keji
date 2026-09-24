@@ -21,6 +21,12 @@ def _sheet(workbook, title, headers):
 
 
 def _finish(ws):
+    # Handover values contain school-provided text. Prevent spreadsheet formula
+    # execution when the generated workbook is opened by implementation staff.
+    for row in ws.iter_rows():
+        for cell in row:
+            if isinstance(cell.value, str) and cell.value.lstrip(' \t\r\n').startswith(('=','+','-','@')):
+                cell.value = "'" + cell.value
     for column in range(1, ws.max_column + 1):
         width = 12
         for cell in ws.iter_cols(min_col=column, max_col=column):

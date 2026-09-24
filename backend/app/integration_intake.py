@@ -129,7 +129,7 @@ def _excel_value(value):
     if isinstance(value, bool):
         value = 'true' if value else 'false'
     value = str(value)
-    return "'" + value if value and value[:1] in '=+-@' else value
+    return "'" + value if value and value.lstrip(' \t\r\n').startswith(('=','+','-','@')) else value
 
 
 def _list_text(values):
@@ -567,8 +567,12 @@ def _inspect_xlsx(data):
             if len(infos) > 250 or sum(x.file_size for x in infos) > 25*1024*1024:
                 raise HTTPException(422, 'Excel内部结构过大')
             lowered = [x.filename.lower() for x in infos]
-            if any('vbaproject' in name or name.endswith('.bin') for name in lowered):
-                raise HTTPException(422, '学校资料表不允许包含宏或二进制嵌入')
+            if any('..' in x.filename.replace('\\','/').split('/') for x in infos):
+                raise HTTPException(422, 'Excel内部路径异常')
+            if any('vbaproject' in name or name.endswith('.bin')
+                   or '/externallinks/' in name or '/embeddings/' in name
+                   for name in lowered):
+                raise HTTPException(422, '学校资料表不允许包含宏、外部链接或嵌入对象')
     except zipfile.BadZipFile:
         raise HTTPException(422, 'Excel文件损坏') from None
 

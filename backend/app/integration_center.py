@@ -78,6 +78,17 @@ def invalidate_acceptance(db, connection_id, actor_id, reason):
     return row
 
 
+def identity_policy_complete(value):
+    value = dict(value or {})
+    items = [x for x in value.get('items', []) if isinstance(x, dict)]
+    expected = {'teacher','dept','college','school'}
+    by_kind = {x.get('kind'):x for x in items if x.get('kind') in expected}
+    return bool(value.get('authorization_mode') == 'LOCAL_ROLE_AUTHORITATIVE'
+                and set(by_kind) == expected and len(items) == 4
+                and all(by_kind[k].get('external_roles') and by_kind[k].get('confirmed_by')
+                        and by_kind[k].get('confirmed_on') for k in expected))
+
+
 def configuration_issues(item, confirmed_sources=()):
     config, issues = item.config, []
     adapter = config.get('adapter') or {}
@@ -193,9 +204,11 @@ def workspace(db, connection, settings):
         and not credential_info['issues']
         and credential_info['state'] not in {'证书已过期','凭据轮换已到期'})
     health_current = bool(health_value.get('passed') and health_value.get('mode') == 'REAL')
+    policy_current = True if connection.code != 'sso' else identity_policy_complete(identity_policy_value)
     acceptance = acceptance_summary(acceptance_value, connection.code,
         connection_version=connection.version, configuration_hash=configuration_hash(connection),
-        source_gaps=source_gaps, runtime_current=live and health_current and credential_current)
+        source_gaps=source_gaps, runtime_current=live and health_current and credential_current,
+        identity_policy_current=policy_current)
     return {'connection_id': connection.id, 'code': connection.code, 'name': connection.name,
         'connection_version': connection.version, 'draft_version': draft.version if draft else 0,
         'has_draft': draft is not None, 'issues': issues,

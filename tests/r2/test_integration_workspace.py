@@ -8,7 +8,7 @@ import pytest
 from openpyxl import load_workbook
 from sqlalchemy import select, func
 from app.models import Connection, Setting, AuthSession, User, utcnow
-from app.integrations import ADAPTERS, ConnectionCheck, configuration_hash, credential_fingerprint
+from app.integrations import ADAPTERS, ConnectionCheck, DATA_CATALOG, configuration_hash, credential_fingerprint
 from app.inbound_sync import IntegrationSchedule
 from app.adapters.contracts import AdapterContractError
 from conftest import auth, post, put
@@ -284,6 +284,11 @@ def test_current_real_health_and_complete_evidence_can_record_school_signoff(cli
         db.add(Setting(key='integration.credential:'+ident, value={
             'credential_type': 'token', 'managed_by': 'server_env', 'owner': 'synthetic-admin',
             'credential_reference': 'ND_ACCEPTANCE_SECRET'}, version=1))
+        db.add(Setting(key='integration.identity_policy:'+ident, value={
+            'authorization_mode':'LOCAL_ROLE_AUTHORITATIVE',
+            'items':[{'kind':kind,'external_roles':'external_'+kind,
+                      'confirmed_by':'合成学校信息中心','confirmed_on':'2026-09-23'}
+                     for kind in ('teacher','dept','college','school')]}, version=1))
     workspace = client2.get('/api/connections/'+ident+'/implementation').json()
     materials = [{'name': name, 'owner': '学校信息中心', 'reference': 'DOC-'+str(index+1),
                   'confirmed_on': '2026-09-23'}
@@ -332,3 +337,62 @@ def test_security_metadata_and_acceptance_are_version_bound(client2):
         **REASON, 'expected_version': 0, 'expected_connection_version': workspace['connection_version']+1,
         'items': _acceptance_items(workspace), 'signed_by': '', 'signed_on': None, 'signed_reference': ''})
     assert stale_acceptance.status_code == 409
+
+def test_sso_final_signoff_requires_four_level_identity_policy(client2):
+    auth(client2, 'schooladmin')
+    ident = connection_id(client2, 'sso')
+    workspace = client2.get('/api/connections/'+ident+'/implementation').json()
+    result = put(client2, '/api/connections/'+ident+'/acceptance', {
+        **REASON, 'expected_version': 0,
+        'expected_connection_version': workspace['connection_version'],
+        'items': _acceptance_items(workspace),
+        'signed_by': '学校验收人', 'signed_on': '2026-09-23',
+        'signed_reference': 'SYNTHETIC-SIGNOFF'})
+    assert result.status_code == 409
+    assert '四级外部身份' in result.text
+
+
+def test_confirmed_province_sources_remove_static_source_gap(client2, app2):
+    auth(client2, 'schooladmin')
+    ident = connection_id(client2, 'province')
+    with app2.state.sessions.begin() as db:
+        db.add(Setting(key='integration.sources:'+ident, value={'items':[
+            {'data_type':code, 'source_system':'合成权威系统', 'data_method':'REST API',
+             'frequency':'每30分钟', 'history_range':'2025-01-01至上线日',
+             'owner':'合成责任人', 'responsibility':'源系统保证完整，本平台负责映射处理',
+             'reference':'SOURCE-'+code, 'confirmed_on':'2026-09-23'}
+            for code, _, _ in DATA_CATALOG['province']
+        ]}, version=1))
+    workspace = client2.get('/api/connections/'+ident+'/implementation').json()
+    assert workspace['source_gaps'] == []
+    result = put(client2, '/api/connections/'+ident+'/acceptance', {
+        **REASON, 'expected_version': 0,
+        'expected_connection_version': workspace['connection_version'],
+        'items': _acceptance_items(workspace),
+        'signed_by': '学校验收人', 'signed_on': '2026-09-23',
+        'signed_reference': 'SYNTHETIC-SIGNOFF'})
+    assert result.status_code == 409
+    assert '权威来源' not in result.text
+    assert '发布授权' in result.text
+
+
+def test_handover_workbook_escapes_school_formula_text(client2):
+    auth(client2, 'schooladmin')
+    ident = connection_id(client2, 'sso')
+    workspace = client2.get('/api/connections/'+ident+'/implementation').json()
+    items = [{'name': name, 'owner': '=HYPERLINK("https://invalid.example","x")',
+              'reference': '+SUM(1,1)', 'confirmed_on': '2026-09-23'}
+             for name in workspace['materials']['required']]
+    saved = put(client2, '/api/connections/'+ident+'/materials',
+                {**REASON, 'expected_version': 0, 'items': items})
+    assert saved.status_code == 200, saved.text
+    archive = client2.get('/api/connections/'+ident+'/handover.zip')
+    handover = zipfile.ZipFile(io.BytesIO(archive.content))
+    workbook = load_workbook(io.BytesIO(handover.read('接口实施交接工作簿.xlsx')),
+                             read_only=False, data_only=False)
+    ws = workbook['资料清单']
+    assert ws.cell(2,2).value.startswith("'=")
+    assert ws.cell(2,3).value.startswith("'+")
+    assert ws.cell(2,2).data_type == 's'
+    assert ws.cell(2,3).data_type == 's'
+    workbook.close()
