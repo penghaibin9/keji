@@ -170,13 +170,19 @@ def _json_values(value):
     return value
 
 
+def _record_totals(db, sub):
+    # The single source for the dashboard KPI totals; comparison() reuses it so
+    # 同比/环比 can never drift from the dashboard numbers (7.5 同源同口径).
+    return db.execute(select(func.count(),func.coalesce(func.sum(sub.c.income),0),func.coalesce(func.sum(sub.c.hours),0),
+        func.coalesce(func.sum(sub.c.participants),0),func.count(distinct(sub.c.teacher_id)),func.count(distinct(sub.c.project_code)),
+        func.count(distinct(sub.c.course_code)),func.count(distinct(sub.c.class_code))).select_from(sub)).one()
+
+
 def stats(db, actor, filters=None):
     f = clean_filters(filters, STAT_FILTERS)
     rq = record_query(db, actor, {k:v for k,v in f.items() if k in RECORD_FILTERS})
     sub = rq.subquery()
-    values = db.execute(select(func.count(),func.coalesce(func.sum(sub.c.income),0),func.coalesce(func.sum(sub.c.hours),0),
-        func.coalesce(func.sum(sub.c.participants),0),func.count(distinct(sub.c.teacher_id)),func.count(distinct(sub.c.project_code)),
-        func.count(distinct(sub.c.course_code)),func.count(distinct(sub.c.class_code))).select_from(sub)).one()
+    values = _record_totals(db, sub)
     groups = db.execute(select(User.org_id,func.sum(sub.c.income),func.sum(sub.c.participants),func.count(distinct(sub.c.teacher_id)))
         .select_from(sub).join(User,User.id==sub.c.teacher_id).group_by(User.org_id).order_by(func.sum(sub.c.income).desc())).all()
     months = db.execute(select(func.substr(sub.c.event_date,1,7).label('month'),func.sum(sub.c.income),func.sum(sub.c.participants))
@@ -275,13 +281,20 @@ def comparison(db, actor, filters=None):
         return {'available': False, 'note': '请选择统计周期，或同时填写开始和结束日期，才能计算环比和同比。'}
     if start > end:
         raise HTTPException(422, '开始日期不能晚于结束日期')
-    current = stats(db, actor, f)
+    # 13.7: only the eight KPI totals are compared, so each window runs the one
+    # shared totals query instead of the full dashboard (rankings, trend,
+    # assessment bands, master counts). Same scope, same SQL, same numbers.
+    def totals(window):
+        rf = {k: v for k, v in window.items() if k in RECORD_FILTERS}
+        values = _record_totals(db, record_query(db, actor, rf).subquery())
+        return _json_values(dict(zip(('records','income','hours','participants','teachers','projects','courses','classes'), values)))
+    current = totals(f)
     base = {k: v for k, v in f.items() if k not in {'period_id','start','end'}}
     days = (end - start).days + 1
     prev_end = start - timedelta(days=1); prev_start = prev_end - timedelta(days=days-1)
     yoy_start, yoy_end = _shift_year(start), _shift_year(end)
-    previous = stats(db, actor, {**base, 'start': prev_start.isoformat(), 'end': prev_end.isoformat()})
-    year_ago = stats(db, actor, {**base, 'start': yoy_start.isoformat(), 'end': yoy_end.isoformat()})
+    previous = totals({**base, 'start': prev_start.isoformat(), 'end': prev_end.isoformat()})
+    year_ago = totals({**base, 'start': yoy_start.isoformat(), 'end': yoy_end.isoformat()})
     pick = lambda s: {k: s[k] for k in COMPARE_KEYS}
     def change(a, b):
         a, b = Decimal(str(a)), Decimal(str(b))
