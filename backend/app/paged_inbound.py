@@ -81,7 +81,7 @@ def process_page(db, task, connection, actor, schedule, adapter, registry):
             raise AdapterContractError('PULL_RESPONSE_TOTAL_MISMATCH')
         total = prior_total if total is None else total
         received = state['records'] + len(records)
-        if not response['has_more'] and total is not None and total != received:
+        if total is not None and (received > total or not response['has_more'] and total != received):
             raise AdapterContractError('PULL_RESPONSE_TOTAL_MISMATCH')
         proof={'request_digest':digest({'connection':connection.id,'type':task.payload['data_type'],'mode':task.payload['mode'],'checkpoint':state.get('checkpoint')}),'response_digest':digest(response),'received_at':utcnow().isoformat(),'records':len(records),'page':response.get('page')}
         batch = None

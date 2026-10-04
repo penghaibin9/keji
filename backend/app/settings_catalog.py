@@ -5,6 +5,8 @@ change display labels for known codes, but cannot invent states or transitions h
 """
 from __future__ import annotations
 from collections.abc import Mapping
+from decimal import Decimal, InvalidOperation
+import re
 from fastapi import HTTPException
 from .models import Setting
 
@@ -38,8 +40,49 @@ def _unique_text_list(value, *, max_items=100, max_len=80):
             and len({x.strip() for x in value}) == len(value))
 
 
+FIXED_SETTING_KEYS = ('branding','metrics','qualification','business_dictionary','import_policy')
+# 3.1: administrators may add dictionary categories ("dict:<code>") and extra system
+# parameters ("param:<code>"). They are plain validated values with the same version,
+# reason and before/after audit as the fixed settings; they never alter workflow codes.
+CUSTOM_SETTING_KEY = re.compile(r'(dict|param):[a-z][a-z0-9_]{1,40}')
+PARAM_TYPES = ('text','int','decimal','bool')
+MAX_CUSTOM_SETTINGS = 200
+
+
+def is_custom_key(key):
+    return isinstance(key,str) and CUSTOM_SETTING_KEY.fullmatch(key) is not None
+
+
+def configurable_key(key):
+    return key in FIXED_SETTING_KEYS or is_custom_key(key)
+
+
+def _param_value_ok(kind, value):
+    if kind=='text':return isinstance(value,str) and len(value)<=500
+    if kind=='int':return type(value) is int and -10**12<=value<=10**12
+    if kind=='bool':return type(value) is bool
+    if kind=='decimal':
+        if isinstance(value,bool) or not isinstance(value,(str,int,float)) or len(str(value))>40:return False
+        try:number=Decimal(str(value))
+        except InvalidOperation:return False
+        return number.is_finite()
+    return False
+
+
+def custom_setting_ok(key, value):
+    if not is_custom_key(key) or not isinstance(value,Mapping):return False
+    optional={'description'}
+    if 'description' in value and not (isinstance(value['description'],str) and len(value['description'])<=500):return False
+    if not _nonblank(value.get('name'),40):return False
+    if key.startswith('dict:'):
+        return set(value)-optional=={'name','items'} and _unique_text_list(value.get('items'),max_items=200,max_len=80)
+    return (set(value)-optional=={'name','type','value'} and value.get('type') in PARAM_TYPES
+            and _param_value_ok(value['type'],value.get('value')))
+
+
 def setting_ok(key, value):
     if not isinstance(value,Mapping):return False
+    if is_custom_key(key):return custom_setting_ok(key,value)
     if key=='branding':return _nonblank(value.get('school_name'),120) and set(value)=={'school_name'}
     if key=='metrics':return set(value)=={'income_note','participants_note'} and all(_nonblank(value.get(k),2000) for k in ('income_note','participants_note'))
     if key=='qualification':
@@ -67,6 +110,13 @@ def require_setting(db,key):
 
 def business_dictionary(db):
     return require_setting(db,'business_dictionary').value
+
+
+def validate_manual_source(db,source):
+    if source in {'学校数据中台','Excel导入','表格导入'}:
+        raise HTTPException(422,'接口和表格来源由对应接入流程确定，不能由人工指定')
+    if source not in business_dictionary(db)['record_sources']:
+        raise HTTPException(422,'请选择学校业务字典中的人工来源说明')
 
 
 def import_policy(db):

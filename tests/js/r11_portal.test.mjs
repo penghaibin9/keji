@@ -1,10 +1,46 @@
 // Real renderer/control tests with explicit synthetic API fixtures, not browser E2E.
+
+test('brand reflects configured identity without applying another school emblem',()=>{
+ const e=engine(),brand=vm.runInContext('schoolBrand',e.ctx);
+ e.t.setUser({school_name:'湖南科技职业学院'});assert.match(brand(),/school-brand-image/);
+ e.t.setUser({school_name:'测试<学校>'});assert.match(brand(),/测试&lt;学校&gt;/);assert.doesNotMatch(brand(),/school-brand-image|湖南科技职业学院/);
+});
+test('changed calculation evidence is escaped and explains the blocked next step',()=>{
+ const e=engine(),notice=vm.runInContext('sourceChangesNotice',e.ctx);
+ assert.equal(notice({source_changes:{changed:false,items:[]}}),'');
+ const html=notice({source_changes:{changed:true,items:[{label:'学时',before:'10',after:'2',details:[{name:'<课程>',before:'10',after:'2'}],detail_count:1}]}});
+ assert.match(html,/暂不能向前确认或归档/);assert.match(html,/&lt;课程&gt;/);assert.doesNotMatch(html,/<课程>/);
+});
+test('manual form cannot offer protected import or interface origins',async()=>{
+ const e=engine();e.t.captureForm();vm.runInContext("businessConfig.record_sources=['学校登记','Excel导入','学校数据中台']",e.ctx);
+ await e.t.handlers['record-form']('');
+ const body=e.t.getForm().body;assert.match(body,/<option value="学校登记"/);assert.doesNotMatch(body,/<option value="学校数据中台"|<option value="Excel导入"/);assert.match(body,/本入口按人工录入留痕/);
+});
+test('changing a project immediately clears previous names and dependent course and class',()=>{
+ const e=engine();
+ for(const key of ['project_code','course_code','class_code']){const input=e.node('#f-'+key);input.value='old';input.addEventListener=(type,handler)=>{input[type]=handler};}
+ for(const key of ['project','course','class_name']){e.node('#f-'+key).value='旧名称';e.node('#f-'+key).readOnly=true;}
+ vm.runInContext('bindRecordReferences()',e.ctx);
+ const project=e.node('#f-project_code');project.value='new';project.input();
+ assert.equal(e.node('#f-project').value,'');assert.equal(e.node('#f-project').readOnly,false);
+ for(const key of ['course_code','class_code','course','class_name'])assert.equal(e.node('#f-'+key).value,'');
+});
+test('rule type disables unrelated fields and prevents a circular points input',()=>{
+ const e=engine(),form=e.node('#edit-form');form.dataset={};
+ const controls=['factor','weight','target','cap'].map(r=>({dataset:{r}})),headers=Array.from({length:6},()=>({})),circular={disabled:false},select={value:'points',querySelector:()=>circular};
+ form.querySelectorAll=s=>s.includes('[data-r]')?controls:s.includes('rule-labels')?headers:s.includes('select')?[select]:[];
+ const sync=vm.runInContext('syncRuleType',e.ctx);
+ e.node('#f-kind').value='points';sync();assert.deepEqual(controls.map(x=>x.disabled),[false,true,true,false]);assert.equal(select.value,'hours');assert.equal(circular.disabled,true);
+ e.node('#f-kind').value='assessment';sync();assert.deepEqual(controls.map(x=>x.disabled),[true,false,false,true]);assert.equal(circular.disabled,false);
+});
+
 import test from 'node:test';import assert from 'node:assert/strict';import fs from 'node:fs';import vm from 'node:vm';
-import {connectorInfo,connectorCards,connectorStatus,incomeChart,guideCards,scopedDateFilters} from '../../frontend/portal-ui.js';
+import {connectorInfo,connectorCards,connectorStatus,incomeChart,guideCards,scopedDateFilters,incomeParticipantsChart,barChart,syncStatusChart,rankRows,percentChange,RANK_METRICS} from '../../frontend/portal-ui.js';
 import * as scope from '../../frontend/scope.js';
 import {icons} from '../../frontend/icons.js';
 import * as workspace from '../../frontend/integration-workspace.js';
 import * as drafts from '../../frontend/integration-drafts.js';
+import {renderBusinessHistory} from '../../frontend/business-history.js';
 const source=fs.readFileSync(new URL('../../frontend/app.js',import.meta.url),'utf8');
 const customerVisible=html=>String(html??'').replace(/<details\b[\s\S]*?<\/details>/g,'');
 const implementationDetailTags=html=>[...String(html??'').matchAll(/<details\b[^>]*class="[^"]*implementation-details[^"]*"[^>]*>/g)].map(x=>x[0]);
@@ -12,7 +48,7 @@ function engine(responder=async()=>({items:[],total:0,page:1,size:20}), role='sc
  const requests=[], nodes=new Map();
  function node(id){if(!nodes.has(id)){const classes=new Set(),attrs=new Map();nodes.set(id,{innerHTML:'',textContent:'',value:'',classList:{add(v){classes.add(v)},remove(v){classes.delete(v)},contains(v){return classes.has(v)},toggle(v,force){const on=force??!classes.has(v);if(on)classes.add(v);else classes.delete(v);return on}},setAttribute(k,v){attrs.set(k,v)},getAttribute(k){return attrs.get(k)??null},removeAttribute(k){attrs.delete(k)},focus(){},addEventListener(){},append(){},querySelector(){return node(id+'-child')},querySelectorAll(){return []}})}return nodes.get(id)}
  const ctx=vm.createContext({console,URLSearchParams,URL,Blob,FormData,Number,String,Object,Array,Date,Math,Set,Map,JSON,RegExp,Error,Promise,crypto:globalThis.crypto,setTimeout:()=>0,clearTimeout(){},
-  ...scope,...workspace,...drafts,connectorInfo,connectorCards,connectorStatus,incomeChart,guideCards,scopedDateFilters,icons,
+  ...scope,...workspace,...drafts,renderBusinessHistory,connectorInfo,connectorCards,connectorStatus,incomeChart,guideCards,scopedDateFilters,incomeParticipantsChart,barChart,syncStatusChart,rankRows,percentChange,RANK_METRICS,icons,
   document:{querySelector:node,querySelectorAll:()=>[],addEventListener(){},createElement:()=>node('created'),body:node('body')},window:{addEventListener(){}},location:{hash:'',pathname:'/',search:''},history:{replaceState(){}},
   fetch:async(url,options)=>{requests.push({url,options});let answer=await responder(url,options);if(url.endsWith('/draft')&&options.method==='GET'&&!answer.connection){const cat=await responder('/api/connections/catalog',options),ident=url.split('/').at(-2),entry=cat.items.find(x=>x.connection.id===ident);answer={connection:entry.connection,draft_version:0,active_version:entry.connection.version||1}}if(url.endsWith('/implementation')&&!answer.statuses){const cat=await responder('/api/connections/catalog',options),ident=url.split('/').at(-2),entry=cat.items.find(x=>x.connection.id===ident);answer={connection_id:ident,code:entry.connection.code,name:entry.connection.name,statuses:{materials:'资料待登记',configuration:'配置待完善',tests:'待真实测试',published:'未发布或授权失效',health:'未检查',acceptance:'待学校签认'}}}return {ok:true,status:200,json:async()=>answer}},
  });
@@ -498,4 +534,116 @@ test('confirmed province source becomes visible without claiming interface readi
  const html=e.t.sourceAvailability('province',confirmed);
  assert.match(html,/权威来源已确认/);assert.match(html,/学校教务系统/);
  assert.doesNotMatch(html,/待确认权威来源/);
+});
+
+test('inline record detail escapes data, collapses, and discards results after navigation',async()=>{
+ let finish;
+ const e=engine(()=>new Promise(resolve=>{finish=resolve}));
+ const panel={isConnected:true,innerHTML:''},detail={hidden:true,querySelector:()=>panel};
+ const row={nextElementSibling:detail,classList:{add(){},remove(){}}};
+ const attrs=new Map(),button={innerHTML:'',closest:()=>row,setAttribute:(k,v)=>attrs.set(k,v)};
+ const payload={record:{id:'rec1',teacher_id:'someone',course:'课程<script>',class_name:'样本',source:'人工录入',event_date:'2026-09-01',income:100,version:1,external_key:'PRIVATE-KEY'},history:[]};
+ const opening=e.t.handlers['record-expand']('rec1',button);
+ assert.equal(detail.hidden,false);assert.equal(attrs.get('aria-expanded'),'true');
+ finish(payload);await opening;
+ assert.match(panel.innerHTML,/课程&lt;script&gt;/);assert.doesNotMatch(panel.innerHTML,/<script>/);
+ assert.doesNotMatch(customerVisible(panel.innerHTML),/PRIVATE-KEY|更正记录/);
+ assert.match(panel.innerHTML,/100\.00/);
+ await e.t.handlers['record-expand']('rec1',button);
+ assert.equal(detail.hidden,true);assert.equal(attrs.get('aria-expanded'),'false');assert.equal(e.requests.length,1);
+ const stale=e.t.handlers['record-expand']('rec1',button);panel.isConnected=false;finish(payload);await stale;
+ assert.match(panel.innerHTML,/正在读取/,'detached panel must not receive the response');
+});
+
+test('inline record failure is visible and remains collapsible for retry',async()=>{
+ const e=engine(()=>{throw Error('读取失败')});
+ const panel={isConnected:true,innerHTML:''},detail={hidden:true,querySelector:()=>panel};
+ const button={innerHTML:'',closest:()=>({nextElementSibling:detail,classList:{add(){},remove(){}}}),setAttribute(){}};
+ await assert.rejects(e.t.handlers['record-expand']('rec1',button),/网络连接中断/);
+ assert.match(panel.innerHTML,/role="alert"/);
+ await e.t.handlers['record-expand']('rec1',button);assert.equal(detail.hidden,true);
+});
+
+// ---- Procurement batch 2: 4.9 / 5.2 / 6.3 / 7.3-7.6 / 10.1 / 10.7 / 10.9 / 11.3 ----
+test('dashboard chart helpers: metric ranking keeps missing values last, dual trend and bars are escaped',()=>{
+ assert.deepEqual(rankRows([{name:'甲',assessment_average:null},{name:'乙',assessment_average:'80.5'},{name:'丙',assessment_average:'90'}],'assessment_average').map(x=>x.name),['丙','乙','甲']);
+ assert.equal(percentChange('12.5'),'+12.50%');assert.equal(percentChange(null),'—');assert.equal(percentChange('-3'),'-3.00%');
+ const dual=incomeParticipantsChart([{month:'2026-08',income:'100',participants:5},{month:'2026-09',income:'-20',participants:0}]);
+ assert.match(dual,/课程人次（右轴）/);assert.match(dual,/participants-bar/);assert.match(dual,/trend-line/);assert.doesNotMatch(dual,/NaN|Infinity/);
+ assert.doesNotMatch(incomeParticipantsChart([{month:'2026-08',income:'100'}]),/participants-bar/);
+ assert.match(incomeParticipantsChart([{month:'m',income:null,participants:1}]),/数据格式异常/);
+ const bars=barChart([{name:'<b>学院</b>',value:3},{name:'空',value:null}],{label:'参与教师',unit:'人'});assert.match(bars,/&lt;b&gt;/);assert.doesNotMatch(bars,/<b>|NaN/);
+ const sync=syncStatusChart([{name:'湘培直通车',latest_task:{success_count:2,failed_count:1,pending_confirmation_count:0}},{name:'中台',latest_task:null}]);assert.match(sync,/bar-fail/);assert.match(sync,/尚无任务/);
+});
+function cockpitResponder(url){
+ if(url.startsWith('/api/statistics/comparison'))return {available:true,windows:{current:{start:'2026-01-01',end:'2026-12-31',days:365},previous:{start:'2025-01-01',end:'2025-12-31',days:365},year_ago:{start:'2025-01-01',end:'2025-12-31'}},current:{income:'300',participants:10,teachers:2,records:2,hours:'20',projects:2},previous:{income:'100',participants:10,teachers:1,records:1,hours:'10',projects:1},year_ago:{income:'0',participants:0,teachers:0,records:0,hours:'0',projects:0},mom:{income:'200.00',participants:'0.00',teachers:'100.00',records:'100.00',hours:'100.00',projects:'100.00'},yoy:{income:null,participants:null,teachers:null,records:null,hours:null,projects:null},note:'同源'};
+ if(url.startsWith('/api/statistics'))return {income:'300',participants:10,teachers:2,projects:2,courses:1,classes:2,hours:'20',records:2,trend:[{month:'2026-09',income:'300',participants:10}],assessment_states:{TEACHER:1},
+  colleges:[{id:'c1',name:'学院一',income:'100',participants:5,teachers:1,assessment_average:'92.00',assessment_count:1},{id:'c2',name:'学院二',income:'200',participants:5,teachers:1,assessment_average:null,assessment_count:0}],
+  assessment_score_summary:{count:1,average:'92',minimum:'92',maximum:'92'},assessment_score_bands:[{label:'90–100分',count:1}],metric_notes:{},master_data_counts:{}};
+ if(url.startsWith('/api/connections/summary'))return {items:[{code:'province',name:'湘培直通车',connection_state:'NOT_CONNECTED',latest_task:{id:'t',state:'BLOCKED',display_state:'BLOCKED',success_count:0,failed_count:2,pending_confirmation_count:0,last_activity_at:'2026-09-20T00:00:00',failure_reason:'外部接口未真实连接'}}]};
+ return {items:[],total:0,page:1,size:20};
+}
+test('school cockpit shows comparison, multi-metric colleges, charts and sync failure reason from one stats source',async()=>{
+ const e=engine(cockpitResponder);e.t.setState('cockpit',{},1,1,'p');const html=await e.t.pages.cockpit();
+ for(const text of ['环比 / 同比','+200.00%','上期为0，不计算','学院多指标对比','教师参与情况','培训收入与课程人次趋势','最近失败原因','外部接口未真实连接','学院排行 · 收入','bar-fail'])assert.ok(html.includes(text),text);
+ assert.ok(html.indexOf('学院二')<html.indexOf('学院一'));
+ assert.ok(e.requests.some(r=>r.url.startsWith('/api/statistics/comparison?')&&r.url.includes('period_id=p')));
+ await e.t.handlers['rank-metric']('assessment_average');const again=await e.t.pages.cockpit();assert.match(again,/学院排行 · 考核均分/);assert.ok(again.indexOf('学院一')<again.indexOf('学院二'));
+ assert.ok(e.requests.every(r=>r.options.method==='GET'));
+});
+test('organization page renders assessment score summary and score bands for the scope',async()=>{
+ const e=engine(url=>url.startsWith('/api/organization-workbench')?{statistics:{...cockpitResponder('/api/statistics'),ranking:[],state_filter_note:''},todos:{items:[],total:0},assessment_states:{}}:{items:[]},'college');
+ e.t.setState('organization');const html=await e.t.pages.organization();assert.match(html,/本范围教师考核分值汇总与分档/);assert.match(html,/90–100分/);assert.match(html,/平均分/);
+});
+test('integration detail renders latest sync per data type with failure reason and province ledger explanation',async()=>{
+ const e=engine(url=>{
+  if(url.startsWith('/api/connections/summary'))return {items:[{code:'province',name:'湘培直通车',connection_state:'NOT_CONNECTED',latest_task:{id:'t9',data_type:'training_record',state:'BLOCKED',display_state:'BLOCKED',success_count:0,failed_count:1,pending_confirmation_count:0,last_activity_at:'2026-09-20T00:00:00',failure_reason:'外部接口未真实连接',failure_items:[{business_key:'record:<x>',state:'BLOCKED',error:'NOT_CONNECTED'}]}}]};
+  if(url.includes('/ledger-sync/catalog'))return {note:'内部标准字段',items:[{data_type:'training_record',name:'培训记录',buildable:true,source_note:'有效台账',fields:[{key:'record_key',label:'台账来源编号'}]},{data_type:'certificate',name:'证书信息',buildable:false,waiting_reason:'学员培训证书由发证系统签发'}]};
+  return integrationResponder(url)});
+ e.t.setState('province',{tab:'overview',data_type:'training_record'});const html=await e.t.pages.province(),visible=customerVisible(html);
+ assert.match(visible,/最近同步/);assert.match(visible,/外部接口未真实连接/);assert.match(visible,/record:&lt;x&gt;/);assert.match(visible,/学员培训证书由发证系统签发/);assert.match(html,/data-action="ledger-sync"/);
+ assert.ok(e.requests.some(r=>r.url.startsWith('/api/connections/summary?')&&r.url.includes('data_type=training_record')));
+ assert.equal((html.match(/data-action="data-type-adapter"/g)||[]).length,11);
+});
+test('ledger sync form previews before enqueue and submits the confirmed count',async()=>{
+ const e=engine(url=>url.includes('/ledger-sync/catalog')?{items:[{data_type:'teaching',name:'教师授课',buildable:true,fields:[]}]}:url.includes('/ledger-sync/preview')?{count:3,task_count:1,sample:[{business_key:'teaching:a'}],fields:[{key:'business_key',label:'业务唯一键'}],mapping_ready:true,connection_live:false}:url.endsWith('/ledger-sync')?{records:3,tasks:[{id:'t',rows:3,state:'BLOCKED',reused:0}]}:{items:[]});
+ e.t.captureForm();vm.runInContext('render=async()=>{}',e.ctx);await e.t.handlers['ledger-sync']('c-province');
+ const box=e.node('#ledger-preview');box.dataset={};e.node('#f-data_type').value='teaching';e.node('#f-period_id').value='p';
+ await assert.rejects(e.t.getForm().callback({data_type:'teaching',reason:'生成'}),/先预览/);
+ await e.t.handlers['ledger-preview']('c-province');assert.equal(box.dataset.count,'3');assert.match(box.innerHTML,/本次将组装 3 条/);assert.match(box.innerHTML,/teaching:a/);
+ await e.t.getForm().callback({data_type:'teaching',period_id:'p',reason:'生成'});
+ const body=JSON.parse(e.requests.find(r=>r.url.endsWith('/ledger-sync')).options.body);assert.equal(body.expected_count,3);assert.equal(body.period_id,'p');
+});
+test('extended scoring rule rows build tier/deduct components and keep legacy shape unchanged',()=>{
+ const e=engine(),build=vm.runInContext('ruleComponent',e.ctx);
+ const row=values=>({querySelectorAll:()=>Object.entries(values).map(([r,value])=>({dataset:{r},value}))});
+ assert.deepEqual(JSON.parse(JSON.stringify(build(row({key:'a',label:'A',source:'hours',factor:'2',weight:'0',target:'1',cap:'',method:''}),'points'))),{key:'a',label:'A',source:'hours',factor:'2',weight:'0',target:'1',cap:null});
+ const tier=build(row({key:'a',label:'A',source:'hours',factor:'1',weight:'40',target:'1',cap:'',method:'tier',tiers:'0:10, 8：30',tier_mode:'score',floor:''}),'assessment');
+ assert.equal(tier.method,'tier');assert.deepEqual(JSON.parse(JSON.stringify(tier.tiers)),[{min:'0',value:'10'},{min:'8',value:'30'}]);assert.equal(tier.weight,'40');
+ const ded=build(row({key:'b',label:'B',source:'participants',weight:'0',target:'1',method:'deduct',per_unit:'2',unit:'',base:'20',floor:'5'}),'points');assert.equal(ded.per_unit,'2');assert.equal(ded.base,'20');assert.equal(ded.floor,'5');assert.equal('unit' in ded,false);
+ assert.throws(()=>build(row({key:'a',label:'A',source:'hours',method:'tier',tiers:'abc'}),'points'),/分档格式/);
+ const relevant=vm.runInContext('ruleFieldRelevant',e.ctx);assert.equal(relevant('tiers',false,'tier'),true);assert.equal(relevant('per_unit',false,'tier'),false);assert.equal(relevant('target',false,'tier'),false);assert.equal(relevant('weight',false,'deduct'),true);assert.equal(relevant('tiers',true,''),false);
+ assert.match(vm.runInContext('methodSummary',e.ctx)({method:'tier',tier_mode:'score',tiers:[{min:'0',value:'10'}],floor:'2'}),/分档；得分 0:10；保底 2/);
+});
+test('assessment list offers role-mapped progress quick filters, tied rank and a ranking print entry',async()=>{
+ const e=engine(url=>url.startsWith('/api/assessments')?{items:[{id:'a',teacher_id:'t',period_id:'p',score:'90',state:'DEPARTMENT',returned:false,rank:1,scope_rank:1},{id:'b',teacher_id:'u',period_id:'p',score:'90',state:'DEPARTMENT',returned:false,rank:1,scope_rank:2}],total:2,page:1,size:20,rank_note:'同分并列'}:{items:[]},'dept');
+ e.t.setState('assessment',{progress:'pending'});const html=await e.t.pages.assessment();
+ assert.match(html,/本级待处理/);assert.match(html,/本级 = 教研室确认环节/);assert.match(html,/名次（同分并列）/);assert.match(html,/data-action="ranking-print"/);
+ assert.match(e.requests.find(r=>r.url.startsWith('/api/assessments?')).url,/progress=pending/);
+ await e.t.handlers['progress-filter']('returned');assert.equal(e.t.getState().filter.progress,'returned');
+ await e.t.handlers['progress-filter']('all');assert.equal(e.t.getState().filter.progress,undefined);
+});
+test('teacher home shows qualification status distribution and recent point details',async()=>{
+ const e=engine(url=>{
+  if(url.startsWith('/api/qualification-summary'))return {items:[{key:'SUBMITTED',label:'待审核',count:1},{key:'RETURNED',label:'已退回',count:2},{key:'EXPIRING',label:'即将到期',count:1},{key:'VALID',label:'有效',count:3},{key:'EXPIRED',label:'已过期',count:1}],note:'30 天内到期'};
+  if(url.startsWith('/api/points'))return {items:[{id:'pe',teacher_id:'u',item_key:'hours',kind:'BASE',amount:'12',created_at:'2026-09-01T00:00:00'}],total:1,sum:'12'};
+  return homeResponse(url)},'teacher');
+ e.t.setState('home');const html=await e.t.pages.home();
+ for(const t of ['我的资质状态','待审核','即将到期','另有 1 份资质已过期','最近积分明细','+12.00'])assert.ok(html.includes(t),t);
+ assert.match(e.requests.find(r=>r.url.startsWith('/api/points')).url,/size=5/);assert.doesNotMatch(html,/NaN/);
+});
+test('administrator task tab also shows the latest sync failure reason and the ledger entry',async()=>{
+ const e=engine(url=>url.startsWith('/api/connections/summary')?{items:[{code:'province',name:'湘培直通车',connection_state:'NOT_CONNECTED',latest_task:{id:'t1',data_type:'teaching',state:'FAILED',display_state:'FAILED',success_count:1,failed_count:1,pending_confirmation_count:0,last_activity_at:'2026-09-20T00:00:00',failure_reason:'存在失败或缺失同步项',failure_items:[]}}]}:integrationResponder(url));
+ e.t.setState('province',{tab:'tasks',data_type:'teaching'});const html=await e.t.pages.province();
+ assert.match(html,/最近同步/);assert.match(html,/存在失败或缺失同步项/);assert.match(html,/data-action="ledger-sync"/);assert.equal((html.match(/id="integration-filters"/g)||[]).length,1);
 });

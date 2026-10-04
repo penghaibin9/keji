@@ -107,7 +107,7 @@ def import_confirm(ident:str,data:VersionedReason,request:Request):
 
 EXPORT_FILTERS={
  'records':set(RECORD_FILTERS),'participations':{'q','teacher_id','org_id','start','end','project_code','course_code'},'qualifications':{'q','state','teacher_id','org_id'},'points':{'teacher_id','period_id','org_id'},
- 'assessments':set(ASSESSMENT_FILTERS),'organization_assessments':{'period_id','target_kind','target_id','state'},'audit':{'q','module','result','start','end'},'handover':set(),
+ 'assessments':set(ASSESSMENT_FILTERS),'organization_assessments':{'period_id','target_kind','target_id','state'},'audit':{'q','module','result','start','end','actor','org_id','object_id','request_id'},'handover':set(),
 }
 
 @router.post('/exports')

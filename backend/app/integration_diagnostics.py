@@ -23,6 +23,7 @@ CATALOG = {
     'PULL_CURSOR_NOT_ADVANCING': ('pagination', '分页游标没有推进', '请数据责任方核对游标；系统不会静默漏页或重复入库。'),
     'PULL_PAGE_LIMIT_EXCEEDED': ('pagination', '达到本次同步安全页数上限', '核对总量和分页规则；保留已确认批次，勿盲目扩大限制。'),
     'PULL_RESPONSE_TOTAL_MISMATCH': ('reconciliation', '源端总量与累计接收量不一致', '核对快照和分页规则，不能将本次同步视为完整。'),
+    'PROVINCE_RECEIPT_INVALID': ('response', '受理回执编号不符合内部保存契约', '核对回执字段映射、类型和长度；不得截断编号或将非法回执记作成功。'),
     'SSO_ID_TOKEN_INVALID': ('signature', '身份令牌验证未通过', '核对签发方、客户端、公钥和服务器时间。'),
     'SSO_IDENTITY_ROOT_INVALID': ('mapping', '身份根路径不匹配', '对照脱敏身份样本调整根路径后重新预览。'),
     'SSO_ACTIVE_RULE_MISSING': ('mapping', '账号启停规则未配置', '登记真实启停字段和取值，不得猜测账号状态。'),

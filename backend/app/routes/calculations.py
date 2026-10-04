@@ -14,11 +14,13 @@ from ..core import *
 from ..schemas import *
 from ..assessment_evidence import assessment_projection, make_archive
 from ..org_evidence import verified_org_archive, organization_summary
-from ..services import facts,evaluate,calculate_points,calculate_assessments,rounded
+from ..services import facts,evaluate,evaluate_rule,calculate_points,calculate_assessments,rounded,assessment_source_changes,point_source_changes
+from ..calculation_freshness import require_current_sources,relevant_disputes
+from ..scoring_methods import clean_teacher_config
 from ..read_queries import assessment_query,ASSESSMENT_FILTERS,authorized_org_descendants
 from .business import owned_object,events
 from ..org_assessment import (OrganizationAssessmentRule,OrganizationRuleTrial,OrganizationAssessment,OrganizationAssessmentMetricEvidence,
-    validate_org_rule_config,organization_facts,evaluate_org_rule,archive_payload,ORG_TARGET_KINDS)
+    validate_org_rule_config,organization_facts,evaluate_org_rule,archive_payload,ORG_TARGET_KINDS,organization_source_changes)
 router=APIRouter(prefix='/api',tags=['积分与教师考核'])
 
 @router.get('/rules')
@@ -27,17 +29,43 @@ def rules(request:Request):
     def load(db,a,s):
         q=select(Rule)
         if f.get('period_id'):q=q.where(Rule.period_id==f['period_id'])
-        return {'items':db.scalars(q.order_by(Rule.created_at.desc(),Rule.id)).all()}
+        items=db.scalars(q.order_by(Rule.created_at.desc(),Rule.id)).all()
+        # 9.8/10.8: the copy source is recorded in the immutable audit trail (no schema change).
+        sources={x.object_id:(x.after or {}).get('source_rule_id') for x in db.scalars(select(Audit).where(Audit.module=='rules',
+            Audit.action==RULE_COPY_ACTION,Audit.object_id.in_([r.id for r in items])))} if items else {}
+        return {'items':[{**serial(r),'copied_from':sources.get(r.id)} for r in items]}
     return read_operation(request,'rules.manage',load)
 
 @router.post('/rules')
 def create_rule(data:RuleIn,request:Request):
     def apply(db,a,s):
-        require_open_period(db,data.period_id);config=serial(data.config.model_dump())
+        require_open_period(db,data.period_id);config=clean_teacher_config(serial(data.config.model_dump()),data.kind)
         version=(db.scalar(select(func.max(Rule.version_no)).where(Rule.period_id==data.period_id,Rule.kind==data.kind)) or 0)+1
         obj=Rule(kind=data.kind,name=data.name,period_id=data.period_id,version_no=version,config=config,
           fingerprint=digest({'kind':data.kind,'period_id':data.period_id,'config':config}),created_by=a.id,reason=data.reason)
         db.add(obj);db.flush();audit(db,a,'rules',obj.id,'创建新规则版本',after=serial(obj),reason=data.reason);return obj
+    return command(request,data.model_dump(),'rules.manage',apply)
+
+RULE_COPY_ACTION='复制为新的教师规则草稿'
+
+@router.post('/rules/{ident}/copy')
+def copy_rule(ident:str,data:RuleCopy,request:Request):
+    """9.8/10.8: new DRAFT rule from an existing one; source id/version recorded; trial still required."""
+    def apply(db,a,s):
+        from copy import deepcopy
+        source=db.get(Rule,ident)
+        if not source:raise HTTPException(404,'规则不存在')
+        check_version(source,data.expected_version);require_open_period(db,data.period_id)
+        config=clean_teacher_config(serial(data.config.model_dump()),source.kind) if data.config is not None else deepcopy(source.config)
+        from pydantic import ValidationError
+        try:RuleIn(kind=source.kind,name=data.name,period_id=data.period_id,config=config,reason=data.reason)  # same validation as a new rule
+        except ValidationError:raise HTTPException(422,'复制后的规则配置不符合规范（积分规则不能引用本期积分等）') from None
+        version=(db.scalar(select(func.max(Rule.version_no)).where(Rule.period_id==data.period_id,Rule.kind==source.kind)) or 0)+1
+        obj=Rule(kind=source.kind,name=data.name,period_id=data.period_id,version_no=version,config=config,state='DRAFT',
+          fingerprint=digest({'kind':source.kind,'period_id':data.period_id,'config':config}),created_by=a.id,reason=data.reason)
+        db.add(obj);db.flush()
+        audit(db,a,'rules',obj.id,RULE_COPY_ACTION,after={'source_rule_id':source.id,'source_version_no':source.version_no,'source_period_id':source.period_id,'rule':serial(obj)},reason=data.reason)
+        return {**serial(obj),'copied_from':source.id,'trial_required':True}
     return command(request,data.model_dump(),'rules.manage',apply)
 
 @router.post('/rules/{ident}/trial')
@@ -47,7 +75,7 @@ def trial(ident:str,data:Trial,request:Request):
         if not obj:raise HTTPException(404,'规则不存在')
         p=require_open_period(db,obj.period_id);items=[]
         for tid in data.teacher_ids:
-            a.check_teacher(db,tid,active=True);raw,snap=facts(db,tid,p);detail=evaluate(obj,raw)
+            a.check_teacher(db,tid,active=True);raw,snap=facts(db,tid,p);detail=evaluate_rule(obj,raw)
             items.append({'teacher_id':tid,'detail':detail,'total':str(rounded(sum((Decimal(x['score']) for x in detail),Decimal(0))))})
         db.add(RuleTrial(rule_id=obj.id,fingerprint=obj.fingerprint,result=items,actor_id=a.id))
         audit(db,a,'rules',obj.id,'样本试算',after={'teachers':len(items),'fingerprint':obj.fingerprint},reason='规则样本试算，不写积分或考核台账')
@@ -143,8 +171,11 @@ def balance_action(ident:str,data:Action,request:Request):
         if data.action=='confirm':
             if obj.teacher_id!=a.id:raise HTTPException(403,'积分必须由本人确认')
             if obj.confirmed:raise HTTPException(409,'积分已经确认')
-            if db.scalar(select(Dispute.id).where(Dispute.teacher_id==obj.teacher_id,Dispute.period_id==obj.period_id,Dispute.state=='OPEN').limit(1)):
+            point_rows=db.scalars(select(PointEntry).where(PointEntry.teacher_id==obj.teacher_id,PointEntry.period_id==obj.period_id)).all()
+            record_ids={r['id'] for p in point_rows for r in (p.source_snapshot or {}).get('facts',{}).get('training_records',[])}
+            if db.scalar(relevant_disputes(obj.teacher_id,db.get(Period,obj.period_id),record_ids).limit(1)):
                 raise HTTPException(409,'请先处理本周期未解决核对申请')
+            require_current_sources(point_source_changes(db,obj.teacher_id,db.get(Period,obj.period_id)))
             obj.confirmed=True
         elif data.action=='reopen':
             if not obj.confirmed or not data.basis:raise HTTPException(409,'解锁需已确认状态且填写依据')
@@ -201,26 +232,52 @@ def assessments(request:Request):
     def load(db,a,s):
         q=assessment_query(db,a,f)
         ordered=q.order_by(Assessment.score.desc(),Assessment.teacher_id)
-        out=page_result(db,ordered,p,z)
+        out=page_result(db,ordered,p,z);sub=q.subquery()
         for i,item in enumerate(out['items']):
             item['scope_rank']=(p-1)*z+i+1
+            # 10.7 competition ranking: equal scores share a rank (1,1,3).
+            item['rank']=1+db.scalar(select(func.count()).select_from(sub).where(sub.c.score>Decimal(str(item['score']))))
             if item['state']=='ARCHIVED':
                 frozen=assessment_projection(db,SimpleNamespace(**item))
                 item['teacher_display_name']=frozen['teacher']['name']
                 item['period_display_name']=frozen['period']['name']
                 item['identity_frozen']=frozen['identity_frozen']
-        out['rank_note']='当前授权与筛选范围的得分排序序号；同分按教师编号稳定排序，不代表全校名次。'
+        out['rank_note']='当前授权与筛选范围的得分排序：“名次”同分并列（如 1、1、3），序号仅用于翻页定位；不代表全校名次。'
         return out
     return read_operation(request,'assessment.read',load)
 
-def assessment_open_disputes(obj):
-    return select(Dispute).where(Dispute.teacher_id==obj.teacher_id,Dispute.state=='OPEN',
-        ((Dispute.period_id==obj.period_id)|(Dispute.period_id.is_(None))))
+RANKING_PRINT_LIMIT=2000
+
+@router.get('/assessment-ranking/print')
+def assessment_ranking_print(request:Request):
+    """10.7 printable teacher ranking for the current filter; same scope/filters as the list."""
+    f,_,_=filters_from(request,ASSESSMENT_FILTERS)
+    def load(db,a,s):
+        a.require('assessment.read');q=assessment_query(db,a,f)
+        total=db.scalar(select(func.count()).select_from(q.order_by(None).subquery()))
+        if total>RANKING_PRINT_LIMIT:raise HTTPException(422,f'打印范围超过 {RANKING_PRINT_LIMIT} 人，请按周期或组织缩小范围')
+        sub=q.subquery();ranked=select(sub.c.id,func.rank().over(order_by=sub.c.score.desc()).label('rank')).subquery()
+        ranks=dict(db.execute(select(ranked.c.id,ranked.c.rank)).all())
+        rows=db.scalars(q.order_by(Assessment.score.desc(),Assessment.teacher_id)).all();items=[]
+        for obj in rows:
+            if obj.state=='ARCHIVED':
+                frozen=assessment_projection(db,obj);name=frozen['teacher']['name'];staff=frozen['teacher'].get('staff_no');period=frozen['period']['name']
+            else:
+                user=db.get(User,obj.teacher_id);name=user.name if user else '';staff=user.staff_no if user else '';period=(db.get(Period,obj.period_id) or SimpleNamespace(name='')).name
+            items.append({'teacher_id':obj.teacher_id,'teacher_name':name,'staff_no':staff,'period_name':period,'score':obj.score,'state':obj.state,'returned':obj.returned,'rank':ranks[obj.id]})
+        audit(db,a,'assessment','ranking','打印教师考核排名表',after={'filters':f,'rows':len(items)},reason='授权打印当前筛选范围排名')
+        return {'items':items,'total':total,'filters':f,'rank_method':'competition','printed_at':utcnow(),
+            'note':'当前授权与筛选范围内排名，同分并列；未归档结果为过程数据，不替代最终确认结果。'}
+    return read_operation(request,'export',load)
+
+def assessment_open_disputes(db,obj):
+    return relevant_disputes(obj.teacher_id,db.get(Period,obj.period_id),[r['id'] for r in obj.source_snapshot.get('training_records',[])])
 
 def assessment_details(db,a,ident,permission='assessment.read'):
     obj=owned_object(db,a,Assessment,ident,permission)
     result=assessment_projection(db,obj,events(db,'assessment',ident) if obj.state!='ARCHIVED' else None)
-    pending=db.scalars(assessment_open_disputes(obj).order_by(Dispute.created_at,Dispute.id)).all() if obj.state!='ARCHIVED' else []
+    pending=db.scalars(assessment_open_disputes(db,obj).order_by(Dispute.created_at,Dispute.id)).all() if obj.state!='ARCHIVED' else []
+    result['source_changes']=assessment_source_changes(db,obj)
     can_view='dispute.write' in a.permissions
     result['confirmation_blockers']={'count':len(pending),'can_view':can_view,
         'can_resolve':can_view and 'dispute.resolve' in a.permissions and obj.teacher_id!=a.id,
@@ -247,8 +304,11 @@ def assessment_evidence_download(ident:str,request:Request):
         if not result['immutable']:raise HTTPException(409,'仅已归档考核可以下载冻结证据')
         payload={'format':'Yueke teacher assessment evidence v2','archive':result['assessment']['archive'],
                  'archive_sha256':result['assessment']['archive_sha256']}
+        from ..sensitive import MaskPolicy
+        policy=MaskPolicy(db,a);payload=policy.apply(serial(payload))
+        if policy.masked:payload['masked_fields']=policy.masked;payload['masking_note']='证书编号/工号已按查看人权限脱敏，本文件不能用于复核归档SHA256'
         data=json.dumps(payload,ensure_ascii=False,indent=2).encode('utf-8')
-        audit(db,a,'assessment',ident,'下载教师考核归档证据',after={'archive_sha256':payload['archive_sha256']},reason='当前权限核验后下载原归档快照')
+        audit(db,a,'assessment',ident,'下载教师考核归档证据',after={'archive_sha256':payload['archive_sha256'],'masked_fields':policy.masked},reason='当前权限核验后下载原归档快照')
     return Response(data,media_type='application/json',headers={'Content-Disposition':"attachment; filename*=UTF-8''"+quote('教师考核归档证据_'+ident+'.json'),'X-Content-Type-Options':'nosniff'})
 
 @router.get('/assessments/{ident}/attachments/{attachment_id}/download')
@@ -280,7 +340,7 @@ def assessment_action(ident:str,data:Action,request:Request):
         if obj.state=='ARCHIVED':raise HTTPException(409,'已归档考核不可修改')
         before=serial(obj)
         if data.action=='confirm':
-            if db.scalar(assessment_open_disputes(obj).limit(1)):
+            if db.scalar(assessment_open_disputes(db,obj).limit(1)):
                 raise HTTPException(409,'存在未解决数据核对，请先处理')
             if obj.state=='TEACHER':
                 a.require('assessment.confirm')
@@ -300,12 +360,14 @@ def assessment_action(ident:str,data:Action,request:Request):
         elif data.action=='archive':
             a.require('assessment.archive')
             if a.role.kind!='school' or obj.state!='READY' or obj.teacher_id==a.id:raise HTTPException(403,'仅学校可归档已审核结果')
-            if db.scalar(assessment_open_disputes(obj).limit(1)):
+            if db.scalar(assessment_open_disputes(db,obj).limit(1)):
                 raise HTTPException(409,'仍有未解决核对申请，不能归档')
+            require_current_sources(assessment_source_changes(db,obj))
             obj.archive=make_archive(db,obj,a,events(db,'assessment',ident),data.reason,data.basis,request.app.state.settings.storage_dir)
             obj.state='ARCHIVED'
             obj.archive_sha256=digest(obj.archive)
         else:raise HTTPException(422,'考核操作无效')
+        if data.action=='confirm':require_current_sources(assessment_source_changes(db,obj))
         obj.version+=1
         workflow(db,a,'assessment',ident,{'confirm':'考核确认','return':'退回教师核对','archive':'考核归档'}[data.action],before,serial(obj),data.reason,data.basis)
         return obj
@@ -367,7 +429,8 @@ def create_organization_rule(data:OrgAssessmentRuleIn,request:Request):
 def copy_organization_rule(ident:str,data:OrgRuleCopy,request:Request):
     def apply(db,a,s):
         from copy import deepcopy
-        a.require_admin();source=db.get(OrganizationAssessmentRule,ident)
+        # 9.8/10.8: any holder of rules.manage (checked by command) may copy into a new draft.
+        source=db.get(OrganizationAssessmentRule,ident)
         if not source:raise HTTPException(404,'组织考核规则不存在')
         check_version(source,data.expected_version);require_open_period(db,data.period_id)
         config=validate_org_rule_config(source.target_kind,serial(data.config.model_dump()) if data.config is not None else deepcopy(source.config))
@@ -389,7 +452,10 @@ def trial_organization_rule(ident:str,data:OrgRuleTrial,request:Request):
         period=require_open_period(db,rule.period_id);items=[]
         for oid in data.target_ids:
             target=_org_target(db,a,oid,rule.target_kind)
-            raw,snapshot=organization_facts(db,target,period);detail=evaluate_org_rule(rule,raw)
+            raw,snapshot=organization_facts(db,target,period)
+            if any(c['source']=='points' for c in rule.config['components']):
+                for tid in snapshot['teacher_ids']:require_current_sources(point_source_changes(db,tid,period))
+            detail=evaluate_org_rule(rule,raw)
             items.append({'target_kind':rule.target_kind,'target_id':oid,'target_name':target.name,'detail':detail,
                           'total':str(rounded(sum((Decimal(x['score']) for x in detail),Decimal(0))))})
         db.add(OrganizationRuleTrial(rule_id=rule.id,fingerprint=rule.fingerprint,target_ids=list(data.target_ids),result=items,actor_id=a.id))
@@ -431,7 +497,10 @@ def calculate_organization_assessments(data:OrgAssessmentCalculate,request:Reque
             obj=db.scalar(select(OrganizationAssessment).where(OrganizationAssessment.target_kind==data.target_kind,
                     OrganizationAssessment.target_id==oid,OrganizationAssessment.period_id==data.period_id).with_for_update())
             if obj and obj.state!='GENERATED':raise HTTPException(409,'已进入复核或已归档的组织考核不能被重算覆盖')
-            raw,snapshot=organization_facts(db,target,period);detail=evaluate_org_rule(rule,raw)
+            raw,snapshot=organization_facts(db,target,period)
+            if any(c['source']=='points' for c in rule.config['components']):
+                for tid in snapshot['teacher_ids']:require_current_sources(point_source_changes(db,tid,period))
+            detail=evaluate_org_rule(rule,raw)
             score=rounded(sum((Decimal(x['score']) for x in detail),Decimal(0)))
             before=serial(obj) if obj else {}
             if obj:
@@ -451,22 +520,60 @@ def calculate_organization_assessments(data:OrgAssessmentCalculate,request:Reque
 
 @router.get('/organization-assessments')
 def list_organization_assessments(request:Request):
-    f,p,z=filters_from(request,{'period_id','target_kind','target_id','state'})
+    f,p,z=filters_from(request,{'period_id','target_kind','target_id','state','progress'})
     def load(db,a,s):
         if a.role.kind=='teacher':raise HTTPException(403,'普通教师不访问组织考核')
         q=select(OrganizationAssessment)
         if a.role.kind!='school':q=q.where(OrganizationAssessment.target_id==a.org.id,OrganizationAssessment.target_kind==a.role.kind)
         for key in ('period_id','target_kind','target_id','state'):
             if f.get(key):q=q.where(getattr(OrganizationAssessment,key)==f[key])
+        generated=db.scalars(q.where(OrganizationAssessment.state=='GENERATED').with_only_columns(OrganizationAssessment.id)).all()
+        returned=org_returned_ids(db,generated)
+        if f.get('progress'):q=q.where(org_progress_clause(a,f['progress'],returned))
         total=db.scalar(select(func.count()).select_from(q.order_by(None).subquery()))
         rows=db.scalars(q.order_by(OrganizationAssessment.created_at.desc(),OrganizationAssessment.id).offset((p-1)*z).limit(z)).all()
-        return {'items':[organization_summary(db,obj) for obj in rows],'total':total,'page':p,'size':z}
+        return {'items':[{**organization_summary(db,obj),'returned':obj.id in returned} for obj in rows],'total':total,'page':p,'size':z}
     return read_operation(request,'assessment.read',load)
+
+ORG_RETURN_ACTION='退回组织考核复核'
+
+def org_returned_ids(db,ids):
+    """10.9 returned flag without schema change: a GENERATED result whose latest workflow event is a return."""
+    if not ids:return set()
+    latest={}
+    for oid,action in db.execute(select(WorkflowEvent.object_id,WorkflowEvent.action).where(WorkflowEvent.object_type=='organization_assessment',
+            WorkflowEvent.object_id.in_(list(ids))).order_by(WorkflowEvent.created_at,WorkflowEvent.id)):latest[oid]=action
+    return {i for i,action in latest.items() if action==ORG_RETURN_ACTION}
+
+def org_progress_clause(a,progress,returned):
+    O=OrganizationAssessment
+    if progress=='returned':return O.id.in_(list(returned) or [''])
+    if a.role.kind=='school':
+        if progress=='pending':return O.state.in_(['REVIEWED','SCHOOL_APPROVED'])|((O.target_kind=='school')&(O.state=='GENERATED'))
+        if progress=='done':return O.state=='ARCHIVED'
+    else:
+        if progress=='pending':return O.state=='GENERATED'
+        if progress=='done':return O.state.in_(['REVIEWED','SCHOOL_APPROVED','ARCHIVED'])
+    raise HTTPException(422,'进度筛选只允许 pending / done / returned')
 
 @router.get('/organization-assessments/ranking')
 def organization_assessment_ranking(request:Request):
     f,p,z=filters_from(request,{'period_id','target_kind','rule_id','state'})
+    return read_operation(request,'assessment.read',lambda db,a,s:_org_ranking(db,a,f,p,z))
+
+@router.get('/organization-assessment-ranking/print')
+def organization_assessment_ranking_print(request:Request):
+    """10.7 printable organization ranking for the same comparable scope."""
+    f,_,_=filters_from(request,{'period_id','target_kind','rule_id','state'})
     def load(db,a,s):
+        a.require('assessment.read');out=_org_ranking(db,a,f,1,RANKING_PRINT_LIMIT)
+        if out['total']>RANKING_PRINT_LIMIT:raise HTTPException(422,'打印范围过大，请缩小范围')
+        audit(db,a,'organization_assessment','ranking','打印组织考核排名表',after={'filters':f,'rows':len(out['items'])},reason='授权打印组织考核排名')
+        return {**out,'printed_at':utcnow()}
+    return read_operation(request,'export',load)
+
+def _org_ranking(db,a,f,p,z):
+    if True:
         if a.role.kind=='teacher':raise HTTPException(403,'普通教师不访问组织考核排名')
         if not all(f.get(k) for k in ('period_id','target_kind','rule_id')):raise HTTPException(422,'排名须指定同一周期、组织层级和规则版本')
         if f['target_kind'] not in ORG_TARGET_KINDS:raise HTTPException(422,'组织考核对象无效')
@@ -489,8 +596,8 @@ def organization_assessment_ranking(request:Request):
         items=[{'id':obj.id,'target_id':obj.target_id,'target_name':organization_summary(db,obj)['target_display_name'],
             'score':obj.score,'state':obj.state,'rank':rank,'rule_id':obj.rule_id} for obj,rank in rows]
         return {'items':items,'total':total,'page':p,'size':z,'scope':'school' if a.role.kind=='school' else 'own_organization_only',
-            'rank_method':'competition','filters':f,'note':'仅在当前授权范围、周期、层级及规则版本内排名；同分并列，不等于跨版本排名'}
-    return read_operation(request,'assessment.read',load)
+            'rank_method':'competition','filters':f,'note':'仅在当前授权范围、周期、层级及规则版本内排名；同分并列，不等于跨版本排名',
+            'rule_name':rule.name,'rule_version':rule.version_no}
 
 def _organization_details(db,a,ident):
     if a.role.kind=='teacher':raise HTTPException(403,'普通教师不访问组织考核')
@@ -508,7 +615,7 @@ def _organization_details(db,a,ident):
     return {'assessment':obj,'rule':db.get(OrganizationAssessmentRule,obj.rule_id),'target':db.get(Org,obj.target_id),
         'period':db.get(Period,obj.period_id),'evidence':db.scalars(select(OrganizationAssessmentMetricEvidence).where(
             OrganizationAssessmentMetricEvidence.assessment_id==ident).order_by(OrganizationAssessmentMetricEvidence.metric_code)).all(),
-        'events':events(db,'organization_assessment',ident),'immutable':False}
+        'events':events(db,'organization_assessment',ident),'immutable':False,'source_changes':organization_source_changes(db,obj)}
 
 @router.get('/organization-assessments/{ident}')
 def organization_assessment_detail(ident:str,request:Request):
@@ -545,8 +652,10 @@ def organization_assessment_action(ident:str,data:Action,request:Request):
         elif data.action=='archive':
             a.require('assessment.archive')
             if a.role.kind!='school' or obj.state!='SCHOOL_APPROVED':raise HTTPException(403,'仅学校可归档已审核组织考核')
+            require_current_sources(organization_source_changes(db,obj))
             payload,sha=archive_payload(db,obj,actor=a,reason=data.reason,basis=data.basis);obj.state='ARCHIVED';obj.archive=payload;obj.archive_sha256=sha
         else:raise HTTPException(422,'组织考核操作无效')
+        if data.action in {'review','school_audit'}:require_current_sources(organization_source_changes(db,obj))
         obj.version+=1
         workflow(db,a,'organization_assessment',ident,{'review':'组织考核复核','school_audit':'学校审核组织考核','return':'退回组织考核复核','archive':'组织考核归档'}[data.action],before,serial(obj),data.reason,data.basis)
         return obj

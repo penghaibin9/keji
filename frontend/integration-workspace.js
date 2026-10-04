@@ -3,7 +3,7 @@ const steps=[['materials','接入资料'],['protocol','协议与环境'],['crede
 
 export function renderCenterStatus(items,c){
  const rows=items.map(w=>[c.esc(w.name),...Object.keys(statusNames).map(k=>c.esc(w.statuses[k])),c.act('进入实施流程','nav',w.code==='middle'?'hub':w.code,'primary')]);
- return `<section class="card"><div class="card-head"><div><h2>统一认证与接口适配中心</h2><p>资料、配置、测试、发布、健康、验收分别记录；不以一个连接状态代替全部结果。</p></div></div>${c.table(['对接项目',...Object.values(statusNames),'操作'],rows)}</section>`;
+ return `<section class="card integration-center-status"><div class="card-head"><div><h2>统一认证与接口适配中心</h2><p>资料、配置、测试、发布、健康、验收分别记录；不以一个连接状态代替全部结果。</p></div></div>${c.table(['对接项目',...Object.values(statusNames),'操作'],rows)}</section>`;
 }
 
 function statusStrip(w,c){

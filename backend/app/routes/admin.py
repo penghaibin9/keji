@@ -7,7 +7,7 @@ from ..passwords import hash_password
 from ..permissions import ALLOWED,validate_permissions
 from ..org_assessment import OrganizationAssessment
 from ..readiness import _setting_ok
-from ..settings_catalog import business_dictionary,import_policy
+from ..settings_catalog import business_dictionary,import_policy,configurable_key,is_custom_key,MAX_CUSTOM_SETTINGS
 router=APIRouter(prefix='/api',tags=['组织与配置'])
 
 def need_admin(a): a.require_admin()
@@ -186,7 +186,7 @@ def settings(request:Request):
 def setting_history(key:str,request:Request):
     def load(db,a,s):
         need_admin(a)
-        if key not in {'branding','metrics','qualification','business_dictionary','import_policy'}:
+        if not configurable_key(key):
             raise HTTPException(404,'配置项不存在')
         rows=db.scalars(select(Audit).where(Audit.module=='settings',Audit.object_id==key)
             .order_by(Audit.created_at.desc(),Audit.id.desc()).limit(100)).all()
@@ -197,7 +197,7 @@ def setting_history(key:str,request:Request):
 def update_setting(key:str,data:SettingUpdate,request:Request):
     def apply(db,a,s):
         need_admin(a);obj=db.get(Setting,key)
-        if key not in {'branding','metrics','qualification','business_dictionary','import_policy'} or not obj: raise HTTPException(404,'配置项不存在')
+        if not configurable_key(key) or not obj: raise HTTPException(404,'配置项不存在')
         check_version(obj,data.expected_version)
         if not _setting_ok(key,data.value):raise HTTPException(422,'配置值不符合该项目规范')
         if len(str(data.value))>12000:raise HTTPException(422,'配置值过长')
@@ -205,13 +205,34 @@ def update_setting(key:str,data:SettingUpdate,request:Request):
         audit(db,a,'settings',key,'修改基础配置',before,serial(obj),data.reason);return obj
     return command(request,data.model_dump(),'settings.manage',apply)
 
+@router.post('/settings')
+def create_setting(data:SettingCreate,request:Request):
+    """3.1: add a custom dictionary category (dict:code) or system parameter (param:code)."""
+    def apply(db,a,s):
+        need_admin(a)
+        if not is_custom_key(data.key):raise HTTPException(422,'只能新增自定义字典类别（dict:编码）或系统参数（param:编码）')
+        if db.get(Setting,data.key):raise HTTPException(409,'该配置编码已存在，请在原配置上修改')
+        count=db.scalar(select(func.count()).select_from(Setting).where(Setting.key.like('dict:%')|Setting.key.like('param:%')))
+        if count>=MAX_CUSTOM_SETTINGS:raise HTTPException(422,'自定义配置项数量已达上限')
+        if not _setting_ok(data.key,data.value):raise HTTPException(422,'配置值不符合该项目规范')
+        if len(str(data.value))>12000:raise HTTPException(422,'配置值过长')
+        obj=Setting(key=data.key,value=data.value,version=1);db.add(obj);db.flush()
+        audit(db,a,'settings',data.key,'新增学校自定义配置',{},serial(obj),data.reason);return obj
+    return command(request,data.model_dump(),'settings.manage',apply)
+
 @router.get('/dictionaries')
 def dictionaries(request:Request):
     def load(db,a,s):
         values=business_dictionary(db)
         policy=import_policy(db)
+        custom={'categories':{},'parameters':{}}
+        for item in db.scalars(select(Setting).where(Setting.key.like('dict:%')|Setting.key.like('param:%')).order_by(Setting.key)):
+            if not _setting_ok(item.key,item.value):continue  # fail closed: a damaged custom item is not published
+            code=item.key.split(':',1)[1]
+            if item.key.startswith('dict:'):custom['categories'][code]={'name':item.value['name'],'items':item.value['items']}
+            else:custom['parameters'][code]={'name':item.value['name'],'type':item.value['type'],'value':item.value['value']}
         return {'notice_categories':values['notice_categories'],'record_sources':values['record_sources'],
-                'status_labels':values['status_labels'],'import_max_rows':policy['max_rows']}
+                'status_labels':values['status_labels'],'import_max_rows':policy['max_rows'],**custom}
     return read_operation(request,'portal.read',load)
 
 @router.get('/qualification-categories')
@@ -269,9 +290,21 @@ def update_notice(ident:str,data:NoticeUpdate,request:Request):
         obj.version+=1;audit(db,a,'notices',ident,'更新通知',before,serial(obj),data.reason);return obj
     return command(request,data.model_dump(),'notice.manage',apply)
 
+@router.get('/audit/security-alerts')
+def security_alerts(request:Request):
+    """12.3 安全提示: denied accesses by user, login refusals/lockouts, key changes, interface failures."""
+    f,_,_=filters_from(request,{'days'})
+    days=f.get('days','7')
+    if not days.isdigit() or not 1<=int(days)<=90:raise HTTPException(422,'统计天数应为 1～90')
+    def load(db,a,s):
+        from ..security_alerts import security_summary
+        return security_summary(db,a,int(days))
+    return read_operation(request,'audit.read',load)
+
 @router.get('/audit')
 def audit_list(request:Request):
-    f,p,z=filters_from(request,{'q','module','result','start','end'})
+    from ..read_queries import AUDIT_FILTERS
+    f,p,z=filters_from(request,AUDIT_FILTERS)
     def load(db,a,s):
         from ..read_queries import audit_query
         q=audit_query(db,a,f)

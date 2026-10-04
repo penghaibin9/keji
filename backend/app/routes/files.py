@@ -53,6 +53,51 @@ def verify_file(root,item):
     except (OSError,ValueError):raise HTTPException(503,'附件字节校验未通过，请联系管理员') from None
     return data
 
+# 12.5: evidence bound to teacher assessments, organisation assessments and sync tasks.
+BOUND_KINDS={'assessment','org_assessment','sync_task'}
+
+def bound_object(db,a,kind,ident,*,write=False):
+    """Same layered checks as qualification files: permission, live scope, then object state."""
+    from ..org_assessment import OrganizationAssessment
+    if kind=='assessment':
+        obj=owned_object(db,a,Assessment,ident,'assessment.read')
+        if write:
+            if obj.state=='ARCHIVED':raise HTTPException(409,'已归档考核不能追加材料')
+            if obj.teacher_id==a.id:a.require('assessment.confirm')
+            elif a.role.kind=='teacher':raise HTTPException(403,'只能为本人考核上传材料')
+            else:a.require('assessment.review')
+        return obj,obj.teacher_id
+    if kind=='org_assessment':
+        a.require('assessment.read')
+        if a.role.kind=='teacher':raise HTTPException(403,'普通教师不访问组织考核')
+        obj=db.get(OrganizationAssessment,ident)
+        if not obj:raise HTTPException(404,'组织考核不存在')
+        if a.role.kind!='school' and (obj.target_id!=a.org.id or obj.target_kind!=a.role.kind):raise HTTPException(403,'组织考核超出授权范围')
+        if obj.target_id not in a.org_ids:raise HTTPException(403,'组织考核超出授权范围')
+        if write:
+            if obj.state=='ARCHIVED':raise HTTPException(409,'已归档组织考核不能追加材料')
+            if not ({'assessment.review','assessment.calculate'}&a.permissions):raise HTTPException(403,'无权上传组织考核材料')
+        return obj,None
+    if kind=='sync_task':
+        a.require_admin();a.require('sync.manage');obj=db.get(Task,ident)
+        if not obj or obj.kind not in {'sync','inbound_pull'}:raise HTTPException(404,'同步任务不存在')
+        return obj,None
+    raise HTTPException(422,'该附件业务类型尚不支持')
+
+def public_attachment(item):
+    return {k:v for k,v in serial(item).items() if k!='storage_key'}
+
+@router.get('/attachments')
+def attachment_list(request:Request):
+    f,_,_=filters_from(request,{'object_type','object_id'})
+    if f.get('object_type') not in BOUND_KINDS or not f.get('object_id'):raise HTTPException(422,'请指定考核、组织考核或同步任务')
+    def load(db,a,s):
+        a.require('file.read');obj,teacher=bound_object(db,a,f['object_type'],f['object_id'])
+        q=select(Attachment).where(Attachment.object_type==f['object_type'],Attachment.object_id==obj.id)
+        if teacher:q=q.where(Attachment.teacher_id==teacher)
+        return {'items':[public_attachment(x) for x in db.scalars(q.order_by(Attachment.created_at,Attachment.id))]}
+    return read_operation(request,'file.read',load)
+
 @router.post('/attachments/{ident}/detach')
 def detach(ident:str,data:VersionedReason,request:Request):
     def apply(db,a,s):
@@ -69,11 +114,12 @@ def detach(ident:str,data:VersionedReason,request:Request):
 
 @router.post('/attachments/{kind}/{ident}')
 async def upload(kind:str,ident:str,request:Request,file:UploadFile=File(...),expected_version:int=Form(...),reason:str=Form(...)):
-    if kind not in {'qualification','dispute'}:raise HTTPException(422,'该附件业务类型尚不支持')
+    if kind not in {'qualification','dispute'}|BOUND_KINDS:raise HTTPException(422,'该附件业务类型尚不支持')
     if len(reason.strip())<2 or len(reason)>2000:raise HTTPException(422,'请填写有效上传依据')
     def authorize_before_parse():
         with request.app.state.sessions.begin() as db:
             a,s=current_actor(db,request,write=True);a.require('file.write')
+            if kind in BOUND_KINDS:bound_object(db,a,kind,ident,write=True);return
             model,perm=(Qualification,'qualification.write') if kind=='qualification' else (Dispute,'dispute.write')
             owned_object(db,a,model,ident,perm,own=True)
     await run_in_threadpool(authorize_before_parse)
@@ -83,8 +129,30 @@ async def upload(kind:str,ident:str,request:Request,file:UploadFile=File(...),ex
     name=file.filename or '';mime=await run_in_threadpool(inspect_upload,name,data)
     payload={'kind':kind,'id':ident,'name':name,'sha256':sha256(data).hexdigest(),'expected_version':expected_version,'reason':reason}
     written=[]
+    def store():
+        root=request.app.state.settings.storage_dir
+        if root.is_symlink() or not root.is_dir():raise HTTPException(503,'附件目录未就绪')
+        key=secrets.token_hex(32);path=root/key
+        fd=open_nofollow(path,os.O_WRONLY|os.O_CREAT|os.O_EXCL,0o600);written.append(path)
+        with os.fdopen(fd,'wb') as f:f.write(data);f.flush();os.fsync(f.fileno())
+        return key
+    def bound_upload(db,a):
+        obj,teacher=bound_object(db,a,kind,ident,write=True);check_version(obj,expected_version)
+        count=db.scalar(select(func.count()).select_from(Attachment).where(Attachment.object_type==kind,Attachment.object_id==ident))
+        if count>=50:raise HTTPException(422,'单个业务对象最多50个附件')
+        # teacher_id is the owning teacher for a teacher assessment; organisation/sync evidence
+        # has no teacher owner, so the (non-null) column records the uploading account.
+        item=Attachment(object_type=kind,object_id=ident,teacher_id=teacher or a.id,uploaded_by=a.id,name=name,storage_key=store(),
+              sha256=payload['sha256'],size=len(data),mime=mime)
+        db.add(item);db.flush()
+        label={'assessment':'考核','org_assessment':'组织考核','sync_task':'同步任务'}[kind]
+        after={'attachment_id':item.id,'name':name,'sha256':item.sha256,'size':item.size}
+        if kind=='sync_task':audit(db,a,'sync',ident,'上传同步佐证材料',after=after,reason=reason)
+        else:workflow(db,a,'assessment' if kind=='assessment' else 'organization_assessment',ident,'上传'+label+'佐证材料',{},after,reason,'附件SHA256:'+item.sha256)
+        return public_attachment(item)
     def execute():
         def apply(db,a,s):
+            if kind in BOUND_KINDS:return bound_upload(db,a)
             model,perm=(Qualification,'qualification.write') if kind=='qualification' else (Dispute,'dispute.write')
             obj=owned_object(db,a,model,ident,perm,own=True);check_version(obj,expected_version)
             if (kind=='qualification' and obj.state not in {'DRAFT','RETURNED'}) or (kind=='dispute' and obj.state!='OPEN'):
@@ -115,6 +183,13 @@ def download(ident:str,request:Request):
     with request.app.state.sessions.begin() as db:
         a,s=current_actor(db,request);a.require('file.read');item=db.get(Attachment,ident)
         if not item:raise HTTPException(404,'附件不存在')
+        if item.object_type in BOUND_KINDS:
+            obj,teacher=bound_object(db,a,item.object_type,item.object_id)
+            if teacher and teacher!=item.teacher_id:raise HTTPException(403,'附件归属不一致')
+            data=verify_file(request.app.state.settings.storage_dir,item)
+            audit(db,a,'attachments',item.id,'下载业务附件',after={'sha256':item.sha256,'size':item.size,'object_type':item.object_type,'object_id':item.object_id},reason='授权访问业务佐证')
+            filename=item.name;mime=item.mime
+            return Response(data,media_type=mime,headers={'Content-Disposition':"attachment; filename*=UTF-8''"+quote(filename),'X-Content-Type-Options':'nosniff'})
         a.check_teacher(db,item.teacher_id)
         model,perm={ 'qualification':(Qualification,'qualification.read'),'dispute':(Dispute,'dispute.write') }.get(item.object_type,(None,None))
         if not model:raise HTTPException(403,'附件业务归属无法确认')

@@ -60,7 +60,8 @@ test('base settings consume server dictionaries without allowing workflow-state 
 })
 
 test('record source, notice category and Excel row limit use school configuration', () => {
-  assert.match(source, /businessConfig\.record_sources\.map/)
+  assert.match(source, /businessConfig\.record_sources\.filter/)
+  assert.match(source, /manualSources\.map/)
   assert.match(source, /businessConfig\.notice_categories\.map/)
   assert.match(source, /businessConfig\.import_max_rows/)
 })

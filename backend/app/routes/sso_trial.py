@@ -89,7 +89,7 @@ def failure_response(cfg, message, status=401):
 def finish_trial(request: Request):
     cfg = request.app.state.settings
     expected = request.cookies.get(cookie_name(cfg), '')
-    if not expected or len(expected) > 128:
+    if not expected or len(expected) > 128 or not expected.isascii():
         return failure_response(cfg, '试登录请求已失效，请从实施中心重新开始')
     with request.app.state.sessions.begin() as db:
         state_row = db.scalar(select(Setting).where(Setting.key == trial_key(expected)).with_for_update())
@@ -113,6 +113,7 @@ def finish_trial(request: Request):
         state_param = protocol.get('state_param', 'state') if protocol.get('protocol') in {'cas', 'json_ticket'} else 'state'
         params = request.query_params
         if (len(params) > 30 or len(params.getlist(state_param)) != 1
+                or not params.get(state_param, '').isascii()
                 or not hmac.compare_digest(params.get(state_param, ''), expected)
                 or any(len(params.getlist(key)) != 1 or len(value) > 8192 for key, value in params.items())):
             return failure_response(cfg, '试登录回调校验未通过')

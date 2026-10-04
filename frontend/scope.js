@@ -3,10 +3,10 @@ export const BUSINESS_KEYS = Object.freeze(['q','teacher_id','org_id','start','e
 const PERIOD_PAGES = new Set(['home','cockpit','records','points','assessment','disputes','organization','rules']);
 const PAGE_KEYS = Object.freeze({
   home: [...BUSINESS_KEYS,'state','returned'], cockpit: [...BUSINESS_KEYS,'state','returned'], records: BUSINESS_KEYS, organization: [...BUSINESS_KEYS,'state','returned'],
-  assessment: [...BUSINESS_KEYS,'state','returned','business_scope'],
+  assessment: [...BUSINESS_KEYS,'state','returned','business_scope','progress'],
   points: ['teacher_id','org_id'], disputes: ['teacher_id','state'],
   qualifications: ['q','teacher_id','state'], rules: [],
-  audit: ['q','module','result','start','end'], imports: ['q'], notices: ['q'], permissions: ['q'],
+  audit: ['q','module','result','start','end','actor','org_id','object_id','request_id'], imports: ['q'], notices: ['q'], permissions: ['q'],
   todos: ['q','type'], sync: [], sso:['tab','impl_step'], hub:['tab','impl_step','data_type','state'], province:['tab','impl_step','data_type','state'], guide:[], operations: [], exports: [], help: [],
 });
 function valuesFor(keys, values = {}) {

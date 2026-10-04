@@ -104,12 +104,16 @@ def change_password(data:Password,request:Request):
 
 @router.post('/logout')
 def logout(request:Request):
+    from .sso import _cancel_pending_state,_state_cookie
     def apply(db,a,s):
-        db.delete(s);audit(db,a,'auth',a.id,'退出登录',reason='本人退出登录')
+        cancelled=_cancel_pending_state(db,request)
+        db.delete(s);audit(db,a,'auth',a.id,'退出登录',after={'pending_sso_cancelled':cancelled},reason='本人退出登录')
         return {'logged_out':True}
     result=command(request,{},None,apply,allow_password=True)
     response=JSONResponse(result);response.delete_cookie(request.app.state.settings.cookie_name,path='/',secure=request.app.state.settings.secure_cookie,httponly=True,samesite='strict')
     response.delete_cookie(request.app.state.settings.demo_cookie_name,path='/',secure=request.app.state.settings.secure_cookie,httponly=True,samesite='strict')
+    response.delete_cookie(_state_cookie(request.app.state.settings),path='/',secure=request.app.state.settings.secure_cookie,httponly=True,samesite='lax')
+    response.delete_cookie('nd_sso_session',path='/',secure=request.app.state.settings.secure_cookie,httponly=True,samesite='strict')
     return response
 
 

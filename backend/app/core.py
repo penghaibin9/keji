@@ -189,7 +189,8 @@ def read_operation(request,permission,fn,*,allow_password=False):
     with request.app.state.sessions.begin() as db:
         actor,session=current_actor(db,request,allow_password=allow_password)
         if permission: actor.require(permission)
-        return serial(fn(db,actor,session))
+        from .sensitive import mask_response
+        return mask_response(db,actor,serial(fn(db,actor,session)))
 
 def command(request,payload,permission,fn,*,allow_password=False):
     raw=request.headers.get('idempotency-key','')
@@ -216,7 +217,8 @@ def command(request,payload,permission,fn,*,allow_password=False):
             if receipt.actor_id!=actor.id or receipt.request_hash!=request_hash: raise HTTPException(409,'同一幂等编号不能用于不同操作')
             if receipt.response.get('authorization')!=auth_fingerprint: raise HTTPException(409,'权限范围已变化，请重新核对业务结果')
             return receipt.response['data']
-        result=serial(fn(db,actor,session))
+        from .sensitive import mask_response
+        result=mask_response(db,actor,serial(fn(db,actor,session)))
         db.add(Receipt(key=key,actor_id=actor.id,request_hash=request_hash,response={'data':result,'authorization':auth_fingerprint}))
         db.flush()
     return result

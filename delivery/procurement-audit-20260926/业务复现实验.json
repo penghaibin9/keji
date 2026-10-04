@@ -1,0 +1,41 @@
+{
+  "scope": "独立临时数据库，普通登录和业务接口，不连接用户8770数据",
+  "results": [
+    {
+      "case": "人工录入可选择中台来源",
+      "confirmed": true,
+      "source": "学校数据中台",
+      "batch_id": null
+    },
+    {
+      "case": "关键词未检索教师姓名",
+      "confirmed": true,
+      "keyword_total": 0,
+      "teacher_filter_total": 2
+    },
+    {
+      "case": "取数更正后旧分数仍可逐级归档",
+      "confirmed": true,
+      "before_score": "100.00",
+      "archived_score": "100.00",
+      "live_hours": "2",
+      "correct_recalculated_score": "20.00",
+      "stages": [
+        "DEPARTMENT",
+        "COLLEGE",
+        "SCHOOL",
+        "READY"
+      ],
+      "blocking_count_after_change": 0
+    },
+    {
+      "case": "上年记录争议阻断本年考核",
+      "confirmed": true,
+      "record_date": "2025-09-01",
+      "assessment_period": "2026",
+      "dispute_period": null,
+      "blocking_count": 1,
+      "confirmation_status": 409
+    }
+  ]
+}

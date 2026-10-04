@@ -19,7 +19,7 @@ from openpyxl.worksheet.datavalidation import DataValidation
 from sqlalchemy import select
 
 from .models import Connection, utcnow
-from .integrations import DATA_CATALOG
+from .integrations import DATA_CATALOG, transform_ok
 from .integration_center import MATERIALS, candidate, source_records, stored
 from .integration_profile_templates import templates, merge_template
 
@@ -486,7 +486,7 @@ def build_intake_workbook(db):
                 '是' if mapping.get('required') else '否',
                 '' if mapping.get('default') is None else mapping.get('default')])
     _finish(mappings, {'业务名称':24,'源字段':30,'目标字段':30,'默认值':24})
-    _dropdown(mappings, 'F', ['text','int','decimal','date','bool'])
+    _dropdown(mappings, 'F', ['text','int','decimal','date','bool','mask','mask:3:4'])
     _dropdown(mappings, 'G', ['是','否'])
 
     material_ws = _sheet(wb, '资料登记', MATERIAL_HEADERS)
@@ -734,7 +734,7 @@ def parse_intake_workbook(data):
             wb.close()
             raise HTTPException(422, '字段映射接口编码或数据类型无效')
         transform = _text(row['转换方式']) or 'text'
-        if transform not in allowed_transforms:
+        if transform not in allowed_transforms and not transform_ok(transform):
             wb.close()
             raise HTTPException(422, '字段映射转换方式无效')
         source, target = _text(row['源字段'],120), _text(row['目标字段'],120)

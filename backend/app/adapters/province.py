@@ -59,7 +59,11 @@ class ConfigurableProvinceAdapter(ConfigurableRestBase):
         receipt_id = ''
         receipt_path = str(response_spec.get('receipt_id_path', '')).strip()
         if receipt_path:
-            receipt_id = str(path_get(response, receipt_path, ''))[:128]
+            raw_receipt=path_get(response,receipt_path,None)
+            if raw_receipt is not None:
+                if type(raw_receipt) not in (str,int) or len(str(raw_receipt))>128:
+                    raise AdapterContractError('PROVINCE_RECEIPT_INVALID')
+                receipt_id=str(raw_receipt)
         result = {'accepted': True, 'code': code or 'ACK'}
         if receipt_id:
             result['receipt_id'] = receipt_id

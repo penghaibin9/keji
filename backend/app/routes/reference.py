@@ -10,7 +10,7 @@ from ..core import *
 from ..schemas import ParticipationIn,ParticipationUpdate
 from ..reference_data import TrainingProjectMaster,TrainingCourseMaster,TrainingClassMaster,TeacherParticipation,TeacherHrProfile,record_reference_errors
 from ..read_queries import authorized_org_descendants
-from ..settings_catalog import business_dictionary
+from ..settings_catalog import business_dictionary,validate_manual_source
 
 router=APIRouter(prefix='/api',tags=['培训主数据与教师参训'])
 
@@ -30,7 +30,7 @@ def _participation_query(db,a,f):
             except ValueError:raise HTTPException(422,'日期格式应为 YYYY-MM-DD') from None
             q=q.where(op(d))
     if f.get('q'):
-        word=f['q'];q=q.where(TeacherParticipation.project.contains(word,autoescape=True)|TeacherParticipation.course.contains(word,autoescape=True)|TeacherParticipation.external_key.contains(word,autoescape=True))
+        word=f['q'];q=q.where(TeacherParticipation.project.contains(word,autoescape=True)|TeacherParticipation.course.contains(word,autoescape=True)|TeacherParticipation.external_key.contains(word,autoescape=True)|TeacherParticipation.teacher_id.in_(select(User.id).where(User.name.contains(word,autoescape=True)|User.staff_no.contains(word,autoescape=True))))
     return q
 
 @router.get('/participations')
@@ -50,7 +50,7 @@ def participation_detail(ident:str,request:Request):
 def participation_create(data:ParticipationIn,request:Request):
     def apply(db,a,s):
         a.check_teacher(db,data.teacher_id,active=True)
-        if data.source not in business_dictionary(db)['record_sources']:raise HTTPException(422,'请选择学校业务字典中的数据来源')
+        validate_manual_source(db,data.source)
         if db.scalar(select(TeacherParticipation.id).where(TeacherParticipation.external_key==data.external_key)):raise HTTPException(409,'来源唯一编号重复')
         errors=record_reference_errors(db,data.model_dump())
         if errors:raise HTTPException(409,'；'.join(errors))
@@ -65,7 +65,7 @@ def participation_update(ident:str,data:ParticipationUpdate,request:Request):
         if not obj or obj.teacher_id not in a.teacher_ids:raise HTTPException(404,'参训记录不存在')
         check_version(obj,data.expected_version)
         if obj.external_key!=data.external_key or obj.teacher_id!=data.teacher_id:raise HTTPException(422,'来源编号和教师归属不可直接更换')
-        if data.source not in business_dictionary(db)['record_sources']:raise HTTPException(422,'请选择学校业务字典中的数据来源')
+        if data.source!=obj.source:raise HTTPException(422,'原始数据来源不可直接更换；更正内容与依据将另外留痕')
         a.check_teacher(db,data.teacher_id,active=True)
         errors=record_reference_errors(db,data.model_dump())
         if errors:raise HTTPException(409,'；'.join(errors))
@@ -124,3 +124,15 @@ def teacher_hr(request:Request):
             q=q.where(TeacherHrProfile.active.is_(f['active'] in {'true','1'}))
         return page_result(db,q.order_by(TeacherHrProfile.staff_no),p,z)
     return read_operation(request,'users.manage',load)
+
+
+@router.get('/reference/classes')
+def classes(request:Request):
+    f,p,z=filters_from(request,{'q','project_code','course_code'})
+    def load(db,a,s):
+        q=select(TrainingClassMaster).where(TrainingClassMaster.active.is_(True))
+        for key in ('project_code','course_code'):
+            if f.get(key):q=q.where(getattr(TrainingClassMaster,key)==f[key])
+        if f.get('q'):q=q.where(TrainingClassMaster.name.contains(f['q'],autoescape=True)|TrainingClassMaster.code.contains(f['q'],autoescape=True))
+        return page_result(db,q.order_by(TrainingClassMaster.code),p,z)
+    return read_operation(request,'records.read',load)

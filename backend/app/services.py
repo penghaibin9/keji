@@ -6,6 +6,8 @@ from fastapi import HTTPException
 from .core import *
 from .schemas import RecordIn
 from .read_queries import record_query, assessment_query, stats
+from .calculation_freshness import source_changes, require_current_sources
+from .settings_catalog import validate_manual_source
 
 D = Decimal
 
@@ -15,9 +17,13 @@ def rounded(value): return D(str(value)).quantize(D("0.01"), rounding=ROUND_HALF
 
 
 
-def insert_record(db,actor,payload:RecordIn,batch_id=None):
+def insert_record(db,actor,payload:RecordIn,batch_id=None,*,channel='manual'):
     actor.check_teacher(db,payload.teacher_id,active=True)
-    obj=TrainingRecord(**payload.model_dump(exclude={"reason","basis"}),batch_id=batch_id)
+    values=payload.model_dump(exclude={"reason","basis"})
+    if channel=='manual':validate_manual_source(db,payload.source)
+    elif channel in {'import','middle'} and batch_id:values['source']='Excel导入' if channel=='import' else '学校数据中台'
+    else:raise HTTPException(422,'接入渠道或批次无效')
+    obj=TrainingRecord(**values,batch_id=batch_id)
     db.add(obj);db.flush()
     db.add(RecordRevision(record_id=obj.id,version=obj.version,data=serial(obj),reason=payload.reason,actor_id=actor.id))
     audit(db,actor,"records",obj.id,"写入培训业务数据",after=serial(obj),reason=payload.reason)
@@ -80,6 +86,47 @@ def evaluate(rule,raw):
     return details
 
 
+def evaluate_rule(rule,raw):
+    """10.1/9.1 dispatcher. Legacy components go through the untouched evaluate();
+    components with an explicit extended method use scoring_methods with full steps."""
+    components=rule.config["components"]
+    if not any(c.get("method") for c in components):return evaluate(rule,raw)
+    from types import SimpleNamespace
+    from .scoring_methods import score_component
+    details=[]
+    for c in components:
+        if not c.get("method"):
+            details.extend(evaluate(SimpleNamespace(id=rule.id,kind=rule.kind,version_no=rule.version_no,config={"components":[c]}),raw));continue
+        score,formula,explain=score_component(c,D(str(raw[c["source"]])),rule.kind)
+        details.append({"key":c["key"],"label":c["label"],"source":c["source"],"raw":str(D(str(raw[c["source"]]))),
+                        "formula":formula,"score":str(score),"rule_id":rule.id,"rule_version":rule.version_no,**explain})
+    return details
+
+
+def point_source_changes(db,teacher_id,period,current=None):
+    current=current or facts(db,teacher_id,period)[1]
+    entries=db.scalars(select(PointEntry).where(PointEntry.teacher_id==teacher_id,PointEntry.period_id==period.id,PointEntry.kind!='MANUAL').order_by(PointEntry.created_at,PointEntry.id)).all()
+    latest={p.item_key:p for p in entries};items=[]
+    for key,entry in latest.items():
+        frozen=entry.source_snapshot or {}
+        components=[c for c in frozen.get('rule',{}).get('config',{}).get('components',[]) if c['key']==key]
+        items.extend(source_changes(frozen.get('facts',{}),current,components)['items'])
+    return {'changed':bool(items),'items':items}
+
+
+def assessment_source_changes(db,obj):
+    if obj.state=='ARCHIVED':return {'changed':False,'items':[]}
+    rule=db.get(Rule,obj.rule_id);period=db.get(Period,obj.period_id)
+    current=facts(db,obj.teacher_id,period)[1]
+    changes=source_changes(obj.source_snapshot,current,rule.config['components'])
+    if any(c['source']=='points' for c in rule.config['components']):
+        upstream=point_source_changes(db,obj.teacher_id,period,current)
+        if upstream['changed']:
+            changes['items'].append({'label':'本期积分的原始依据','before':'计算时的依据','after':'已变化，请先重算积分','details':[]})
+            changes['changed']=True
+    return changes
+
+
 def active_rule(db,kind,period_id):
     rule=db.scalar(select(Rule).where(Rule.kind==kind,Rule.period_id==period_id,Rule.state=="ACTIVE"))
     if not rule:raise HTTPException(409,"本周期尚未启用相应规则，请先配置、试算并启用")
@@ -99,18 +146,22 @@ def calculate_points(db,actor,period,teacher_ids,item_keys,reason):
         bal=db.scalar(select(PointBalance).where(PointBalance.teacher_id==teacher_id,PointBalance.period_id==period.id).with_for_update())
         if bal and bal.confirmed:raise HTTPException(409,"该教师已确认积分；如需纠错应先留痕解锁，已归档不可解锁")
         if not bal:bal=PointBalance(teacher_id=teacher_id,period_id=period.id,confirmed=False,version=1);db.add(bal)
-        raw,snapshot=facts(db,teacher_id,period);details=evaluate(rule,raw)
+        raw,snapshot=facts(db,teacher_id,period);details=evaluate_rule(rule,raw)
         entries=db.scalars(select(PointEntry).where(PointEntry.teacher_id==teacher_id,PointEntry.period_id==period.id)).all()
-        old={}
+        old={};latest={}
         for e in entries:
-            if e.kind!="MANUAL":old[e.item_key]=old.get(e.item_key,D(0))+D(str(e.amount))
+            if e.kind!="MANUAL":
+                old[e.item_key]=old.get(e.item_key,D(0))+D(str(e.amount))
+                if e.item_key not in latest or (e.created_at,e.id)>(latest[e.item_key].created_at,latest[e.item_key].id):latest[e.item_key]=e
         targets={d["key"]:d for d in details if not item_keys or d["key"] in item_keys}
         if not item_keys:
             for removed in set(old)-keys:targets[removed]={"key":removed,"label":"规则移除项","raw":"0","formula":"新规则移除本项；追加冲销，保留历史","score":"0"}
         added=[]
         for key,detail in targets.items():
             target=D(detail["score"]);delta=rounded(target-old.get(key,D(0)))
-            if delta==0 and key in old:continue
+            previous=latest.get(key)
+            components=[c for c in rule.config['components'] if c['key']==key]
+            if delta==0 and previous and previous.rule_id==rule.id and not source_changes(previous.source_snapshot.get('facts',{}),snapshot,components)['changed']:continue
             entry=PointEntry(teacher_id=teacher_id,period_id=period.id,item_key=key,
                 kind="BASE" if key not in old else "RECALC",amount=delta,raw_value=detail["raw"],
                 formula=detail["formula"]+f"；本次目标 {target} − 已计 {old.get(key,D(0))} = 追加 {delta}",
@@ -132,7 +183,9 @@ def calculate_assessments(db,actor,period,teacher_ids,reason):
         actor.check_teacher(db,tid,active=True)
         obj=db.scalar(select(Assessment).where(Assessment.teacher_id==tid,Assessment.period_id==period.id).with_for_update())
         if obj and obj.state!="TEACHER":raise HTTPException(409,"已确认或已归档考核不能被批量重算覆盖，应先按审核流程退回")
-        raw,snap=facts(db,tid,period);detail=evaluate(rule,raw)
+        raw,snap=facts(db,tid,period)
+        if any(c['source']=='points' for c in rule.config['components']):require_current_sources(point_source_changes(db,tid,period,snap))
+        detail=evaluate_rule(rule,raw)
         score=rounded(sum((D(x["score"]) for x in detail),D(0)))
         if obj:
             before=serial(obj);obj.rule_id=rule.id;obj.detail=detail;obj.score=score;obj.source_snapshot=snap;obj.version+=1;obj.returned=False

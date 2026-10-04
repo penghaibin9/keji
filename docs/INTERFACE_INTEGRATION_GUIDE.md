@@ -43,3 +43,129 @@
 公共入站处理的是不超过1000行的完整单元。出现`has_more=true`、`complete=false`、`truncated=true`，或者游标不是有效有界字符串时，系统不会标记完整同步或前推成功游标。真实分页、全量完成证据和跨单元断点恢复必须由学校接口责任方与适配器实现共同确认，不能忽略部分页标志。
 
 详细规则、测试与实际未完成条件见 `R8_RELIABILITY_CLOSEOUT.md`。
+
+## 湘培直通车：台账自动组装的内部标准字段（11.3）
+
+本平台从本地台账组装上报数据时，只输出下表的**内部标准字段**（代码：`backend/app/province_payload.py` 的 `CANONICAL_FIELDS`）。省平台的正式字段名由接口“字段对应”配置按省级正式规范转换：每条映射的 `source` 填下表字段键、`target` 填省平台规范字段，`data_type` 填对应类型。本平台不臆造省级字段名；未配置字段对应的类型禁止生成任务。
+
+入口：湘培直通车 → 同步任务 →“从台账生成同步任务”（选择类型、周期或日期范围 → 预览数量与样例 → 生成）。接口：`GET /api/connections/{id}/ledger-sync/catalog`、`GET /api/connections/{id}/ledger-sync/preview`、`POST /api/connections/{id}/ledger-sync`（学校管理员 + sync.manage，写审计）。业务唯一键 `business_key` 稳定，重复生成相同内容复用原同步项，不重复发送。只取有效（未作废）台账与已归档且校验通过的考核结果，并受当前账号数据范围限制。
+
+### 培训项目（training_project）
+
+取数口径：当前范围内有效培训台账涉及的项目，名称与起止日期取已接入的项目主数据
+
+| 字段键 | 含义 |
+|---|---|
+| `business_key` | 业务唯一键 |
+| `project_code` | 项目编码 |
+| `project_name` | 项目名称 |
+| `start_date` | 项目开始日期 |
+| `end_date` | 项目结束日期 |
+| `source` | 数据来源 |
+
+### 课程（course）
+
+取数口径：当前范围内有效培训台账涉及的课程，名称取课程主数据
+
+| 字段键 | 含义 |
+|---|---|
+| `business_key` | 业务唯一键 |
+| `course_code` | 课程编码 |
+| `course_name` | 课程名称 |
+| `project_code` | 所属项目编码 |
+| `source` | 数据来源 |
+
+### 班级（class）
+
+取数口径：当前范围内有效培训台账涉及的班级，名称与起止日期取班级主数据
+
+| 字段键 | 含义 |
+|---|---|
+| `business_key` | 业务唯一键 |
+| `class_code` | 班级编码 |
+| `class_name` | 班级名称 |
+| `project_code` | 所属项目编码 |
+| `course_code` | 所属课程编码 |
+| `start_date` | 开班日期 |
+| `end_date` | 结班日期 |
+| `source` | 数据来源 |
+
+### 教师授课（teaching）
+
+取数口径：每条有效培训台账对应一条教师授课记录
+
+| 字段键 | 含义 |
+|---|---|
+| `business_key` | 业务唯一键 |
+| `record_key` | 台账来源编号 |
+| `teacher_staff_no` | 授课教师工号 |
+| `teacher_name` | 授课教师姓名 |
+| `org_code` | 教师所属组织编码 |
+| `event_date` | 授课日期 |
+| `project_code` | 项目编码 |
+| `course_code` | 课程编码 |
+| `class_code` | 班级编码 |
+| `hours` | 授课学时 |
+
+### 人次（participants）
+
+取数口径：每条有效培训台账的课程人次
+
+| 字段键 | 含义 |
+|---|---|
+| `business_key` | 业务唯一键 |
+| `record_key` | 台账来源编号 |
+| `event_date` | 业务日期 |
+| `project_code` | 项目编码 |
+| `course_code` | 课程编码 |
+| `class_code` | 班级编码 |
+| `participants` | 人次 |
+
+### 培训记录（training_record）
+
+取数口径：有效（未作废）培训台账明细
+
+| 字段键 | 含义 |
+|---|---|
+| `business_key` | 业务唯一键 |
+| `record_key` | 台账来源编号 |
+| `event_date` | 业务日期 |
+| `teacher_staff_no` | 授课教师工号 |
+| `project_code` | 项目编码 |
+| `project_name` | 项目名称 |
+| `course_code` | 课程编码 |
+| `course_name` | 课程名称 |
+| `class_code` | 班级编码 |
+| `class_name` | 班级名称 |
+| `hours` | 学时 |
+| `participants` | 人次 |
+| `income` | 培训收入（元） |
+| `source` | 数据来源 |
+
+### 考核结果（assessment_result）
+
+取数口径：仅已归档且归档校验通过的教师考核结果，取归档冻结值
+
+| 字段键 | 含义 |
+|---|---|
+| `business_key` | 业务唯一键 |
+| `teacher_staff_no` | 教师工号 |
+| `teacher_name` | 教师姓名 |
+| `org_code` | 教师所属组织编码 |
+| `period_name` | 考核周期 |
+| `period_start` | 周期开始日期 |
+| `period_end` | 周期结束日期 |
+| `score` | 考核得分 |
+| `rule_name` | 考核规则 |
+| `rule_version` | 规则版本 |
+| `archived_at` | 归档时间 |
+| `archive_sha256` | 归档校验值 |
+
+### 暂不能从本平台组装的 4 类（保持“待确认权威来源”）
+
+| 类型 | 原因 |
+|---|---|
+| 培训计划（plan） | 培训计划由学校培训管理/教务源系统编制和审批，本平台台账只记录已发生的培训业务，没有计划编制与审批数据；须学校确认计划的权威来源系统与字段后再接入。 |
+| 学习过程（learning_process） | 学员签到、学习时长、作业等学习过程数据产生在学校在线学习或教学平台，本平台不采集学员个人学习过程。 |
+| 结业结果（completion_result） | 学员结业结论由培训实施单位的教务系统判定；本平台的“考核结果”是教师考核，不是学员结业结论，不能替代。 |
+| 证书信息（certificate） | 学员培训证书由发证系统签发；本平台保存的是教师资质证书，不能替代学员结业证书。 |

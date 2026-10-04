@@ -14,9 +14,20 @@ def test_existing_scoring_and_ledger_business_functions_are_preserved():
     before=functions(ROOT/'evidence/before/backend/app/services.py');after=functions(ROOT/'backend/app/services.py')
     # R6 intentionally validates previously archived evidence before reusing its score.
     # Formula evaluation and all ledger/calculation mutations remain AST-identical.
-    untouched=set(before)-{'record_query','stats','facts'}
-    assert {'evaluate','calculate_points','calculate_assessments'}<=untouched
+    # 2026-09-26 procurement fixes intentionally changed three functions:
+    #  - calculate_points: skip-unchanged now also requires same rule + unchanged sources (calculation freshness);
+    #  - calculate_assessments: refuses when upstream point evidence is stale (require_current_sources);
+    #  - insert_record: manual source is validated against the dictionary; import/middle channels force their source.
+    # record_query/stats moved to read_queries.py.  The formula itself (evaluate) and the
+    # remaining helpers stay AST-identical; the changed ones are pinned by their new checks below.
+    changed_20260926={'calculate_points','calculate_assessments','insert_record'}
+    untouched=set(before)-{'record_query','stats','facts'}-changed_20260926
+    assert {'evaluate','active_rule','rounded','qualification_revision'}<=untouched
+    assert set(before)-{'record_query','stats'}<=set(after)
     assert 'verified_archive' in after['facts'] and 'previous_frozen' in after['facts']
+    assert "'source_changes'" in after['calculate_points'] and "'rule_id'" in after['calculate_points']
+    assert "'require_current_sources'" in after['calculate_assessments'] and "'point_source_changes'" in after['calculate_assessments']
+    assert "'validate_manual_source'" in after['insert_record']
     assert all(before[name]==after[name] for name in untouched)
 
 

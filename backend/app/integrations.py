@@ -63,7 +63,14 @@ DATA_CATALOG={
   ('certificate','证书信息','WAITING_SOURCE')]
 }
 
-ALLOWED_TRANSFORMS={'text','int','decimal','date','bool'}
+ALLOWED_TRANSFORMS={'text','int','decimal','date','bool','mask','mask:3:4'}
+# 4.3 inbound masking: 'mask' keeps about a quarter of the characters at each end;
+# 'mask:H:T' keeps exactly H leading and T trailing characters (0-8 each).
+MASK_TRANSFORM=re.compile(r'mask(?::([0-8]):([0-8]))?')
+
+
+def transform_ok(transform):
+    return transform in ALLOWED_TRANSFORMS or MASK_TRANSFORM.fullmatch(transform or '') is not None
 
 # Deployment modules must implement the real wire operation required by each
 # procurement integration before they can even be registered as production
@@ -91,7 +98,7 @@ def normalize_mapping(mapping):
     if set(mapping)-allowed:raise HTTPException(422,'字段映射包含未知配置')
     data_type=str(mapping.get('data_type','')).strip();source=str(mapping.get('source','')).strip();target=str(mapping.get('target','')).strip();transform=str(mapping.get('transform','text')).strip()
     if data_type and (len(data_type)>64 or not all(c.isalnum() or c in '_-' for c in data_type)):raise HTTPException(422,'字段映射数据类型无效')
-    if not source or not target or len(source)>120 or len(target)>120 or transform not in ALLOWED_TRANSFORMS:raise HTTPException(422,'字段映射定义无效')
+    if not source or not target or len(source)>120 or len(target)>120 or not transform_ok(transform):raise HTTPException(422,'字段映射定义无效')
     required=mapping.get('required',False)
     if type(required) is not bool:raise HTTPException(422,'字段映射 required 必须是真正的布尔值')
     out={'source':source,'target':target,'transform':transform,'required':required,'default':mapping.get('default')}
@@ -119,6 +126,12 @@ def convert(value,kind):
                 return int(number)
             return str(number)
         if kind=='date':return date.fromisoformat(str(value)).isoformat()
+        masked=MASK_TRANSFORM.fullmatch(kind)
+        if masked:
+            from .sensitive import mask_text
+            text=str(value).strip()
+            if isinstance(value,(dict,list)) or len(text)>500:raise ValueError('mask')
+            return mask_text(text,*(int(x) for x in masked.groups())) if masked.group(1) else mask_text(text)
         if kind=='bool':
             if value in (True,1,'1','true','TRUE','是'):return True
             if value in (False,0,'0','false','FALSE','否'):return False
@@ -143,6 +156,27 @@ def apply_mappings(connection:Connection,record:dict,data_type=None):
         try:mapped[m['target']]=convert(value,m['transform'])
         except ValueError:errors.append(f"{m['source']} 转换失败")
     return mapped,errors
+
+
+def mask_raw(connection:Connection,record:dict,data_type=None):
+    """Copy of an inbound record whose masked source fields are also masked in the kept raw evidence."""
+    import copy
+    mappings=normalize_mappings(connection.mappings or [])
+    typed=[m for m in mappings if m.get('data_type')==data_type] if data_type else []
+    selected=[m for m in (typed or [m for m in mappings if not m.get('data_type')]) if MASK_TRANSFORM.fullmatch(m['transform'])]
+    if not selected or not isinstance(record,dict):return record
+    out=copy.deepcopy(record)
+    for m in selected:
+        if m['source'] in out:holder,key=out,m['source']
+        else:
+            *parents,key=m['source'].split('.');holder=out
+            for piece in parents:
+                holder=holder.get(piece) if isinstance(holder,dict) else holder[int(piece)] if isinstance(holder,list) and piece.isdigit() and int(piece)<len(holder) else None
+                if holder is None:break
+        if isinstance(holder,dict) and key in holder and holder[key] not in (None,''):
+            try:holder[key]=convert(holder[key],m['transform'])
+            except ValueError:holder[key]='***'
+    return out
 
 
 def business_idempotency(connection_id,data_type,business_key,payload):
@@ -397,6 +431,9 @@ def process_sync_task_once(db,task:Task,registry=ADAPTERS):
         except Exception as exc:
             message=type(exc).__name__
             from .adapters.contracts import AdapterContractError
+            from .integration_diagnostics import safe_code
+            reason_code=safe_code(exc)
+            if reason_code!='INTEGRATION_EXTERNAL_FAILURE':message=reason_code
             upstream_code=getattr(exc,'upstream_code','') if isinstance(exc,AdapterContractError) else ''
             if not isinstance(upstream_code,str) or not re.fullmatch(r'[A-Za-z0-9_.-]{1,40}',upstream_code):upstream_code=''
             item.error=message
