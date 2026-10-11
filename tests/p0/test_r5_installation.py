@@ -20,7 +20,7 @@ def canonical(tmp_path):
 
 def test_fresh_migration_provenance_and_repeat_noop(canonical):
     e=sa.create_engine('sqlite:///'+str(canonical))
-    with e.connect() as c:first=require_canonical(c);assert len(sa.inspect(c).get_table_names())==47
+    with e.connect() as c:first=require_canonical(c);assert len(sa.inspect(c).get_table_names())==55
     result=cli(canonical,'upgrade','head');assert result.returncode==0,result.stderr
     with e.connect() as c:assert require_canonical(c)==first
     e.dispose()

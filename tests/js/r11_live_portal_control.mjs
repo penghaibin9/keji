@@ -1,14 +1,14 @@
 // Executed explicitly by run_r11_portal_control.py, not part of node --test *.test.mjs.
 import fs from 'node:fs';import path from 'node:path';import vm from 'node:vm';import assert from 'node:assert/strict';
 import {fileURLToPath} from 'node:url';
-import * as ui from '../../frontend/portal-ui.js';import * as scope from '../../frontend/scope.js';import {icons} from '../../frontend/icons.js';
+import * as ui from '../../frontend/portal-ui.js';import * as scope from '../../frontend/scope.js';import {icons} from '../../frontend/icons.js';import * as ledgers from '../../frontend/social-ledgers.js';import * as schoolData from '../../frontend/school-data.js';
 const root=path.resolve(path.dirname(fileURLToPath(import.meta.url)),'../..');
 const [origin,output]=process.argv.slice(2);if(!/^http:\/\/127\.0\.0\.1:\d+$/.test(origin||''))throw Error('Only explicitly isolated loopback service is allowed');
 fs.mkdirSync(output,{recursive:true});const snapshots=path.join(output,'rendered');fs.mkdirSync(snapshots,{recursive:true});
 const original=fs.readFileSync(path.join(root,'frontend/app.js'),'utf8');
 const log=[],checks=[],pagesTested=[],jars=new Map();let activeJar='schooladmin';
 const nodes=new Map();function node(id){if(!nodes.has(id))nodes.set(id,{innerHTML:'',textContent:'',value:'',disabled:false,isConnected:true,classList:{add(){},remove(){},toggle(){}},addEventListener(){},append(){},querySelector(){return null},querySelectorAll(){return []},focus(){}});return nodes.get(id)}
-const c=vm.createContext({console,...ui,...scope,icons,URL,URLSearchParams,Blob,FormData,crypto:globalThis.crypto,setTimeout:()=>0,clearTimeout(){},document:{querySelector:node,querySelectorAll:()=>[],createElement:()=>({click(){},remove(){}}),addEventListener(){},body:node('body')},window:{addEventListener(){}},location:{hash:'',pathname:'/',search:''},history:{replaceState(){}},
+const c=vm.createContext({console,...ui,...scope,...ledgers,...schoolData,icons,URL,URLSearchParams,Blob,FormData,crypto:globalThis.crypto,setTimeout:()=>0,clearTimeout(){},document:{querySelector:node,querySelectorAll:()=>[],createElement:()=>({click(){},remove(){}}),addEventListener(){},body:node('body')},window:{addEventListener(){}},location:{hash:'',pathname:'/',search:''},history:{replaceState(){}},
  fetch:async(url,opts)=>{
    if(!url.startsWith('/api/'))throw Error('Unexpected external request');
    let jar=jars.get(activeJar);if(!jar){jar=new Map();jars.set(activeJar,jar)}
@@ -17,7 +17,7 @@ const c=vm.createContext({console,...ui,...scope,icons,URL,URLSearchParams,Blob,
    for(const cookie of response.headers.getSetCookie()){const pair=cookie.split(';')[0],i=pair.indexOf('=');jar.set(pair.slice(0,i),pair.slice(i+1));}
    log.push({method:opts.method,url,status:response.status});return response;
  }});
-vm.runInContext(original.replace(/^import .*?;\n/gm,'').replace(/\(async\(\)=>\{try\{await boot\(\)\}[\s\S]*$/,'')+`
+vm.runInContext(original.replace(/^import .*?;\r?\n/gm,'').replace(/\(async\(\)=>\{try\{await boot\(\)\}[\s\S]*$/,'')+`
 globalThis.T={api,pages,handlers,shell,loginView,pageAllowed,connectionForm,mappingEditor,showInbound,showTask,showSyncItem,
  setUser(user){me=user;csrf=user.csrf},setPage(p,f={},n=1){page=p;filter=f;tablePage=n;participationPage=1;periodId=''},
  setData(p,t,o,d){periods=p;teachers=t;orgs=o;businessConfig=d},captureForm(){formModal=(title,body,callback,options)=>{globalThis.F={title,body,callback,options}}},getForm(){return globalThis.F}, getView(){return view}};`,c);

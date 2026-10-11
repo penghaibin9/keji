@@ -69,7 +69,12 @@ def test_current_probe_activation_expiry_and_config_change_are_enforced(app2,mon
         assert live_connection(db,c,registry)
         original=dict(c.config);c.config={**original,'owner':'changed'};assert not live_connection(db,c,registry)
         with pytest.raises(HTTPException):activate_connection(db,a,c,check.id,registry)
-        c.config=original;check.expires_at=utcnow()-timedelta(seconds=1);assert not live_connection(db,c,registry)
+        c.config=original;check.expires_at=utcnow()-timedelta(seconds=1);assert live_connection(db,c,registry)
+        # Publication survives proof age; expiry still prevents NEW activation.
+        fresh=probe_connection(db,a,c,registry,production=True)
+        fresh.expires_at=utcnow()-timedelta(seconds=1)
+        with pytest.raises(HTTPException):activate_connection(db,a,c,fresh.id,registry)
+        assert not live_connection(db,c,registry)
         assert 'NEVER_PERSIST_TOKEN' not in json.dumps(check.receipt)
 
 def test_probe_api_missing_adapter_and_replay_do_not_claim_connected(client2,app2):

@@ -10,6 +10,7 @@ from decimal import Decimal, InvalidOperation
 from fastapi import HTTPException
 from .models import User, Org, Rule, Period, Attachment, utcnow
 from .core import serial, digest
+from .settings_catalog import require_setting
 
 
 def teacher_identity(db, teacher_id):
@@ -100,6 +101,7 @@ def make_archive(db, obj, actor, events, reason, basis, storage_dir):
     frozen = {k:v for k,v in serial(obj).items() if k not in {'archive','archive_sha256'}}
     frozen.update(state='ARCHIVED', version=obj.version + 1)
     return {'schema_version': 2, 'assessment': frozen,
+        'school_name': require_setting(db,'branding').value['school_name'],
         'rule': serial(db.get(Rule, obj.rule_id)), 'period': serial(db.get(Period, obj.period_id)),
         'teacher': identity, 'organization_chain': organization_chain(db, identity['org_id']),
         'source_snapshot': deepcopy(obj.source_snapshot),
@@ -111,6 +113,7 @@ def assessment_projection(db, obj, live_events=None):
     if obj.state != 'ARCHIVED':
         identity = teacher_identity(db, obj.teacher_id)
         return {'assessment': serial(obj), 'rule': serial(db.get(Rule, obj.rule_id)),
+            'school_name': require_setting(db,'branding').value['school_name'],
             'period': serial(db.get(Period, obj.period_id)), 'teacher': identity,
             'organization_chain': organization_chain(db, identity['org_id']),
             'events': serial(live_events or []), 'immutable': False,
@@ -121,6 +124,7 @@ def assessment_projection(db, obj, live_events=None):
     if not identity_frozen:
         identity = {'id':obj.teacher_id, 'name':'归档时未冻结姓名', 'staff_no':'未冻结', 'org_id':None}
     return {'assessment': {**frozen['assessment'], 'archive': frozen, 'archive_sha256': obj.archive_sha256},
+        'school_name': frozen.get('school_name'),
         'rule': frozen['rule'], 'period': frozen['period'], 'teacher': identity,
         'organization_chain': frozen.get('organization_chain', []),
         'events': frozen.get('events', []), 'immutable': True, 'identity_frozen': identity_frozen,

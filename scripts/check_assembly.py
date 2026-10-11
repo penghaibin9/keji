@@ -15,6 +15,11 @@ REQUIRED = [
  *['backend/app/routes/'+x+'.py' for x in ('auth','admin','business','calculations','files','tasks','integrations','reference','delivery')],
  'backend/app/database_snapshot.py','backend/app/installation.py','backend/canonical_release.json','backend/canonical_schema.json','backend/alembic_legacy_unverified/MANIFEST.json',
  'backend/app/worker.py','backend/app/healthcheck.py','backend/app/releasecheck.py',
+ 'backend/app/integration_center.py','backend/app/integration_diagnostics.py','backend/app/integration_security.py','backend/app/integration_handover.py','backend/app/integration_intake.py','backend/app/sso_identity.py',
+ 'backend/app/paged_inbound.py','backend/app/adapters/paged_datahub.py','backend/app/routes/integration_center.py','backend/app/routes/integration_intake.py','backend/app/routes/sso_trial.py',
+ 'frontend/integration-workspace.js','frontend/integration-drafts.js',
+ 'backend/app/social_models.py','backend/app/social_schemas.py','backend/app/social_training.py','backend/app/routes/social.py','backend/app/social_export.py','frontend/social-training.js','frontend/social-training.css','backend/social_schema.json','backend/social_release.json','backend/teaching_schema.json','backend/teaching_release.json',
+ 'backend/app/ledger_check.py','backend/app/routes/ledgers.py','frontend/social-ledgers.js','frontend/school-data.js',
  'backend/app/cli.py','backend/app/grants.py','backend/app/maintenance.py',
  'backend/requirements.txt','backend/app/resources/integration-coordination.xlsx','frontend/index.html','frontend/icons.js','frontend/app.js','frontend/scope.js','frontend/styles.css','frontend/integration.css','frontend/portal.css','frontend/portal-ui.js',
  'deploy/Dockerfile.api','deploy/Dockerfile.frontend','deploy/compose.yml','deploy/nginx.conf','deploy/mysql-init/01-users.sh',
@@ -32,7 +37,7 @@ def inspect_assembly(root):
     for p in (root/'backend/alembic/versions').glob('*.py'):
         if p.name=='__init__.py':continue
         try:
-            tree=ast.parse(p.read_text());values={}
+            tree=ast.parse(p.read_text(encoding='utf-8'));values={}
             for n in tree.body:
                 if isinstance(n,ast.Assign):
                     for t in n.targets:
@@ -47,7 +52,7 @@ def inspect_assembly(root):
         parent=v.get('down_revision')
         parents.update(parent if isinstance(parent,(list,tuple)) else [parent] if parent else [])
     heads=sorted(revision_ids-parents)
-    migration_ok=len(revisions)==1 and revision_ids=={'20260918_0001'} and revisions[0].get('down_revision') is None and heads==['20260918_0001']
+    migration_ok=(len(revisions)==3 and {x['revision']:x.get('down_revision') for x in revisions}=={'20260918_0001':None,'20261008_0002':'20260918_0001','20261009_0003':'20261008_0002'} and heads==['20261009_0003'])
     alembic_config=any((root/p).is_file() for p in ('backend/alembic.ini','alembic.ini'))
     migration_env=any((root/'backend').rglob('env.py'))
     integrity_ok=False
@@ -58,10 +63,18 @@ def inspect_assembly(root):
             and lock['installation_scope']=='fresh_school_only'
             and all(not (root/name).is_symlink() and hashlib.sha256((root/name).read_bytes()).hexdigest()==sha for name,sha in lock['sha256'].items()))
     except (OSError,ValueError,KeyError,TypeError):pass
+    try:
+        extension=json.loads((root/'backend/social_release.json').read_text())
+        expected={'backend/social_schema.json','backend/alembic/versions/20261008_0002_social_training.py'}
+        integrity_ok=integrity_ok and extension['revision']=='20261008_0002' and extension['parent']=='20260918_0001' and set(extension['sha256'])==expected and all(not (root/name).is_symlink() and hashlib.sha256((root/name).read_bytes()).hexdigest()==sha for name,sha in extension['sha256'].items())
+        teaching=json.loads((root/'backend/teaching_release.json').read_text())
+        expected={'backend/teaching_schema.json','backend/alembic/versions/20261009_0003_teacher_course_terms.py'}
+        integrity_ok=integrity_ok and teaching['revision']=='20261009_0003' and teaching['parent']=='20261008_0002' and set(teaching['sha256'])==expected and all(not (root/name).is_symlink() and hashlib.sha256((root/name).read_bytes()).hexdigest()==sha for name,sha in teaching['sha256'].items())
+    except (OSError,ValueError,KeyError,TypeError):integrity_ok=False
     ok=integrity_ok and not missing and not python_errors and migration_ok and alembic_config and migration_env
     return {'status':'PASS' if ok else 'BLOCKED','kind':'SOURCE_ASSEMBLY_ONLY','missing':missing,
             'python_errors':python_errors,'observed_alembic_heads':heads,
-            'application_expected_heads':['20260918_0001'],'installation_scope':'fresh_school_only','legacy_upgrade_allowed':False,
+            'application_expected_heads':['20261009_0003'],'installation_scope':'canonical_baseline_additive_only','legacy_upgrade_allowed':False,
             'historical_graph_verified':False,'unverified_historical_parent':'20260917_0001',
             'canonical_files_hash_verified':integrity_ok,'legacy_evidence_preserved':integrity_ok,'migration_graph_verified':migration_ok,'alembic_config_present':alembic_config,
             'migration_env_present':migration_env,

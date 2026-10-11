@@ -124,6 +124,7 @@ def retry_pull_task(db, actor, task, reason):
         if not schedule or not schedule.active or not schedule.auto_commit or schedule.approved_by!=actor.id or task.payload.get('schedule_authorization')!=schedule_context(schedule):
             raise HTTPException(409,'原定时计划授权已变化，不能重试原自动入库任务')
     task.payload={**task.payload,'retry_authorized_by':actor.id,'retry_base_attempt':task.attempts}
+    if (task.result or {}).get('paged'):task.result={**task.result,'page_failures':0}
     task.state='PENDING';task.next_at=utcnow();task.error='';task.lease_token=None;task.lease_until=None;task.version+=1
     audit(db,actor,'sync',task.id,'重新授权数据中台拉取',after={'attempts_preserved':task.attempts},reason=reason)
     return task

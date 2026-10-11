@@ -29,3 +29,4 @@
 .rule-row.org-rule-row{grid-template-columns:1.3fr 1.2fr .8fr .8fr auto!important}
 @media(max-width:900px){.rule-row,.rule-row.org-rule-row{grid-template-columns:repeat(2,minmax(0,1fr))!important}.rule-labels{display:none}}
 .search-results button[hidden]{display:none}
+.inline-check{display:inline-flex;align-items:center;gap:6px;font-size:12px;white-space:nowrap;color:#486589}.filterbar .inline-check input{height:auto;min-height:0;margin:0}

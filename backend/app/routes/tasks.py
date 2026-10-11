@@ -107,7 +107,7 @@ def import_confirm(ident:str,data:VersionedReason,request:Request):
 
 EXPORT_FILTERS={
  'records':set(RECORD_FILTERS),'participations':{'q','teacher_id','org_id','start','end','project_code','course_code'},'qualifications':{'q','state','teacher_id','org_id'},'points':{'teacher_id','period_id','org_id'},
- 'assessments':set(ASSESSMENT_FILTERS),'organization_assessments':{'period_id','target_kind','target_id','state'},'audit':{'q','module','result','start','end'},'handover':set(),
+ 'assessments':set(ASSESSMENT_FILTERS),'organization_assessments':{'period_id','target_kind','target_id','state'},'audit':{'q','module','result','start','end','actor','org_id','object_id','request_id'},'handover':set(),
 }
 
 @router.post('/exports')
@@ -140,7 +140,7 @@ def tasks(request:Request):
             if f.get('connection_id') or f.get('data_type'):
                 raise HTTPException(422,'导出任务不接受外部连接筛选')
         if f.get('state'):
-            if f['state'] not in {'PENDING','RUNNING','RETRY','FAILED','BLOCKED','DONE'}:
+            if f['state'] not in {'PENDING','RUNNING','RETRY','FAILED','BLOCKED','DONE','WAITING_CONFIRMATION'}:
                 raise HTTPException(422,'任务状态筛选无效')
             q=q.where(Task.state==f['state'])
         if f.get('connection_id'):

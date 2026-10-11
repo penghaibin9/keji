@@ -27,6 +27,13 @@ def _state_cookie(settings):
 def _state_key(state):
     return 'ssostate:'+sha256(state.encode()).hexdigest()
 
+
+def _cancel_pending_state(db, request):
+    state=request.cookies.get(_state_cookie(request.app.state.settings),'')
+    if not state or len(state)>128:return False
+    removed=db.execute(delete(Setting).where(Setting.key==_state_key(state)))
+    return removed.rowcount==1
+
 def _consume_state(db,state,connection):
     key=_state_key(state)
     row=db.scalar(select(Setting).where(Setting.key==key).with_for_update())
@@ -183,7 +190,7 @@ def sso_callback(request: Request):
         state_param=protocol.get('state_param','state') if protocol.get('protocol') in {'cas','json_ticket'} else 'state'
     state = request.query_params.get(state_param, '')
     expected = request.cookies.get(_state_cookie(cfg), '')
-    if not state or len(state)>128 or not expected or len(request.query_params.getlist(state_param))!=1 or not hmac.compare_digest(state, expected):
+    if not state or len(state)>128 or not state.isascii() or not expected or len(expected)>128 or not expected.isascii() or len(request.query_params.getlist(state_param))!=1 or not hmac.compare_digest(state, expected):
         with request.app.state.sessions.begin() as db:
             _record_rejection(db, request, '统一认证回调 state 校验失败', 401)
         response = JSONResponse({'detail': '统一认证回调校验失败，请重新登录', 'request_id': getattr(request.state, 'request_id', '')}, 401)
@@ -293,11 +300,13 @@ def sso_logout(request: Request):
                 except Exception:
                     # Local logout must still succeed; remote logout can be retried by user.
                     redirect_url = None
+        cancelled=_cancel_pending_state(db,request)
         db.delete(session)
-        audit(db, actor, 'auth', actor.id, '统一认证退出登录', after={'remote_logout_url_available': bool(redirect_url)}, reason='清理本地会话并按学校协议提供单点退出地址')
+        audit(db, actor, 'auth', actor.id, '统一认证退出登录', after={'remote_logout_url_available': bool(redirect_url),'pending_sso_cancelled':cancelled}, reason='清理本地会话及待处理认证请求，并按学校协议提供单点退出地址')
         return {'logged_out': True, 'sso_logout_url': redirect_url}
     result = command(request, {}, None, apply, allow_password=True)
     response = JSONResponse(result)
+    response.delete_cookie(_state_cookie(cfg),path='/',secure=cfg.secure_cookie,httponly=True,samesite='lax')
     response.delete_cookie('nd_sso_session',path='/',secure=cfg.secure_cookie,httponly=True,samesite='strict')
     response.delete_cookie(cfg.cookie_name, path='/', secure=cfg.secure_cookie, httponly=True, samesite='strict')
     response.delete_cookie(cfg.demo_cookie_name,path='/',secure=cfg.secure_cookie,httponly=True,samesite='strict')

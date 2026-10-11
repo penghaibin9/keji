@@ -9,11 +9,11 @@ from urllib.parse import urlsplit
 from fastapi import APIRouter,Request,HTTPException
 from sqlalchemy import select
 from ..core import *
-from ..schemas import (ConnectionUpdate,MappingValidate,SyncEnqueue,TaskRetry,VersionedReason,InboundPreview,
+from ..schemas import (ConnectionUpdate,MappingValidate,SyncEnqueue,LedgerSync,TaskRetry,VersionedReason,InboundPreview,
     InboundPullRequest,IntegrationScheduleIn,IntegrationScheduleUpdate,IntegrationProfileApply)
 from ..integrations import (DATA_CATALOG,catalog_for,normalize_mappings,apply_mappings,enqueue_sync,
                             SyncItem,SyncCallLog,ADAPTERS,ConnectionCheck,probe_connection,activate_connection,pause_schedules,live_connection,task_sync_items)
-from ..reference_data import InboundBatch,InboundRow,preview_inbound,confirm_inbound
+from ..reference_data import InboundBatch,InboundRow,preview_inbound,confirm_inbound,rollback_inbound
 from ..inbound_sync import IntegrationSchedule,create_pull_task
 from ..integration_status import latest_task_status
 router=APIRouter(prefix='/api',tags=['接口同步'])
@@ -118,7 +118,17 @@ def connection_catalog(request:Request):
     def load(db,a,s):
         out=[]
         for connection in db.scalars(select(Connection).order_by(Connection.code)):
-            out.append({'connection':{**serial(connection),'state':'CONNECTED' if live_connection(db,connection) else 'NOT_CONNECTED'},'data_types':[{**d,'connection_state':'CONNECTED' if live_connection(db,connection) else 'NOT_CONNECTED'} for d in catalog_for(connection)]})
+            from ..integration_center import MATERIALS,stored,source_record_map,source_record_complete
+            _,source_map=source_record_map(db,connection.id)
+            data_types=[]
+            for d in catalog_for(connection):
+                record=source_map.get(d['data_type']) or {}
+                data_types.append({**d,'connection_state':'CONNECTED' if live_connection(db,connection) else 'NOT_CONNECTED',
+                    'source_confirmed':source_record_complete(record),
+                    'source_system':record.get('source_system',''),'source_reference':record.get('reference','')})
+            out.append({'connection':{**serial(connection),'state':'CONNECTED' if live_connection(db,connection) else 'NOT_CONNECTED'},'data_types':data_types})
+            material_row=stored(db,'materials',connection.id)
+            out[-1]['material_records']={'required':list(MATERIALS),'items':(material_row.value or {}).get('items',[]) if material_row else []}
         return {'items':out}
     return read_operation(request,'sync.manage',load)
 
@@ -166,11 +176,17 @@ def validate_mapping(data:MappingValidate,request:Request):
         if data.data_type not in allowed:raise HTTPException(422,'数据类型不在采购接口目录')
         normalized=normalize_mappings(obj.mappings or [])
         typed=[m for m in normalized if m.get('data_type')==data.data_type];legacy=[m for m in normalized if not m.get('data_type')]
-        if not (typed or legacy):raise HTTPException(409,'当前数据类型尚未配置字段映射，不能把空映射校验当成通过')
+        if obj.code!='sso' and not (typed or legacy):raise HTTPException(409,'当前数据类型尚未配置字段映射，不能把空映射校验当成通过')
         rows=[];errors=0
         for idx,record in enumerate(data.records,1):
-            mapped,row_errors=apply_mappings(obj,record,data.data_type);errors+=bool(row_errors)
-            rows.append({'row':idx,'mapped':mapped,'errors':row_errors})
+            if obj.code=='sso' and data.data_type=='identity':
+                a.require_admin()
+                from ..sso_identity import preview_identity
+                result=preview_identity(db,obj.config,record)
+                rows.append({'row':idx,**result});errors+=bool(result['errors'])
+            else:
+                mapped,row_errors=apply_mappings(obj,record,data.data_type);errors+=bool(row_errors)
+                rows.append({'row':idx,'mapped':mapped,'errors':row_errors})
         audit(db,a,'connections',obj.id,'本地字段映射校验',after={'data_type':data.data_type,'rows':len(rows),'error_rows':errors,'external_called':False},reason=data.reason)
         return {'connection_state':obj.state,'external_called':False,'items':rows,'error_rows':errors}
     return command(request,data.model_dump(),'sync.manage',apply)
@@ -189,6 +205,71 @@ def manual_sync(ident:str,data:SyncEnqueue,request:Request):
             db.add(TaskAttempt(task_id=task.id,attempt=task.attempts,result='BLOCKED',message='NOT_CONNECTED'))
         audit(db,a,'sync',task.id,'创建人工同步/补传任务',after={'connection':obj.code,'data_type':data.data_type,'records':len(data.records),'state':task.state},reason=data.reason)
         return task
+    return command(request,data.model_dump(),'sync.manage',apply)
+
+
+def _province(db,ident):
+    obj=_connection(db,ident)
+    if obj.code!='province':raise HTTPException(422,'只有湘培直通车支持从台账组装上报数据')
+    return obj
+
+
+def _ledger_filters(source):
+    return {k:source.get(k) for k in ('start','end','period_id','org_id') if source.get(k)}
+
+
+@router.get('/connections/{ident}/ledger-sync/catalog')
+def ledger_sync_catalog(ident:str,request:Request):
+    """11.3 which province types can be assembled locally, canonical fields, and why 4 types wait."""
+    def load(db,a,s):
+        obj=_province(db,ident)
+        from ..province_payload import ledger_catalog
+        mappings=normalize_mappings(obj.mappings or [])
+        items=[{**x,'mapping_count':len([m for m in mappings if m.get('data_type')==x['data_type']] or [m for m in mappings if not m.get('data_type')])} for x in ledger_catalog()]
+        return {'items':items,'note':'本平台按内部标准字段组装；省平台正式字段由“字段对应”按省级规范转换，不在此处臆造省级字段名。'}
+    return read_operation(request,'sync.manage',load)
+
+
+@router.get('/connections/{ident}/ledger-sync/preview')
+def ledger_sync_preview(ident:str,request:Request):
+    f,_,_=filters_from(request,{'data_type','start','end','period_id','org_id'})
+    def load(db,a,s):
+        a.require_admin();obj=_province(db,ident)
+        from ..province_payload import build_ledger_records,chunks,CANONICAL_FIELDS
+        if not f.get('data_type'):raise HTTPException(422,'请选择数据类型')
+        records=build_ledger_records(db,a,f['data_type'],_ledger_filters(f))
+        mappings=normalize_mappings(obj.mappings or [])
+        mapped=any(not m.get('data_type') or m.get('data_type')==f['data_type'] for m in mappings)
+        sample=records[:5]
+        return {'data_type':f['data_type'],'count':len(records),'task_count':len(chunks(records)),'sample':sample,
+            'mapped_sample':[apply_mappings(obj,x,f['data_type'])[0] for x in sample] if mapped else [],
+            'fields':[{'key':k,'label':v} for k,v in CANONICAL_FIELDS[f['data_type']]],'mapping_ready':mapped,
+            'connection_live':live_connection(db,obj),'external_called':False}
+    return read_operation(request,'sync.manage',load)
+
+
+@router.post('/connections/{ident}/ledger-sync')
+def ledger_sync_enqueue(ident:str,data:LedgerSync,request:Request):
+    def apply(db,a,s):
+        a.require_admin();obj=_province(db,ident)
+        from ..province_payload import build_ledger_records,chunks
+        records=build_ledger_records(db,a,data.data_type,_ledger_filters(data.model_dump()))
+        if not records:raise HTTPException(422,'所选范围没有可上报的台账数据')
+        if data.expected_count is not None and data.expected_count!=len(records):raise HTTPException(409,'台账数据在预览后已变化，请重新预览核对数量')
+        tasks=[]
+        for part in chunks(records):
+            task,created=enqueue_sync(db,a,obj,data.data_type,part,data.reason,return_created=True)
+            if created and not live_connection(db,obj):
+                task.state='BLOCKED';task.error='外部接口未真实连接';task.version+=1
+                for item in db.scalars(select(SyncItem).where(SyncItem.task_id==task.id)):
+                    item.state='BLOCKED';item.error='NOT_CONNECTED';item.version+=1
+                task.attempts+=1
+                db.add(TaskAttempt(task_id=task.id,attempt=task.attempts,result='BLOCKED',message='NOT_CONNECTED'))
+            task.payload={**task.payload,'origin':'ledger','ledger_filters':_ledger_filters(data.model_dump())}
+            tasks.append({'id':task.id,'state':task.state,'created':created,'rows':len(part),'reused':len(task.payload.get('reused_item_ids') or [])})
+        audit(db,a,'sync',obj.id,'从台账生成湘培直通车同步任务',after={'data_type':data.data_type,'records':len(records),'tasks':[t['id'] for t in tasks],
+            'filters':_ledger_filters(data.model_dump())},reason=data.reason)
+        return {'data_type':data.data_type,'records':len(records),'tasks':tasks}
     return command(request,data.model_dump(),'sync.manage',apply)
 
 
@@ -265,7 +346,7 @@ def inbound_batches(request:Request):
             if f['data_type'] not in SUPPORTED_INBOUND:raise HTTPException(422,'当前入站数据类型不支持')
             q=q.where(InboundBatch.data_type==f['data_type'])
         if f.get('state'):
-            if f['state'] not in {'PREVIEW','COMMITTED','FAILED','BLOCKED'}:raise HTTPException(422,'入站状态筛选无效')
+            if f['state'] not in {'PREVIEW','COMMITTED','FAILED','BLOCKED','VOID'}:raise HTTPException(422,'入站状态筛选无效')
             q=q.where(InboundBatch.state==f['state'])
         total=db.scalar(select(func.count()).select_from(q.subquery()))
         batches=db.scalars(q.order_by(InboundBatch.created_at.desc(),InboundBatch.id).offset((p-1)*z).limit(z)).all()
@@ -289,7 +370,21 @@ def inbound_confirm(ident:str,data:VersionedReason,request:Request):
     def apply(db,a,s):
         batch=db.get(InboundBatch,ident)
         if not batch:raise HTTPException(404,'入站批次不存在')
-        return confirm_inbound(db,a,batch,data.expected_version,data.reason,data.basis)
+        if not batch:raise HTTPException(404,'入站批次不存在')
+        from ..paged_inbound import lock_pending_task,resume_confirmed_task
+        task=lock_pending_task(db,batch)
+        result=confirm_inbound(db,a,batch,data.expected_version,data.reason,data.basis)
+        resume_confirmed_task(db,task,result)
+        return result
+    return command(request,data.model_dump(),'sync.manage',apply)
+
+@router.post('/inbound-batches/{ident}/rollback')
+def inbound_rollback(ident:str,data:VersionedReason,request:Request):
+    """4.4 撤销本批入库: restore prior master values; refuse on later changes; audit is never deleted."""
+    def apply(db,a,s):
+        batch=db.get(InboundBatch,ident)
+        if not batch:raise HTTPException(404,'入站批次不存在')
+        return rollback_inbound(db,a,batch,data.expected_version,data.reason,data.basis)
     return command(request,data.model_dump(),'sync.manage',apply)
 
 @router.post('/connections/{ident}/inbound/pull')

@@ -117,11 +117,13 @@ def test_sso_is_registered_for_identity_mapping_preparation_without_fake_login(c
     c=sso['connection']
     r=put(client2,'/api/connections/'+c['id'],{
       'mappings':[{'data_type':'identity','source':'uid','target':'external_subject','transform':'text','required':True,'default':None}],
-      'config':{'endpoint':'https://sso.school.example/auth','owner':'学校信息中心','retry_count':3,'secret_env':'ND_SSO_SECRET','frequency_minutes':30,'auth_mode':'school_sso'},
+      'config':{'endpoint':'https://sso.school.example/auth','owner':'学校信息中心','retry_count':3,'secret_env':'ND_SSO_SECRET','frequency_minutes':30,'auth_mode':'school_sso','adapter':{'identity_fields':{'stable_id':'uid','account':'account','name':'name','active':'active'}}},
       'expected_version':c['version'],'reason':'统一认证字段准备','basis':'只做本地映射，不调用外部'})
     assert r.status_code==200 and r.json()['state']=='NOT_CONNECTED'
-    v=post(client2,'/api/connections/validate',{'connection_id':c['id'],'data_type':'identity','records':[{'uid':'U001'}],'reason':'本地映射检查','basis':'不调用外部'})
-    assert v.status_code==200 and v.json()['external_called'] is False and v.json()['items'][0]['mapped']['external_subject']=='U001'
+    v=post(client2,'/api/connections/validate',{'connection_id':c['id'],'data_type':'identity','records':[{'uid':'U001','account':'teacher','name':'合成教师','active':True}],'reason':'本地映射检查','basis':'不调用外部'})
+    assert v.status_code==200 and v.json()['external_called'] is False and v.json()['items'][0]['mapped']['stable_id']=='U001'
+    assert v.json()['items'][0]['binding']['role_kind']=='teacher'
+    assert v.json()['items'][0]['session_created'] is False
 
 def test_connection_mapping_rejects_data_type_outside_its_procurement_catalog(client2):
     auth(client2,'schooladmin')

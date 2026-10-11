@@ -31,7 +31,8 @@ class ConfigurableDataHubAdapter(ConfigurableRestBase):
         credentials = parse_credential(credential)
         paging=spec.get('pagination') or {}
         page_size=paging.get('page_size',limit);max_pages=paging.get('max_pages',20)
-        if type(page_size) is not int or not 1<=page_size<=limit or type(max_pages) is not int or not 1<=max_pages<=100:raise AdapterContractError('PULL_PAGING_INVALID')
+        if type(page_size) is not int or not 1<=page_size<=limit or type(max_pages) is not int or not 1<=max_pages<=1000:raise AdapterContractError('PULL_PAGING_INVALID')
+        max_pages=min(max_pages,100)  # one in-memory unit never exceeds `limit` rows; long runs use pull_chunk
         start=paging.get('start_page',1)
         if type(start) is not int or start<0:raise AdapterContractError('PULL_PAGING_INVALID')
         records=[];seen=set()
@@ -47,17 +48,26 @@ class ConfigurableDataHubAdapter(ConfigurableRestBase):
             elif paging.get('mode')!='page':raise AdapterContractError('PULL_PAGING_INVALID')
         raise AdapterContractError('PULL_PAGE_LIMIT_EXCEEDED')
 
-    def _page(self,config,request_spec,response_spec,context,credentials,timeout_seconds):
+    def pull_chunk(self, **kwargs):
+        from .paged_datahub import pull_chunk
+        return pull_chunk(self, **kwargs)
+
+    def _page(self,config,request_spec,response_spec,context,credentials,timeout_seconds, *, with_metadata=False):
         response = self._request_json(endpoint=str(config.get('endpoint', '')).strip(), spec=request_spec,
                                       context=context, credentials=credentials, timeout_seconds=timeout_seconds)
         if not isinstance(response_spec, dict):
             raise AdapterContractError('PULL_RESPONSE_SPEC_INVALID')
         success_path = str(response_spec.get('success_path', '')).strip()
-        if success_path:
+        empty_values = response_spec.get('empty_success_values')
+        is_empty = bool(success_path and empty_values and matches_value(path_get(response, success_path), empty_values))
+        if success_path and not is_empty:
             allowed = response_spec.get('success_values', [True, 0, '0', 'SUCCESS', 'OK'])
             if not matches_value(path_get(response, success_path),allowed):
                 raise AdapterContractError('PULL_UPSTREAM_REJECTED')
-        records = path_get(response, str(response_spec.get('records_path', 'data')))
+        if is_empty:
+            records = []  # e.g. data-hub code 20013: query succeeded, no rows
+        else:
+            records = path_get(response, str(response_spec.get('records_path', 'data')))
         if not isinstance(records, list) or any(not isinstance(x, dict) for x in records):
             raise AdapterContractError('PULL_RECORDS_INVALID')
         if len(records) > context['limit']:
@@ -72,4 +82,10 @@ class ConfigurableDataHubAdapter(ConfigurableRestBase):
                     raise AdapterContractError('PULL_CURSOR_INVALID')
         has_more_path = str(response_spec.get('has_more_path', '')).strip()
         has_more = normalized_bool(path_get(response, has_more_path)) if has_more_path else False
+        if with_metadata:
+            total=(0 if is_empty else path_get(response,str(response_spec['total_path']))) if response_spec.get('total_path') else None
+            if total is not None and (type(total) is not int or total<0):raise AdapterContractError('PULL_RESPONSE_TOTAL_MISMATCH')
+            watermark=path_get(response,str(response_spec['watermark_path'])) if response_spec.get('watermark_path') else None
+            if watermark is not None and (not isinstance(watermark,str) or not watermark.strip() or len(watermark)>500):raise AdapterContractError('PULL_CURSOR_INVALID')
+            return records,next_cursor,has_more,{'total':total,'watermark':watermark}
         return records,next_cursor,has_more

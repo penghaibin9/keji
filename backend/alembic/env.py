@@ -4,6 +4,7 @@ from sqlalchemy import engine_from_config,pool
 from app.config import Settings
 from app.models import Base
 from app import org_assessment,integrations,reference_data,inbound_sync,installation  # register extension metadata
+from app import social_models
 config=context.config
 if config.config_file_name is not None:fileConfig(config.config_file_name)
 target_metadata=Base.metadata

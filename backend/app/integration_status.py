@@ -13,11 +13,17 @@ def latest_task_status(db, connection, data_type=None):
     if task is None:return None
     success=failed=pending=0;stage=task.state
     activity=db.scalar(select(func.max(TaskAttempt.created_at)).where(TaskAttempt.task_id==task.id)) or task.created_at
+    failures=[]
     if task.kind=='sync':
         rows=task_sync_items(db,task)
         success=sum(x.state=='DONE' for x in rows);failed=sum(x.state in {'FAILED','BLOCKED'} for x in rows)
+        # 4.9 latest failure reason: first failed items with their last error code.
+        failures=[{'business_key':x.business_key,'state':x.state,'error':x.error} for x in rows if x.state in {'FAILED','BLOCKED','RETRY'} and x.error][:3]
         last_call=db.scalar(select(func.max(SyncCallLog.created_at)).where(SyncCallLog.item_id.in_([x.id for x in rows])))
         if last_call:activity=max(activity,last_call)
+    elif (task.result or {}).get('paged'):
+        from .paged_inbound import run_counts
+        success,failed,pending,stage=run_counts(db,task,connection)
     else:
         result=task.result or {};batch=db.get(InboundBatch,result.get('batch_id')) if result.get('batch_id') else None
         if batch and batch.connection_id==connection.id and batch.data_type==(task.payload or {}).get('data_type'):
@@ -34,6 +40,8 @@ def latest_task_status(db, connection, data_type=None):
             stage='NO_CHANGES'
     return {'id':task.id,'kind':task.kind,'data_type':(task.payload or {}).get('data_type'),
         'state':task.state,'display_state':stage,'created_at':task.created_at.isoformat(),
-        'error':task.error,'success_count':success,'failed_count':failed,
+        'error':task.error,'failure_items':failures,
+        'failure_reason':task.error or (failures[0]['error'] if failures else '') or ((task.result or {}).get('message') if task.state in {'FAILED','BLOCKED'} else ''),
+        'success_count':success,'failed_count':failed,
         'pending_confirmation_count':pending,'count_unit':'records',
         'last_activity_at':activity if isinstance(activity,str) else activity.isoformat()}

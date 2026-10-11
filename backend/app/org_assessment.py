@@ -107,7 +107,13 @@ def validate_org_rule_config(target_kind: str, config: dict) -> dict:
         except Exception: raise HTTPException(422, "组织考核权重或目标值无效") from None
         if weight < 0 or weight > 100 or target <= 0: raise HTTPException(422, "组织考核权重或目标值超出范围")
         keys.add(key); total += weight
-        normalized.append({"key":key,"label":label,"source":source,"weight":str(weight),"target":str(target)})
+        entry={"key":key,"label":label,"source":source,"weight":str(weight),"target":str(target)}
+        # 10.1 extended methods are opt-in; a component without "method" keeps the exact legacy shape.
+        from .scoring_methods import normalize_method
+        if item.get("method") in (None,"") and item.get("cap") not in (None,""):raise HTTPException(422, "封顶/保底须先选择评分方式")
+        try: entry.update(normalize_method(item,"org"))
+        except ValueError as exc: raise HTTPException(422, str(exc)) from None
+        normalized.append(entry)
     if total != Decimal("100"):
         raise HTTPException(422, "组织考核权重总和必须为100")
     return {"components": normalized}
@@ -121,7 +127,7 @@ def organization_facts(db, target: Org, period: Period):
     if not teacher_ids:
         raw={k:Decimal(0) for k in ORG_SOURCES}
         raw["teachers"]=Decimal(0)
-        return raw, {"as_of":utcnow().isoformat(),"period":{"id":period.id,"start_date":period.start_date.isoformat(),"end_date":period.end_date.isoformat()},"target":{"kind":target.kind,"id":target.id,"code":target.code,"name":target.name},"org_ids":org_ids,"teacher_ids":[],"assessment_references":[],"values":serial(raw)}
+        return raw, {"as_of":utcnow().isoformat(),"period":{"id":period.id,"start_date":period.start_date.isoformat(),"end_date":period.end_date.isoformat()},"target":{"kind":target.kind,"id":target.id,"code":target.code,"name":target.name},"org_ids":org_ids,"teacher_ids":[],"assessment_references":[],"basis_digests":organization_basis_digests(db,teacher_ids,period,[]),"values":serial(raw)}
     rq=select(TrainingRecord).where(TrainingRecord.teacher_id.in_(teacher_ids),TrainingRecord.state=="VALID",TrainingRecord.event_date>=period.start_date,TrainingRecord.event_date<=period.end_date).subquery()
     vals=db.execute(select(
         func.coalesce(func.sum(rq.c.hours),0),func.coalesce(func.sum(rq.c.participants),0),func.coalesce(func.sum(rq.c.income),0),
@@ -149,14 +155,54 @@ def organization_facts(db, target: Org, period: Period):
             "assessment_score":"assessments: same-period ARCHIVED teacher results average",
         },
         "values":serial(raw),
+        "basis_digests":organization_basis_digests(db,teacher_ids,period,references),
     }
     return raw, snapshot
+
+
+def organization_basis_digests(db,teacher_ids,period,references):
+    """Stream source identities/values so same-total replacements cannot pass as unchanged."""
+    from hashlib import sha256
+    from .calculation_freshness import RECORD_FIELDS
+    hashes={source:sha256() for source in RECORD_FIELDS}
+    query=select(TrainingRecord).where(TrainingRecord.teacher_id.in_(teacher_ids),TrainingRecord.state=='VALID',TrainingRecord.event_date>=period.start_date,TrainingRecord.event_date<=period.end_date).order_by(TrainingRecord.id)
+    for row in db.scalars(query.execution_options(yield_per=500)):
+        for source,field in RECORD_FIELDS.items():
+            hashes[source].update(digest([row.id,row.teacher_id,row.event_date,row.external_key,row.source,row.batch_id,getattr(row,field)]).encode())
+    result={k:v.hexdigest() for k,v in hashes.items()}
+    q=select(Qualification).where(Qualification.teacher_id.in_(teacher_ids),Qualification.state=='APPROVED',Qualification.obtained<=period.end_date,(Qualification.expires.is_(None))|(Qualification.expires>=period.end_date)).order_by(Qualification.id)
+    p=select(PointEntry).where(PointEntry.teacher_id.in_(teacher_ids),PointEntry.period_id==period.id).order_by(PointEntry.id)
+    for source,query in [('qualifications',q),('points',p)]:
+        checksum=sha256()
+        for row in db.scalars(query.execution_options(yield_per=500)):checksum.update(digest(serial(row)).encode())
+        result[source]=checksum.hexdigest()
+    result['assessment_score']=digest(references)
+    return result
+
+
+def organization_source_changes(db,obj):
+    from .calculation_freshness import source_changes
+    from .services import point_source_changes
+    if obj.state=='ARCHIVED':return {'changed':False,'items':[]}
+    period=db.get(Period,obj.period_id);rule=db.get(OrganizationAssessmentRule,obj.rule_id)
+    current=organization_facts(db,db.get(Org,obj.target_id),period)[1]
+    result=source_changes(obj.source_snapshot,current,rule.config['components'])
+    if any(c['source']=='points' for c in rule.config['components']):
+        if any(point_source_changes(db,tid,period)['changed'] for tid in current['teacher_ids']):
+            result['changed']=True;result['items'].append({'label':'教师积分的原始依据','before':'计算时的依据','after':'已变化，请先重算积分','details':[]})
+    return result
 
 
 def evaluate_org_rule(rule: OrganizationAssessmentRule, raw: dict):
     detail=[]
     for c in rule.config["components"]:
         value=Decimal(str(raw[c["source"]])); target=Decimal(str(c["target"])); weight=Decimal(str(c["weight"]))
+        if c.get("method"):
+            # 10.1 extended method: explainable steps are kept in the same calculation detail.
+            from .scoring_methods import score_component
+            score,formula,explain=score_component(c,value,"org")
+            detail.append({"key":c["key"],"label":c["label"],"source":c["source"],"raw":str(value),"target":str(target),"weight":str(weight),"formula":formula,"score":str(score),"rule_id":rule.id,"rule_version":rule.version_no,**explain})
+            continue
         score=max(Decimal(0),min(Decimal(1),value/target))*weight
         score=rounded(score)
         detail.append({"key":c["key"],"label":c["label"],"source":c["source"],"raw":str(value),"target":str(target),"weight":str(weight),"formula":f"max(0, min({value} ÷ {target}, 1)) × {weight}","score":str(score),"rule_id":rule.id,"rule_version":rule.version_no})

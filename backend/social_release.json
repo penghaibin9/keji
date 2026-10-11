@@ -1,0 +1,8 @@
+{
+  "parent": "20260918_0001",
+  "revision": "20261008_0002",
+  "sha256": {
+    "backend/alembic/versions/20261008_0002_social_training.py": "9e425620b5e4a31d46018375f55717d46aa3d1dad173aded9f92a02b255b09b5",
+    "backend/social_schema.json": "068eb9b1e8828eb8dd1b7a6412a854a03d48fcd825bf00faf347aaec6266b3b6"
+  }
+}

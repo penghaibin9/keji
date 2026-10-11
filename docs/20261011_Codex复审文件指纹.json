@@ -1,0 +1,258 @@
+{
+  "record_date": "2026-10-11",
+  "source_repository": "D:\\一站式非学历教育智慧前台\\Yueke_NonDegree_R11_Restricted_Server_Demo",
+  "branch_at_recording": "codex/keji-upload-clean",
+  "head_at_recording": "f80b8a5",
+  "current_files": [
+    {
+      "path": "backend/app/routes/admin.py",
+      "current_sha256": "f28057cf01f416cc53619b66ba09613a08e3f5cddab9bc97a27432a0152a4099",
+      "matches_last_record": true
+    },
+    {
+      "path": "backend/app/routes/social.py",
+      "current_sha256": "809835948ff501b087e075e942d7e2567a0e3023e8f74b487cca35c306f6f1be",
+      "matches_last_record": true
+    },
+    {
+      "path": "backend/app/social_schemas.py",
+      "current_sha256": "cdcd4c5b8b603d3631ad93c39179cb05547e6d2b81792c8c4ac9778b07345d40",
+      "matches_last_record": true
+    },
+    {
+      "path": "backend/app/social_training.py",
+      "current_sha256": "44ce1bfb5a49871b53c752dfdeeb220b3d6f908d44019e8f64739bb0d3e0160f",
+      "matches_last_record": true
+    },
+    {
+      "path": "docs/API_ENDPOINT_CATALOG.md",
+      "current_sha256": "dce8d7ef79a2af7c5a12b04b4aee62e9a42599210d1fb34d680732213d111ca1",
+      "matches_last_record": true
+    },
+    {
+      "path": "frontend/app.js",
+      "current_sha256": "aca04202d25866ec490f6ec51b1e87d2257bc458c583d1be6a31ea2e6effb3ae",
+      "matches_last_record": true
+    },
+    {
+      "path": "frontend/business-focus.css",
+      "current_sha256": "fedd47ea9c5f23ade0c25967e4d83a104f8d91b44fcb413c84957bbb40929eca",
+      "matches_last_record": true
+    },
+    {
+      "path": "frontend/index.html",
+      "current_sha256": "11a0757d3d811c3f66ecb801745eb5e9e3ef0ee7b8e261999cfb24b1d42d00c3",
+      "matches_last_record": true
+    },
+    {
+      "path": "frontend/integration-workspace.js",
+      "current_sha256": "f7349e40a8e955dabb58a56b2f8a037b7c3a624e2f289f67594ffdea1a6326a2",
+      "matches_last_record": true
+    },
+    {
+      "path": "frontend/school-data.js",
+      "current_sha256": "62f3a83ff6ce2291d673db1eb3edd313bb52fdad7cd9cb65bd03d5a45d605a18",
+      "matches_last_record": true
+    },
+    {
+      "path": "frontend/social-ledgers.js",
+      "current_sha256": "490990c4004043bdda2e4d5f50d8bb457ed9ff91c53d21995640fe0f3ca184b5",
+      "matches_last_record": true
+    },
+    {
+      "path": "frontend/social-training.js",
+      "current_sha256": "6532e35b436216ea5f9ade76165ebb44db9e9ee10c84cc1b487783fdc9baee92",
+      "matches_last_record": true
+    },
+    {
+      "path": "tests/js/integration-workspace.test.mjs",
+      "current_sha256": "318a35b21885ab8c642897a1fc35231733a192d2ed46fd05e55ae9708d8075fa",
+      "matches_last_record": true
+    },
+    {
+      "path": "tests/js/r11_portal.test.mjs",
+      "current_sha256": "af6cc763ef931b61b884fc2813b6743e229feed730f5bbf486e00d69a382ac4e",
+      "matches_last_record": true
+    },
+    {
+      "path": "tests/js/social-ledgers.test.mjs",
+      "current_sha256": "87494963d7c844fd86ac71b14f74dad32216131d747ed12e8a0b76d2b46b5dc0",
+      "matches_last_record": true
+    },
+    {
+      "path": "tests/js/social-training.test.mjs",
+      "current_sha256": "48c0943d327bbc9c47bc279926f266902d6ff9007e290969199d589873f42428",
+      "matches_last_record": true
+    },
+    {
+      "path": "tests/r2/test_inactive_org_recovery.py",
+      "current_sha256": "36f9ddc8a05741476b13c651e943fb602cf768c49675608e7c5549ef2b7b3b72",
+      "matches_last_record": true
+    },
+    {
+      "path": "tests/r2/test_participation_workflow.py",
+      "current_sha256": "89fb0f0703eaa6a14b95c0aa22842a3b457bc064651178b4688a80622b3fe1de",
+      "matches_last_record": true
+    },
+    {
+      "path": "tests/r2/test_resource_edit.py",
+      "current_sha256": "47bc93b5022ac7211b0d14f67c5cf759ec6ab98c3bee6ba92b211b2872620490",
+      "matches_last_record": true
+    },
+    {
+      "path": "tests/r2/test_social_additions.py",
+      "current_sha256": "2af37855e9cbd682c5db8fd719c284f43fe1e838f337260b5ebada1a737e0bac",
+      "matches_last_record": true
+    }
+  ],
+  "recorded_round_history": [
+    {
+      "round": "四角色全流程精修_20261011",
+      "path": "docs/API_ENDPOINT_CATALOG.md",
+      "before_sha256": "bc82b2f5c6496608dfe3c602939267714037688179fef0798a6c2ccdbbb567cf",
+      "after_sha256": "dce8d7ef79a2af7c5a12b04b4aee62e9a42599210d1fb34d680732213d111ca1"
+    },
+    {
+      "round": "四角色全流程精修_20261011",
+      "path": "frontend/app.js",
+      "before_sha256": "dec76716bbd63c6a4a13cdb603e268dce79f02fff7dc34bc355480d821e17a85",
+      "after_sha256": "57cdd8a59073f5d5cebc4fce82404fbbef1f08a6d26b4f6256aa7f351c1b1afe"
+    },
+    {
+      "round": "四角色全流程精修_20261011",
+      "path": "frontend/business-focus.css",
+      "before_sha256": "fe6c421c01c3aa8d14f143060b6607bf69b29f3e5290116c29657304b77453fb",
+      "after_sha256": "fedd47ea9c5f23ade0c25967e4d83a104f8d91b44fcb413c84957bbb40929eca"
+    },
+    {
+      "round": "四角色全流程精修_20261011",
+      "path": "frontend/index.html",
+      "before_sha256": "de8dad1fa75d5c96b48d045b193ebab918a4435ac36666b0bf8817c27f13a76e",
+      "after_sha256": "0b088710744112bd50cd268271fc31bc81d98028f68b0e808620bd55a6158b12"
+    },
+    {
+      "round": "四角色全流程精修_20261011",
+      "path": "frontend/integration-workspace.js",
+      "before_sha256": "ab25352fe8d06d29569e6cb5a7001cf45ac6fa86c1479654a5a4e02ebec25560",
+      "after_sha256": "f7349e40a8e955dabb58a56b2f8a037b7c3a624e2f289f67594ffdea1a6326a2"
+    },
+    {
+      "round": "四角色全流程精修_20261011",
+      "path": "frontend/school-data.js",
+      "before_sha256": "021deba62e141f26a6b176b975f35b614d873a080290380670abea15b40fc002",
+      "after_sha256": "62f3a83ff6ce2291d673db1eb3edd313bb52fdad7cd9cb65bd03d5a45d605a18"
+    },
+    {
+      "round": "四角色全流程精修_20261011",
+      "path": "frontend/social-ledgers.js",
+      "before_sha256": "8cf2d2b9f089d2068c7d5d791dc266aa36b4d7b7adf9699ce7dd226e1dfeec93",
+      "after_sha256": "490990c4004043bdda2e4d5f50d8bb457ed9ff91c53d21995640fe0f3ca184b5"
+    },
+    {
+      "round": "四角色全流程精修_20261011",
+      "path": "frontend/social-training.js",
+      "before_sha256": "133eabe8e751773356b217bfa10be89e22845f48be705135cff5c3a4d7e84206",
+      "after_sha256": "43e353bf137803264d770087caf8959daf33eb654192f94ffa9ff22cb72693cc"
+    },
+    {
+      "round": "四角色全流程精修_20261011",
+      "path": "backend/app/social_schemas.py",
+      "before_sha256": "c54434b32a28c9bc7981a37af1bcf3f353c0e16d2a7d2c36f4931ba6d7b7e654",
+      "after_sha256": "cdcd4c5b8b603d3631ad93c39179cb05547e6d2b81792c8c4ac9778b07345d40"
+    },
+    {
+      "round": "四角色全流程精修_20261011",
+      "path": "backend/app/social_training.py",
+      "before_sha256": "0f51f318975750d1cd21ea9d39cf6b6e2a61f6abb239c0800cfede50d2d130ab",
+      "after_sha256": "44ce1bfb5a49871b53c752dfdeeb220b3d6f908d44019e8f64739bb0d3e0160f"
+    },
+    {
+      "round": "四角色全流程精修_20261011",
+      "path": "backend/app/routes/social.py",
+      "before_sha256": "171caf8f551b2fcb108d7befa227f078da456fba405933af574ddd844d6c6dfd",
+      "after_sha256": "809835948ff501b087e075e942d7e2567a0e3023e8f74b487cca35c306f6f1be"
+    },
+    {
+      "round": "四角色全流程精修_20261011",
+      "path": "tests/js/r11_portal.test.mjs",
+      "before_sha256": "c00ef0ad59e57ac546e1953a6253a97758b3b34009d94de2fac7ba78f7f7424e",
+      "after_sha256": "b31ccc687fc6fecb636dd85f330d06cad93a09f9ce3e92f90c1437ef5edde69d"
+    },
+    {
+      "round": "四角色全流程精修_20261011",
+      "path": "tests/js/social-ledgers.test.mjs",
+      "before_sha256": "b9745d9af71459aa711274b503197b8a6528fe2b4547379640d62ed40bc3e35a",
+      "after_sha256": "87494963d7c844fd86ac71b14f74dad32216131d747ed12e8a0b76d2b46b5dc0"
+    },
+    {
+      "round": "四角色全流程精修_20261011",
+      "path": "tests/r2/test_social_additions.py",
+      "before_sha256": "1bbed1db3a1c6597f0f98ea21c5f668bb1de74d18c345785971c5f8dc43f9fd1",
+      "after_sha256": "2af37855e9cbd682c5db8fd719c284f43fe1e838f337260b5ebada1a737e0bac"
+    },
+    {
+      "round": "四角色全流程精修_20261011",
+      "path": "tests/r2/test_resource_edit.py",
+      "new_file": true,
+      "after_sha256": "47bc93b5022ac7211b0d14f67c5cf759ec6ab98c3bee6ba92b211b2872620490"
+    },
+    {
+      "round": "四角色全流程精修_20261011",
+      "path": "tests/js/integration-workspace.test.mjs",
+      "new_file": true,
+      "after_sha256": "318a35b21885ab8c642897a1fc35231733a192d2ed46fd05e55ae9708d8075fa"
+    },
+    {
+      "round": "四角色查漏补全_20261011",
+      "path": "frontend/app.js",
+      "before_sha256": "57cdd8a59073f5d5cebc4fce82404fbbef1f08a6d26b4f6256aa7f351c1b1afe",
+      "after_sha256": "aca04202d25866ec490f6ec51b1e87d2257bc458c583d1be6a31ea2e6effb3ae"
+    },
+    {
+      "round": "四角色查漏补全_20261011",
+      "path": "frontend/index.html",
+      "before_sha256": "0b088710744112bd50cd268271fc31bc81d98028f68b0e808620bd55a6158b12",
+      "after_sha256": "11a0757d3d811c3f66ecb801745eb5e9e3ef0ee7b8e261999cfb24b1d42d00c3"
+    },
+    {
+      "round": "四角色查漏补全_20261011",
+      "path": "frontend/social-training.js",
+      "before_sha256": "43e353bf137803264d770087caf8959daf33eb654192f94ffa9ff22cb72693cc",
+      "after_sha256": "6532e35b436216ea5f9ade76165ebb44db9e9ee10c84cc1b487783fdc9baee92"
+    },
+    {
+      "round": "四角色查漏补全_20261011",
+      "path": "backend/app/routes/admin.py",
+      "before_sha256": "6b694e232f7a5444b146ab2a60f58073c2e9bc1a49517526512124b5d9644184",
+      "after_sha256": "f28057cf01f416cc53619b66ba09613a08e3f5cddab9bc97a27432a0152a4099"
+    },
+    {
+      "round": "四角色查漏补全_20261011",
+      "path": "tests/js/r11_portal.test.mjs",
+      "after_sha256": "af6cc763ef931b61b884fc2813b6743e229feed730f5bbf486e00d69a382ac4e",
+      "note": "本轮增加针对性回归，未记录测试文件修改前副本"
+    },
+    {
+      "round": "四角色查漏补全_20261011",
+      "path": "tests/js/social-training.test.mjs",
+      "after_sha256": "48c0943d327bbc9c47bc279926f266902d6ff9007e290969199d589873f42428",
+      "note": "本轮增加针对性回归，未记录测试文件修改前副本"
+    },
+    {
+      "round": "四角色查漏补全_20261011",
+      "path": "tests/r2/test_participation_workflow.py",
+      "after_sha256": "89fb0f0703eaa6a14b95c0aa22842a3b457bc064651178b4688a80622b3fe1de",
+      "note": "本轮增加针对性回归，未记录测试文件修改前副本"
+    },
+    {
+      "round": "四角色查漏补全_20261011",
+      "path": "tests/r2/test_inactive_org_recovery.py",
+      "after_sha256": "36f9ddc8a05741476b13c651e943fb602cf768c49675608e7c5549ef2b7b3b72",
+      "note": "本轮增加针对性回归，未记录测试文件修改前副本"
+    }
+  ],
+  "notes": [
+    "SHA256校验仅证明文件内容与记录一致，不等于逻辑或安全通过",
+    "design-qa.md另有今天追加记录，未纳入这20个产品和测试文件的轮次清单"
+  ]
+}

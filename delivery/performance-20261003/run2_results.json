@@ -1,0 +1,964 @@
+{
+ "tool": "scratchpad load_driver.py (asyncio+httpx)",
+ "base_url": "http://127.0.0.1:53057",
+ "started_at": "2026-10-03T22:33:39+0800",
+ "online_session_phase": {
+  "target": 100,
+  "login_concurrency": 20,
+  "created_sessions": 100,
+  "role_mix": {
+   "teacher": 60,
+   "dept": 20,
+   "college": 12,
+   "school": 8
+  },
+  "login_summary": {
+   "requests": 100,
+   "errors": 0,
+   "error_rate": 0.0,
+   "p50_s": 0.2672,
+   "p95_s": 1.2569,
+   "p99_s": 2.4602,
+   "max_s": 2.5844,
+   "mean_s": 0.43,
+   "status_counts": {
+    "200": 100
+   },
+   "throughput_rps": 36.68
+  },
+  "wall_s": 2.7,
+  "verify_all_sessions": {
+   "checked": 100,
+   "valid": 55,
+   "concurrency": 100,
+   "summary": {
+    "requests": 100,
+    "errors": 45,
+    "error_rate": 0.45,
+    "p50_s": 1.759,
+    "p95_s": 31.2196,
+    "p99_s": 31.2517,
+    "max_s": 31.3255,
+    "mean_s": 14.8243,
+    "status_counts": {
+     "0": 45,
+     "200": 55
+    },
+    "throughput_rps": 3.19
+   }
+  },
+  "pass": false,
+  "reverify_after_business": {
+   "checked": 100,
+   "valid": 100,
+   "summary": {
+    "requests": 100,
+    "errors": 0,
+    "error_rate": 0.0,
+    "p50_s": 0.8203,
+    "p95_s": 1.0528,
+    "p99_s": 1.2536,
+    "max_s": 1.4384,
+    "mean_s": 0.8548,
+    "status_counts": {
+     "200": 100
+    },
+    "throughput_rps": 55.74
+   }
+  }
+ },
+ "business_phase": {
+  "virtual_users": 100,
+  "role_mix": {
+   "teacher": 60,
+   "dept": 20,
+   "college": 12,
+   "school": 8
+  },
+  "duration_s": 364.9,
+  "model": "closed loop, think time 1.0-5.0s between requests, one keep-alive connection per user, shuffled endpoint order per cycle",
+  "overall": {
+   "requests": 10225,
+   "errors": 34,
+   "error_rate": 0.003325,
+   "p50_s": 0.0579,
+   "p95_s": 2.2743,
+   "p99_s": 10.7376,
+   "max_s": 26.1171,
+   "mean_s": 0.536,
+   "status_counts": {
+    "0": 34,
+    "200": 10191
+   },
+   "throughput_rps": 28.02
+  },
+  "ordinary_all": {
+   "requests": 6622,
+   "errors": 20,
+   "error_rate": 0.00302,
+   "p50_s": 0.0471,
+   "p95_s": 1.8375,
+   "p99_s": 11.1259,
+   "max_s": 22.5283,
+   "mean_s": 0.4779,
+   "status_counts": {
+    "0": 20,
+    "200": 6602
+   },
+   "throughput_rps": 18.15
+  },
+  "complex_all": {
+   "requests": 3603,
+   "errors": 14,
+   "error_rate": 0.003886,
+   "p50_s": 0.0805,
+   "p95_s": 2.8664,
+   "p99_s": 10.5962,
+   "max_s": 26.1171,
+   "mean_s": 0.6426,
+   "status_counts": {
+    "0": 14,
+    "200": 3589
+   },
+   "throughput_rps": 9.87
+  },
+  "endpoints": {
+   "assessments_list": {
+    "kind": "complex",
+    "threshold_p95_s": 5.0,
+    "summary": {
+     "requests": 1326,
+     "errors": 2,
+     "error_rate": 0.001508,
+     "p50_s": 0.0663,
+     "p95_s": 1.9705,
+     "p99_s": 7.3397,
+     "max_s": 19.3741,
+     "mean_s": 0.4668,
+     "status_counts": {
+      "0": 2,
+      "200": 1324
+     },
+     "throughput_rps": 3.63
+    },
+    "by_role": {
+     "teacher": {
+      "requests": 907,
+      "errors": 1,
+      "error_rate": 0.001103,
+      "p50_s": 0.0421,
+      "p95_s": 1.2576,
+      "p99_s": 6.4433,
+      "max_s": 18.563,
+      "mean_s": 0.3471,
+      "status_counts": {
+       "0": 1,
+       "200": 906
+      }
+     },
+     "dept": {
+      "requests": 230,
+      "errors": 1,
+      "error_rate": 0.004348,
+      "p50_s": 0.0988,
+      "p95_s": 1.8149,
+      "p99_s": 6.6752,
+      "max_s": 7.7461,
+      "mean_s": 0.4165,
+      "status_counts": {
+       "0": 1,
+       "200": 229
+      }
+     },
+     "college": {
+      "requests": 138,
+      "errors": 0,
+      "error_rate": 0.0,
+      "p50_s": 0.123,
+      "p95_s": 2.4403,
+      "p99_s": 11.1252,
+      "max_s": 19.3741,
+      "mean_s": 0.7191,
+      "status_counts": {
+       "200": 138
+      }
+     },
+     "school": {
+      "requests": 51,
+      "errors": 0,
+      "error_rate": 0.0,
+      "p50_s": 1.6519,
+      "p95_s": 3.7104,
+      "p99_s": 11.1247,
+      "max_s": 15.4017,
+      "mean_s": 2.1387,
+      "status_counts": {
+       "200": 51
+      }
+     }
+    },
+    "pass": false
+   },
+   "assessments_list_2025_archived": {
+    "kind": "complex",
+    "threshold_p95_s": 5.0,
+    "summary": {
+     "requests": 49,
+     "errors": 1,
+     "error_rate": 0.020408,
+     "p50_s": 1.2908,
+     "p95_s": 5.723,
+     "p99_s": 17.5567,
+     "max_s": 26.1171,
+     "mean_s": 2.1921,
+     "status_counts": {
+      "0": 1,
+      "200": 48
+     },
+     "throughput_rps": 0.13
+    },
+    "by_role": {
+     "school": {
+      "requests": 49,
+      "errors": 1,
+      "error_rate": 0.020408,
+      "p50_s": 1.2908,
+      "p95_s": 5.723,
+      "p99_s": 17.5567,
+      "max_s": 26.1171,
+      "mean_s": 2.1921,
+      "status_counts": {
+       "0": 1,
+       "200": 48
+      }
+     }
+    },
+    "pass": false
+   },
+   "organization_assessments": {
+    "kind": "complex",
+    "threshold_p95_s": 5.0,
+    "summary": {
+     "requests": 423,
+     "errors": 1,
+     "error_rate": 0.002364,
+     "p50_s": 0.051,
+     "p95_s": 1.8828,
+     "p99_s": 6.6542,
+     "max_s": 17.3932,
+     "mean_s": 0.4208,
+     "status_counts": {
+      "0": 1,
+      "200": 422
+     },
+     "throughput_rps": 1.16
+    },
+    "by_role": {
+     "dept": {
+      "requests": 230,
+      "errors": 1,
+      "error_rate": 0.004348,
+      "p50_s": 0.0457,
+      "p95_s": 1.6987,
+      "p99_s": 6.6145,
+      "max_s": 17.3932,
+      "mean_s": 0.4242,
+      "status_counts": {
+       "0": 1,
+       "200": 229
+      }
+     },
+     "college": {
+      "requests": 139,
+      "errors": 0,
+      "error_rate": 0.0,
+      "p50_s": 0.047,
+      "p95_s": 2.0919,
+      "p99_s": 4.7333,
+      "max_s": 11.233,
+      "mean_s": 0.3786,
+      "status_counts": {
+       "200": 139
+      }
+     },
+     "school": {
+      "requests": 54,
+      "errors": 0,
+      "error_rate": 0.0,
+      "p50_s": 0.0686,
+      "p95_s": 2.995,
+      "p99_s": 6.854,
+      "max_s": 8.3106,
+      "mean_s": 0.5153,
+      "status_counts": {
+       "200": 54
+      }
+     }
+    },
+    "pass": false
+   },
+   "organization_workbench": {
+    "kind": "complex",
+    "threshold_p95_s": 5.0,
+    "summary": {
+     "requests": 428,
+     "errors": 3,
+     "error_rate": 0.007009,
+     "p50_s": 0.1808,
+     "p95_s": 4.0056,
+     "p99_s": 15.151,
+     "max_s": 25.681,
+     "mean_s": 1.0906,
+     "status_counts": {
+      "0": 3,
+      "200": 425
+     },
+     "throughput_rps": 1.17
+    },
+    "by_role": {
+     "dept": {
+      "requests": 235,
+      "errors": 2,
+      "error_rate": 0.008511,
+      "p50_s": 0.0883,
+      "p95_s": 2.503,
+      "p99_s": 12.0216,
+      "max_s": 15.7552,
+      "mean_s": 0.6016,
+      "status_counts": {
+       "0": 2,
+       "200": 233
+      }
+     },
+     "college": {
+      "requests": 139,
+      "errors": 1,
+      "error_rate": 0.007194,
+      "p50_s": 0.1884,
+      "p95_s": 1.2912,
+      "p99_s": 3.8525,
+      "max_s": 13.7913,
+      "mean_s": 0.5203,
+      "status_counts": {
+       "0": 1,
+       "200": 138
+      }
+     },
+     "school": {
+      "requests": 54,
+      "errors": 0,
+      "error_rate": 0.0,
+      "p50_s": 2.9321,
+      "p95_s": 18.2697,
+      "p99_s": 25.3742,
+      "max_s": 25.681,
+      "mean_s": 4.6864,
+      "status_counts": {
+       "200": 54
+      }
+     }
+    },
+    "pass": false
+   },
+   "portal_workbench": {
+    "kind": "ordinary",
+    "threshold_p95_s": 3.0,
+    "summary": {
+     "requests": 1326,
+     "errors": 7,
+     "error_rate": 0.005279,
+     "p50_s": 0.055,
+     "p95_s": 2.0169,
+     "p99_s": 7.7765,
+     "max_s": 22.5283,
+     "mean_s": 0.5203,
+     "status_counts": {
+      "0": 7,
+      "200": 1319
+     },
+     "throughput_rps": 3.63
+    },
+    "by_role": {
+     "teacher": {
+      "requests": 902,
+      "errors": 5,
+      "error_rate": 0.005543,
+      "p50_s": 0.0387,
+      "p95_s": 1.6796,
+      "p99_s": 7.5401,
+      "max_s": 19.1768,
+      "mean_s": 0.4473,
+      "status_counts": {
+       "0": 5,
+       "200": 897
+      }
+     },
+     "dept": {
+      "requests": 233,
+      "errors": 0,
+      "error_rate": 0.0,
+      "p50_s": 0.0551,
+      "p95_s": 1.1839,
+      "p99_s": 2.4616,
+      "max_s": 11.5837,
+      "mean_s": 0.2848,
+      "status_counts": {
+       "200": 233
+      }
+     },
+     "college": {
+      "requests": 137,
+      "errors": 2,
+      "error_rate": 0.014599,
+      "p50_s": 0.0949,
+      "p95_s": 1.57,
+      "p99_s": 9.2734,
+      "max_s": 21.6099,
+      "mean_s": 0.5579,
+      "status_counts": {
+       "0": 2,
+       "200": 135
+      }
+     },
+     "school": {
+      "requests": 54,
+      "errors": 0,
+      "error_rate": 0.0,
+      "p50_s": 1.6349,
+      "p95_s": 4.9026,
+      "p99_s": 20.7397,
+      "max_s": 22.5283,
+      "mean_s": 2.6616,
+      "status_counts": {
+       "200": 54
+      }
+     }
+    },
+    "pass": false
+   },
+   "qualification_summary": {
+    "kind": "ordinary",
+    "threshold_p95_s": 3.0,
+    "summary": {
+     "requests": 1322,
+     "errors": 4,
+     "error_rate": 0.003026,
+     "p50_s": 0.0393,
+     "p95_s": 1.6412,
+     "p99_s": 10.918,
+     "max_s": 22.2856,
+     "mean_s": 0.4427,
+     "status_counts": {
+      "0": 4,
+      "200": 1318
+     },
+     "throughput_rps": 3.62
+    },
+    "by_role": {
+     "teacher": {
+      "requests": 904,
+      "errors": 3,
+      "error_rate": 0.003319,
+      "p50_s": 0.0359,
+      "p95_s": 1.6268,
+      "p99_s": 11.1784,
+      "max_s": 22.2856,
+      "mean_s": 0.4404,
+      "status_counts": {
+       "0": 3,
+       "200": 901
+      }
+     },
+     "dept": {
+      "requests": 228,
+      "errors": 0,
+      "error_rate": 0.0,
+      "p50_s": 0.0345,
+      "p95_s": 1.6308,
+      "p99_s": 11.8824,
+      "max_s": 18.8919,
+      "mean_s": 0.4876,
+      "status_counts": {
+       "200": 228
+      }
+     },
+     "college": {
+      "requests": 137,
+      "errors": 0,
+      "error_rate": 0.0,
+      "p50_s": 0.0448,
+      "p95_s": 1.378,
+      "p99_s": 5.6331,
+      "max_s": 8.0982,
+      "mean_s": 0.3415,
+      "status_counts": {
+       "200": 137
+      }
+     },
+     "school": {
+      "requests": 53,
+      "errors": 1,
+      "error_rate": 0.018868,
+      "p50_s": 0.158,
+      "p95_s": 2.5432,
+      "p99_s": 6.2989,
+      "max_s": 9.3355,
+      "mean_s": 0.55,
+      "status_counts": {
+       "0": 1,
+       "200": 52
+      }
+     }
+    },
+    "pass": false
+   },
+   "qualifications_list": {
+    "kind": "ordinary",
+    "threshold_p95_s": 3.0,
+    "summary": {
+     "requests": 1328,
+     "errors": 0,
+     "error_rate": 0.0,
+     "p50_s": 0.043,
+     "p95_s": 1.2632,
+     "p99_s": 8.5426,
+     "max_s": 18.6919,
+     "mean_s": 0.4153,
+     "status_counts": {
+      "200": 1328
+     },
+     "throughput_rps": 3.64
+    },
+    "by_role": {
+     "teacher": {
+      "requests": 906,
+      "errors": 0,
+      "error_rate": 0.0,
+      "p50_s": 0.0379,
+      "p95_s": 1.3116,
+      "p99_s": 13.312,
+      "max_s": 18.6919,
+      "mean_s": 0.4444,
+      "status_counts": {
+       "200": 906
+      }
+     },
+     "dept": {
+      "requests": 233,
+      "errors": 0,
+      "error_rate": 0.0,
+      "p50_s": 0.0493,
+      "p95_s": 1.2062,
+      "p99_s": 6.7158,
+      "max_s": 15.1494,
+      "mean_s": 0.4027,
+      "status_counts": {
+       "200": 233
+      }
+     },
+     "college": {
+      "requests": 136,
+      "errors": 0,
+      "error_rate": 0.0,
+      "p50_s": 0.0469,
+      "p95_s": 1.2467,
+      "p99_s": 4.4614,
+      "max_s": 5.7301,
+      "mean_s": 0.3069,
+      "status_counts": {
+       "200": 136
+      }
+     },
+     "school": {
+      "requests": 53,
+      "errors": 0,
+      "error_rate": 0.0,
+      "p50_s": 0.0692,
+      "p95_s": 0.5376,
+      "p99_s": 3.5164,
+      "max_s": 6.3654,
+      "mean_s": 0.2526,
+      "status_counts": {
+       "200": 53
+      }
+     }
+    },
+    "pass": true
+   },
+   "records_list": {
+    "kind": "ordinary",
+    "threshold_p95_s": 3.0,
+    "summary": {
+     "requests": 1328,
+     "errors": 4,
+     "error_rate": 0.003012,
+     "p50_s": 0.0486,
+     "p95_s": 1.5275,
+     "p99_s": 6.9039,
+     "max_s": 18.8614,
+     "mean_s": 0.4046,
+     "status_counts": {
+      "0": 4,
+      "200": 1324
+     },
+     "throughput_rps": 3.64
+    },
+    "by_role": {
+     "teacher": {
+      "requests": 900,
+      "errors": 2,
+      "error_rate": 0.002222,
+      "p50_s": 0.0431,
+      "p95_s": 1.4291,
+      "p99_s": 4.984,
+      "max_s": 18.8614,
+      "mean_s": 0.3602,
+      "status_counts": {
+       "0": 2,
+       "200": 898
+      }
+     },
+     "dept": {
+      "requests": 237,
+      "errors": 1,
+      "error_rate": 0.004219,
+      "p50_s": 0.0451,
+      "p95_s": 1.3289,
+      "p99_s": 12.8696,
+      "max_s": 18.2912,
+      "mean_s": 0.4618,
+      "status_counts": {
+       "0": 1,
+       "200": 236
+      }
+     },
+     "college": {
+      "requests": 138,
+      "errors": 0,
+      "error_rate": 0.0,
+      "p50_s": 0.0636,
+      "p95_s": 1.8544,
+      "p99_s": 11.1455,
+      "max_s": 14.0953,
+      "mean_s": 0.5509,
+      "status_counts": {
+       "200": 138
+      }
+     },
+     "school": {
+      "requests": 53,
+      "errors": 1,
+      "error_rate": 0.018868,
+      "p50_s": 0.3267,
+      "p95_s": 1.4399,
+      "p99_s": 3.5621,
+      "max_s": 3.9297,
+      "mean_s": 0.5218,
+      "status_counts": {
+       "0": 1,
+       "200": 52
+      }
+     }
+    },
+    "pass": false
+   },
+   "statistics_comparison": {
+    "kind": "complex",
+    "threshold_p95_s": 5.0,
+    "summary": {
+     "requests": 51,
+     "errors": 0,
+     "error_rate": 0.0,
+     "p50_s": 3.2265,
+     "p95_s": 9.5565,
+     "p99_s": 18.83,
+     "max_s": 19.7584,
+     "mean_s": 4.4272,
+     "status_counts": {
+      "200": 51
+     },
+     "throughput_rps": 0.14
+    },
+    "by_role": {
+     "school": {
+      "requests": 51,
+      "errors": 0,
+      "error_rate": 0.0,
+      "p50_s": 3.2265,
+      "p95_s": 9.5565,
+      "p99_s": 18.83,
+      "max_s": 19.7584,
+      "mean_s": 4.4272,
+      "status_counts": {
+       "200": 51
+      }
+     }
+    },
+    "pass": false
+   },
+   "statistics_dashboard": {
+    "kind": "complex",
+    "threshold_p95_s": 5.0,
+    "summary": {
+     "requests": 1326,
+     "errors": 7,
+     "error_rate": 0.005279,
+     "p50_s": 0.0735,
+     "p95_s": 1.8335,
+     "p99_s": 10.1427,
+     "max_s": 22.0407,
+     "mean_s": 0.5418,
+     "status_counts": {
+      "0": 7,
+      "200": 1319
+     },
+     "throughput_rps": 3.63
+    },
+    "by_role": {
+     "teacher": {
+      "requests": 904,
+      "errors": 5,
+      "error_rate": 0.005531,
+      "p50_s": 0.0556,
+      "p95_s": 1.5622,
+      "p99_s": 7.7883,
+      "max_s": 21.4075,
+      "mean_s": 0.4382,
+      "status_counts": {
+       "0": 5,
+       "200": 899
+      }
+     },
+     "dept": {
+      "requests": 233,
+      "errors": 1,
+      "error_rate": 0.004292,
+      "p50_s": 0.0663,
+      "p95_s": 1.5319,
+      "p99_s": 12.9258,
+      "max_s": 17.7533,
+      "mean_s": 0.5528,
+      "status_counts": {
+       "0": 1,
+       "200": 232
+      }
+     },
+     "college": {
+      "requests": 137,
+      "errors": 1,
+      "error_rate": 0.007299,
+      "p50_s": 0.1411,
+      "p95_s": 2.0098,
+      "p99_s": 14.837,
+      "max_s": 22.0407,
+      "mean_s": 0.7606,
+      "status_counts": {
+       "0": 1,
+       "200": 136
+      }
+     },
+     "school": {
+      "requests": 52,
+      "errors": 0,
+      "error_rate": 0.0,
+      "p50_s": 1.4224,
+      "p95_s": 3.2321,
+      "p99_s": 6.179,
+      "max_s": 7.7571,
+      "mean_s": 1.7173,
+      "status_counts": {
+       "200": 52
+      }
+     }
+    },
+    "pass": false
+   },
+   "todos": {
+    "kind": "ordinary",
+    "threshold_p95_s": 3.0,
+    "summary": {
+     "requests": 1318,
+     "errors": 5,
+     "error_rate": 0.003794,
+     "p50_s": 0.0532,
+     "p95_s": 2.5074,
+     "p99_s": 13.899,
+     "max_s": 19.179,
+     "mean_s": 0.6076,
+     "status_counts": {
+      "0": 5,
+      "200": 1313
+     },
+     "throughput_rps": 3.61
+    },
+    "by_role": {
+     "teacher": {
+      "requests": 900,
+      "errors": 3,
+      "error_rate": 0.003333,
+      "p50_s": 0.0411,
+      "p95_s": 2.0605,
+      "p99_s": 13.9873,
+      "max_s": 18.2922,
+      "mean_s": 0.5528,
+      "status_counts": {
+       "0": 3,
+       "200": 897
+      }
+     },
+     "dept": {
+      "requests": 231,
+      "errors": 0,
+      "error_rate": 0.0,
+      "p50_s": 0.0549,
+      "p95_s": 2.4529,
+      "p99_s": 7.3681,
+      "max_s": 19.1406,
+      "mean_s": 0.5835,
+      "status_counts": {
+       "200": 231
+      }
+     },
+     "college": {
+      "requests": 136,
+      "errors": 1,
+      "error_rate": 0.007353,
+      "p50_s": 0.0878,
+      "p95_s": 1.1062,
+      "p99_s": 6.3688,
+      "max_s": 19.179,
+      "mean_s": 0.4562,
+      "status_counts": {
+       "0": 1,
+       "200": 135
+      }
+     },
+     "school": {
+      "requests": 51,
+      "errors": 1,
+      "error_rate": 0.019608,
+      "p50_s": 1.7594,
+      "p95_s": 5.4195,
+      "p99_s": 6.7338,
+      "max_s": 6.7414,
+      "mean_s": 2.0876,
+      "status_counts": {
+       "0": 1,
+       "200": 50
+      }
+     }
+    },
+    "pass": false
+   }
+  },
+  "windows_30s": [
+   {
+    "window": "0-30s",
+    "requests": 952,
+    "rps": 31.7,
+    "errors": 1,
+    "ordinary_p95_s": 0.553,
+    "complex_p95_s": 0.949
+   },
+   {
+    "window": "30-60s",
+    "requests": 484,
+    "rps": 16.1,
+    "errors": 0,
+    "ordinary_p95_s": 18.292,
+    "complex_p95_s": 19.334
+   },
+   {
+    "window": "60-90s",
+    "requests": 947,
+    "rps": 31.6,
+    "errors": 3,
+    "ordinary_p95_s": 0.362,
+    "complex_p95_s": 1.472
+   },
+   {
+    "window": "90-120s",
+    "requests": 905,
+    "rps": 30.2,
+    "errors": 2,
+    "ordinary_p95_s": 1.487,
+    "complex_p95_s": 1.572
+   },
+   {
+    "window": "120-150s",
+    "requests": 922,
+    "rps": 30.7,
+    "errors": 4,
+    "ordinary_p95_s": 0.428,
+    "complex_p95_s": 1.954
+   },
+   {
+    "window": "150-180s",
+    "requests": 907,
+    "rps": 30.2,
+    "errors": 4,
+    "ordinary_p95_s": 1.137,
+    "complex_p95_s": 2.664
+   },
+   {
+    "window": "180-210s",
+    "requests": 940,
+    "rps": 31.3,
+    "errors": 1,
+    "ordinary_p95_s": 1.187,
+    "complex_p95_s": 1.549
+   },
+   {
+    "window": "210-240s",
+    "requests": 888,
+    "rps": 29.6,
+    "errors": 8,
+    "ordinary_p95_s": 1.385,
+    "complex_p95_s": 2.785
+   },
+   {
+    "window": "240-270s",
+    "requests": 873,
+    "rps": 29.1,
+    "errors": 1,
+    "ordinary_p95_s": 2.995,
+    "complex_p95_s": 3.121
+   },
+   {
+    "window": "270-300s",
+    "requests": 807,
+    "rps": 26.9,
+    "errors": 3,
+    "ordinary_p95_s": 5.368,
+    "complex_p95_s": 6.703
+   },
+   {
+    "window": "300-330s",
+    "requests": 666,
+    "rps": 22.2,
+    "errors": 5,
+    "ordinary_p95_s": 2.239,
+    "complex_p95_s": 2.441
+   },
+   {
+    "window": "330-360s",
+    "requests": 930,
+    "rps": 31.0,
+    "errors": 2,
+    "ordinary_p95_s": 3.229,
+    "complex_p95_s": 10.741
+   },
+   {
+    "window": "360-390s",
+    "requests": 4,
+    "rps": 0.1,
+    "errors": 0,
+    "ordinary_p95_s": 1.27,
+    "complex_p95_s": 0.558
+   }
+  ],
+  "ordinary_pass": false,
+  "complex_pass": false
+ },
+ "finished_at": "2026-10-03T22:40:20+0800"
+}

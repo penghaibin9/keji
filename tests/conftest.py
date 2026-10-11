@@ -12,6 +12,7 @@ ROOT=Path(__file__).resolve().parents[1]
 sys.path.insert(0,str(ROOT/'backend'));sys.path.insert(0,str(ROOT/'scripts'))
 from app import models as m
 from app.settings_catalog import DEFAULT_BUSINESS_DICTIONARY,DEFAULT_IMPORT_POLICY
+from app.release_contract import EXPECTED_MIGRATION_HEADS
 
 class FixtureActor:
     def __init__(self,ids=('t1','t2','t4'),org_ids=('school','c1','d1')):
@@ -32,7 +33,8 @@ def engine(tmp_path):
     m.Base.metadata.create_all(e) # Test database only; never used by production code.
     with e.begin() as c:
         c.exec_driver_sql('CREATE TABLE alembic_version (version_num VARCHAR(32) NOT NULL)')
-        c.exec_driver_sql("INSERT INTO alembic_version VALUES ('20260918_0001')")
+        for head in EXPECTED_MIGRATION_HEADS:
+            c.exec_driver_sql('INSERT INTO alembic_version VALUES (?)',(head,))
     with Session(e) as db:
         for o in [('school','学校','school',None),('c1','学院一','college','school'),('c2','学院二','college','school'),('d1','教研室一','dept','c1'),('d2','教研室二','dept','c2')]:
             db.add(m.Org(id=o[0],code=o[0],name=o[1],kind=o[2],parent_id=o[3]));db.flush()

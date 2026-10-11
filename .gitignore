@@ -7,3 +7,20 @@ node_modules/
 .env
 *.sqlite
 *.sqlite3
+.venv/
+evidence/
+.keji-closeout-backup-*/
+
+# Keep local runtime, work copies and school-provided materials private.
+.runtime/
+_claude_tmp/
+.env.*
+!.env.*.example
+*.sqlite-wal
+*.sqlite-shm
+*.db
+*.pem
+*.key
+*.pfx
+/docs/学校对接资料_20261009/
+/docs/10.10/第二轮代码改动.diff

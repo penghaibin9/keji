@@ -32,7 +32,7 @@ def test_blocker_scope_matches_guard_and_hides_unauthorized_details(client2,app2
     with app2.state.sessions.begin() as db:
         db.add(Period(id='past',name='其他周期',start_date=date(2025,1,1),end_date=date(2025,12,31)));db.flush()
         for key,teacher,period,state in [('mine','teacher','period2026','OPEN'),('record','teacher',None,'OPEN'),('other','otherteacher','period2026','OPEN'),('past','teacher','past','OPEN'),('done','teacher','period2026','RESOLVED')]:
-            db.add(Dispute(id=key,teacher_id=teacher,period_id=period,object_type='assessment',object_id=ident,reason='隔离核对原因',state=state))
+            db.add(Dispute(id=key,teacher_id=teacher,period_id=period,object_type='record' if key=='record' else 'assessment',object_id='rec1' if key=='record' else ident,reason='隔离核对原因',state=state))
     auth(client2,'depthead')
     b=client2.get(f'/api/assessments/{ident}').json()['confirmation_blockers']
     assert b['count']==2 and {i['id'] for i in b['items']}=={'mine','record'}

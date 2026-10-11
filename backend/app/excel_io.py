@@ -30,8 +30,9 @@ from .org_assessment import OrganizationAssessment, OrganizationAssessmentRule, 
 from .settings_catalog import business_dictionary,import_row_limit
 from .integrations import SyncItem,SyncCallLog,ConnectionCheck,DATA_CATALOG
 from .delivery import configuration_snapshot,database_dictionary
-from .reference_data import TeacherParticipation,TrainingProjectMaster,TrainingCourseMaster,TrainingClassMaster,TeacherHrProfile,InboundBatch,InboundRow,ensure_reference_from_training_record,record_reference_errors
+from .reference_data import TeacherParticipation,TrainingProjectMaster,TrainingCourseMaster,TrainingClassMaster,TeacherHrProfile,TeacherCourseTerm,SchoolCourse,InboundBatch,InboundRow,ensure_reference_from_training_record,record_reference_errors
 from .inbound_sync import IntegrationSchedule
+from .social_models import SocialProject,SocialUnit,SocialPolicy,SocialClaim,SocialAnnual,SocialResource
 
 MAX_ROWS=5000
 MAX_XLSX_BYTES=10*1024*1024
@@ -236,7 +237,8 @@ def validate_rows(db,actor,kind,rows):
                 else:resolved['teacher_id']=teacher.id
                 if n['external_key'] in seen1 or n['external_key'] in existing_ext:errors.append('来源唯一编号重复')
                 seen1.add(n['external_key'])
-                if n['source'] not in record_sources:errors.append('数据来源不在学校业务字典中')
+                if n['source'] not in record_sources and n['source']!='Excel导入':errors.append('来源说明不在学校业务字典中')
+                resolved['source']='Excel导入'
                 if not errors:
                     RecordIn(**{k:v for k,v in resolved.items() if k!='teacher_staff_no'},reason='Excel预览校验',basis='标准模板预览')
                     errors.extend(record_reference_errors(db,resolved,pending=pending_references))
@@ -246,7 +248,8 @@ def validate_rows(db,actor,kind,rows):
                 else:resolved['teacher_id']=teacher.id
                 if n['external_key'] in seen1 or n['external_key'] in existing_ext:errors.append('来源唯一编号重复')
                 seen1.add(n['external_key'])
-                if n['source'] not in record_sources:errors.append('数据来源不在学校业务字典中')
+                if n['source'] not in record_sources and n['source']!='Excel导入':errors.append('来源说明不在学校业务字典中')
+                resolved['source']='Excel导入'
                 if not errors:
                     ParticipationIn(**{k:v for k,v in resolved.items() if k!='teacher_staff_no'},reason='Excel预览校验',basis='标准模板预览')
                     errors.extend(record_reference_errors(db,resolved,pending=pending_references))
@@ -305,12 +308,12 @@ def _commit_import(db,actor,job,rows,reason,basis,preview_sha):
     if job.kind=='records':
         for x in checked:
             n=x['normalized'];payload={k:v for k,v in n.items() if k!='teacher_staff_no'}
-            obj=insert_record(db,actor,RecordIn(**payload,reason=reason,basis=basis),batch_id=job.id);ensure_reference_from_training_record(db,obj);written.append({'row_no':x['row_no'],'object_id':obj.id})
+            obj=insert_record(db,actor,RecordIn(**payload,reason=reason,basis=basis),batch_id=job.id,channel='import');ensure_reference_from_training_record(db,obj);written.append({'row_no':x['row_no'],'object_id':obj.id})
     elif job.kind=='participations':
         for x in checked:
             n=x['normalized'];payload={k:v for k,v in n.items() if k!='teacher_staff_no'}
             parsed=ParticipationIn(**payload,reason=reason,basis=basis)
-            obj=TeacherParticipation(**parsed.model_dump(exclude={'reason','basis'}),batch_id=job.id);db.add(obj);db.flush()
+            obj=TeacherParticipation(**{**parsed.model_dump(exclude={'reason','basis'}),'source':'Excel导入'},batch_id=job.id);db.add(obj);db.flush()
             workflow(db,actor,'participation',obj.id,'Excel导入教师参训记录',{},serial(obj),reason,basis);written.append({'row_no':x['row_no'],'object_id':obj.id})
     elif job.kind=='qualifications':
         for x in checked:
@@ -357,19 +360,22 @@ def require_export_scope(actor,kind):
     if kind=='audit':actor.require_admin()
 
 
-def export_rows(db,actor,kind,filters):
+def export_rows(db,actor,kind,filters,policy=None):
     require_export_scope(actor,kind)
+    from .sensitive import MaskPolicy
+    pol=policy or MaskPolicy(db,actor);staff=lambda u:pol.value('staff_no',u.staff_no,u.id)
+    labels=business_dictionary(db)['status_labels'];label=lambda code:labels.get(code,code)  # 3.4: same display names as the UI
     if kind=='records':
         q=record_query(db,actor,filters)
         items=db.scalars(q.order_by(TrainingRecord.event_date.desc(),TrainingRecord.id)).all();users={u.id:u for u in db.scalars(select(User).where(User.id.in_({x.teacher_id for x in items})))}
         return ['业务日期','来源唯一编号','教师工号','教师姓名','项目编码','项目名称','课程编码','课程名称','班级编码','班级名称','学时','人次','归属培训收入','数据来源'],[
-            [x.event_date,x.external_key,users[x.teacher_id].staff_no,users[x.teacher_id].name,x.project_code,x.project,x.course_code,x.course,x.class_code,x.class_name,x.hours,x.participants,x.income,x.source] for x in items]
+            [x.event_date,x.external_key,staff(users[x.teacher_id]),users[x.teacher_id].name,x.project_code,x.project,x.course_code,x.course,x.class_code,x.class_name,x.hours,x.participants,x.income,x.source] for x in items]
     if kind=='participations':
         allowed={'q','teacher_id','org_id','start','end','project_code','course_code'}
         if set(filters)-allowed:raise HTTPException(422,'参训导出筛选字段无效')
         from .routes.reference import _participation_query
         items=db.scalars(_participation_query(db,actor,filters).order_by(TeacherParticipation.event_date.desc(),TeacherParticipation.id)).all();users={u.id:u for u in db.scalars(select(User).where(User.id.in_({x.teacher_id for x in items})))}
-        return ['参训日期','来源唯一编号','教师工号','教师姓名','项目编码','项目名称','课程编码','课程名称','参训学时','数据来源'],[[x.event_date,x.external_key,users[x.teacher_id].staff_no,users[x.teacher_id].name,x.project_code,x.project,x.course_code,x.course,x.hours,x.source] for x in items]
+        return ['参训日期','来源唯一编号','教师工号','教师姓名','项目编码','项目名称','课程编码','课程名称','参训学时','数据来源'],[[x.event_date,x.external_key,staff(users[x.teacher_id]),users[x.teacher_id].name,x.project_code,x.project,x.course_code,x.course,x.hours,x.source] for x in items]
     if kind=='qualifications':
         allowed={'q','state','teacher_id','org_id'}
         if set(filters)-allowed:raise HTTPException(422,'资质导出筛选字段无效')
@@ -379,7 +385,7 @@ def export_rows(db,actor,kind,filters):
         if filters.get('state'):q=q.where(Qualification.state==filters['state'])
         if filters.get('q'):q=q.where(Qualification.name.contains(filters['q'],autoescape=True)|Qualification.certificate_no.contains(filters['q'],autoescape=True))
         items=db.scalars(q.order_by(Qualification.created_at.desc(),Qualification.id)).all();users={u.id:u for u in db.scalars(select(User).where(User.id.in_({x.teacher_id for x in items})))}
-        return ['教师工号','教师姓名','资质类别','证书名称','证书编号','发证机构','取得日期','有效期至','状态','版本'],[[users[x.teacher_id].staff_no,users[x.teacher_id].name,x.category,x.name,x.certificate_no,x.issuer,x.obtained,x.expires or '',x.state,x.version] for x in items]
+        return ['教师工号','教师姓名','资质类别','证书名称','证书编号','发证机构','取得日期','有效期至','状态','版本'],[[staff(users[x.teacher_id]),users[x.teacher_id].name,x.category,x.name,pol.value('certificate_no',x.certificate_no,x.teacher_id),x.issuer,x.obtained,x.expires or '',label(x.state),x.version] for x in items]
     if kind=='points':
         allowed={'teacher_id','period_id','org_id'}
         if set(filters)-allowed:raise HTTPException(422,'积分导出筛选字段无效')
@@ -388,7 +394,7 @@ def export_rows(db,actor,kind,filters):
             if filters.get(k):q=q.where(getattr(PointEntry,k)==filters[k])
         if filters.get('org_id'):q=q.where(PointEntry.teacher_id.in_(select(User.id).where(User.org_id.in_(authorized_org_descendants(db,actor,filters['org_id'])))))
         items=db.scalars(q.order_by(PointEntry.created_at,PointEntry.id)).all();users={u.id:u for u in db.scalars(select(User).where(User.id.in_({x.teacher_id for x in items})))}
-        return ['教师工号','教师姓名','周期ID','积分项','类型','分值','原始值','公式','规则ID','批次ID','时间','原因','依据'],[[users[x.teacher_id].staff_no,users[x.teacher_id].name,x.period_id,x.item_key,x.kind,x.amount,x.raw_value,x.formula,x.rule_id or '',x.batch_id or '',x.created_at,x.reason,x.basis] for x in items]
+        return ['教师工号','教师姓名','周期ID','积分项','类型','分值','原始值','公式','规则ID','批次ID','时间','原因','依据'],[[staff(users[x.teacher_id]),users[x.teacher_id].name,x.period_id,x.item_key,label(x.kind),x.amount,x.raw_value,x.formula,x.rule_id or '',x.batch_id or '',x.created_at,x.reason,x.basis] for x in items]
     if kind=='assessments':
         if set(filters)-ASSESSMENT_FILTERS:raise HTTPException(422,'考核导出筛选字段无效')
         from .assessment_evidence import assessment_projection
@@ -396,7 +402,7 @@ def export_rows(db,actor,kind,filters):
         rows=[]
         for obj in items:
             d=assessment_projection(db,obj);x=d['assessment'];u=d['teacher']
-            rows.append([u['staff_no'],u['name'],x['period_id'],x['score'],x['state'],'是' if x['returned'] else '否',x['rule_id'],x['version'],obj.archive_sha256 or ''])
+            rows.append([pol.value('staff_no',u['staff_no'],obj.teacher_id),u['name'],x['period_id'],x['score'],label(x['state']),'是' if x['returned'] else '否',x['rule_id'],x['version'],obj.archive_sha256 or ''])
         return ['教师工号','教师姓名','周期ID','得分','状态','退回','规则ID','版本','归档SHA256'],rows
     if kind=='organization_assessments':
         if actor.role.kind=='teacher':raise HTTPException(403,'教师不能导出组织考核')
@@ -411,12 +417,12 @@ def export_rows(db,actor,kind,filters):
         rows=[]
         for obj in items:
             d=serial(_organization_details(db,actor,obj.id));x=d['assessment']
-            rows.append([d['target']['name'],x['target_kind'],x['period_id'],x['score'],x['state'],x['rule_id'],x['version'],obj.archive_sha256 or ''])
+            rows.append([d['target']['name'],{'dept':'教研室','college':'学院','school':'学校'}.get(x['target_kind'],x['target_kind']),x['period_id'],x['score'],label(x['state']),x['rule_id'],x['version'],obj.archive_sha256 or ''])
         return ['考核对象','对象层级','周期ID','得分','状态','规则ID','版本','归档SHA256'],rows
     if kind=='audit':
         q=audit_query(db,actor,filters)
         items=db.scalars(q.order_by(Audit.created_at.desc(),Audit.id)).all()
-        return ['时间','用户','组织ID','模块','业务对象','操作','前值','后值','原因','结果','Request-ID'],[[x.created_at,x.actor_name,x.org_id or '',x.module,x.object_id,x.action,json.dumps(x.before,ensure_ascii=False),json.dumps(x.after,ensure_ascii=False),x.reason,x.result,x.request_id] for x in items]
+        return ['时间','用户','组织ID','模块','业务对象','操作','前值','后值','原因','结果','Request-ID'],[[x.created_at,x.actor_name,x.org_id or '',x.module,x.object_id,x.action,json.dumps(x.before,ensure_ascii=False),json.dumps(x.after,ensure_ascii=False),x.reason,label(x.result),x.request_id] for x in items]
     raise HTTPException(422,'导出类型无效')
 
 
@@ -455,8 +461,10 @@ def process_export_task(db,task,storage_dir):
         if kind=='handover':
             actor.require('data.export');actor.require_admin();path,filename=_handover_snapshot(db,task,storage_dir)
         else:
-            actor.require('export');headers,rows=export_rows(db,actor,kind,filters);data=rows_to_xlsx(headers,rows,kind[:31]);root=_ensure_export_root(storage_dir);filename=f'{kind}_{task.id}.xlsx';path=root/(task.id+'.xlsx');_atomic_write(path,data)
+            from .sensitive import MaskPolicy
+            policy=MaskPolicy(db,actor);actor.require('export');headers,rows=export_rows(db,actor,kind,filters,policy);data=rows_to_xlsx(headers,rows,kind[:31]);root=_ensure_export_root(storage_dir);filename=f'{kind}_{task.id}.xlsx';path=root/(task.id+'.xlsx');_atomic_write(path,data)
         data_hash=sha256(path.read_bytes()).hexdigest();task.state='DONE';task.error='';task.result={'filename':filename,'storage_name':path.name,'sha256':data_hash,'size':path.stat().st_size,'mime':'application/zip' if kind=='handover' else 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'};task.version+=1
+        if kind!='handover':task.result['sensitive_masked']=policy.masked  # 12.6: masked identifier count for this viewer
         db.add(TaskAttempt(task_id=task.id,attempt=attempt,result='SUCCESS',message='导出生成并完成SHA256校验'));return task
     except Exception as exc:
         task.state='FAILED';task.error=('导出校验未通过，请核对权限与数据完整性' if isinstance(exc,HTTPException) else '导出执行失败：'+type(exc).__name__);task.version+=1;db.add(TaskAttempt(task_id=task.id,attempt=attempt,result='ERROR',message=type(exc).__name__))
@@ -502,6 +510,7 @@ def _handover_zip(db,actor,task,storage_dir):
       ('organizations',Org,['id','code','name','kind','parent_id','active','version','created_at']),('roles',Role,['id','code','name','kind','permissions','active','version','created_at']),
       ('users',User,['id','username','name','staff_no','title','org_id','role_id','active','is_admin','version','created_at']),('periods',Period,['id','name','start_date','end_date','state','version','created_at']),
       ('settings',Setting,['key','value','version']),('training_records',TrainingRecord,[c.key for c in sa_inspect(TrainingRecord).columns]),
+      *[(model.__tablename__,model,[c.key for c in sa_inspect(model).columns]) for model in (SocialProject,SocialUnit,SocialPolicy,SocialClaim,SocialAnnual,SocialResource)],
       ('qualifications',Qualification,[c.key for c in sa_inspect(Qualification).columns]),('qualification_revisions',QualificationRevision,[c.key for c in sa_inspect(QualificationRevision).columns]),
       ('rules',Rule,[c.key for c in sa_inspect(Rule).columns]),('point_balances',PointBalance,[c.key for c in sa_inspect(PointBalance).columns]),('point_entries',PointEntry,[c.key for c in sa_inspect(PointEntry).columns]),
       ('assessments',Assessment,[c.key for c in sa_inspect(Assessment).columns]),('workflow_events',WorkflowEvent,[c.key for c in sa_inspect(WorkflowEvent).columns]),
@@ -510,6 +519,8 @@ def _handover_zip(db,actor,task,storage_dir):
       ('teacher_hr_profiles',TeacherHrProfile,[c.key for c in sa_inspect(TeacherHrProfile).columns]),('training_projects',TrainingProjectMaster,[c.key for c in sa_inspect(TrainingProjectMaster).columns]),
       ('training_courses',TrainingCourseMaster,[c.key for c in sa_inspect(TrainingCourseMaster).columns]),('training_classes',TrainingClassMaster,[c.key for c in sa_inspect(TrainingClassMaster).columns]),
       ('teacher_participations',TeacherParticipation,[c.key for c in sa_inspect(TeacherParticipation).columns]),
+      ('teacher_course_terms',TeacherCourseTerm,[c.key for c in sa_inspect(TeacherCourseTerm).columns]),
+      ('school_courses',SchoolCourse,[c.key for c in sa_inspect(SchoolCourse).columns]),
       ('inbound_batches',InboundBatch,[c.key for c in sa_inspect(InboundBatch).columns]),('inbound_rows',InboundRow,[c.key for c in sa_inspect(InboundRow).columns]),
       ('integration_schedules',IntegrationSchedule,[c.key for c in sa_inspect(IntegrationSchedule).columns]),
       ('sync_items',SyncItem,[c.key for c in sa_inspect(SyncItem).columns]),('sync_call_logs',SyncCallLog,[c.key for c in sa_inspect(SyncCallLog).columns]),

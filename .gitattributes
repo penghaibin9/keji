@@ -1,0 +1,12 @@
+backend/alembic/versions/20260918_0001_canonical_fresh_school.py text eol=lf
+backend/alembic_legacy_unverified/20260917_0002_org_assessment_and_sync.py text eol=lf
+backend/canonical_schema.json text eol=lf
+backend/alembic/versions/20261008_0002_social_training.py -text
+backend/social_schema.json -text
+backend/social_release.json text eol=lf
+
+backend/alembic/versions/20261009_0003_teacher_course_terms.py text eol=lf
+backend/teaching_schema.json text eol=lf
+backend/teaching_release.json text eol=lf
+
+# Preserve the signed social migration and schema bytes across platforms.

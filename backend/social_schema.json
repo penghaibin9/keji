@@ -1,0 +1,571 @@
+{
+  "revision": "20261008_0002",
+  "tables": {
+    "social_annuals": {
+      "checks": [],
+      "columns": {
+        "created_at": {
+          "family": "datetime",
+          "nullable": false
+        },
+        "data": {
+          "family": "json",
+          "nullable": false
+        },
+        "id": {
+          "family": "string",
+          "length": 36,
+          "nullable": false
+        },
+        "org_id": {
+          "family": "string",
+          "length": 36,
+          "nullable": false
+        },
+        "owner_id": {
+          "family": "string",
+          "length": 36,
+          "nullable": false
+        },
+        "period_id": {
+          "family": "string",
+          "length": 36,
+          "nullable": false
+        },
+        "policy_id": {
+          "family": "string",
+          "length": 36,
+          "nullable": false
+        },
+        "snapshot": {
+          "family": "json",
+          "nullable": false
+        },
+        "state": {
+          "family": "string",
+          "length": 32,
+          "nullable": false
+        },
+        "version": {
+          "family": "integer",
+          "nullable": false
+        }
+      },
+      "foreign_keys": [
+        [
+          [
+            "org_id"
+          ],
+          "organizations",
+          [
+            "id"
+          ]
+        ],
+        [
+          [
+            "owner_id"
+          ],
+          "users",
+          [
+            "id"
+          ]
+        ],
+        [
+          [
+            "period_id"
+          ],
+          "periods",
+          [
+            "id"
+          ]
+        ],
+        [
+          [
+            "policy_id"
+          ],
+          "social_policies",
+          [
+            "id"
+          ]
+        ]
+      ],
+      "indexes": [
+        [
+          "ix_social_annuals_org_id",
+          [
+            "org_id"
+          ],
+          false
+        ],
+        [
+          "ix_social_annuals_period_id",
+          [
+            "period_id"
+          ],
+          false
+        ]
+      ],
+      "primary_key": [
+        "id"
+      ],
+      "unique": [
+        [
+          "org_id",
+          "period_id"
+        ]
+      ]
+    },
+    "social_claims": {
+      "checks": [],
+      "columns": {
+        "created_at": {
+          "family": "datetime",
+          "nullable": false
+        },
+        "data": {
+          "family": "json",
+          "nullable": false
+        },
+        "id": {
+          "family": "string",
+          "length": 36,
+          "nullable": false
+        },
+        "period_id": {
+          "family": "string",
+          "length": 36,
+          "nullable": false
+        },
+        "policy_id": {
+          "family": "string",
+          "length": 36,
+          "nullable": false
+        },
+        "project_id": {
+          "family": "string",
+          "length": 36,
+          "nullable": false
+        },
+        "snapshot": {
+          "family": "json",
+          "nullable": false
+        },
+        "state": {
+          "family": "string",
+          "length": 32,
+          "nullable": false
+        },
+        "teacher_id": {
+          "family": "string",
+          "length": 36,
+          "nullable": false
+        },
+        "version": {
+          "family": "integer",
+          "nullable": false
+        }
+      },
+      "foreign_keys": [
+        [
+          [
+            "period_id"
+          ],
+          "periods",
+          [
+            "id"
+          ]
+        ],
+        [
+          [
+            "policy_id"
+          ],
+          "social_policies",
+          [
+            "id"
+          ]
+        ],
+        [
+          [
+            "project_id"
+          ],
+          "social_projects",
+          [
+            "id"
+          ]
+        ],
+        [
+          [
+            "teacher_id"
+          ],
+          "users",
+          [
+            "id"
+          ]
+        ]
+      ],
+      "indexes": [
+        [
+          "ix_social_claims_period_id",
+          [
+            "period_id"
+          ],
+          false
+        ],
+        [
+          "ix_social_claims_project_id",
+          [
+            "project_id"
+          ],
+          false
+        ],
+        [
+          "ix_social_claims_teacher_id",
+          [
+            "teacher_id"
+          ],
+          false
+        ]
+      ],
+      "primary_key": [
+        "id"
+      ],
+      "unique": [
+        [
+          "project_id",
+          "teacher_id",
+          "period_id"
+        ]
+      ]
+    },
+    "social_policies": {
+      "checks": [],
+      "columns": {
+        "created_at": {
+          "family": "datetime",
+          "nullable": false
+        },
+        "created_by": {
+          "family": "string",
+          "length": 36,
+          "nullable": false
+        },
+        "data": {
+          "family": "json",
+          "nullable": false
+        },
+        "id": {
+          "family": "string",
+          "length": 36,
+          "nullable": false
+        },
+        "name": {
+          "family": "string",
+          "length": 100,
+          "nullable": false
+        },
+        "period_id": {
+          "family": "string",
+          "length": 36,
+          "nullable": false
+        },
+        "state": {
+          "family": "string",
+          "length": 32,
+          "nullable": false
+        },
+        "version": {
+          "family": "integer",
+          "nullable": false
+        }
+      },
+      "foreign_keys": [
+        [
+          [
+            "created_by"
+          ],
+          "users",
+          [
+            "id"
+          ]
+        ],
+        [
+          [
+            "period_id"
+          ],
+          "periods",
+          [
+            "id"
+          ]
+        ]
+      ],
+      "indexes": [
+        [
+          "ix_social_policies_period_id",
+          [
+            "period_id"
+          ],
+          false
+        ]
+      ],
+      "primary_key": [
+        "id"
+      ],
+      "unique": []
+    },
+    "social_projects": {
+      "checks": [],
+      "columns": {
+        "closeout": {
+          "family": "json",
+          "nullable": false
+        },
+        "cohort": {
+          "family": "string",
+          "length": 64,
+          "nullable": false
+        },
+        "created_at": {
+          "family": "datetime",
+          "nullable": false
+        },
+        "data": {
+          "family": "json",
+          "nullable": false
+        },
+        "id": {
+          "family": "string",
+          "length": 36,
+          "nullable": false
+        },
+        "master_id": {
+          "family": "string",
+          "length": 36,
+          "nullable": false
+        },
+        "org_id": {
+          "family": "string",
+          "length": 36,
+          "nullable": false
+        },
+        "owner_id": {
+          "family": "string",
+          "length": 36,
+          "nullable": false
+        },
+        "state": {
+          "family": "string",
+          "length": 32,
+          "nullable": false
+        },
+        "version": {
+          "family": "integer",
+          "nullable": false
+        }
+      },
+      "foreign_keys": [
+        [
+          [
+            "master_id"
+          ],
+          "training_projects",
+          [
+            "id"
+          ]
+        ],
+        [
+          [
+            "org_id"
+          ],
+          "organizations",
+          [
+            "id"
+          ]
+        ],
+        [
+          [
+            "owner_id"
+          ],
+          "users",
+          [
+            "id"
+          ]
+        ]
+      ],
+      "indexes": [
+        [
+          "ix_social_projects_master_id",
+          [
+            "master_id"
+          ],
+          false
+        ],
+        [
+          "ix_social_projects_org_id",
+          [
+            "org_id"
+          ],
+          false
+        ],
+        [
+          "ix_social_projects_owner_id",
+          [
+            "owner_id"
+          ],
+          false
+        ]
+      ],
+      "primary_key": [
+        "id"
+      ],
+      "unique": [
+        [
+          "master_id",
+          "cohort"
+        ]
+      ]
+    },
+    "social_resources": {
+      "checks": [],
+      "columns": {
+        "code": {
+          "family": "string",
+          "length": 64,
+          "nullable": false
+        },
+        "created_at": {
+          "family": "datetime",
+          "nullable": false
+        },
+        "data": {
+          "family": "json",
+          "nullable": false
+        },
+        "id": {
+          "family": "string",
+          "length": 36,
+          "nullable": false
+        },
+        "kind": {
+          "family": "string",
+          "length": 20,
+          "nullable": false
+        },
+        "name": {
+          "family": "string",
+          "length": 160,
+          "nullable": false
+        },
+        "org_id": {
+          "family": "string",
+          "length": 36,
+          "nullable": false
+        },
+        "state": {
+          "family": "string",
+          "length": 32,
+          "nullable": false
+        },
+        "version": {
+          "family": "integer",
+          "nullable": false
+        }
+      },
+      "foreign_keys": [
+        [
+          [
+            "org_id"
+          ],
+          "organizations",
+          [
+            "id"
+          ]
+        ]
+      ],
+      "indexes": [
+        [
+          "ix_social_resources_kind",
+          [
+            "kind"
+          ],
+          false
+        ],
+        [
+          "ix_social_resources_org_id",
+          [
+            "org_id"
+          ],
+          false
+        ]
+      ],
+      "primary_key": [
+        "id"
+      ],
+      "unique": [
+        [
+          "code"
+        ]
+      ]
+    },
+    "social_units": {
+      "checks": [],
+      "columns": {
+        "created_at": {
+          "family": "datetime",
+          "nullable": false
+        },
+        "data": {
+          "family": "json",
+          "nullable": false
+        },
+        "external_key": {
+          "family": "string",
+          "length": 128,
+          "nullable": false
+        },
+        "id": {
+          "family": "string",
+          "length": 36,
+          "nullable": false
+        },
+        "project_id": {
+          "family": "string",
+          "length": 36,
+          "nullable": false
+        },
+        "version": {
+          "family": "integer",
+          "nullable": false
+        }
+      },
+      "foreign_keys": [
+        [
+          [
+            "project_id"
+          ],
+          "social_projects",
+          [
+            "id"
+          ]
+        ]
+      ],
+      "indexes": [
+        [
+          "ix_social_units_project_id",
+          [
+            "project_id"
+          ],
+          false
+        ]
+      ],
+      "primary_key": [
+        "id"
+      ],
+      "unique": [
+        [
+          "project_id",
+          "external_key"
+        ]
+      ]
+    }
+  }
+}

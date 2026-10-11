@@ -65,7 +65,7 @@ def test_handover_contains_complete_evidence_and_lossless_jsonl(client2,app2,tmp
         db.get(TrainingRecord,'rec1').income='-12.30'
     data=export(c,app2,'handover');path=tmp_path/'all-evidence.zip';path.write_bytes(data)
     result=mod.verify(path);assert result['status']=='PASS',result
-    assert result['details']['typed_tables']==40 and result['details']['foreign_key_checks']>40
+    assert result['details']['typed_tables']==48 and result['details']['foreign_key_checks']>40
     assert result['details']['typed_roundtrip_verified'] and not result['disaster_restore_proven']
     with zipfile.ZipFile(io.BytesIO(data)) as z:
         m=json.loads(z.read('manifest.json'));assert m['format'].endswith('v2')

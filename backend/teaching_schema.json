@@ -1,0 +1,263 @@
+{
+  "revision": "20261009_0003",
+  "tables": {
+    "school_courses": {
+      "checks": [],
+      "columns": {
+        "active": {
+          "family": "integer",
+          "nullable": false
+        },
+        "code": {
+          "family": "string",
+          "length": 100,
+          "nullable": false
+        },
+        "course_version": {
+          "family": "string",
+          "length": 32,
+          "nullable": false
+        },
+        "created_at": {
+          "family": "datetime",
+          "nullable": false
+        },
+        "credit": {
+          "family": "numeric",
+          "nullable": true,
+          "precision": 8,
+          "scale": 2
+        },
+        "dept": {
+          "family": "string",
+          "length": 300,
+          "nullable": false
+        },
+        "external_key": {
+          "family": "string",
+          "length": 128,
+          "nullable": false
+        },
+        "extra": {
+          "family": "json",
+          "nullable": false
+        },
+        "hours": {
+          "family": "numeric",
+          "nullable": true,
+          "precision": 10,
+          "scale": 2
+        },
+        "id": {
+          "family": "string",
+          "length": 36,
+          "nullable": false
+        },
+        "name": {
+          "family": "string",
+          "length": 300,
+          "nullable": false
+        },
+        "source": {
+          "family": "string",
+          "length": 100,
+          "nullable": false
+        },
+        "version": {
+          "family": "integer",
+          "nullable": false
+        },
+        "weekly_hours": {
+          "family": "numeric",
+          "nullable": true,
+          "precision": 8,
+          "scale": 2
+        }
+      },
+      "foreign_keys": [],
+      "indexes": [
+        [
+          "ix_school_courses_active",
+          [
+            "active"
+          ],
+          false
+        ],
+        [
+          "ix_school_courses_code",
+          [
+            "code"
+          ],
+          false
+        ]
+      ],
+      "primary_key": [
+        "id"
+      ],
+      "unique": [
+        [
+          "external_key"
+        ]
+      ]
+    },
+    "teacher_course_terms": {
+      "checks": [],
+      "columns": {
+        "active": {
+          "family": "integer",
+          "nullable": false
+        },
+        "course_code": {
+          "family": "string",
+          "length": 64,
+          "nullable": false
+        },
+        "course_name": {
+          "family": "string",
+          "length": 300,
+          "nullable": false
+        },
+        "created_at": {
+          "family": "datetime",
+          "nullable": false
+        },
+        "credit": {
+          "family": "numeric",
+          "nullable": true,
+          "precision": 8,
+          "scale": 2
+        },
+        "external_key": {
+          "family": "string",
+          "length": 200,
+          "nullable": false
+        },
+        "extra": {
+          "family": "json",
+          "nullable": false
+        },
+        "hours": {
+          "family": "numeric",
+          "nullable": true,
+          "precision": 10,
+          "scale": 2
+        },
+        "id": {
+          "family": "string",
+          "length": 36,
+          "nullable": false
+        },
+        "origin": {
+          "family": "string",
+          "length": 8,
+          "nullable": false
+        },
+        "source": {
+          "family": "string",
+          "length": 100,
+          "nullable": false
+        },
+        "source_stamp": {
+          "family": "string",
+          "length": 64,
+          "nullable": false
+        },
+        "staff_no": {
+          "family": "string",
+          "length": 64,
+          "nullable": false
+        },
+        "teacher_name": {
+          "family": "string",
+          "length": 100,
+          "nullable": false
+        },
+        "term_name": {
+          "family": "string",
+          "length": 64,
+          "nullable": false
+        },
+        "user_id": {
+          "family": "string",
+          "length": 36,
+          "nullable": true
+        },
+        "version": {
+          "family": "integer",
+          "nullable": false
+        }
+      },
+      "foreign_keys": [
+        [
+          [
+            "user_id"
+          ],
+          "users",
+          [
+            "id"
+          ]
+        ]
+      ],
+      "indexes": [
+        [
+          "ix_teacher_course_term_staff_term",
+          [
+            "staff_no",
+            "term_name"
+          ],
+          false
+        ],
+        [
+          "ix_teacher_course_terms_active",
+          [
+            "active"
+          ],
+          false
+        ],
+        [
+          "ix_teacher_course_terms_course_code",
+          [
+            "course_code"
+          ],
+          false
+        ],
+        [
+          "ix_teacher_course_terms_origin",
+          [
+            "origin"
+          ],
+          false
+        ],
+        [
+          "ix_teacher_course_terms_staff_no",
+          [
+            "staff_no"
+          ],
+          false
+        ],
+        [
+          "ix_teacher_course_terms_term_name",
+          [
+            "term_name"
+          ],
+          false
+        ],
+        [
+          "ix_teacher_course_terms_user_id",
+          [
+            "user_id"
+          ],
+          false
+        ]
+      ],
+      "primary_key": [
+        "id"
+      ],
+      "unique": [
+        [
+          "external_key"
+        ]
+      ]
+    }
+  }
+}

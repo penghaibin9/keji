@@ -35,6 +35,13 @@ def statistics(request:Request):
     f,_,_=filters_from(request,STAT_FILTERS)
     return read_operation(request,'portal.read',lambda db,a,s:stats(db,a,f))
 
+@router.get('/statistics/comparison')
+def statistics_comparison(request:Request):
+    """7.4/7.5 period-over-period KPIs from the same stats() source."""
+    f,_,_=filters_from(request,STAT_FILTERS)
+    from ..read_queries import comparison
+    return read_operation(request,'portal.read',lambda db,a,s:comparison(db,a,f))
+
 @router.get('/records')
 def records(request:Request):
     f,p,z=filters_from(request,RECORD_FILTERS)
@@ -50,7 +57,6 @@ def record_detail(ident:str,request:Request):
 @router.post('/records')
 def record_create(data:RecordIn,request:Request):
     def apply(db,a,s):
-        if data.source not in business_dictionary(db)['record_sources']:raise HTTPException(422,'请选择学校业务字典中的数据来源')
         obj=insert_record(db,a,data)
         ensure_reference_from_training_record(db,obj)
         if data.basis:workflow(db,a,'record',obj.id,'业务录入依据',{},serial(obj),data.reason,data.basis)
@@ -62,7 +68,7 @@ def record_update(ident:str,data:RecordUpdate,request:Request):
     def apply(db,a,s):
         obj=owned_object(db,a,TrainingRecord,ident,'records.write');check_version(obj,data.expected_version)
         if obj.external_key!=data.external_key or obj.teacher_id!=data.teacher_id:raise HTTPException(422,'来源编号和教师归属不可直接更换')
-        if data.source not in business_dictionary(db)['record_sources']:raise HTTPException(422,'请选择学校业务字典中的数据来源')
+        if data.source!=obj.source:raise HTTPException(422,'原始数据来源不可直接更换；更正内容与依据将另外留痕')
         before=serial(obj)
         for k,v in data.model_dump(exclude={'reason','basis','expected_version'}).items():setattr(obj,k,v)
         obj.version+=1;db.flush();ensure_reference_from_training_record(db,obj)
@@ -82,6 +88,24 @@ def qualifications(request:Request):
             q=q.where(Qualification.state==f['state'])
         if f.get('q'):q=q.where(Qualification.name.contains(f['q'],autoescape=True)|Qualification.certificate_no.contains(f['q'],autoescape=True))
         return page_result(db,q.order_by(Qualification.created_at.desc(),Qualification.id),p,z)
+    return read_operation(request,'qualification.read',load)
+
+@router.get('/qualification-summary')
+def qualification_summary(request:Request):
+    """5.2 status distribution: 待审/退回/即将到期/有效/已过期/草稿 within the live scope."""
+    f,_,_=filters_from(request,{'teacher_id'})
+    def load(db,a,s):
+        q=select(Qualification.state,Qualification.expires).where(a.scope(Qualification.teacher_id))
+        if f.get('teacher_id'):q=q.where(Qualification.teacher_id==f['teacher_id'])
+        setting=db.get(Setting,'qualification');days=int((setting.value or {}).get('expiry_days',0)) if setting else 0
+        today=date.today();limit=today+timedelta(days=days)
+        counts={'SUBMITTED':0,'RETURNED':0,'EXPIRING':0,'VALID':0,'EXPIRED':0,'DRAFT':0}
+        for state,expires in db.execute(q):
+            if state=='APPROVED':counts['EXPIRED' if expires and expires<today else 'EXPIRING' if expires and expires<=limit else 'VALID']+=1
+            elif state in counts:counts[state]+=1
+        labels={'SUBMITTED':'待审核','RETURNED':'已退回','EXPIRING':'即将到期','VALID':'有效','EXPIRED':'已过期','DRAFT':'草稿'}
+        return {'items':[{'key':k,'label':labels[k],'count':v} for k,v in counts.items()],'total':sum(counts.values()),
+                'expiry_days':days,'note':f'即将到期 = 审核通过且 {days} 天内到期；无有效期视为长期有效。'}
     return read_operation(request,'qualification.read',load)
 
 @router.get('/qualifications/{ident}')
@@ -141,6 +165,9 @@ def qualification_action(ident:str,data:Action,request:Request):
             if own or a.role.kind=='teacher':raise HTTPException(403,'不能审核本人资质')
             if obj.state!='SUBMITTED':raise HTTPException(409,'资质不在待审核环节')
             obj.state='APPROVED' if data.action=='approve' else 'RETURNED'
+            if data.action=='return':
+                from ..message_push import queue
+                queue(db,[obj.teacher_id],'你的资质申报被退回','请登录非学历教育智慧前台，在“个人培训”查看退回原因并补正后重新提交。')
         else:raise HTTPException(422,'资质操作无效')
         obj.version+=1;qualification_revision(db,a,obj,data.reason)
         workflow(db,a,'qualification',obj.id,{'submit':'提交资质','withdraw':'撤回资质','approve':'资质审核通过','return':'资质退回补充'}[data.action],before,serial(obj),data.reason,data.basis)
@@ -224,10 +251,18 @@ def _todo_items(db,a):
                     elif x.state=='SCHOOL_APPROVED':add('organization_assessment',x,'归档组织考核：'+name,target_id=x.target_id)
     if 'dispute.write' in a.permissions:
         for x in db.scalars(select(Dispute).where(a.scope(Dispute.teacher_id),Dispute.state=='OPEN')):
-            if x.teacher_id==a.id or 'dispute.resolve' in a.permissions:add('dispute',x,'数据核对：'+x.reason[:40])
+            if x.teacher_id==a.id or 'dispute.resolve' in a.permissions:add('dispute',x,('我提出的异议：' if x.teacher_id==a.id else '数据核对：')+x.reason[:40])
+    if 'audit.read' in a.permissions and a.role.kind=='school' and a.user.is_admin:
+        from ..security_alerts import security_summary
+        summary=security_summary(db,a)
+        if summary['alert']:
+            from types import SimpleNamespace
+            add('security',SimpleNamespace(id='security-alerts'),'安全提示：'+'；'.join(summary['flags']),'OPEN')
     if 'sync.manage' in a.permissions:
         for x in db.scalars(select(Task).where(Task.kind.in_(['sync','inbound_pull']),Task.state.in_(['FAILED','BLOCKED'])).order_by(Task.created_at.desc(),Task.id)):
             add('sync',x,'数据中台拉取异常' if x.kind=='inbound_pull' else '接口同步异常',task_kind=x.kind)
+    from ..social_training import todo_items
+    out.extend(todo_items(db,a))
     return out
 
 @router.get('/todos')
@@ -235,14 +270,16 @@ def todos(request:Request):
     f,p,z=filters_from(request,{'q','type'})
     from ..read_queries import clean_filters
     f=clean_filters(f,{'q','type'})
-    if f.get('type') and f['type'] not in {'qualification','assessment','organization_assessment','dispute','sync'}:
+    if f.get('type') and f['type'] not in {'qualification','assessment','organization_assessment','dispute','sync','security','social_project','social_claim','social_annual','social_resource','social_report'}:
         raise HTTPException(422,'待办类型无效')
     def load(db,a,s):
         items=_todo_items(db,a)
+        counts={}
+        for x in items:counts[x['type']]=counts.get(x['type'],0)+1
         if f.get('type'):items=[x for x in items if x['type']==f['type']]
         if f.get('q'):items=[x for x in items if f['q'].casefold() in x['title'].casefold()]
         total=len(items)
-        return {'items':items[(p-1)*z:p*z],'total':total,'page':p,'size':z}
+        return {'items':items[(p-1)*z:p*z],'total':total,'page':p,'size':z,'counts':counts}
     return read_operation(request,'portal.read',load)
 
 @router.get('/portal/workbench')
@@ -259,7 +296,7 @@ def portal_workbench(request:Request):
                 target=db.get(Org,item['target_id'])
                 item['owner_name']=target.name if target else '授权组织'
             else:
-                item['owner_name']='学校系统对接'
+                item['owner_name']='安全审计' if item['type']=='security' else '学校系统对接'
         reminders=sorted((x for x in items if x['state']=='EXPIRING'),
                          key=lambda x:(x['expires'],x['id']))
         tasks=sorted((x for x in items if x['state']!='EXPIRING'),

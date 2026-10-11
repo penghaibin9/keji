@@ -60,6 +60,9 @@ class ConfigurableRestBase:
         if isinstance(auth, dict) and str(auth.get('mode','')).lower() == 'oauth2_client_credentials':
             headers['Authorization'] = 'Bearer ' + self._oauth2_token(endpoint, auth, credentials, timeout_seconds)
             signing_context = {}
+        elif isinstance(auth, dict) and str(auth.get('mode','')).lower() == 'datahub_access_token':
+            self._inject_datahub_token(endpoint, auth, credentials, timeout_seconds, query, body)
+            signing_context = {}
         else:
             signing_context = apply_auth(headers, query, body, auth, credentials,
                                          method=method, path=path, idempotency_key=str(context.get('idempotency_key', '')))
@@ -99,6 +102,53 @@ class ConfigurableRestBase:
         token = str(data['access_token']).strip()
         try: expires = max(30, min(86400, int(data.get('expires_in',300))))
         except Exception: expires = 300
+        with self._token_lock:
+            self._token_cache[cache_key] = (token, now + expires)
+        return token
+
+    def _inject_datahub_token(self, endpoint, auth, credentials, timeout_seconds, query, body):
+        target = str(auth.get('token_in', 'body')).lower()
+        field = str(auth.get('token_field', 'access_token')).strip() or 'access_token'
+        if target == 'body':
+            if not isinstance(body, dict):
+                raise AdapterContractError('DATAHUB_TOKEN_BODY_REQUIRED')
+            body[field] = self._datahub_token(endpoint, auth, credentials, timeout_seconds)
+        elif target == 'query':
+            query[field] = self._datahub_token(endpoint, auth, credentials, timeout_seconds)
+        else:
+            raise AdapterContractError('DATAHUB_TOKEN_TARGET_INVALID')
+
+    def _datahub_token(self, endpoint, auth, credentials, timeout_seconds):
+        """GAIA/Pangu data-platform token: key+secret -> result.access_token (code 10000)."""
+        token_path = str(auth.get('token_path', '/open_api/authentication/get_access_token')).strip()
+        method = str(auth.get('token_method', 'POST')).upper()
+        if method not in {'GET', 'POST'}:
+            raise AdapterContractError('DATAHUB_TOKEN_METHOD_INVALID')
+        key = credentials.get(str(auth.get('key_credential', 'app_key')), '')
+        secret = credentials.get(str(auth.get('secret_credential', 'app_secret')), '')
+        if not key or not secret:
+            raise AdapterContractError('DATAHUB_CREDENTIAL_MISSING')
+        cache_key = ('datahub', endpoint, token_path, key, hashlib.sha256(secret.encode()).hexdigest())
+        now = time.monotonic()
+        with self._token_lock:
+            cached = self._token_cache.get(cache_key)
+            if cached and cached[1] > now + 60:
+                return cached[0]
+        transport = self.transport_cls(endpoint)
+        if method == 'POST':
+            data = transport.request_json('POST', token_path, payload={'key': key, 'secret': secret},
+                                          timeout_seconds=timeout_seconds)
+        else:
+            data = transport.request_json('GET', encode_query(token_path, {'key': key, 'secret': secret}),
+                                          timeout_seconds=timeout_seconds)
+        if not isinstance(data, dict) or data.get('code') not in (10000, '10000'):
+            raise AdapterContractError('DATAHUB_TOKEN_REJECTED')
+        result = data.get('result')
+        token = str((result or {}).get('access_token', '')).strip() if isinstance(result, dict) else ''
+        if not token:
+            raise AdapterContractError('DATAHUB_TOKEN_INVALID')
+        try: expires = max(120, min(86400, int(result.get('expires_in', 7199))))
+        except Exception: expires = 7199
         with self._token_lock:
             self._token_cache[cache_key] = (token, now + expires)
         return token

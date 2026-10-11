@@ -30,6 +30,9 @@ class Settings(BaseSettings):
     release_guard: bool = True
     adapter_modules: str = ''
     demo_identity_switch_enabled: bool = False
+    # 学校移动门户消息推送：留空即关闭；地址按《湖科职消息中心集成标准接口文档v1.0》。
+    message_push_yyid: str = ''
+    message_push_endpoint: str = 'https://ydmh.hnkjxy.net.cn/ydmh/api/send/send'
 
     @property
     def demo_cookie_name(self):

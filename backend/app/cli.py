@@ -44,7 +44,7 @@ def init_empty(cfg,password_file):
               Connection(code='province',name='湘培直通车',state='NOT_CONNECTED',mappings=[],config={'endpoint':'','owner':'','retry_count':3,'secret_env':'','frequency_minutes':30,'auth_mode':'custom'}),
               Setting(key='branding',value={'school_name':school_name},version=1),
               Setting(key='metrics',value={'income_note':'培训收入统计口径待学校确认','participants_note':'课程人次统计口径待学校确认'},version=1),
-              Setting(key='qualification',value={'expiry_days':30,'categories':['职业资格','教学资质']},version=1),
+              Setting(key='qualification',value={'expiry_days':30,'categories':['职业资格','教学资质','双师型教师（初级）','双师型教师（中级）','双师型教师（高级）','职业技能等级证书','培训师资格']},version=1),
               Setting(key='business_dictionary',value=DEFAULT_BUSINESS_DICTIONARY,version=1),
               Setting(key='import_policy',value=DEFAULT_IMPORT_POLICY,version=1),
             ])

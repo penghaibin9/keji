@@ -79,6 +79,9 @@ class PeriodIn(Reason):
 class SettingUpdate(Reason):
     value: dict
     expected_version: int=Field(ge=1)
+class SettingCreate(Reason):
+    key: str=Field(min_length=6,max_length=48,pattern=r'^(dict|param):[a-z][a-z0-9_]{1,40}$')
+    value: dict
 class NoticeIn(Reason):
     title: str=Field(min_length=1,max_length=200)
     category: str=Field(min_length=1,max_length=40)
@@ -117,10 +120,23 @@ class QualificationIn(Reason):
         return self
 class QualificationUpdate(QualificationIn):
     expected_version:int=Field(ge=1)
-class Component(Input):
+ScoreNumber = Annotated[Decimal,Field(ge=-1000000000000,le=1000000000000,allow_inf_nan=False,max_digits=18,decimal_places=4)]
+class TierItem(Input):
+    min: ScoreNumber
+    value: ScoreNumber
+class MethodFields(Input):
+    # 10.1/9.1 optional extended scoring methods; absent => legacy formula unchanged.
+    method: Literal['ratio','linear','tier','deduct','bonus']|None=None
+    tiers: list[TierItem]|None=Field(default=None,max_length=20)
+    tier_mode: Literal['score','multiplier']|None=None
+    base: ScoreNumber|None=None
+    unit: ScoreNumber|None=None
+    per_unit: ScoreNumber|None=None
+    floor: ScoreNumber|None=None
+class Component(MethodFields):
     key: str=Field(pattern=r'^[a-z][a-z0-9_]{0,40}$')
     label: str=Field(min_length=1,max_length=100)
-    source: Literal['hours','participants','income','qualifications','points','assessment_score']
+    source: Literal['hours','participants','income','qualifications','points','assessment_score','credits']
     factor: Decimal=Field(default=1,ge=0,le=1000000,allow_inf_nan=False,max_digits=16,decimal_places=4)
     weight: Decimal=Field(default=0,ge=0,le=100,allow_inf_nan=False,max_digits=7,decimal_places=2)
     target: Decimal=Field(default=1,gt=0,le=1000000000000,allow_inf_nan=False,max_digits=18,decimal_places=4)
@@ -140,6 +156,8 @@ class RuleIn(Reason):
     def acyclic(self):
         if self.kind=='points' and any(c.source=='points' for c in self.config.components):
             raise ValueError('积分不能引用本期积分作为来源，防止循环累计')
+        from .scoring_methods import normalize_method
+        for c in self.config.components:normalize_method(c.model_dump(),self.kind)
         return self
 class Trial(Input):
     teacher_ids:list[Ident]=Field(min_length=1,max_length=20)
@@ -168,12 +186,13 @@ class ResolveDispute(Reason):
     resolution:str=Field(min_length=2,max_length=2000)
     expected_version:int=Field(ge=1)
 
-class OrgAssessmentComponent(Input):
+class OrgAssessmentComponent(MethodFields):
     key: str=Field(pattern=r'^[a-z][a-z0-9_]{0,40}$')
     label: str=Field(min_length=1,max_length=100)
     source: Literal['hours','participants','income','teachers','projects','courses','qualifications','points','assessment_score']
     weight: Decimal=Field(ge=0,le=100,max_digits=7,decimal_places=2,allow_inf_nan=False)
     target: Decimal=Field(gt=0,le=1000000000000,max_digits=18,decimal_places=4,allow_inf_nan=False)
+    cap: Decimal|None=Field(default=None,ge=0,le=100,max_digits=7,decimal_places=2,allow_inf_nan=False)
 class OrgAssessmentRuleConfig(Input):
     components:list[OrgAssessmentComponent]=Field(min_length=1,max_length=30)
     @model_validator(mode='after')
@@ -186,6 +205,10 @@ class OrgAssessmentRuleIn(Reason):
     name:str=Field(min_length=1,max_length=100)
     period_id:Ident
     config:OrgAssessmentRuleConfig
+class RuleCopy(VersionedReason):
+    name:str=Field(min_length=1,max_length=100)
+    period_id:Ident
+    config:RuleConfig|None=None
 class OrgRuleCopy(VersionedReason):
     name:str=Field(min_length=1,max_length=100)
     period_id:Ident
@@ -219,6 +242,14 @@ class MappingValidate(Reason):
 class SyncEnqueue(Reason):
     data_type:str=Field(min_length=1,max_length=64)
     records:list[dict]=Field(min_length=1,max_length=1000)
+class LedgerSync(Reason):
+    # 11.3 assemble province records from the local ledger (no pasted JSON).
+    data_type:str=Field(min_length=1,max_length=64)
+    start:str|None=Field(default=None,max_length=10)
+    end:str|None=Field(default=None,max_length=10)
+    period_id:Ident|None=None
+    org_id:Ident|None=None
+    expected_count:int|None=Field(default=None,ge=0)
 class TaskRetry(Reason):
     expected_version:int=Field(ge=1)
 
@@ -241,17 +272,17 @@ class ParticipationUpdate(ParticipationIn):
     expected_version:int=Field(ge=1)
 
 class InboundPreview(Reason):
-    data_type: Literal['teacher_hr','training_project','course','training_income','course_participants']
+    data_type: Literal['teacher_hr','training_project','course','training_income','course_participants','teacher_course','online_course','school_course']
     records: list[dict]=Field(min_length=1,max_length=1000)
     source_label: str=Field(default='手工脱敏联调样本',min_length=1,max_length=160)
 
 class InboundPullRequest(Reason):
-    data_type: Literal['teacher_hr','training_project','course','training_income','course_participants']
+    data_type: Literal['teacher_hr','training_project','course','training_income','course_participants','teacher_course','online_course','school_course']
     mode: Literal['FULL','INCREMENTAL']
 
 class IntegrationScheduleIn(Reason):
     connection_id: Ident
-    data_type: Literal['teacher_hr','training_project','course','training_income','course_participants']
+    data_type: Literal['teacher_hr','training_project','course','training_income','course_participants','teacher_course','online_course','school_course']
     frequency_minutes: int=Field(ge=1,le=10080)
     auto_commit: bool=False
     active: bool=False

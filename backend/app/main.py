@@ -21,22 +21,26 @@ from .readiness import collect_readiness
 from .maintenance_guard import configured_maintenance
 from .access_logging import record_access_best_effort
 from . import __version__
-from .routes import auth, sso, admin, business, calculations, files, tasks, integrations, reference, delivery
+from .routes import auth, sso, admin, business, calculations, files, tasks, integrations, reference, delivery, integration_center, integration_intake, sso_trial
+from .routes import social, ledgers
 
 log = logging.getLogger("nondegree")
 
 class BodyLimitMiddleware:
     """Bound actual incoming bytes, including chunked uploads, before multipart parsing."""
+    # 学院台账常嵌入现场照片，单独放宽到 33 MiB；解析时仍按 ledger_check.MAX_BYTES 拦截。
+    LEDGER_PATHS = ("/api/social/ledgers",)
     def __init__(self, app, limit): self.app, self.limit = app, limit
     async def __call__(self, scope, receive, send):
         if scope["type"] != "http" or scope.get("method") in {"GET", "HEAD", "OPTIONS"}:
             return await self.app(scope, receive, send)
+        limit=max(self.limit,33*1024*1024) if scope.get("path","").startswith(self.LEDGER_PATHS) else self.limit
         chunks=[]; size=0
         while True:
             message=await receive()
             if message["type"] == "http.disconnect": return
             body=message.get("body",b"");size+=len(body)
-            if size>self.limit:
+            if size>limit:
                 return await JSONResponse({"detail":"请求过大，附件上限为配置的单文件大小"},413)(scope,receive,send)
             chunks.append(body)
             if not message.get("more_body",False):break
@@ -117,7 +121,14 @@ def create_app(settings: Settings | None = None):
     @app.exception_handler(IntegrityError)
     async def integrity_error(request,exc):
         log.warning("Integrity conflict request=%s",getattr(request.state,"request_id",""))
-        return JSONResponse({"detail":"数据重复或关联关系冲突；本次事务已回滚，请刷新核对","request_id":getattr(request.state,"request_id","")},409)
+        text=str(getattr(exc,"orig",exc)).lower()
+        # 常见重复登记给出能照着办的提示；其他冲突仍用通用说明。
+        known=[("certificate_no","这个证书编号已经登记过，请在资质列表里找到原记录修改或补充"),("social_units","单元编号已经导入过，本批未入库；请换新的单元编号，或只导入新增的行"),("social_projects","项目编号已经存在，请换一个编号，或在项目列表里查找原项目"),("social_resources","来源编号已经登记过，请换一个编号，或查找原记录"),("course","课程编号已经存在，请换一个编号，或在课程列表里查找原课程"),("staff_no","工号已被其他账号使用"),("username","登录账号名已被使用")]
+        head=text.split("detail:")[0]
+        unique="unique" in head or "duplicate" in head
+        detail=next((m for k,m in known if k in head),None) if unique else None
+        detail=detail or "数据重复或关联关系冲突；本次事务已回滚，请刷新核对"
+        return JSONResponse({"detail":detail,"request_id":getattr(request.state,"request_id","")},409)
     @app.exception_handler(OperationalError)
     async def database_error(request,exc):
         log.error("Database error request=%s type=%s",getattr(request.state,"request_id",""),type(exc).__name__)
@@ -131,7 +142,9 @@ def create_app(settings: Settings | None = None):
     def health():
         report = collect_readiness(engine,cfg,__version__)
         return JSONResponse(report,200 if report['status']=='ok' else 503)
-    for router in (auth.router,sso.router,admin.router,business.router,calculations.router,files.router,tasks.router,integrations.router,reference.router,delivery.router):app.include_router(router)
+    for router in (auth.router,sso.router,admin.router,business.router,calculations.router,files.router,tasks.router,integrations.router,reference.router,delivery.router,integration_center.router,integration_intake.router,sso_trial.router):app.include_router(router)
+    app.include_router(social.router)
+    app.include_router(ledgers.router)
     # A local review server only. Production frontend is served by the separate nginx service.
     if cfg.env=="test":
         frontend=Path(__file__).resolve().parents[2]/"frontend"

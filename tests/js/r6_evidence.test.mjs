@@ -30,8 +30,8 @@ test('legacy missing identity is explicitly labelled, no live school fallback',a
  const r=await render(d);assert.ok(r.html.includes('归档时未冻结学校名称'));assert.ok(r.html.includes(d.identity_note));
 });
 test('unarchived print says process copy, not final result',async()=>{
- const d=frozen();d.immutable=false;d.assessment.state='TEACHER';d.assessment.archive_sha256=null;
- const r=await render(d);assert.ok(r.html.includes('过程稿（非最终结果）'));assert.ok(r.html.includes('尚未归档'));
+ const d=frozen();d.immutable=false;d.school_name='正式配置学校';d.assessment.state='TEACHER';d.assessment.archive_sha256=null;
+ const r=await render(d);assert.ok(r.html.includes('过程稿（非最终结果）'));assert.ok(r.html.includes('尚未归档'));assert.ok(r.html.includes('正式配置学校'));assert.ok(!r.html.includes('旧学校'));
 });
 test('print failure still restores page layout',async()=>{
  const r=await render(frozen(),true);assert.equal(r.error,'print unavailable');assert.ok(!r.classes.has('print-mode'));

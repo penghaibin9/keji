@@ -12,6 +12,7 @@ import json
 import re
 import sqlalchemy as sa
 from . import installation, org_assessment, integrations, reference_data, inbound_sync
+from . import social_models
 from .models import Base
 
 ALGORITHM = 'sha256-primary-key-typed-json-v1'

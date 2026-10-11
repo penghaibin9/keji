@@ -7,7 +7,7 @@ from ..passwords import hash_password
 from ..permissions import ALLOWED,validate_permissions
 from ..org_assessment import OrganizationAssessment
 from ..readiness import _setting_ok
-from ..settings_catalog import business_dictionary,import_policy
+from ..settings_catalog import business_dictionary,import_policy,configurable_key,is_custom_key,MAX_CUSTOM_SETTINGS
 router=APIRouter(prefix='/api',tags=['组织与配置'])
 
 def need_admin(a): a.require_admin()
@@ -30,7 +30,13 @@ def admin_survives(db):
 @router.get('/organizations')
 def organizations(request:Request):
     # Required by every preserved portal boot, including teachers.
-    return read_operation(request,'portal.read',lambda db,a,s:{'items':db.scalars(select(Org).where(Org.id.in_(a.org_ids)).order_by(Org.code)).all()})
+    def load(db,a,s):
+        visible=Org.id.in_(a.org_ids)
+        if a.user.is_admin and a.role.kind=='school' and 'organization.manage' in a.permissions:
+            # Recovery metadata only; Actor keeps inactive organizations out of business scope.
+            visible=visible | (Org.active.is_(False) & Org.parent_id.in_(a.org_ids))
+        return {'items':db.scalars(select(Org).where(visible).order_by(Org.code)).all()}
+    return read_operation(request,'portal.read',load)
 
 @router.post('/organizations')
 def create_org(data:OrgIn,request:Request):
@@ -82,12 +88,40 @@ def teachers(request:Request):
 
 @router.get('/users')
 def users(request:Request):
-    f,p,z=filters_from(request,{'q'})
+    f,p,z=filters_from(request,{'q','hr_state'})
+    if f.get('hr_state') not in (None,'active','inactive','missing','none'):raise HTTPException(422,'人事状态筛选无效')
     def load(db,a,s):
+        from ..reference_data import TeacherHrProfile
         need_admin(a);q=select(User).where(User.org_id.in_(a.org_ids))
         if f.get('q'): q=q.where(User.name.contains(f['q'],autoescape=True)|User.username.contains(f['q'],autoescape=True))
-        return page_result(db,q.order_by(User.username),p,z)
+        # 人事状态: active/inactive in the school's 教职工 table, missing = staff number not there,
+        # none = management account without a staff number.
+        in_hr=select(TeacherHrProfile.staff_no)
+        state=f.get('hr_state')
+        if state=='none':q=q.where(User.staff_no.is_(None))
+        elif state=='missing':q=q.where(User.staff_no.is_not(None),User.staff_no.not_in(in_hr))
+        elif state:q=q.where(User.staff_no.in_(in_hr.where(TeacherHrProfile.active.is_(state=='active'))))
+        out=page_result(db,q.order_by(User.username),p,z)
+        numbers=[x['staff_no'] for x in out['items'] if x.get('staff_no')]
+        hr=dict(db.execute(select(TeacherHrProfile.staff_no,TeacherHrProfile.active).where(TeacherHrProfile.staff_no.in_(numbers))).all()) if numbers else {}
+        for x in out['items']:
+            n=x.get('staff_no');x['hr_state']='none' if not n else ('missing' if n not in hr else ('active' if hr[n] else 'inactive'))
+        out['hr_synced']=db.scalar(select(func.count()).select_from(TeacherHrProfile))>0
+        out['hr_unmatched']=db.scalar(select(func.count()).select_from(TeacherHrProfile).where(TeacherHrProfile.user_id.is_(None))) or 0
+        return out
     return read_operation(request,'users.manage',load)
+
+def link_school_rows(db,a,user):
+    """A new account takes over the school rows already synced under its staff number,
+    so the roster, scope and credits see it now instead of after the next data-hub pull."""
+    from ..reference_data import TeacherHrProfile,TeacherCourseTerm
+    profile=db.scalar(select(TeacherHrProfile).where(TeacherHrProfile.staff_no==user.staff_no,TeacherHrProfile.user_id.is_(None)))
+    if profile is not None:
+        before=serial(profile);profile.user_id=user.id;profile.version+=1
+        audit(db,a,'teacher_hr',profile.id,'新账号对应人事记录',before,serial(profile),'按工号对应新建账号')
+    terms=db.scalars(select(TeacherCourseTerm).where(TeacherCourseTerm.staff_no==user.staff_no,TeacherCourseTerm.user_id.is_(None))).all()
+    for t in terms:t.user_id=user.id;t.version+=1
+    if terms:audit(db,a,'teacher_course',user.id,'新账号对应授课记录',after={'staff_no':user.staff_no,'rows':len(terms)},reason='按工号对应新建账号')
 
 @router.post('/users')
 def create_user(data:UserIn,request:Request):
@@ -96,7 +130,9 @@ def create_user(data:UserIn,request:Request):
         if org.id not in a.org_ids or not set(role.permissions)<=a.permissions: raise HTTPException(403,'不能创建超出本人授权的账号')
         values=data.model_dump(exclude={'reason','basis','password'})
         obj=User(**values,password_hash=hash_password(data.password),is_admin=False,must_change_password=True,active=True)
-        db.add(obj);db.flush();audit(db,a,'users',obj.id,'新增账号',after=serial(obj),reason=data.reason);return obj
+        db.add(obj);db.flush();audit(db,a,'users',obj.id,'新增账号',after=serial(obj),reason=data.reason)
+        if obj.staff_no:link_school_rows(db,a,obj)
+        return obj
     return command(request,data.model_dump(),'users.manage',apply)
 
 @router.put('/users/{ident}')
@@ -174,19 +210,28 @@ def close_period(ident:str,data:VersionedReason,request:Request):
             or db.scalar(select(OrganizationAssessment.id).where(OrganizationAssessment.period_id==ident,OrganizationAssessment.state!='ARCHIVED').limit(1))
             or db.scalar(select(Dispute.id).where(Dispute.period_id==ident,Dispute.state=='OPEN').limit(1))):
             raise HTTPException(409,'仍有未归档教师/组织考核或未解决核对申请')
+        from ..social_models import SocialClaim,SocialAnnual,SocialResource
+        pending=[]
+        for model,label in ((SocialClaim,'社会培训积分申报'),(SocialAnnual,'学院社会培训年度考核')):
+            count=db.scalar(select(func.count()).select_from(model).where(model.period_id==ident,model.state!='ARCHIVED'))
+            if count:pending.append(label+str(count)+'项')
+        for kind,finished,label in [('correction',['ARCHIVED','VOID'],'积分更正'),('point_review',['CLOSED'],'积分核对')]:
+            count=db.scalar(select(func.count()).select_from(SocialResource).where(SocialResource.kind==kind,SocialResource.state.notin_(finished),SocialResource.data['period_id'].as_string()==ident))
+            if count:pending.append(label+str(count)+'项')
+        if pending:raise HTTPException(409,'仍有未办结社会培训事项：'+'、'.join(pending)+'；请先在对应业务中办结，再关闭周期')
         before=serial(obj);obj.state='CLOSED';obj.version+=1
         audit(db,a,'periods',ident,'关闭考核周期',before,serial(obj),data.reason);return obj
     return command(request,data.model_dump(),'settings.manage',apply)
 
 @router.get('/settings')
 def settings(request:Request):
-    return read_operation(request,'settings.manage',lambda db,a,s:{'items':db.scalars(select(Setting).where(~Setting.key.like('ssoid:%'),~Setting.key.like('ssostate:%')).order_by(Setting.key)).all()})
+    return read_operation(request,'settings.manage',lambda db,a,s:{'items':db.scalars(select(Setting).where(~Setting.key.like('ssoid:%'),~Setting.key.like('ssostate:%'),Setting.key!='code_tables').order_by(Setting.key)).all()})
 
 @router.get('/settings/{key}/history')
 def setting_history(key:str,request:Request):
     def load(db,a,s):
         need_admin(a)
-        if key not in {'branding','metrics','qualification','business_dictionary','import_policy'}:
+        if not configurable_key(key):
             raise HTTPException(404,'配置项不存在')
         rows=db.scalars(select(Audit).where(Audit.module=='settings',Audit.object_id==key)
             .order_by(Audit.created_at.desc(),Audit.id.desc()).limit(100)).all()
@@ -197,7 +242,7 @@ def setting_history(key:str,request:Request):
 def update_setting(key:str,data:SettingUpdate,request:Request):
     def apply(db,a,s):
         need_admin(a);obj=db.get(Setting,key)
-        if key not in {'branding','metrics','qualification','business_dictionary','import_policy'} or not obj: raise HTTPException(404,'配置项不存在')
+        if not configurable_key(key) or not obj: raise HTTPException(404,'配置项不存在')
         check_version(obj,data.expected_version)
         if not _setting_ok(key,data.value):raise HTTPException(422,'配置值不符合该项目规范')
         if len(str(data.value))>12000:raise HTTPException(422,'配置值过长')
@@ -205,13 +250,34 @@ def update_setting(key:str,data:SettingUpdate,request:Request):
         audit(db,a,'settings',key,'修改基础配置',before,serial(obj),data.reason);return obj
     return command(request,data.model_dump(),'settings.manage',apply)
 
+@router.post('/settings')
+def create_setting(data:SettingCreate,request:Request):
+    """3.1: add a custom dictionary category (dict:code) or system parameter (param:code)."""
+    def apply(db,a,s):
+        need_admin(a)
+        if not is_custom_key(data.key):raise HTTPException(422,'只能新增自定义字典类别（dict:编码）或系统参数（param:编码）')
+        if db.get(Setting,data.key):raise HTTPException(409,'该配置编码已存在，请在原配置上修改')
+        count=db.scalar(select(func.count()).select_from(Setting).where(Setting.key.like('dict:%')|Setting.key.like('param:%')))
+        if count>=MAX_CUSTOM_SETTINGS:raise HTTPException(422,'自定义配置项数量已达上限')
+        if not _setting_ok(data.key,data.value):raise HTTPException(422,'配置值不符合该项目规范')
+        if len(str(data.value))>12000:raise HTTPException(422,'配置值过长')
+        obj=Setting(key=data.key,value=data.value,version=1);db.add(obj);db.flush()
+        audit(db,a,'settings',data.key,'新增学校自定义配置',{},serial(obj),data.reason);return obj
+    return command(request,data.model_dump(),'settings.manage',apply)
+
 @router.get('/dictionaries')
 def dictionaries(request:Request):
     def load(db,a,s):
         values=business_dictionary(db)
         policy=import_policy(db)
+        custom={'categories':{},'parameters':{}}
+        for item in db.scalars(select(Setting).where(Setting.key.like('dict:%')|Setting.key.like('param:%')).order_by(Setting.key)):
+            if not _setting_ok(item.key,item.value):continue  # fail closed: a damaged custom item is not published
+            code=item.key.split(':',1)[1]
+            if item.key.startswith('dict:'):custom['categories'][code]={'name':item.value['name'],'items':item.value['items']}
+            else:custom['parameters'][code]={'name':item.value['name'],'type':item.value['type'],'value':item.value['value']}
         return {'notice_categories':values['notice_categories'],'record_sources':values['record_sources'],
-                'status_labels':values['status_labels'],'import_max_rows':policy['max_rows']}
+                'status_labels':values['status_labels'],'import_max_rows':policy['max_rows'],**custom}
     return read_operation(request,'portal.read',load)
 
 @router.get('/qualification-categories')
@@ -269,9 +335,21 @@ def update_notice(ident:str,data:NoticeUpdate,request:Request):
         obj.version+=1;audit(db,a,'notices',ident,'更新通知',before,serial(obj),data.reason);return obj
     return command(request,data.model_dump(),'notice.manage',apply)
 
+@router.get('/audit/security-alerts')
+def security_alerts(request:Request):
+    """12.3 安全提示: denied accesses by user, login refusals/lockouts, key changes, interface failures."""
+    f,_,_=filters_from(request,{'days'})
+    days=f.get('days','7')
+    if not days.isdigit() or not 1<=int(days)<=90:raise HTTPException(422,'统计天数应为 1～90')
+    def load(db,a,s):
+        from ..security_alerts import security_summary
+        return security_summary(db,a,int(days))
+    return read_operation(request,'audit.read',load)
+
 @router.get('/audit')
 def audit_list(request:Request):
-    f,p,z=filters_from(request,{'q','module','result','start','end'})
+    from ..read_queries import AUDIT_FILTERS
+    f,p,z=filters_from(request,AUDIT_FILTERS)
     def load(db,a,s):
         from ..read_queries import audit_query
         q=audit_query(db,a,f)

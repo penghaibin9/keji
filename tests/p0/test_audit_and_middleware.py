@@ -9,6 +9,9 @@ import httpx
 from fastapi import FastAPI,Request
 from fastapi.responses import JSONResponse
 from starlette.concurrency import run_in_threadpool
+from starlette.background import BackgroundTask,BackgroundTasks
+from fastapi import HTTPException
+from app.settings_catalog import validate_manual_source
 from sqlalchemy import event,select,func
 from sqlalchemy.orm import sessionmaker
 from app import models as m
@@ -31,7 +34,8 @@ def harness(engine,cfg):
     log=logging.getLogger('nd-isolated-http')
     namespace={'Request':Request,'JSONResponse':JSONResponse,'cfg':cfg,'sessions':factory,'log':log,
                'time':time,'uuid':uuid,'run_in_threadpool':run_in_threadpool,
-               'record_access_best_effort':record_access_best_effort,'configured_maintenance':configured_maintenance}
+               'record_access_best_effort':record_access_best_effort,'configured_maintenance':configured_maintenance,
+               'BackgroundTask':BackgroundTask,'BackgroundTasks':BackgroundTasks}
     app=FastAPI();app.middleware('http')(source_function('security',namespace))
     @app.post('/api/checkpoint-fixture',status_code=201)
     def commit_fixture():
@@ -96,13 +100,14 @@ def test_existing_insert_service_propagates_critical_audit_failure(engine,actor)
     node=next(n for n in tree.body if isinstance(n,ast.FunctionDef) and n.name=='insert_record')
     def serial(obj):return {'id':obj.id,'version':obj.version}
     def critical_failure(*args,**kwargs):raise RuntimeError('critical audit unavailable')
-    ns={**vars(m),'RecordIn':object,'serial':serial,'audit':critical_failure}
+    # insert_record now validates the manual source against the seeded business dictionary.
+    ns={**vars(m),'RecordIn':object,'serial':serial,'audit':critical_failure,'validate_manual_source':validate_manual_source,'HTTPException':HTTPException}
     exec(compile(ast.Module(body=[node],type_ignores=[]),'existing_insert_record','exec'),ns)
     class Payload:
-        teacher_id='t1';reason='隔离事务回滚'
+        teacher_id='t1';reason='隔离事务回滚';source='经核对人工录入'
         def model_dump(self,**kwargs):
             from datetime import date
-            return dict(id='should-rollback',external_key='newkey',teacher_id='t1',event_date=date(2026,9,1),project_code='p',project='p',course_code='c',course='c',class_code='b',class_name='b',hours=1,participants=1,income=1)
+            return dict(id='should-rollback',external_key='newkey',teacher_id='t1',source='经核对人工录入',event_date=date(2026,9,1),project_code='p',project='p',course_code='c',course='c',class_code='b',class_name='b',hours=1,participants=1,income=1)
     factory=sessionmaker(engine)
     with pytest.raises(RuntimeError,match='critical audit'):
         with factory.begin() as db:ns['insert_record'](db,actor,Payload())
