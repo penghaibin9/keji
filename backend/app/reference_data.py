@@ -428,6 +428,14 @@ def annual_teaching_credits(db,rows,*,include_details=True):
     out.sort(key=lambda g:(g['school_year']!=UNKNOWN_YEAR,g['school_year']),reverse=True)  # newest year first, unknown last
     return out
 
+def pending_credit_reviews(db,actor):
+    """Teacher-years with courses waiting for this reviewer: 教研室主任 -> own teachers, 学院负责人 -> 教研室主任 of the college."""
+    if actor.role.kind not in ('dept','college') or 'assessment.review' not in actor.permissions:return []
+    q=select(TeacherCourseTerm).where(TeacherCourseTerm.active.is_(True),actor.scope(TeacherCourseTerm.user_id),TeacherCourseTerm.user_id!=actor.id)
+    if actor.role.kind=='college':
+        q=q.where(TeacherCourseTerm.user_id.in_(select(User.id).join(Role,Role.id==User.role_id).where(Role.kind=='dept')))
+    return [g for g in annual_teaching_credits(db,db.scalars(q),include_details=False) if g['pending_courses']]
+
 def term_anchor(school_year,term_no):
     """Date a term counts on: term 1 of '2025-2026' -> 2025-09-01, term 2 -> 2026-03-01.
 

@@ -103,20 +103,20 @@ def test_only_approved_courses_score_and_repull_resets_changed_courses(client2,a
     c=client2;conn=setup(c,app2)
     from app.services import facts,point_source_changes
     points(c,app2)
-    # 都还待认定：积分 0。
-    assert calculate(c)=='0.00'
+    # 还有待认定的课：正式计算被拦下，提示先认定（不会悄悄按 0 学分出分）。
+    r=post(c,'/api/points/calculate',{'period_id':'period2026','teacher_ids':['teacher'],**REASON})
+    assert r.status_code==409 and '待教研室主任认定' in r.json()['detail'] and 'K1' in r.json()['detail'],r.text
     with Session(app2.state.engine) as db:
         raw,snap=facts(db,'teacher',db.get(Period,'period2026'))
         assert raw['credits']==Decimal('0') and {x['course_code'] for x in snap['teaching_credits']['unapproved']}=={'K1','K2'}
     auth(c,'depthead')
     y=credits(c,'J001');ids=[course(y['2025-2026'],'K1')['id'],course(y['2026-2027'],'K2')['id']]
     assert review(c,ids,'approve','本学年排课已核对').json()['updated']==2   # 批量认定
-    with Session(app2.state.engine) as db:
-        changes=point_source_changes(db,'teacher',db.get(Period,'period2026'))
-        assert changes['changed'] and changes['items'][0]['after']=='6.00'   # 认定后提示积分需重算
     auth(c,'schooladmin')
     assert calculate(c)=='12.00'   # (4 + 2) x 2
     # 重新拉取：课程总库里 K1 改成 5 学分 → K1 回到待认定，K2 没变仍算。
+    with Session(app2.state.engine) as db:
+        assert not point_source_changes(db,'teacher',db.get(Period,'period2026'))['changed']
     inbound(c,conn,'school_course',[{**CATALOGUE[0],'XF':'5'},CATALOGUE[1]])
     auth(c,'depthead')
     y=credits(c,'J001');k1=course(y['2025-2026'],'K1')
@@ -146,7 +146,30 @@ def test_unmapped_staff_are_reviewed_by_school_admin_and_college_can_review(clie
     # 学院负责人可以认定本学院老师的课（教研室主任本人的课由学院负责人认定）。
     auth(c,'collegehead')
     assert review(c,[k1['id']],'approve','学院核对').status_code==200
+    # 缺学分的课不能认定计分，只能等教务补齐或认定不计分。
+    auth(c,'schooladmin');conn=configure_middle(c,MAPS)
+    inbound(c,conn,'teacher_course',[{'ZGH':'J001','XM':'测试教师一','KCH':'K9','KCMC':'缺学分课','XQMC':'2025-2026学年第二学期'}])
+    auth(c,'collegehead')
+    k9=course(credits(c,'J001')['2025-2026'],'K9')
+    r=review(c,[k9['id']],'approve');assert r.status_code==409 and '缺学分' in r.json()['detail'],r.text
+    assert review(c,[k9['id']],'exclude','课程总库无此课，不计').status_code==200
     # 不存在的课整批拒绝，一条也不写。
     k2=course(credits(c,'J001')['2026-2027'],'K2')
     assert review(c,[k2['id'],'no-such-row'],'approve').status_code==409
     assert course(credits(c,'J001')['2026-2027'],'K2')['review']=='pending'
+
+
+def test_pending_courses_show_in_reviewer_todos(client2,app2):
+    c=client2;setup(c,app2)
+    auth(c,'depthead')
+    todos=c.get('/api/todos',params={'type':'credit_review'}).json()
+    assert todos['total']==2 and {x['id'] for x in todos['items']}=={'J001~2025-2026','J001~2026-2027'}
+    assert all(x['teacher_id']=='teacher' and '待认定' in x['title'] for x in todos['items'])
+    # 别的教研室主任只看到本教研室的 J002；老师本人、学院负责人（只认定教研室主任本人的课）没有这类待办。
+    auth(c,'otherdept');assert [x['id'] for x in c.get('/api/todos',params={'type':'credit_review'}).json()['items']]==['J002~2025-2026']
+    for user in ('teacher','collegehead'):
+        auth(c,user);assert c.get('/api/todos',params={'type':'credit_review'}).json()['total']==0
+    auth(c,'depthead')
+    y=credits(c,'J001');ids=[d['id'] for g in y.values() for d in g['details'] if d['review']=='pending']
+    assert review(c,ids,'approve').status_code==200
+    assert c.get('/api/todos',params={'type':'credit_review'}).json()['total']==0

@@ -326,6 +326,7 @@ def teacher_credit_review(data:CreditReviewIn,request:Request):
         for i in ids:
             r=rows[i];d=facts.get(i)
             if d is None or not d['counted']:raise HTTPException(409,r.course_name+' 是重复课程，已按规则只算一次，不用认定')
+            if data.decision=='approve' and d['credit'] is None:raise HTTPException(409,r.course_name+' 缺学分，请先请教务处在课程总库补齐学分再认定；确实不计的可以选“不计分”')
             basis={'staff_no':r.staff_no,'origin':r.origin,'course_code':r.course_code,'term_name':r.term_name,'credit':d['credit'],'hours':d['hours']}
             obj=reviews.get(i);before=serial(obj) if obj else {}
             entry={'decision':state,'by':a.id,'by_name':a.name,'at':at,'reason':data.reason,'basis':basis}

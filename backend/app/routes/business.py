@@ -249,6 +249,12 @@ def _todo_items(db,a):
                     target=db.get(Org,x.target_id);name=target.name if target else x.target_id
                     if x.state=='REVIEWED' and x.reviewed_by!=a.id:add('organization_assessment',x,'学校审核组织考核：'+name,target_id=x.target_id)
                     elif x.state=='SCHOOL_APPROVED':add('organization_assessment',x,'归档组织考核：'+name,target_id=x.target_id)
+    if a.role.kind in {'dept','college'} and 'assessment.review' in a.permissions:
+        from types import SimpleNamespace
+        from ..reference_data import pending_credit_reviews
+        for g in pending_credit_reviews(db,a):
+            add('credit_review',SimpleNamespace(id=g['staff_no']+'~'+g['school_year'],teacher_id=g['user_id']),
+                '授课认定：'+(g['teacher_name'] or g['staff_no'])+' '+g['school_year']+' 学年 '+str(g['pending_courses'])+' 门课待认定','待认定')
     if 'dispute.write' in a.permissions:
         for x in db.scalars(select(Dispute).where(a.scope(Dispute.teacher_id),Dispute.state=='OPEN')):
             if x.teacher_id==a.id or 'dispute.resolve' in a.permissions:add('dispute',x,('我提出的异议：' if x.teacher_id==a.id else '数据核对：')+x.reason[:40])
@@ -270,7 +276,7 @@ def todos(request:Request):
     f,p,z=filters_from(request,{'q','type','stage'})
     from ..read_queries import clean_filters
     f=clean_filters(f,{'q','type','stage'})
-    if f.get('type') and f['type'] not in {'qualification','assessment','organization_assessment','dispute','sync','security','social_project','social_claim','social_annual','social_resource','social_report'}:
+    if f.get('type') and f['type'] not in {'qualification','assessment','organization_assessment','dispute','sync','security','social_project','social_claim','social_annual','social_resource','social_report','credit_review'}:
         raise HTTPException(422,'待办类型无效')
     # 待归档清单只是只读筛选：积分认定、更正待教学秘书归档，教师考核待学校归档；办理仍走原单条接口。
     if f.get('stage') and f['stage']!='archive':raise HTTPException(422,'待办环节无效')

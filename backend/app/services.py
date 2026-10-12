@@ -82,13 +82,21 @@ def credit_gaps(snapshot):
     return missing+list(basis.get("excluded",[]))
 
 
+def pending_credit_reviews_in(snapshot):
+    """Courses in the period still waiting for the 教研室主任 (认定不计分 ones are settled, not pending)."""
+    return [c for c in (snapshot.get("teaching_credits") or {}).get("unapproved",[]) if c.get("review")=="pending"]
+
+
 def require_complete_credits(rule,snapshot,item_keys=None):
-    # 缺学分会被当成 0 分算进去，正式计算前拦下，避免出“看起来正常”的错分
+    # 缺学分会被当成 0 分算进去，正式计算前拦下，避免出“看起来正常”的错分；待认定的课同理，认定后再算
     if not any(c.get("source")=="credits" and (not item_keys or c["key"] in item_keys) for c in rule.config.get("components",[])):return
+    names=lambda rows:"、".join(sorted({str(g.get("course_code") or "") for g in rows})[:5])
     gaps=credit_gaps(snapshot)
     if gaps:
-        names="、".join(sorted({str(g.get("course_code") or "") for g in gaps})[:5])
-        raise HTTPException(409,f"有 {len(gaps)} 门授课课程缺学分或学期名称识别不出（{names}），请先在“授课与学分”补齐后再正式计算")
+        raise HTTPException(409,f"有 {len(gaps)} 门授课课程缺学分或学期名称识别不出（{names(gaps)}），请先在“授课与学分”补齐后再正式计算")
+    pending=pending_credit_reviews_in(snapshot)
+    if pending:
+        raise HTTPException(409,f"有 {len(pending)} 门授课课程还待教研室主任认定（{names(pending)}），请先在“授课与学分”认定后再正式计算")
 
 
 def evaluate(rule,raw):
