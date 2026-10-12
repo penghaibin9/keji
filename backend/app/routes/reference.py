@@ -176,7 +176,7 @@ def staff_roster_view(request:Request):
 
 # 超星课程库映射进 extra 的字段（数据中台_适配器配置 字段映射建议.online_course）。
 ONLINE_EXTRA_KEYS=('cover_url','course_url','group_name','chapters','course_type','course_source','archived','team_names','team_staff_nos',
-    'jw_course_code','nature','course_owner','major','score','created_at_source','edited_at_source')
+    'jw_course_code','nature','course_owner','major','score','period_text','created_at_source','edited_at_source')
 
 @router.get('/reference/staff-roster/{staff_no}')
 def staff_roster_detail(staff_no:str,request:Request):

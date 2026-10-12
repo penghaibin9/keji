@@ -87,7 +87,7 @@ def create_app(settings: Settings | None = None):
         response.headers["X-Frame-Options"]="DENY"
         response.headers["Referrer-Policy"]="same-origin"
         response.headers["Permissions-Policy"]="camera=(), microphone=(), geolocation=()"
-        response.headers["Content-Security-Policy"]="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; connect-src 'self'; object-src 'none'; frame-ancestors 'none'; base-uri 'self'; form-action 'self'"
+        response.headers["Content-Security-Policy"]="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: https://*.chaoxing.com; connect-src 'self'; object-src 'none'; frame-ancestors 'none'; base-uri 'self'; form-action 'self'"
         if cfg.secure_cookie:response.headers["Strict-Transport-Security"]="max-age=31536000"
         if request.url.path.startswith("/api"):
             response.headers["Cache-Control"]="no-store"

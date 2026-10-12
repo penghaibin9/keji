@@ -80,7 +80,7 @@ def test_detail_returns_every_mapped_chaoxing_field(client2,app2):
     from app.reference_data import TeacherCourseTerm
     extra={'cover_url':'https://p.ananas.chaoxing.com/c.png','course_url':'https://mooc1.chaoxing.com/course/1.html','group_name':'公共课',
         'chapters':'12','course_type':'1','course_source':'2','archived':'0','team_names':'测试教师一,测试教师二','team_staff_nos':'J001,J002',
-        'jw_course_code':'K404','nature':'01','course_owner':'J001','major':'计算机','score':'2.5',
+        'jw_course_code':'K404','nature':'01','course_owner':'J001','major':'计算机','score':'2.5','period_text':'64/32',
         'created_at_source':'2025-03-01 08:00:00','edited_at_source':'2025-06-01 09:30:00','description':'简介'*1500}
     with Session(app2.state.engine) as db:
         db.add(TeacherCourseTerm(external_key='CX-1',staff_no='J001',user_id='teacher',term_name='2025-2',course_code='CX1',
@@ -89,3 +89,5 @@ def test_detail_returns_every_mapped_chaoxing_field(client2,app2):
     o=r.json()['online_courses'][0]
     assert {k:o[k] for k in extra if k!='description'}=={k:v for k,v in extra.items() if k!='description'}
     assert len(o['description'])==2000 and o['credit'] is None
+    # 超星封面图来自 *.chaoxing.com，页面安全策略只额外放行这一个图片来源。
+    assert "img-src 'self' data: https://*.chaoxing.com;" in r.headers['content-security-policy']

@@ -2,7 +2,7 @@ import {icons} from './icons.js';
 import {socialPage,socialAction} from './social-training.js?v=20261012-streamline1';
 import {nextCode,runBatch,batchStage,batchMode,batchPerformer,BATCH_LABELS} from './approval-flow.js?v=20261012-streamline1';
 import {ledgerPage,resourceStatsPage,homeIndicators,ledgerAction,resetLedgerView,minePage,mineReminders} from './social-ledgers.js?v=20261012-role-walk3';
-import {rosterSection,rosterHandlers,onlineHandlers,showStaffDetail,showCourseDetail,presetRoster,loadCodeTables} from './school-data.js?v=20261012-cx1';
+import {rosterSection,rosterHandlers,onlineHandlers,showStaffDetail,showCourseDetail,presetRoster,loadCodeTables} from './school-data.js?v=20261012-cx2';
 import {renderCenterStatus,renderImplementationWorkspace,handleImplementationAction} from './integration-workspace.js?v=20261011-gap5';
 import {readDraftEntry,saveDraft,previewDraft} from './integration-drafts.js';
 import {renderBusinessHistory} from './business-history.js';

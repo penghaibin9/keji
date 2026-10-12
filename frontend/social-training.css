@@ -290,10 +290,15 @@
 .online-card.archived{opacity:.6}
 .online-cover{position:relative;width:84px;flex:0 0 84px;background:linear-gradient(140deg,#7a4fd6,#195bfa);display:grid;place-items:center;color:#fff;font-size:12px;font-weight:700;overflow:hidden}
 .online-cover img{position:absolute;inset:0;width:100%;height:100%;object-fit:cover}
-.online-body{padding:10px 12px;min-width:0;font-size:13px}
+.online-body{padding:10px 12px;min-width:0;flex:1;display:flex;flex-direction:column;font-size:13px}
 .online-body strong{display:block;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .online-body p{margin:3px 0}
-.online-body .btn{margin-top:4px}
+.online-tags{display:flex;flex-wrap:wrap;gap:4px}
+.online-actions{display:flex;flex-wrap:wrap;gap:8px;margin-top:auto;padding-top:8px}
+.online-card.archived .online-cover{filter:grayscale(1)}
+.cx-intro{white-space:pre-wrap;line-height:1.8;max-height:320px;overflow:auto;background:#f7f9fc;border-radius:8px;padding:10px 12px;margin-top:8px}
+.cx-intro-box summary{cursor:pointer;color:var(--blue);font-size:14px}
+@media(max-width:620px){.online-cards{grid-template-columns:minmax(0,1fr)}.online-cover{width:64px;flex-basis:64px}}
 @media(max-width:700px){.mine-credit-body{gap:18px}.mine-credit-body dl{gap:16px}}
 
 .todo-chips{display:flex;flex-wrap:wrap;gap:8px;padding:14px 20px 0}.todo-chips .btn b{margin-left:4px}.todo-chips .todo-chip-zero{color:#94a3b8}
