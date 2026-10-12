@@ -164,7 +164,7 @@ def test_pending_courses_show_in_reviewer_todos(client2,app2):
     auth(c,'depthead')
     todos=c.get('/api/todos',params={'type':'credit_review'}).json()
     assert todos['total']==2 and {x['id'] for x in todos['items']}=={'J001~2025-2026','J001~2026-2027'}
-    assert all(x['teacher_id']=='teacher' and '待认定' in x['title'] for x in todos['items'])
+    assert all(x['teacher_id']=='teacher' and x['title'].startswith('授课认定：测试教师一 ') for x in todos['items'])
     # 别的教研室主任只看到本教研室的 J002；老师本人、学院负责人（只认定教研室主任本人的课）没有这类待办。
     auth(c,'otherdept');assert [x['id'] for x in c.get('/api/todos',params={'type':'credit_review'}).json()['items']]==['J002~2025-2026']
     for user in ('teacher','collegehead'):

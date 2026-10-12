@@ -252,9 +252,11 @@ def _todo_items(db,a):
     if a.role.kind in {'dept','college'} and 'assessment.review' in a.permissions:
         from types import SimpleNamespace
         from ..reference_data import pending_credit_reviews
-        for g in pending_credit_reviews(db,a):
+        groups=pending_credit_reviews(db,a)
+        names=dict(db.execute(select(User.id,User.name).where(User.id.in_(sorted({g['user_id'] for g in groups if g['user_id']})))).all()) if groups else {}
+        for g in groups:
             add('credit_review',SimpleNamespace(id=g['staff_no']+'~'+g['school_year'],teacher_id=g['user_id']),
-                '授课认定：'+(g['teacher_name'] or g['staff_no'])+' '+g['school_year']+' 学年 '+str(g['pending_courses'])+' 门课待认定','待认定')
+                '授课认定：'+(names.get(g['user_id']) or g['teacher_name'] or g['staff_no'])+' '+g['school_year']+' 学年 '+str(g['pending_courses'])+' 门课待认定','待认定')
     if 'dispute.write' in a.permissions:
         for x in db.scalars(select(Dispute).where(a.scope(Dispute.teacher_id),Dispute.state=='OPEN')):
             if x.teacher_id==a.id or 'dispute.resolve' in a.permissions:add('dispute',x,('我提出的异议：' if x.teacher_id==a.id else '数据核对：')+x.reason[:40])
