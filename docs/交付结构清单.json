@@ -4,9 +4,9 @@
   ],
   "table_count": 54,
   "column_count": 535,
-  "api_route_count": 227,
+  "api_route_count": 228,
   "static_route_status": "PASS",
-  "business_api_route_count": 226,
+  "business_api_route_count": 227,
   "health_api_route_count": 1,
   "schema_source": "isolated_sqlite_migrations_not_school_database",
   "fields": [
@@ -8293,6 +8293,17 @@
     },
     {
       "file": "backend\\app\\routes\\reference.py",
+      "function": "teacher_credit_review",
+      "method": "POST",
+      "path": "/api/reference/teacher-credits/review",
+      "public": false,
+      "auth_primitives": [
+        "command"
+      ],
+      "protected": true
+    },
+    {
+      "file": "backend\\app\\routes\\reference.py",
       "function": "classes",
       "method": "GET",
       "path": "/api/reference/classes",
@@ -8914,7 +8925,7 @@
     {
       "method": "GET",
       "path": "/api/health",
-      "file": "backend/app/main.py",
+      "file": "backend\\app\\main.py",
       "function": "health",
       "auth_primitives": [],
       "public": true,
@@ -8922,19 +8933,19 @@
     }
   ],
   "source_sha256": {
-    "backend/app/main.py": "1d554d1df608a561a6bbbdccce44f37c5401c957d572f4f3987900c54d17fbe5",
-    "backend\\app\\routes\\admin.py": "4ca9a5706e48f1e85ad195cba634e92c71fc024ac131b113f0818dac916ffbef",
+    "backend\\app\\main.py": "671a4de1e92a1d86b50a6e33d796cdbebfe9e1289d9513970d5541232ccd1a2c",
+    "backend\\app\\routes\\admin.py": "f68b7dcb8044da6d04449441f88e42b8344beff2b988eac684ab6118e58adc06",
     "backend\\app\\routes\\auth.py": "56e78f18f898581342882c9768daa52e526a3ba3ceca958be740d8056d22304b",
-    "backend\\app\\routes\\business.py": "8c40cda181bd0258e9ca03a13ae70123a55184b0dadc91b1fbdcb40b47db7d9b",
+    "backend\\app\\routes\\business.py": "a03dfa54f176452eef09779d5bbb269dbc04de1a3f59bce3c0883692ccf6aef8",
     "backend\\app\\routes\\calculations.py": "02084076c9a3ef0a9ec2c36cd65788deb841d75852587abc7b02a48fb134c4ad",
     "backend\\app\\routes\\delivery.py": "2c3d0cdcef2c954a01c11f6cf4314fa5057cfff9ecd407c6389ab806ea5de45a",
     "backend\\app\\routes\\files.py": "044ee90afacb047ac1223d5df8f44c06011e083b4324aadf2d31d2c6b122c743",
     "backend\\app\\routes\\integration_center.py": "60e713dac010f35f1d09bece48611495b97a7d0bb0e6c8fd600c91e4cafd6a76",
     "backend\\app\\routes\\integration_intake.py": "6c6842a5c9aa6e0e61eb305052c3ee985fec0fd6af7a9f74592ee0b6a667fcf7",
     "backend\\app\\routes\\integrations.py": "9b8eeb6d58e897ad43e80a441ea37007a68bd903321df36d2d094492e184bee8",
-    "backend\\app\\routes\\ledgers.py": "af168055484f8401a0463463e5dae19118ace03a3a6db89c076a32e6f6ccb358",
-    "backend\\app\\routes\\reference.py": "a1166e0941a04a3eec00b86a8bc86ca034b16ac2a149a467b4f94990f267bb80",
-    "backend\\app\\routes\\social.py": "d728634121608db87ffb103f975543935911a380e9c73a6de1d2e21d8ad217f2",
+    "backend\\app\\routes\\ledgers.py": "7638e7f48bbaea3829a011a0d60c89ded46f2bc298d8d4b4c22d338e7696b04b",
+    "backend\\app\\routes\\reference.py": "2d7f649b5611d108974e4b5b2d4506fdab3c95bec62019660f348755ff4228d8",
+    "backend\\app\\routes\\social.py": "39fdbbbbda444227c1d94c2286956acbb03f5cacd8390603ed14bc2d640603f8",
     "backend\\app\\routes\\sso.py": "8f304380441e6301f35da29769c1778bfebe08b2b1d36002f393af467e8b6be4",
     "backend\\app\\routes\\sso_trial.py": "9763e302eacd55ef627eb8034526f9980e194d9181bea0002c47df1b74d9b4b4",
     "backend\\app\\routes\\tasks.py": "4f42a18e4bf087d6e0505fb5bb872d82146056d5ca09319e79bcd88aa74fc26a"
