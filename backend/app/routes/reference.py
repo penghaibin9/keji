@@ -188,7 +188,7 @@ def staff_roster_detail(staff_no:str,request:Request):
         if profile is None:raise HTTPException(404,'教师不存在或不在授权范围')
         row=staff_roster(db,[profile],school_year=school_year_now(),private=_private_ok(db,a))[0]
         terms=db.scalars(select(TeacherCourseTerm).where(TeacherCourseTerm.staff_no==staff_no,TeacherCourseTerm.active.is_(True))).all()
-        years=[{k:g[k] for k in ('school_year','jw_credit','cx_credit','total_credit','courses','missing_credit')} for g in annual_teaching_credits(db,terms)]
+        years=[{k:g[k] for k in ('school_year','jw_credit','cx_credit','total_credit','courses','missing_credit','pending_credit','pending_courses','excluded_courses')} for g in annual_teaching_credits(db,terms)]
         online=[{'course_code':t.course_code,'course_name':t.course_name,'term_name':t.term_name,'credit':t.credit,'hours':t.hours,
                  **{k:(t.extra or {}).get(k) for k in ONLINE_EXTRA_KEYS},
                  'description':str((t.extra or {}).get('description') or '')[:2000]}
