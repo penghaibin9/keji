@@ -30,6 +30,13 @@ def codes(row):
     return {i['code'] for i in row['issues']}
 
 
+def test_long_allocation_names_are_preserved_for_exact_identity_binding():
+    assert lc.parse_allocations('测试教师一：15、共同授课测试教师：15') == [
+        ('测试教师一', Decimal('15')), ('共同授课测试教师', Decimal('15'))]
+    result=checked(sheet(rows=[[1,'隔离长姓名项目',30,8,30,'测试教师一：15、共同授课测试教师：15','2,3,4','']]))
+    assert [item['name'] for item in result['rows'][0]['allocations']] == ['测试教师一','共同授课测试教师']
+
+
 def test_2025_missing_divide_by_eight_and_online_views():
     data = sheet('2025', [[1, '职业启蒙进校园', 342, 8, 1, 2736, '样例教师乙600、样例教师丙600、样例教师丁1200、样例教师戊336', '2，4', ''],
                           [2, '会客厅直播', 415500, 1, 1, 51937, '人工智能学院100%', '2，3,4', ''],

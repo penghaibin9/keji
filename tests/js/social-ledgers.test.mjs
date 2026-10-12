@@ -4,13 +4,21 @@ import {ledgerPage,homeIndicators,ledgerAction,minePage,mineReminders} from '../
 const esc=v=>String(v??'').replace(/[&<>"']/g,ch=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[ch]));
 function context(answers,role='school'){
  const requests=[];
- return {requests,esc,icon:()=>'',act:(l,a,id='')=>`<button data-action="${a}" data-id="${esc(id)}">${esc(l)}</button>`,link:(l,a,id='')=>`<a data-action="${a}" data-id="${esc(id)}">${esc(l)}</a>`,
+ return {requests,esc,ts:v=>v||'—',icon:()=>'',act:(l,a,id='')=>`<button data-action="${a}" data-id="${esc(id)}">${esc(l)}</button>`,link:(l,a,id='')=>`<a data-action="${a}" data-id="${esc(id)}">${esc(l)}</a>`,
   table:(h,rows,empty='')=>rows.length?`<table>${rows.map(r=>`<tr>${r.map(x=>`<td>${x}</td>`).join('')}</tr>`).join('')}</table>`:`<p>${esc(empty)}</p>`,
   note:(t,warn)=>t?`<p class="note${warn?' warn':''}">${esc(t)}</p>`:'',field:(n,l)=>`<label>${esc(l)}<input id="f-${n}"></label>`,pageHead:(t,a='')=>`<header>${esc(t)}${a}</header>`,
   number:(v,d=0)=>Number(v||0).toFixed(d),modal(){},closeModal(){},render:async()=>{},toast(){},me:{role:{kind:role}},can:()=>true,pageAllowed:p=>p!=='qualifications'||role!=='dept',
   api:async path=>{requests.push(path);for(const [k,v] of Object.entries(answers))if(path.startsWith(k))return v;throw Error('unexpected '+path)}};
 }
 const overview={year:2026,scope:'全校',note:'推荐口径待学校确认',participants:{claimed:'4320',final:'2508',reported:3,colleges:12,pending_rows:4,pending_ledgers:2,mine:null},can_review:true,points:null,achievements:{total:3,levels:{national:0,province:1,school:2}},dual:{total:7,levels:{'初级':2,'中级':3,'高级':1,'未分级':1}}};
+
+test('历次台账报送时间交给系统统一时间格式，不能截取原始协调时',async()=>{
+ const totals={claimed_total:'30',recommended_total:'30',final_total:'30',pending_rows:0},stamp='2026-10-11T21:57:00';
+ const d={id:'time-ledger',version:1,org_name:'合成学院',can_review:false,can_draft:false,note:'',versions:[{id:'old',version_no:1,created_at:stamp,totals},{id:'time-ledger',version_no:2,created_at:stamp,totals}],totals,data:{year:2026,version_no:2,template_label:'合成台账',file:{name:'合成.xlsx'},summary:{serious:0},rows:[]}};
+ const c=context({'/social/ledgers/time-ledger':d}),seen=[];c.ts=v=>{seen.push(v);return '2026/10/12 05:57:00'};
+ await ledgerAction('tz-detail','time-ledger',c);
+ try{const html=await ledgerPage(c);assert.deepEqual(seen,[stamp,stamp]);assert.match(html,/2026\/10\/12 05:57:00/);assert.doesNotMatch(html,/2026-10-11 21:57/)}finally{await ledgerAction('tz-back','',c)}
+});
 test('个人提醒默认显示短状态，完整原因可展开，原办理目标不变',()=>{
  const c=context({}),m={projects:[{id:'p1',name:'项目<一>',deadline:{estimated:true,days_left:-5}}],reminders:[{action:'social-detail',id:'social_project|p1',action_label:'查看项目',text:'学校校历尚未确认 <保留原文>',level:'warn'},{action:'social-claim-new',id:'',text:'缺少条件'}],claim_ready:{reason:'口径待配置'}};
  const html=mineReminders(c,m),visible=html.replace(/<details\b[\s\S]*?<\/details>/g,'');

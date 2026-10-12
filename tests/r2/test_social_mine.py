@@ -2,8 +2,26 @@
 from app.routes.ledgers import claim_deadline
 from datetime import date
 from conftest import auth, post
-from test_social_training import setup_social, row, import_rows, close_project
+from test_social_training import setup_social, recognized, row, import_rows, close_project, action, proof
 from test_social_additions import recommended
+
+
+def test_direct_correction_draft_and_returned_reminders_are_not_teacher_responses(recognized,client2):
+    claim_id,_=recognized
+    auth(client2,'teacher')
+    r=post(client2,'/api/social/corrections',{'claim_id':claim_id,'period_id':'period2026','teaching':'0.10','auxiliary':'0','decision_reference':'合成补计依据','reason':'本人追加更正'})
+    assert r.status_code==200,r.text
+    item=r.json()['item']
+    for state in ('DRAFT','RETURNED'):
+        if state=='RETURNED':
+            proof(client2,'social_resource',item['id'],item['version'])
+            assert action(client2,'corrections','social_resource',item['id'],'submit').status_code==200
+            auth(client2,'collegehead');assert action(client2,'corrections','social_resource',item['id'],'return').status_code==200
+            auth(client2,'teacher')
+        mine=client2.get('/api/social/mine?year=2026').json()
+        reminder=next(x for x in mine['reminders'] if x['id']=='social_resource|'+item['id'])
+        assert '更正' in reminder['text'] and '教研室请你核对' not in reminder['text']
+        assert reminder['action']=='todo'
 
 
 def test_mine_lists_own_project_deadline_then_claim_steps(setup_social,client2,app2):

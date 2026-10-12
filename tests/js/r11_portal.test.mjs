@@ -333,6 +333,20 @@ test('export task lists show Chinese type and business status instead of interna
  const e=engine(()=>({items:[{id:'t',kind:'export',state:'DONE',payload:{kind:'assessments'},result:{filename:'internal-code.xlsx'},attempts:1}],page:1,size:20,total:1}));
  const html=await e.t.pages.exports();assert.match(html,/教师考核/);assert.match(html,/文件已生成/);assert.doesNotMatch(html,/internal-code.xlsx|>assessments</);
 });
+
+test('教师参训导出任务准确标识业务类型，不显示成课程人次',async()=>{
+ const e=engine(()=>({items:[{id:'part-export',kind:'export',state:'DONE',payload:{kind:'participations'},attempts:1}],page:1,size:20,total:1}), 'teacher');
+ const html=await e.t.pages.exports();
+ assert.match(html,/教师参训记录/);assert.doesNotMatch(html,/课程人次|>participations</);
+});
+
+test('实际台账页面上下文包含统一时间格式，历次报送可完整渲染',async()=>{
+ const stamp='2026-10-11T21:57:00',totals={claimed_total:'30',recommended_total:'30',final_total:'30',pending_rows:0};
+ const detail={id:'context-time',version:1,org_name:'合成学院',can_review:false,can_draft:false,note:'',versions:[{id:'old',version_no:1,created_at:stamp,totals},{id:'context-time',version_no:2,created_at:stamp,totals}],totals,data:{year:2026,version_no:2,template_label:'合成台账',file:{name:'合成.xlsx'},summary:{serious:0},rows:[]}};
+ const e=engine(async()=>detail),c=vm.runInContext('ledgerContext()',e.ctx);c.render=async()=>{};
+ await ledgers.ledgerAction('tz-detail','context-time',c);
+ try{const html=await ledgers.ledgerPage(c);assert.ok(html.includes(e.t.ts(stamp)));assert.match(html,/历次报送/)}finally{await ledgers.ledgerAction('tz-back','',c)}
+});
 test('local configuration history renders Chinese fields and escapes values',()=>{
  const e=engine();const render=vm.runInContext('settingSnapshot',e.ctx);
  const html=render('branding',{value:{school_name:'<学校>',password:'never-show'}});
@@ -351,6 +365,11 @@ test('notice read always uses the authorized detail endpoint',async()=>{
  await e.t.handlers.notice('notice-id');
  assert.equal(e.requests[0].url,'/api/notices/notice-id');
  assert.match(e.node('#modal-root').innerHTML,/&lt;script&gt;/);
+});
+test('通知发布范围使用授权接口名称，不依赖教师组织目录包含上级',async()=>{
+ const e=engine(()=>({items:[{id:'n',title:'年度公示',category:'公示',org_id:'school-outside-catalog',org_name:'合成<学校>',created_at:'2026-10-12'}],total:1,page:1,size:20}),'teacher');
+ const html=await e.t.pages.notices();
+ assert.match(html,/合成&lt;学校&gt;/);assert.doesNotMatch(html,/<学校>|school-outside-catalog/);
 });
 test('todo page sends filters and page and exposes subsequent pages',async()=>{
  const e=engine(()=>({items:[{id:'q',type:'qualification',title:'资质核对',state:'DRAFT',teacher_id:'u'}],total:24,page:2,size:20}));
@@ -845,4 +864,17 @@ test('积分解锁明确要求依据，普通确认不额外要求',()=>{
  const e=engine();e.t.captureForm();const action=vm.runInContext('actionForm',e.ctx);
  action('留痕解锁积分','/point-balances/b/actions',{version:1},'reopen');assert.match(e.t.getForm().body,/name="basis"[^>]*required/);
  action('确认本人积分','/point-balances/b/actions',{version:1},'confirm');assert.doesNotMatch(e.t.getForm().body,/name="basis"[^>]*required/);
+});
+test('秘书双月报送待办有独立分类、计数与办理入口',async()=>{
+ const e=engine(async()=>({items:[{type:'social_report',id:'bimonth',title:'本双月积分汇总与报送',state:'待汇总',target_id:'school'}],counts:{social_report:1,social_resource:0},total:1,page:1,size:20}));
+ e.t.setUser({user:{id:'secretary'},role:{kind:'school'},permissions:['portal.read','points.read']});
+ const html=await e.t.pages.todos();
+ assert.match(html,/<option value="social_report"[^>]*>双月积分汇总与报送（1）<\/option>/);
+ assert.match(html,/data-id="social_report\|bimonth"/);
+});
+
+test('教师待办分类同时覆盖积分核对与本人更正，不误称全部为教研室核对',async()=>{
+ const e=engine(async()=>({items:[{type:'social_resource',id:'fix1',title:'补充积分更正依据',state:'退回补正',teacher_id:'u'}],counts:{social_resource:1},total:1,page:1,size:20}),'teacher');
+ const html=await e.t.pages.todos();
+ assert.match(html,/积分核对与更正/);assert.match(html,/补充积分更正依据/);assert.doesNotMatch(html,/教研室请我核对积分/);
 });

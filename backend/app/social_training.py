@@ -40,6 +40,7 @@ def today():
 
 
 def state_label(obj):
+    if isinstance(obj,SocialResource) and obj.kind=='point_report' and obj.state=='VOID':return '已被新公示替代'
     if isinstance(obj,SocialResource) and obj.kind in {'base','achievement','course_resource'} and obj.state=='DRAFT':return '待补认定日期' if obj.kind=='achievement' and not obj.data.get('confirmed_on') else '已登记'
     if isinstance(obj,SocialPolicy) and obj.state=='DRAFT':return '执行口径待确认'
     if isinstance(obj,SocialResource) and obj.kind=='point_review':return REVIEW_STATES.get(obj.state,'待核验')
@@ -675,6 +676,9 @@ def detail(db,actor,kind,obj):
                 'facts':{'project':item,'units':rows,'evidence':[],'followups':[],'invalidated':False,'effective':None,'priority':None,'excluded':None}}
     result={'item':serial(obj),'state_label':state_label(obj),'attachments':evidence(db,kind,obj.id),
             'events':serial(db.scalars(select(WorkflowEvent).where(WorkflowEvent.object_type==kind,WorkflowEvent.object_id==obj.id).order_by(WorkflowEvent.created_at,WorkflowEvent.id)).all())}
+    if isinstance(obj,SocialResource) and obj.kind=='point_report':
+        for row in result['events']:
+            if row['action']=='积分汇总：待院长初审' and row['after'].get('state')=='SUBMITTED':row['action']='积分汇总：待归口复核'
     if isinstance(obj,SocialProject):result['item']=project_read_item(actor,obj);result['facts']=project_facts(db,obj)
     if isinstance(obj,(SocialProject,SocialResource)):
         org=db.get(Org,obj.org_id);result['org_name']=org.name if org else ''  # 教师、教研室的组织列表不含所属学院，名称由服务端给出
@@ -823,12 +827,14 @@ def todo_items(db,a):
         if obj.state=='DRAFT' and obj.data['created_by']==a.id:add('social_resource',obj,'上传核对材料并发给教师',teacher_id=obj.data['teacher_id'])
         elif obj.state=='TEACHER' and obj.data['teacher_id']==a.id:add('social_resource',obj,'教研室请你核对一条积分，请回应',teacher_id=a.id)
         elif obj.state=='COLLEGE' and 'dean' in duties and a.id not in {obj.data['created_by'],obj.data['teacher_id']}:add('social_resource',obj,'积分核对待学院裁定',teacher_id=obj.data['teacher_id'])
-    for report in db.scalars(select(SocialResource).where(SocialResource.kind=='point_report',SocialResource.org_id.in_(a.org_ids),SocialResource.state!='ARCHIVED')):
+    for report in db.scalars(select(SocialResource).where(SocialResource.kind=='point_report',SocialResource.org_id.in_(a.org_ids),SocialResource.state.notin_(['ARCHIVED','VOID']))):
         if report.data['created_by']==a.id or duties&{'coordinator','secretary'}:add('social_resource',report,'积分双月报送或年度公示')
     if 'secretary' in duties and today().month%2==0:
         from types import SimpleNamespace
         add('social_report',SimpleNamespace(id='bimonth',state='DRAFT',org_id=a.org.id),'本双月积分汇总与报送','待汇总')
     if 'assessment.review' in a.permissions:
         for annual in db.scalars(select(SocialAnnual).where(SocialAnnual.org_id.in_(a.org_ids),SocialAnnual.state!='ARCHIVED')):
-            if annual.owner_id==a.id or (annual.state=='REVIEW' and duties&{'coordinator','finance','academic','discipline'}) or (annual.state=='COMMITTEE' and 'committee' in duties) or (annual.state=='PUBLIC' and duties&{'coordinator','secretary'}):add('social_annual',annual,'学院年度考核办理')
+            if annual.owner_id==a.id and annual.state not in {'DRAFT','RETURNED'}:continue
+            pending={'coordinator','finance','academic','discipline'}-annual.snapshot.get('checks',{}).keys()
+            if (annual.owner_id==a.id and annual.state in {'DRAFT','RETURNED'}) or (annual.state=='REVIEW' and duties&pending) or (annual.state=='COMMITTEE' and 'committee' in duties) or (annual.state=='PUBLIC' and duties&{'coordinator','secretary'}):add('social_annual',annual,'学院年度考核办理')
     return items

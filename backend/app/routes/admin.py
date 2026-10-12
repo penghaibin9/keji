@@ -303,7 +303,10 @@ def notices(request:Request):
         if 'notice.manage' not in a.permissions:q=q.where(Notice.published.is_(True))
         else:q=q.where(Notice.published.is_(True)|Notice.org_id.in_(a.org_ids))
         if f.get('q'):q=q.where(Notice.title.contains(f['q'],autoescape=True)|Notice.body.contains(f['q'],autoescape=True))
-        return page_result(db,q.order_by(Notice.created_at.desc(),Notice.id),p,z)
+        result=page_result(db,q.order_by(Notice.created_at.desc(),Notice.id),p,z)
+        names=dict(db.execute(select(Org.id,Org.name).where(Org.id.in_({x['org_id'] for x in result['items']}))).all())
+        for item in result['items']:item['org_name']=names.get(item['org_id'],'')
+        return result
     return read_operation(request,'notice.read',load)
 
 @router.post('/notices')

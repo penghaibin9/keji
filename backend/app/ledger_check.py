@@ -93,7 +93,7 @@ def _formula_value(formula, people, hours, coeff):
 
 def parse_allocations(text: str):
     if '%' in text or '％' in text: return []
-    return [(name, D(num)) for name, num in re.findall(r'([一-龥]{2,6})\s*[:：]?\s*(\d+(?:\.\d+)?)', text)]
+    return [(name, D(num)) for name, num in re.findall(r'(?<![一-龥])([一-龥]{2,})\s*[:：]?\s*(\d+(?:\.\d+)?)', text)]
 
 
 def _header(rows):

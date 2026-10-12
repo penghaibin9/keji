@@ -1,7 +1,7 @@
 """Local procurement gaps: real permissions, search, todos and rule selection."""
 from datetime import date
 import pytest
-from app.models import Notice,Qualification,Role,Audit
+from app.models import Notice,Qualification,Role,Audit,Org
 from sqlalchemy import select
 from conftest import auth,post
 from test_api import rule,activate
@@ -32,6 +32,9 @@ def test_notice_detail_and_search_recheck_visibility(client2,app2):
             db.add(Notice(id=ident,title='共同通知',body='隔离测试内容',category='业务通知',org_id=org,published=published,author_id='schooladmin'))
     auth(client2,'teacher')
     assert client2.get('/api/notices/n-parent').status_code==200
+    notices=client2.get('/api/notices?q=共同').json()['items']
+    assert [x['id'] for x in notices]==['n-parent']
+    with app2.state.sessions() as db:assert notices[0]['org_name']==db.get(Org,'school').name
     for ident in ['n-other','n-draft','absent']:
         assert client2.get('/api/notices/'+ident).status_code==404
     group=next(g for g in client2.get('/api/portal/search?q=共同').json()['groups'] if g['type']=='notice')
