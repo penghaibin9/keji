@@ -132,6 +132,30 @@ def test_due_schedule_first_full_then_incremental_and_cursor_advances(client2,ap
     finally:ADAPTERS.clear()
 
 
+def test_due_schedule_without_cursor_keeps_pulling_full(client2,app2):
+    """The school hub's /full tables return no watermark: every scheduled run stays FULL so deletions reconcile."""
+    auth(client2,'schooladmin');c=configure_project_mapping(client2);set_connected(app2,c['id'])
+    adapter=PullAdapter([
+      {'records':[{'project_code':'P301','project_name':'项目301','active':True}]},
+      {'records':[{'project_code':'P301','project_name':'项目301','active':True}]},
+    ])
+    ADAPTERS.register_for_test('middle',adapter)
+    try:
+        r=post(client2,'/api/integration-schedules',{'connection_id':c['id'],'data_type':'training_project','frequency_minutes':10080,'auto_commit':True,'active':True,'reason':'每周全量','basis':'隔离测试'})
+        assert r.status_code==200,r.text;sid=r.json()['id']
+        for _ in range(2):
+            with Session(app2.state.engine) as db:
+                sch=db.get(IntegrationSchedule,sid);sch.next_at=utcnow()-timedelta(seconds=1);db.commit()
+            with Session(app2.state.engine) as db:
+                ids=enqueue_due_schedules(db,utcnow());assert len(ids)==1;db.commit();tid=ids[0]
+            with Session(app2.state.engine) as db:
+                t=db.get(Task,tid);process_pull_task_once(db,t,ADAPTERS);db.commit()
+        with Session(app2.state.engine) as db:
+            sch=db.get(IntegrationSchedule,sid);assert sch.last_run_at is not None and not sch.last_cursor
+        assert [x['mode'] for x in adapter.calls]==['FULL','FULL']
+    finally:ADAPTERS.clear()
+
+
 def test_data_quality_error_keeps_formal_master_unchanged(client2,app2):
     auth(client2,'schooladmin');c=configure_project_mapping(client2);set_connected(app2,c['id'])
     adapter=PullAdapter([{'records':[{'project_code':'P_BAD'}],'next_cursor':'bad-cursor'}])

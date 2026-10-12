@@ -173,7 +173,9 @@ def enqueue_due_schedules(db,now=None,registry=ADAPTERS):
         from .paged_inbound import has_unfinished_run
         if pending is not None or has_unfinished_run(db,schedule):
             schedule.next_at=now+timedelta(minutes=schedule.frequency_minutes);schedule.version+=1;continue
-        mode='INCREMENTAL' if schedule.last_run_at else 'FULL'
+        # Feeds without a watermark (the school hub's /full tables) re-pull in FULL so the
+        # run can withdraw rows the school deleted; incremental only once a cursor exists.
+        mode='INCREMENTAL' if schedule.last_run_at and schedule.last_cursor else 'FULL'
         task=create_pull_task(db,actor,connection,schedule.data_type,mode,'定时同步计划',schedule=schedule);created.append(task.id)
         schedule.next_at=now+timedelta(minutes=schedule.frequency_minutes);schedule.version+=1
     return created
