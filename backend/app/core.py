@@ -72,8 +72,13 @@ def org_scope(db,org,kind):
         ids |= children; frontier=children
     return sorted(ids)
 
+def school_today():
+    return (utcnow()+timedelta(hours=8)).date()
+
+
 class Actor:
     def __init__(self,db,user,role,org,request=None):
+        if user.authorization_pending:raise HTTPException(403,"人事单位已变化，请联系学校管理员重新确认账号授权")
         if not user.active or not role.active or not validate_permissions(role.kind,role.permissions):
             raise HTTPException(403,'账号或角色已停用，或授权配置无效')
         self.user,self.role,self.org=user,role,org
@@ -96,16 +101,19 @@ class Actor:
     def teacher_ids(self):
         if self._teacher_ids is None:
             self._teacher_ids=tuple(self._db.scalars(select(User.id).where(
-                User.org_id.in_(self.org_ids),User.staff_no.is_not(None))))
+                User.org_id.in_(self.org_ids),User.staff_no.is_not(None),
+                True if self.role.kind=='school' else User.authorization_pending.is_(False))))
         return self._teacher_ids
     def scope(self,column):
         if self.role.kind=='teacher': return column==self.id
         return column.in_(select(User.id).where(
-            User.org_id.in_(self.org_ids),User.staff_no.is_not(None)))
+            User.org_id.in_(self.org_ids),User.staff_no.is_not(None),
+                True if self.role.kind=='school' else User.authorization_pending.is_(False)))
     def check_teacher(self,db,teacher_id,active=False):
         user=db.get(User,teacher_id)
         if (user is None or not user.staff_no or user.org_id not in self.org_ids
                 or (self.role.kind=='teacher' and teacher_id!=self.id)
+                or (user.authorization_pending and (active or self.role.kind!='school'))
                 or (active and not user.active)):
             raise HTTPException(403,'教师不在当前授权业务范围')
         return user
@@ -124,6 +132,9 @@ def check_origin(request):
         source=f'{parsed.scheme}://{parsed.netloc}' if parsed.scheme and parsed.netloc else ''
     if source!=cfg.public_origin: raise HTTPException(403,'请求来源校验失败')
 
+def sso_session(session):
+    return session.auth_method == 'sso'
+
 def current_actor(db,request,*,allow_password=False,write=False):
     cfg=request.app.state.settings
     raw=request.cookies.get(cfg.cookie_name,'')
@@ -141,7 +152,8 @@ def current_actor(db,request,*,allow_password=False,write=False):
     from .demo_identity import resolve
     actor=resolve(db,request,actor,session,write=write)
     request.state.actor_id,request.state.actor_name,request.state.org_id=actor.id,actor.name,actor.org.id
-    if user.must_change_password and not allow_password: raise HTTPException(403,'首次登录请先修改临时密码')
+    # 学校统一认证登录的会话不用本地密码，按人事表补建的账号也就没有可改的临时密码
+    if user.must_change_password and not allow_password and not sso_session(session): raise HTTPException(403,'首次登录请先修改临时密码')
     if write:
         check_origin(request)
         supplied=request.headers.get('x-csrf-token','')
@@ -195,6 +207,16 @@ def read_operation(request,permission,fn,*,allow_password=False):
 def command(request,payload,permission,fn,*,allow_password=False):
     raw=request.headers.get('idempotency-key','')
     if not re.fullmatch(r'[A-Za-z0-9_-]{8,128}',raw): raise HTTPException(422,'写入必须提供有效幂等请求编号')
+    from . import message_push
+    token=message_push.begin();committed=False
+    try:
+        result=_command(request,payload,permission,fn,raw,allow_password)
+        committed=True
+        return result
+    finally:
+        message_push.finish(token,request.app.state.settings,committed)
+
+def _command(request,payload,permission,fn,raw,allow_password):
     with request.app.state.sessions.begin() as db:
         # Authorization-changing writes and business writes share a guard. This
         # favors correctness until per-object MySQL concurrency is measured.

@@ -9,6 +9,8 @@ x-api: &api
   env_file: .env
   environment:
     ND_ENV: production
+    # Local dates (qualification expiry, school year, ledger dates) follow Beijing time; stored timestamps stay UTC.
+    TZ: Asia/Shanghai
     ND_DATABASE_URL_FILE: /run/secrets/runtime_url
     ND_STORAGE_DIR: /var/lib/nondegree/files
     ND_SECURE_COOKIE: "true"
@@ -43,16 +45,21 @@ services:
     networks: [internal]
     restart: unless-stopped
     healthcheck:
-      test: [CMD-SHELL, "mysqladmin --defaults-extra-file=/run/secrets/root_cnf ping --silent"]
+      # TCP, not the socket: on a brand-new volume the entrypoint's temporary init server answers socket pings
+      # before the real server listens, and migrations connecting over the network would then be refused.
+      test: [CMD-SHELL, "mysqladmin --defaults-extra-file=/run/secrets/root_cnf --protocol=tcp -h 127.0.0.1 ping --silent"]
       interval: 5s
       timeout: 4s
       retries: 36
+      start_period: 180s
     mem_limit: 3g
     logging:
       driver: json-file
       options: {max-size: "20m", max-file: "5"}
   api:
     <<: *api
+    # CAS ticket validation, the data hub and portal push call school services; the database stays internal-only.
+    networks: [internal, egress]
     depends_on:
       db: {condition: service_healthy}
     healthcheck:
@@ -64,6 +71,7 @@ services:
   worker:
     <<: *api
     command: [python,-m,app.worker]
+    networks: [internal, egress]
     depends_on:
       api: {condition: service_healthy}
     healthcheck:
@@ -108,6 +116,7 @@ services:
 networks:
   internal: {internal: true}
   edge: {}
+  egress: {}
 secrets:
   db_root_password: {file: ./secrets/db_root_password}
   root_cnf: {file: ./secrets/root.cnf}

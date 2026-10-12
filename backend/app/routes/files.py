@@ -6,7 +6,7 @@ from starlette.concurrency import run_in_threadpool
 from urllib.parse import quote
 from pathlib import Path
 from hashlib import sha256
-import os,io,re,stat,secrets,warnings
+import os,io,re,stat,secrets,warnings,zipfile
 from PIL import Image
 from ..core import *
 from ..schemas import VersionedReason
@@ -37,7 +37,18 @@ def inspect_upload(name,data):
                 if doc.is_encrypted or not 1<=len(doc.pages)<=2000:raise ValueError('pdf structure')
         except Exception:raise HTTPException(422,'PDF损坏、加密或超过页数上限') from None
         return 'application/pdf'
-    raise HTTPException(422,'只接收PDF、PNG、JPG附件')
+    if ext in {'.docx','.xlsx'}:
+        part,mime=('word/document.xml','application/vnd.openxmlformats-officedocument.wordprocessingml.document') if ext=='.docx' else ('xl/workbook.xml','application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')
+        try:
+            with zipfile.ZipFile(io.BytesIO(data)) as archive:
+                infos=archive.infolist();names={x.filename for x in infos}
+                if len(infos)>2000 or sum(x.file_size for x in infos)>200*1024*1024:raise ValueError('zip bomb')
+                if not {'[Content_Types].xml',part}<=names:raise ValueError('office structure')
+                if any(x.flag_bits&1 or x.filename.replace('\\','/').rsplit('/',1)[-1].lower()=='vbaproject.bin' for x in infos):raise ValueError('encrypted or macro')
+                if archive.testzip() is not None:raise ValueError('zip checksum')
+        except Exception:raise HTTPException(422,'文档或表格损坏、加密、包含宏或超过解压限制') from None
+        return mime
+    raise HTTPException(422,'只接收 .pdf、.png、.jpg、.jpeg、.docx、.xlsx 附件；iPhone（苹果手机）照片请在相机设置里选“兼容性最佳”或截图后上传')
 
 def verify_file(root,item):
     root=Path(root)
@@ -54,11 +65,20 @@ def verify_file(root,item):
     return data
 
 # 12.5: evidence bound to teacher assessments, organisation assessments and sync tasks.
-BOUND_KINDS={'assessment','org_assessment','sync_task'}
+BOUND_KINDS={'assessment','org_assessment','sync_task','social_project','social_claim','social_policy','social_annual','social_resource'}
 
 def bound_object(db,a,kind,ident,*,write=False):
     """Same layered checks as qualification files: permission, live scope, then object state."""
     from ..org_assessment import OrganizationAssessment
+    if kind.startswith('social_'):
+        from ..social_training import scoped
+        a.require('records.read')
+        obj=scoped(db,a,kind,ident,write=write)
+        if kind=='social_annual' and a.role.kind=='teacher':raise HTTPException(403,'年度公示仅开放评分摘要，原始材料由授权核验人员查看')
+        if write and kind=='social_claim' and (obj.teacher_id!=a.id or obj.state not in {'DRAFT','RETURNED'}):raise HTTPException(403,'仅本人可为待补正积分上传材料')
+        if write and kind=='social_resource' and obj.kind=='correction' and (obj.data['created_by']!=a.id or obj.state not in {'DRAFT','RETURNED'}):raise HTTPException(403,'仅更正申请人可在草稿或退回时补充依据')
+        if write and kind=='social_resource' and obj.kind=='point_review' and not ((obj.data['created_by']==a.id and obj.state=='DRAFT') or (obj.data['teacher_id']==a.id and obj.state=='TEACHER')):raise HTTPException(403,'核对材料由发起人在发送前、或被核对教师在回应时上传')
+        return obj,getattr(obj,'teacher_id',None)
     if kind=='assessment':
         obj=owned_object(db,a,Assessment,ident,'assessment.read')
         if write:
@@ -145,9 +165,12 @@ async def upload(kind:str,ident:str,request:Request,file:UploadFile=File(...),ex
         item=Attachment(object_type=kind,object_id=ident,teacher_id=teacher or a.id,uploaded_by=a.id,name=name,storage_key=store(),
               sha256=payload['sha256'],size=len(data),mime=mime)
         db.add(item);db.flush()
-        label={'assessment':'考核','org_assessment':'组织考核','sync_task':'同步任务'}[kind]
+        label={'assessment':'考核','org_assessment':'组织考核','sync_task':'同步任务'}.get(kind,'社会培训')
         after={'attachment_id':item.id,'name':name,'sha256':item.sha256,'size':item.size}
-        if kind=='sync_task':audit(db,a,'sync',ident,'上传同步佐证材料',after=after,reason=reason)
+        if kind.startswith('social_'):
+            obj.version+=1
+            workflow(db,a,kind,ident,'上传社会培训佐证材料',{},after,reason,'附件校验值:'+item.sha256)
+        elif kind=='sync_task':audit(db,a,'sync',ident,'上传同步佐证材料',after=after,reason=reason)
         else:workflow(db,a,'assessment' if kind=='assessment' else 'organization_assessment',ident,'上传'+label+'佐证材料',{},after,reason,'附件SHA256:'+item.sha256)
         return public_attachment(item)
     def execute():

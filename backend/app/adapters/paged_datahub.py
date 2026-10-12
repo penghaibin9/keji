@@ -16,7 +16,7 @@ def pull_chunk(adapter, *, data_type, mode, cursor, limit, checkpoint=None,
     size, maximum = paging.get('page_size', limit), paging.get('max_pages', 100)
     start = paging.get('start_page', 1)
     if (type(size) is not int or not 1 <= size <= limit or type(maximum) is not int
-            or not 1 <= maximum <= 100 or type(start) is not int or start < 0):
+            or not 1 <= maximum <= 1000 or type(start) is not int or start < 0):
         raise AdapterContractError('PULL_PAGING_INVALID')
     kind = paging.get('mode', 'cursor')
     if kind not in {'cursor', 'page'}:
@@ -26,7 +26,7 @@ def pull_chunk(adapter, *, data_type, mode, cursor, limit, checkpoint=None,
         raise AdapterContractError('PULL_PAGING_INVALID')
     page, position, seen = state['page'], state['cursor'], state['seen']
     if (type(page) is not int or page < start or not isinstance(seen, list)
-            or len(seen) > 100 or any(not isinstance(x, str) or len(x) != 64 for x in seen)
+            or len(seen) > maximum or any(not isinstance(x, str) or len(x) != 64 for x in seen)
             or position is not None and (not isinstance(position, str) or len(position) > 500)):
         raise AdapterContractError('PULL_PAGING_INVALID')
     if page - start >= maximum:

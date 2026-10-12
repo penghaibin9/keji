@@ -12,6 +12,10 @@ from sqlalchemy.orm import Mapped, mapped_column
 from .models import Base
 
 BASELINE_REVISION = "20260918_0001"
+# Additive revisions after the baseline, oldest first, with the schema contract each adds.
+EXTENSION_REVISIONS = (("20261008_0002", "social_schema.json"), ("20261009_0003", "teaching_schema.json"), ("20261012_0004", "auth_session_schema.json"))
+CURRENT_REVISION = EXTENSION_REVISIONS[-1][0]
+KNOWN_REVISIONS = (BASELINE_REVISION, *(r for r, _ in EXTENSION_REVISIONS))
 SOURCE_KIND = "canonical_empty_school"
 CONTRACT_PATH = Path(__file__).resolve().parents[1] / "canonical_schema.json"
 
@@ -47,8 +51,11 @@ def type_signature(t):
 def normalize_check(expression):
     return re.sub(r'[\s`()]+','',expression).lower()
 
-def verify_schema(connection):
+def verify_schema(connection, *, revision=CURRENT_REVISION):
     contract, _ = load_contract(); inspector = sa.inspect(connection)
+    if revision not in KNOWN_REVISIONS: raise InstallationRejected("LEGACY_OR_UNKNOWN_REVISION")
+    for rev, name in EXTENSION_REVISIONS[:KNOWN_REVISIONS.index(revision)]:
+        contract['tables'].update(json.loads(CONTRACT_PATH.with_name(name).read_text(encoding='utf-8'))['tables'])
     tables = set(inspector.get_table_names()) - {"alembic_version"}
     if tables != set(contract["tables"]) or inspector.get_view_names():
         raise InstallationRejected("SCHEMA_TABLE_SET_MISMATCH")
@@ -78,7 +85,7 @@ def verify_schema(connection):
             if engine.lower() != "innodb": raise InstallationRejected("SCHEMA_ENGINE_MISMATCH")
     return True
 
-def require_canonical(connection, *, check_schema=True, require_mysql=False):
+def require_canonical(connection, *, check_schema=True, require_mysql=False, allow_baseline=False):
     if require_mysql:
         if connection.dialect.name != "mysql": raise InstallationRejected("MYSQL_84_REQUIRED")
         version = connection.execute(sa.text("SELECT VERSION()")).scalar_one()
@@ -88,7 +95,8 @@ def require_canonical(connection, *, check_schema=True, require_mysql=False):
     if not {"alembic_version", "installation_provenance"} <= tables:
         raise InstallationRejected("INSTALLATION_PROVENANCE_MISSING")
     heads = list(connection.execute(sa.text("SELECT version_num FROM alembic_version")).scalars())
-    if heads != [BASELINE_REVISION]: raise InstallationRejected("LEGACY_OR_UNKNOWN_REVISION")
+    # allow_baseline (migration preflight only): an older known revision may be upgraded in place.
+    if heads != [CURRENT_REVISION] and not (allow_baseline and len(heads) == 1 and heads[0] in KNOWN_REVISIONS): raise InstallationRejected("LEGACY_OR_UNKNOWN_REVISION")
     records = connection.execute(sa.select(InstallationProvenance.__table__)).mappings().all()
     _, checksum = load_contract()
     if len(records) != 1: raise InstallationRejected("INSTALLATION_PROVENANCE_INVALID")
@@ -100,7 +108,7 @@ def require_canonical(connection, *, check_schema=True, require_mysql=False):
         or r["source_kind"] != SOURCE_KIND or r["contract_sha256"] != checksum
         or not isinstance(r["installed_at"], datetime)):
         raise InstallationRejected("INSTALLATION_PROVENANCE_INVALID")
-    if check_schema: verify_schema(connection)
+    if check_schema: verify_schema(connection, revision=heads[0])
     return {"installation_id": r["installation_id"], "baseline_revision": BASELINE_REVISION,
             "source_kind": SOURCE_KIND, "contract_sha256": checksum,
             "installed_at": r["installed_at"].isoformat()}
@@ -112,7 +120,7 @@ def migration_preflight(connection):
         if "alembic_version" in tables and connection.execute(sa.text("SELECT COUNT(*) FROM alembic_version")).scalar_one():
             raise InstallationRejected("STAMP_WITHOUT_SCHEMA_REFUSED")
         return "EMPTY"
-    require_canonical(connection, require_mysql=connection.dialect.name != "sqlite")
+    require_canonical(connection, require_mysql=connection.dialect.name != "sqlite", allow_baseline=True)
     return "CANONICAL"
 
 def main():

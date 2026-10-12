@@ -8,6 +8,7 @@ from . import installation  # register immutable installation provenance
 from .models import Base
 # Register extension tables before reading metadata.
 from . import org_assessment, integrations, reference_data, inbound_sync  # noqa: F401
+from . import social_models
 
 APPEND_ONLY_TABLES = frozenset({'audit_events','workflow_events','record_revisions',
     'qualification_revisions','point_entries','rule_trials','organization_rule_trials',

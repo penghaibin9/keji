@@ -136,7 +136,7 @@ class MethodFields(Input):
 class Component(MethodFields):
     key: str=Field(pattern=r'^[a-z][a-z0-9_]{0,40}$')
     label: str=Field(min_length=1,max_length=100)
-    source: Literal['hours','participants','income','qualifications','points','assessment_score']
+    source: Literal['hours','participants','income','qualifications','points','assessment_score','credits']
     factor: Decimal=Field(default=1,ge=0,le=1000000,allow_inf_nan=False,max_digits=16,decimal_places=4)
     weight: Decimal=Field(default=0,ge=0,le=100,allow_inf_nan=False,max_digits=7,decimal_places=2)
     target: Decimal=Field(default=1,gt=0,le=1000000000000,allow_inf_nan=False,max_digits=18,decimal_places=4)
@@ -272,17 +272,17 @@ class ParticipationUpdate(ParticipationIn):
     expected_version:int=Field(ge=1)
 
 class InboundPreview(Reason):
-    data_type: Literal['teacher_hr','training_project','course','training_income','course_participants']
+    data_type: Literal['teacher_hr','training_project','course','training_income','course_participants','teacher_course','online_course','school_course']
     records: list[dict]=Field(min_length=1,max_length=1000)
     source_label: str=Field(default='手工脱敏联调样本',min_length=1,max_length=160)
 
 class InboundPullRequest(Reason):
-    data_type: Literal['teacher_hr','training_project','course','training_income','course_participants']
+    data_type: Literal['teacher_hr','training_project','course','training_income','course_participants','teacher_course','online_course','school_course']
     mode: Literal['FULL','INCREMENTAL']
 
 class IntegrationScheduleIn(Reason):
     connection_id: Ident
-    data_type: Literal['teacher_hr','training_project','course','training_income','course_participants']
+    data_type: Literal['teacher_hr','training_project','course','training_income','course_participants','teacher_course','online_course','school_course']
     frequency_minutes: int=Field(ge=1,le=10080)
     auto_commit: bool=False
     active: bool=False

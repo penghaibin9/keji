@@ -55,7 +55,8 @@ DATA_CATALOG={
   ('identity','统一认证身份字段与角色/组织映射','WAITING_PROTOCOL')],
  'middle':[
   ('teacher_hr','教师人事信息','AVAILABLE'),('training_income','培训收入','AVAILABLE'),('course_participants','课程人次','AVAILABLE'),
-  ('training_project','培训项目基础信息','AVAILABLE'),('course','课程基础信息','AVAILABLE')],
+  ('training_project','培训项目基础信息','AVAILABLE'),('course','课程基础信息','AVAILABLE'),
+  ('teacher_course','教师学期授课（教务）','AVAILABLE'),('online_course','教师线上课程（超星课程库）','AVAILABLE'),('school_course','课程总库（学分学时）','AVAILABLE')],
  'province':[
   ('training_project','培训项目','AVAILABLE'),('course','课程','AVAILABLE'),('plan','培训计划','WAITING_SOURCE'),('class','班级','AVAILABLE'),
   ('teaching','教师授课','AVAILABLE'),('participants','人次','AVAILABLE'),('learning_process','学习过程','WAITING_SOURCE'),

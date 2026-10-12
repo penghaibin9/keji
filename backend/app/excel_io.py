@@ -30,8 +30,9 @@ from .org_assessment import OrganizationAssessment, OrganizationAssessmentRule, 
 from .settings_catalog import business_dictionary,import_row_limit
 from .integrations import SyncItem,SyncCallLog,ConnectionCheck,DATA_CATALOG
 from .delivery import configuration_snapshot,database_dictionary
-from .reference_data import TeacherParticipation,TrainingProjectMaster,TrainingCourseMaster,TrainingClassMaster,TeacherHrProfile,InboundBatch,InboundRow,ensure_reference_from_training_record,record_reference_errors
+from .reference_data import TeacherParticipation,TrainingProjectMaster,TrainingCourseMaster,TrainingClassMaster,TeacherHrProfile,TeacherCourseTerm,SchoolCourse,InboundBatch,InboundRow,ensure_reference_from_training_record,record_reference_errors
 from .inbound_sync import IntegrationSchedule
+from .social_models import SocialProject,SocialUnit,SocialPolicy,SocialClaim,SocialAnnual,SocialResource
 
 MAX_ROWS=5000
 MAX_XLSX_BYTES=10*1024*1024
@@ -69,6 +70,7 @@ def _safe_text(value,*,limit=200):
 
 
 def _safe_excel_value(value):
+    if isinstance(value,Decimal):return value
     value=value.isoformat() if isinstance(value,datetime) else _plain(value)
     if isinstance(value,str) and value.lstrip(' \t\r\n').startswith(DANGEROUS_PREFIXES):return "'"+value
     return value
@@ -81,8 +83,11 @@ def _date(value,required=True):
     if isinstance(value,datetime):return value.date().isoformat()
     if isinstance(value,date):return value.isoformat()
     text=_safe_text(value,limit=20)
+    if match:=re.fullmatch(r'(\d{4})/(\d{1,2})/(\d{1,2})',text):
+        try:return date(*map(int,match.groups())).isoformat()
+        except ValueError:raise ValueError('日期不存在，请核对年月日') from None
     try:return date.fromisoformat(text).isoformat()
-    except ValueError:raise ValueError('日期格式应为 YYYY-MM-DD') from None
+    except ValueError:raise ValueError('日期格式应为 YYYY-MM-DD 或 YYYY/M/D') from None
 
 
 def _decimal(value,label,*,minimum=None):
@@ -156,17 +161,21 @@ def inspect_xlsx(data,filename,kind,*,max_rows=MAX_ROWS):
         if headers!=expected:raise HTTPException(422,'Excel 表头与标准模板不一致')
         parsed=[]
         for excel_row,cells in enumerate(rows,start=2):
-            vals=[];present=False;formula=False
-            for c in cells[:len(expected)]:
+            vals=[];present=False;formula=False;errors=[]
+            for i,c in enumerate(cells[:len(expected)]):
                 if c.data_type=='f':formula=True
                 value=c.value
                 if value not in (None,''):present=True
+                if TEMPLATES[kind][i][1] in {'staff_no','teacher_staff_no'} and c.data_type=='n' and isinstance(value,(int,float)):
+                    if isinstance(value,float) and not value.is_integer():errors.append('工号必须是文本')
+                    else:
+                        value=str(int(value))
+                        if re.fullmatch(r'0+',c.number_format):value=value.zfill(len(c.number_format))
                 vals.append(_plain(value))
             if not present:continue
             if type(max_rows) is not int or not 100<=max_rows<=10000:raise HTTPException(503,'Excel导入行数策略未正确初始化')
             if len(parsed)>=max_rows:raise HTTPException(422,f'单次导入不能超过{max_rows}行')
             raw=dict(zip(expected,vals+['']*(len(expected)-len(vals))))
-            errors=[]
             if formula:errors.append('禁止公式单元格')
             try:normalized=normalize_row(kind,raw)
             except ValueError as exc:normalized={};errors.append(str(exc))
@@ -236,7 +245,7 @@ def validate_rows(db,actor,kind,rows):
                 else:resolved['teacher_id']=teacher.id
                 if n['external_key'] in seen1 or n['external_key'] in existing_ext:errors.append('来源唯一编号重复')
                 seen1.add(n['external_key'])
-                if n['source'] not in record_sources and n['source']!='Excel导入':errors.append('来源说明不在学校业务字典中')
+                if n['source'] not in record_sources and n['source']!='Excel导入':errors.append('来源说明不在学校业务字典中，可选值：'+'、'.join(sorted(record_sources|{'Excel导入'})))
                 resolved['source']='Excel导入'
                 if not errors:
                     RecordIn(**{k:v for k,v in resolved.items() if k!='teacher_staff_no'},reason='Excel预览校验',basis='标准模板预览')
@@ -247,7 +256,7 @@ def validate_rows(db,actor,kind,rows):
                 else:resolved['teacher_id']=teacher.id
                 if n['external_key'] in seen1 or n['external_key'] in existing_ext:errors.append('来源唯一编号重复')
                 seen1.add(n['external_key'])
-                if n['source'] not in record_sources and n['source']!='Excel导入':errors.append('来源说明不在学校业务字典中')
+                if n['source'] not in record_sources and n['source']!='Excel导入':errors.append('来源说明不在学校业务字典中，可选值：'+'、'.join(sorted(record_sources|{'Excel导入'})))
                 resolved['source']='Excel导入'
                 if not errors:
                     ParticipationIn(**{k:v for k,v in resolved.items() if k!='teacher_staff_no'},reason='Excel预览校验',basis='标准模板预览')
@@ -320,11 +329,13 @@ def _commit_import(db,actor,job,rows,reason,basis,preview_sha):
             obj=Qualification(**data.model_dump(exclude={'reason','basis'}),state='DRAFT');db.add(obj);db.flush();qualification_revision(db,actor,obj,reason)
             workflow(db,actor,'qualification',obj.id,'Excel导入资质草稿',{},serial(obj),reason,basis);written.append({'row_no':x['row_no'],'object_id':obj.id})
     else:
+        from .routes.admin import link_school_rows
         actor.require_admin();role=db.scalar(select(Role).where(Role.kind=='teacher',Role.active.is_(True)).order_by(Role.code).limit(1))
         for x in checked:
             n=x['normalized'];obj=User(username=n['username'],name=n['name'],staff_no=n['staff_no'],title=n['title'],org_id=n['org_id'],role_id=role.id,
               password_hash=hash_password(secrets.token_urlsafe(48)),active=False,is_admin=False,must_change_password=True)
             db.add(obj);db.flush();audit(db,actor,'users',obj.id,'Excel导入教师账号（默认停用）',after=serial(obj),reason=reason);written.append({'row_no':x['row_no'],'object_id':obj.id})
+            if obj.staff_no:link_school_rows(db,actor,obj)
     job.state='COMMITTED';job.errors=0;job.version+=1;job.receipt={**proof,'preview_rows_sha256':preview_sha,'written':len(written),'rows':written,'objects_sha256':digest(written),'committed_at':utcnow().isoformat()}
     audit(db,actor,'imports',job.id,'确认Excel整批入库',after={'kind':job.kind,'written':len(written),'sha256':job.sha256},reason=reason)
     return job
@@ -401,7 +412,7 @@ def export_rows(db,actor,kind,filters,policy=None):
         rows=[]
         for obj in items:
             d=assessment_projection(db,obj);x=d['assessment'];u=d['teacher']
-            rows.append([pol.value('staff_no',u['staff_no'],obj.teacher_id),u['name'],x['period_id'],x['score'],label(x['state']),'是' if x['returned'] else '否',x['rule_id'],x['version'],obj.archive_sha256 or ''])
+            rows.append([pol.value('staff_no',u['staff_no'],obj.teacher_id),u['name'],x['period_id'],Decimal(str(x['score'])),label(x['state']),'是' if x['returned'] else '否',x['rule_id'],x['version'],obj.archive_sha256 or ''])
         return ['教师工号','教师姓名','周期ID','得分','状态','退回','规则ID','版本','归档SHA256'],rows
     if kind=='organization_assessments':
         if actor.role.kind=='teacher':raise HTTPException(403,'教师不能导出组织考核')
@@ -416,7 +427,7 @@ def export_rows(db,actor,kind,filters,policy=None):
         rows=[]
         for obj in items:
             d=serial(_organization_details(db,actor,obj.id));x=d['assessment']
-            rows.append([d['target']['name'],{'dept':'教研室','college':'学院','school':'学校'}.get(x['target_kind'],x['target_kind']),x['period_id'],x['score'],label(x['state']),x['rule_id'],x['version'],obj.archive_sha256 or ''])
+            rows.append([d['target']['name'],{'dept':'教研室','college':'学院','school':'学校'}.get(x['target_kind'],x['target_kind']),x['period_id'],Decimal(str(x['score'])),label(x['state']),x['rule_id'],x['version'],obj.archive_sha256 or ''])
         return ['考核对象','对象层级','周期ID','得分','状态','规则ID','版本','归档SHA256'],rows
     if kind=='audit':
         q=audit_query(db,actor,filters)
@@ -461,7 +472,9 @@ def process_export_task(db,task,storage_dir):
             actor.require('data.export');actor.require_admin();path,filename=_handover_snapshot(db,task,storage_dir)
         else:
             from .sensitive import MaskPolicy
-            policy=MaskPolicy(db,actor);actor.require('export');headers,rows=export_rows(db,actor,kind,filters,policy);data=rows_to_xlsx(headers,rows,kind[:31]);root=_ensure_export_root(storage_dir);filename=f'{kind}_{task.id}.xlsx';path=root/(task.id+'.xlsx');_atomic_write(path,data)
+            policy=MaskPolicy(db,actor);actor.require('export');headers,rows=export_rows(db,actor,kind,filters,policy)
+            title={'records':'培训授课数据','participations':'教师参训记录','qualifications':'教师资质','points':'教师积分','assessments':'教师考核','organization_assessments':'组织考核','audit':'审计记录'}[kind]
+            data=rows_to_xlsx(headers,rows,title);root=_ensure_export_root(storage_dir);filename=f'{title}_{task.id[:8]}.xlsx';path=root/(task.id+'.xlsx');_atomic_write(path,data)
         data_hash=sha256(path.read_bytes()).hexdigest();task.state='DONE';task.error='';task.result={'filename':filename,'storage_name':path.name,'sha256':data_hash,'size':path.stat().st_size,'mime':'application/zip' if kind=='handover' else 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'};task.version+=1
         if kind!='handover':task.result['sensitive_masked']=policy.masked  # 12.6: masked identifier count for this viewer
         db.add(TaskAttempt(task_id=task.id,attempt=attempt,result='SUCCESS',message='导出生成并完成SHA256校验'));return task
@@ -509,6 +522,7 @@ def _handover_zip(db,actor,task,storage_dir):
       ('organizations',Org,['id','code','name','kind','parent_id','active','version','created_at']),('roles',Role,['id','code','name','kind','permissions','active','version','created_at']),
       ('users',User,['id','username','name','staff_no','title','org_id','role_id','active','is_admin','version','created_at']),('periods',Period,['id','name','start_date','end_date','state','version','created_at']),
       ('settings',Setting,['key','value','version']),('training_records',TrainingRecord,[c.key for c in sa_inspect(TrainingRecord).columns]),
+      *[(model.__tablename__,model,[c.key for c in sa_inspect(model).columns]) for model in (SocialProject,SocialUnit,SocialPolicy,SocialClaim,SocialAnnual,SocialResource)],
       ('qualifications',Qualification,[c.key for c in sa_inspect(Qualification).columns]),('qualification_revisions',QualificationRevision,[c.key for c in sa_inspect(QualificationRevision).columns]),
       ('rules',Rule,[c.key for c in sa_inspect(Rule).columns]),('point_balances',PointBalance,[c.key for c in sa_inspect(PointBalance).columns]),('point_entries',PointEntry,[c.key for c in sa_inspect(PointEntry).columns]),
       ('assessments',Assessment,[c.key for c in sa_inspect(Assessment).columns]),('workflow_events',WorkflowEvent,[c.key for c in sa_inspect(WorkflowEvent).columns]),
@@ -517,6 +531,8 @@ def _handover_zip(db,actor,task,storage_dir):
       ('teacher_hr_profiles',TeacherHrProfile,[c.key for c in sa_inspect(TeacherHrProfile).columns]),('training_projects',TrainingProjectMaster,[c.key for c in sa_inspect(TrainingProjectMaster).columns]),
       ('training_courses',TrainingCourseMaster,[c.key for c in sa_inspect(TrainingCourseMaster).columns]),('training_classes',TrainingClassMaster,[c.key for c in sa_inspect(TrainingClassMaster).columns]),
       ('teacher_participations',TeacherParticipation,[c.key for c in sa_inspect(TeacherParticipation).columns]),
+      ('teacher_course_terms',TeacherCourseTerm,[c.key for c in sa_inspect(TeacherCourseTerm).columns]),
+      ('school_courses',SchoolCourse,[c.key for c in sa_inspect(SchoolCourse).columns]),
       ('inbound_batches',InboundBatch,[c.key for c in sa_inspect(InboundBatch).columns]),('inbound_rows',InboundRow,[c.key for c in sa_inspect(InboundRow).columns]),
       ('integration_schedules',IntegrationSchedule,[c.key for c in sa_inspect(IntegrationSchedule).columns]),
       ('sync_items',SyncItem,[c.key for c in sa_inspect(SyncItem).columns]),('sync_call_logs',SyncCallLog,[c.key for c in sa_inspect(SyncCallLog).columns]),

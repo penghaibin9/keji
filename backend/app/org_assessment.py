@@ -123,7 +123,7 @@ def organization_facts(db, target: Org, period: Period):
     if target.kind not in ORG_TARGET_KINDS:
         raise HTTPException(422, "组织考核对象层级无效")
     org_ids = org_scope(db, target, target.kind)
-    teacher_ids = tuple(db.scalars(select(User.id).where(User.org_id.in_(org_ids), User.staff_no.is_not(None))).all())
+    teacher_ids = tuple(db.scalars(select(User.id).where(User.org_id.in_(org_ids), User.staff_no.is_not(None), User.authorization_pending.is_(False))).all())
     if not teacher_ids:
         raw={k:Decimal(0) for k in ORG_SOURCES}
         raw["teachers"]=Decimal(0)

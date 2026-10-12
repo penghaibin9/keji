@@ -1,11 +1,12 @@
 """Normalized receipt IDs must not be fabricated by truncating upstream data."""
+from datetime import timedelta
 import pytest
 from sqlalchemy import select
 
 from app.adapters.contracts import AdapterContractError
 from app.adapters.province import ConfigurableProvinceAdapter
 from app.integrations import AdapterRegistry, enqueue_sync, process_sync_task_once, task_sync_items, SyncCallLog
-from app.models import Connection
+from app.models import Connection,utcnow
 from test_integration_closeout import actor
 
 
@@ -49,6 +50,7 @@ def test_invalid_receipt_enters_retry_and_cannot_create_success_log(app2):
         connection.mappings=[{'source':'code','target':'code','required':True,'transform':'text'}]
         task=enqueue_sync(db,actor(db),connection,'training_project',
             [{'business_key':'MOCK-1','code':'MOCK-1'}],'隔离模拟回执')
+        for pending in task_sync_items(db,task):pending.next_at=utcnow()-timedelta(seconds=2)
         process_sync_task_once(db,task,registry)
         item=task_sync_items(db,task)[0]
         log=db.scalar(select(SyncCallLog).where(SyncCallLog.item_id==item.id))

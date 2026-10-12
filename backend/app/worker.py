@@ -7,7 +7,7 @@ stable business idempotency keys; MySQL concurrency is a separate release gate.
 from __future__ import annotations
 import logging,os,secrets,time
 from datetime import timedelta
-from sqlalchemy import select
+from sqlalchemy import select,text
 from sqlalchemy.orm import sessionmaker
 from . import installation
 from .config import Settings
@@ -60,11 +60,14 @@ def _record_executor_failure(sessions,ident,token,exc):
         return {'status':'FAILED','claimed':True,'task_id':ident}
 
 
-def run_once(cfg=None,registry=ADAPTERS):
-    cfg=cfg or Settings();registry.configure(cfg.env == 'production', [x.strip() for x in cfg.adapter_modules.split(',') if x.strip()]);engine=make_engine(cfg.database_url);sessions=sessionmaker(bind=engine,expire_on_commit=False)
+def run_once(cfg=None,registry=ADAPTERS,*,engine=None,sessions=None,check_schema=True):
+    cfg=cfg or Settings();registry.configure(cfg.env == 'production', [x.strip() for x in cfg.adapter_modules.split(',') if x.strip()]);owns_engine=engine is None
+    engine=engine if engine is not None else make_engine(cfg.database_url);sessions=sessions if sessions is not None else sessionmaker(bind=engine,expire_on_commit=False)
     try:
         if cfg.env == 'production':
-            with engine.connect() as connection:installation.require_canonical(connection,require_mysql=True)
+            with engine.connect() as connection:
+                if check_schema:installation.require_canonical(connection,require_mysql=True)
+                elif list(connection.execute(text('SELECT version_num FROM alembic_version')).scalars())!=[installation.CURRENT_REVISION]:raise installation.InstallationRejected('LEGACY_OR_UNKNOWN_REVISION')
         if configured_maintenance(cfg)['blocked']:
             with sessions.begin() as db:heartbeat(db,healthy=True,maintenance=True,note='维护期间停止领取业务任务')
             return {'status':'MAINTENANCE','claimed':False}
@@ -93,17 +96,24 @@ def run_once(cfg=None,registry=ADAPTERS):
                 return {'status':task.state,'claimed':True,'task_id':task.id}
         except Exception as exc:
             return _record_executor_failure(sessions,ident,token,exc)
-    finally:engine.dispose()
+    finally:
+        if owns_engine:engine.dispose()
 
 
 def main():
-    cfg=Settings()
-    while True:
-        try:run_once(cfg)
-        except Exception as exc:
-            # Database/preflight failures must not reveal DSNs or interrupt all
-            # future polling. Missing heartbeats remain unhealthy to the monitor.
-            log.error('worker iteration failed: %s',type(exc).__name__)
-        time.sleep(2)
+    cfg=Settings();engine=make_engine(cfg.database_url);sessions=sessionmaker(bind=engine,expire_on_commit=False);next_schema_check=0
+    try:
+        while True:
+            try:
+                if cfg.env=='production' and time.monotonic()>=next_schema_check:
+                    with engine.connect() as connection:installation.require_canonical(connection,require_mysql=True)
+                    next_schema_check=time.monotonic()+600
+                run_once(cfg,engine=engine,sessions=sessions,check_schema=False)
+            except Exception as exc:
+                # Database/preflight failures must not reveal DSNs or interrupt all
+                # future polling. Missing heartbeats remain unhealthy to the monitor.
+                log.error('worker iteration failed: %s',type(exc).__name__)
+            time.sleep(2)
+    finally:engine.dispose()
 
 if __name__=='__main__':main()

@@ -18,6 +18,7 @@ from ..services import facts,evaluate,evaluate_rule,calculate_points,calculate_a
 from ..calculation_freshness import require_current_sources,relevant_disputes
 from ..scoring_methods import clean_teacher_config
 from ..read_queries import assessment_query,ASSESSMENT_FILTERS,authorized_org_descendants
+from ..social_training import point_entry_read_item
 from .business import owned_object,events
 from ..org_assessment import (OrganizationAssessmentRule,OrganizationRuleTrial,OrganizationAssessment,OrganizationAssessmentMetricEvidence,
     validate_org_rule_config,organization_facts,evaluate_org_rule,archive_payload,ORG_TARGET_KINDS,organization_source_changes)
@@ -126,7 +127,14 @@ def point_calculation_items(request:Request):
 def assessment_calculate(data:Calculate,request:Request):
     if data.item_keys:raise HTTPException(422,'教师考核不接收积分项参数')
     def apply(db,a,s):
-        return calculate_assessments(db,a,require_open_period(db,data.period_id),data.teacher_ids,data.reason)
+        period=require_open_period(db,data.period_id)
+        # 重算时只提醒新生成或得分变了的老师，避免学校反复试算时同一位老师收到多条消息。
+        before={x.teacher_id:x.score for x in db.scalars(select(Assessment).where(Assessment.period_id==period.id,Assessment.teacher_id.in_(data.teacher_ids or [''])))}
+        result=calculate_assessments(db,a,period,data.teacher_ids,data.reason)
+        from ..message_push import queue
+        changed=[x['teacher_id'] for x in result['items'] if x.get('state')=='TEACHER' and (x['teacher_id'] not in before or Decimal(str(before[x['teacher_id']]))!=Decimal(str(x['score'])))]
+        queue(db,changed,'年度考核结果已生成，请确认','请登录非学历教育智慧前台，核对本人考核得分后点“本人确认”。')
+        return result
     return command(request,data.model_dump(),'assessment.calculate',apply)
 
 def point_scope(db,a,model,f):
@@ -141,6 +149,7 @@ def points(request:Request):
     f,p,z=filters_from(request,{'teacher_id','period_id','org_id'})
     def load(db,a,s):
         q=point_scope(db,a,PointEntry,f);out=page_result(db,q.order_by(PointEntry.created_at.desc(),PointEntry.id),p,z)
+        out['items']=[point_entry_read_item(db,a,item) for item in out['items']]
         sub=q.subquery();out['sum']=db.scalar(select(func.coalesce(func.sum(sub.c.amount),0)))
         return out
     return read_operation(request,'points.read',load)
@@ -151,7 +160,7 @@ def point_detail(ident:str,request:Request):
         obj=owned_object(db,a,PointEntry,ident,'points.read')
         rule=db.get(Rule,obj.rule_id) if obj.rule_id else None
         batch=db.get(CalculationBatch,obj.batch_id) if obj.batch_id else None
-        return {**serial(obj),'rule_display_name':(obj.source_snapshot or {}).get('rule',{}).get('name') or (rule.name if rule else '人工复核调整'),
+        return {**point_entry_read_item(db,a,obj),'rule_display_name':(obj.source_snapshot or {}).get('rule',{}).get('name') or (rule.name if rule else '人工复核调整'),
                 'batch_created_at':batch.created_at if batch else None}
     return read_operation(request,'points.read',load)
 
@@ -193,6 +202,7 @@ def balance_action(ident:str,data:Action,request:Request):
 def point_adjust(data:PointAdjust,request:Request):
     def apply(db,a,s):
         a.check_teacher(db,data.teacher_id,active=True);require_open_period(db,data.period_id)
+        if db.scalar(select(PointEntry.id).where(PointEntry.teacher_id==data.teacher_id,PointEntry.period_id==data.period_id,PointEntry.kind=='SOCIAL').limit(1)):raise HTTPException(409,'社会培训积分须从原认定办理更正并逐级审核')
         if not data.basis or data.amount==0:raise HTTPException(422,'人工调整必须填写依据且分值不能为零')
         if archive_exists(db,data.teacher_id,data.period_id):raise HTTPException(409,'归档后的积分不可更改')
         bal=db.scalar(select(PointBalance).where(PointBalance.teacher_id==data.teacher_id,PointBalance.period_id==data.period_id))
@@ -270,6 +280,10 @@ def assessment_ranking_print(request:Request):
             'note':'当前授权与筛选范围内排名，同分并列；未归档结果为过程数据，不替代最终确认结果。'}
     return read_operation(request,'export',load)
 
+def st_reviews(db,teacher_id):
+    from ..social_training import open_point_reviews
+    return open_point_reviews(db,teacher_id)
+
 def assessment_open_disputes(db,obj):
     return relevant_disputes(obj.teacher_id,db.get(Period,obj.period_id),[r['id'] for r in obj.source_snapshot.get('training_records',[])])
 
@@ -279,6 +293,7 @@ def assessment_details(db,a,ident,permission='assessment.read'):
     pending=db.scalars(assessment_open_disputes(db,obj).order_by(Dispute.created_at,Dispute.id)).all() if obj.state!='ARCHIVED' else []
     result['source_changes']=assessment_source_changes(db,obj)
     can_view='dispute.write' in a.permissions
+    result['open_point_reviews']=len(st_reviews(db,obj.teacher_id)) if obj.state!='ARCHIVED' else 0
     result['confirmation_blockers']={'count':len(pending),'can_view':can_view,
         'can_resolve':can_view and 'dispute.resolve' in a.permissions and obj.teacher_id!=a.id,
         'items':[{'id':d.id,'object_type':d.object_type,'reason':d.reason,'created_at':serial(d)['created_at']} for d in pending] if can_view else []}
@@ -342,6 +357,7 @@ def assessment_action(ident:str,data:Action,request:Request):
         if data.action=='confirm':
             if db.scalar(assessment_open_disputes(db,obj).limit(1)):
                 raise HTTPException(409,'存在未解决数据核对，请先处理')
+            if st_reviews(db,obj.teacher_id):raise HTTPException(409,'该教师有教研室发起的积分核对（或由此生成的更正）尚未办结，请先办结后再确认')
             if obj.state=='TEACHER':
                 a.require('assessment.confirm')
                 if obj.teacher_id!=a.id:raise HTTPException(403,'考核必须由本人确认')
@@ -357,11 +373,14 @@ def assessment_action(ident:str,data:Action,request:Request):
             expected={'DEPARTMENT':'dept','COLLEGE':'college','SCHOOL':'school','READY':'school'}.get(obj.state)
             if expected!=a.role.kind or obj.teacher_id==a.id:raise HTTPException(403,'不能越级退回或复核本人考核')
             obj.state='TEACHER';obj.returned=True
+            from ..message_push import queue
+            queue(db,[obj.teacher_id],'年度考核被退回，请重新核对','请登录非学历教育智慧前台，查看退回原因后重新确认本人考核。')
         elif data.action=='archive':
             a.require('assessment.archive')
             if a.role.kind!='school' or obj.state!='READY' or obj.teacher_id==a.id:raise HTTPException(403,'仅学校可归档已审核结果')
             if db.scalar(assessment_open_disputes(db,obj).limit(1)):
                 raise HTTPException(409,'仍有未解决核对申请，不能归档')
+            if st_reviews(db,obj.teacher_id):raise HTTPException(409,'该教师有教研室发起的积分核对（或由此生成的更正）尚未办结，请先办结后再确认')
             require_current_sources(assessment_source_changes(db,obj))
             obj.archive=make_archive(db,obj,a,events(db,'assessment',ident),data.reason,data.basis,request.app.state.settings.storage_dir)
             obj.state='ARCHIVED'

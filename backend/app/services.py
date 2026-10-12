@@ -57,17 +57,38 @@ def facts(db,teacher_id,period):
         rev=db.get(QualificationRevision,q.current_revision_id) if q.current_revision_id else None
         snapshots.append({"id":q.id,"version":q.version,"revision":serial(rev),
                           "attachments":[serial(db.get(Attachment,a)) for a in (rev.attachment_ids if rev else [])]})
+    from .reference_data import teaching_credit_facts
+    credits,credit_basis=teaching_credit_facts(db,db.get(User,teacher_id),period)
     raw={"hours":sum((D(str(r.hours)) for r in records),D(0)),
          "participants":D(sum(r.participants for r in records)),
          "income":sum((D(str(r.income)) for r in records),D(0)),
          "qualifications":D(len(quals)),"points":sum((D(str(p.amount)) for p in points),D(0)),
-         "assessment_score":D(str(previous_frozen["assessment"]["score"])) if previous_frozen else D(0)}
+         "assessment_score":D(str(previous_frozen["assessment"]["score"])) if previous_frozen else D(0),
+         "credits":credits}
     snapshot={"as_of":utcnow().isoformat(),"period":serial(period),"training_records":serial(records),
               "qualifications":snapshots,"point_entries":[{"id":p.id,"item_key":p.item_key,"amount":str(p.amount),"rule_id":p.rule_id,"batch_id":p.batch_id,"evidence_sha256":digest(p.source_snapshot)} for p in points],
               "previous_archived_assessment":({"id":previous.id,"period_id":previous.period_id,"score":str(previous_frozen["assessment"]["score"]),"archive_sha256":previous.archive_sha256} if previous else None),
               "values":serial(raw),"qualification_basis":"审核通过、取得日期不晚于周期结束、有效期覆盖周期结束日；无有效期视为长期有效",
-              "assessment_score_basis":"本周期开始日前最近一个已归档考核结果，不引用当期未完成考核"}
+              "assessment_score_basis":"本周期开始日前最近一个已归档考核结果，不引用当期未完成考核",
+              "teaching_credits":credit_basis,
+              "credits_basis":"教务授课按课程号取课程总库学分，超星课程用自带学分（只算创建人）；第一学期按 9月1日、第二学期按次年 3月1日 落入考核周期"}
     return raw,snapshot
+
+
+def credit_gaps(snapshot):
+    """授课学分缺数据的课程：计入但没有学分，或学期名识别不出学年。"""
+    basis=snapshot.get("teaching_credits") or {}
+    missing=[c for c in basis.get("courses",[]) if c.get("counted") and c.get("credit") is None]
+    return missing+list(basis.get("excluded",[]))
+
+
+def require_complete_credits(rule,snapshot,item_keys=None):
+    # 缺学分会被当成 0 分算进去，正式计算前拦下，避免出“看起来正常”的错分
+    if not any(c.get("source")=="credits" and (not item_keys or c["key"] in item_keys) for c in rule.config.get("components",[])):return
+    gaps=credit_gaps(snapshot)
+    if gaps:
+        names="、".join(sorted({str(g.get("course_code") or "") for g in gaps})[:5])
+        raise HTTPException(409,f"有 {len(gaps)} 门授课课程缺学分或学期名称识别不出（{names}），请先在“授课与学分”补齐后再正式计算")
 
 
 def evaluate(rule,raw):
@@ -105,7 +126,7 @@ def evaluate_rule(rule,raw):
 
 def point_source_changes(db,teacher_id,period,current=None):
     current=current or facts(db,teacher_id,period)[1]
-    entries=db.scalars(select(PointEntry).where(PointEntry.teacher_id==teacher_id,PointEntry.period_id==period.id,PointEntry.kind!='MANUAL').order_by(PointEntry.created_at,PointEntry.id)).all()
+    entries=db.scalars(select(PointEntry).where(PointEntry.teacher_id==teacher_id,PointEntry.period_id==period.id,PointEntry.kind.notin_(['MANUAL','SOCIAL'])).order_by(PointEntry.created_at,PointEntry.id)).all()
     latest={p.item_key:p for p in entries};items=[]
     for key,entry in latest.items():
         frozen=entry.source_snapshot or {}
@@ -142,15 +163,17 @@ def calculate_points(db,actor,period,teacher_ids,item_keys,reason):
     db.add(batch);db.flush();out=[]
     for teacher_id in teacher_ids:
         actor.check_teacher(db,teacher_id,active=True)
+        if db.scalar(select(PointEntry.id).where(PointEntry.teacher_id==teacher_id,PointEntry.period_id==period.id,PointEntry.kind=='SOCIAL').limit(1)):
+            raise HTTPException(409,'本周期已有社会培训正式认定积分，不能再用旧汇总规则重复计算')
         if archive_exists(db,teacher_id,period.id):raise HTTPException(409,"已归档周期的积分依据不可修改")
         bal=db.scalar(select(PointBalance).where(PointBalance.teacher_id==teacher_id,PointBalance.period_id==period.id).with_for_update())
         if bal and bal.confirmed:raise HTTPException(409,"该教师已确认积分；如需纠错应先留痕解锁，已归档不可解锁")
         if not bal:bal=PointBalance(teacher_id=teacher_id,period_id=period.id,confirmed=False,version=1);db.add(bal)
-        raw,snapshot=facts(db,teacher_id,period);details=evaluate_rule(rule,raw)
+        raw,snapshot=facts(db,teacher_id,period);require_complete_credits(rule,snapshot,item_keys);details=evaluate_rule(rule,raw)
         entries=db.scalars(select(PointEntry).where(PointEntry.teacher_id==teacher_id,PointEntry.period_id==period.id)).all()
         old={};latest={}
         for e in entries:
-            if e.kind!="MANUAL":
+            if e.kind not in {"MANUAL", "SOCIAL"}:
                 old[e.item_key]=old.get(e.item_key,D(0))+D(str(e.amount))
                 if e.item_key not in latest or (e.created_at,e.id)>(latest[e.item_key].created_at,latest[e.item_key].id):latest[e.item_key]=e
         targets={d["key"]:d for d in details if not item_keys or d["key"] in item_keys}
@@ -183,7 +206,7 @@ def calculate_assessments(db,actor,period,teacher_ids,reason):
         actor.check_teacher(db,tid,active=True)
         obj=db.scalar(select(Assessment).where(Assessment.teacher_id==tid,Assessment.period_id==period.id).with_for_update())
         if obj and obj.state!="TEACHER":raise HTTPException(409,"已确认或已归档考核不能被批量重算覆盖，应先按审核流程退回")
-        raw,snap=facts(db,tid,period)
+        raw,snap=facts(db,tid,period);require_complete_credits(rule,snap)
         if any(c['source']=='points' for c in rule.config['components']):require_current_sources(point_source_changes(db,tid,period,snap))
         detail=evaluate_rule(rule,raw)
         score=rounded(sum((D(x["score"]) for x in detail),D(0)))

@@ -4,8 +4,16 @@ from pathlib import Path
 ROOT=Path(__file__).resolve().parents[2]
 
 
-def test_existing_models_are_byte_for_byte_preserved():
-    assert (ROOT/'backend/app/models.py').read_bytes()==(ROOT/'evidence/before/backend/app/models.py').read_bytes()
+def test_existing_models_preserved_except_authorized_security_columns():
+    before=ast.parse((ROOT/'evidence/before/backend/app/models.py').read_text(encoding='utf-8'))
+    after=ast.parse((ROOT/'backend/app/models.py').read_text(encoding='utf-8'))
+    additions={'User':{'authorization_pending'},'AuthSession':{'auth_method'}}
+    for node in after.body:
+        if isinstance(node,ast.ClassDef) and node.name in additions:
+            added=[x for x in node.body if isinstance(x,ast.AnnAssign) and isinstance(x.target,ast.Name) and x.target.id in additions[node.name]]
+            assert {x.target.id for x in added}==additions[node.name]
+            node.body=[x for x in node.body if x not in added]
+    assert ast.dump(before,include_attributes=False)==ast.dump(after,include_attributes=False)
 
 
 def test_existing_scoring_and_ledger_business_functions_are_preserved():

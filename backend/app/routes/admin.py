@@ -21,16 +21,22 @@ def account_shape(db,org_id,role_id,staff_no):
 
 def admin_survives(db):
     db.flush()
-    admins=db.scalars(select(User).where(User.active.is_(True),User.is_admin.is_(True))).all()
+    admins=db.scalars(select(User).where(User.active.is_(True),User.authorization_pending.is_(False),User.is_admin.is_(True))).all()
     for u in admins:
         r=db.get(Role,u.role_id);o=db.get(Org,u.org_id)
-        if r and o and r.active and r.kind=='school' and o.active and o.kind=='school' and {'users.manage','roles.manage'}<=set(r.permissions): return
+        if r and o and r.active and r.kind=='school' and o.active and o.kind=='school' and ALLOWED['school']<=set(r.permissions): return
     raise HTTPException(409,'不能停用或移除最后一位可用学校管理员')
 
 @router.get('/organizations')
 def organizations(request:Request):
     # Required by every preserved portal boot, including teachers.
-    return read_operation(request,'portal.read',lambda db,a,s:{'items':db.scalars(select(Org).where(Org.id.in_(a.org_ids)).order_by(Org.code)).all()})
+    def load(db,a,s):
+        visible=Org.id.in_(a.org_ids)
+        if a.user.is_admin and a.role.kind=='school' and 'organization.manage' in a.permissions:
+            # Recovery metadata only; Actor keeps inactive organizations out of business scope.
+            visible=visible | (Org.active.is_(False) & Org.parent_id.in_(a.org_ids))
+        return {'items':db.scalars(select(Org).where(visible).order_by(Org.code)).all()}
+    return read_operation(request,'portal.read',load)
 
 @router.post('/organizations')
 def create_org(data:OrgIn,request:Request):
@@ -82,12 +88,40 @@ def teachers(request:Request):
 
 @router.get('/users')
 def users(request:Request):
-    f,p,z=filters_from(request,{'q'})
+    f,p,z=filters_from(request,{'q','hr_state'})
+    if f.get('hr_state') not in (None,'active','inactive','missing','none'):raise HTTPException(422,'人事状态筛选无效')
     def load(db,a,s):
+        from ..reference_data import TeacherHrProfile
         need_admin(a);q=select(User).where(User.org_id.in_(a.org_ids))
         if f.get('q'): q=q.where(User.name.contains(f['q'],autoescape=True)|User.username.contains(f['q'],autoescape=True))
-        return page_result(db,q.order_by(User.username),p,z)
+        # 人事状态: active/inactive in the school's 教职工 table, missing = staff number not there,
+        # none = management account without a staff number.
+        in_hr=select(TeacherHrProfile.staff_no)
+        state=f.get('hr_state')
+        if state=='none':q=q.where(User.staff_no.is_(None))
+        elif state=='missing':q=q.where(User.staff_no.is_not(None),User.staff_no.not_in(in_hr))
+        elif state:q=q.where(User.staff_no.in_(in_hr.where(TeacherHrProfile.active.is_(state=='active'))))
+        out=page_result(db,q.order_by(User.username),p,z)
+        numbers=[x['staff_no'] for x in out['items'] if x.get('staff_no')]
+        hr=dict(db.execute(select(TeacherHrProfile.staff_no,TeacherHrProfile.active).where(TeacherHrProfile.staff_no.in_(numbers))).all()) if numbers else {}
+        for x in out['items']:
+            n=x.get('staff_no');x['hr_state']='none' if not n else ('missing' if n not in hr else ('active' if hr[n] else 'inactive'))
+        out['hr_synced']=db.scalar(select(func.count()).select_from(TeacherHrProfile))>0
+        out['hr_unmatched']=db.scalar(select(func.count()).select_from(TeacherHrProfile).where(TeacherHrProfile.user_id.is_(None))) or 0
+        return out
     return read_operation(request,'users.manage',load)
+
+def link_school_rows(db,a,user):
+    """A new account takes over the school rows already synced under its staff number,
+    so the roster, scope and credits see it now instead of after the next data-hub pull."""
+    from ..reference_data import TeacherHrProfile,TeacherCourseTerm
+    profile=db.scalar(select(TeacherHrProfile).where(TeacherHrProfile.staff_no==user.staff_no,TeacherHrProfile.user_id.is_(None)))
+    if profile is not None:
+        before=serial(profile);profile.user_id=user.id;profile.version+=1
+        audit(db,a,'teacher_hr',profile.id,'新账号对应人事记录',before,serial(profile),'按工号对应新建账号')
+    terms=db.scalars(select(TeacherCourseTerm).where(TeacherCourseTerm.staff_no==user.staff_no,TeacherCourseTerm.user_id.is_(None))).all()
+    for t in terms:t.user_id=user.id;t.version+=1
+    if terms:audit(db,a,'teacher_course',user.id,'新账号对应授课记录',after={'staff_no':user.staff_no,'rows':len(terms)},reason='按工号对应新建账号')
 
 @router.post('/users')
 def create_user(data:UserIn,request:Request):
@@ -96,7 +130,9 @@ def create_user(data:UserIn,request:Request):
         if org.id not in a.org_ids or not set(role.permissions)<=a.permissions: raise HTTPException(403,'不能创建超出本人授权的账号')
         values=data.model_dump(exclude={'reason','basis','password'})
         obj=User(**values,password_hash=hash_password(data.password),is_admin=False,must_change_password=True,active=True)
-        db.add(obj);db.flush();audit(db,a,'users',obj.id,'新增账号',after=serial(obj),reason=data.reason);return obj
+        db.add(obj);db.flush();audit(db,a,'users',obj.id,'新增账号',after=serial(obj),reason=data.reason)
+        if obj.staff_no:link_school_rows(db,a,obj)
+        return obj
     return command(request,data.model_dump(),'users.manage',apply)
 
 @router.put('/users/{ident}')
@@ -108,6 +144,7 @@ def update_user(ident:str,data:UserUpdate,request:Request):
         if org.id not in a.org_ids or not set(role.permissions)<=a.permissions: raise HTTPException(403,'不能分配超出本人授权的角色')
         if data.is_admin and role.kind!='school': raise HTTPException(422,'学校管理员必须绑定学校角色')
         before=serial(obj)
+        obj.authorization_pending=False
         for key,value in data.model_dump(exclude={'reason','basis','expected_version'}).items():setattr(obj,key,value)
         obj.version+=1;obj.auth_version+=1;db.execute(delete(AuthSession).where(AuthSession.user_id==ident))
         admin_survives(db);audit(db,a,'users',ident,'调整账号权限',before,serial(obj),data.reason);return obj
@@ -174,13 +211,22 @@ def close_period(ident:str,data:VersionedReason,request:Request):
             or db.scalar(select(OrganizationAssessment.id).where(OrganizationAssessment.period_id==ident,OrganizationAssessment.state!='ARCHIVED').limit(1))
             or db.scalar(select(Dispute.id).where(Dispute.period_id==ident,Dispute.state=='OPEN').limit(1))):
             raise HTTPException(409,'仍有未归档教师/组织考核或未解决核对申请')
+        from ..social_models import SocialClaim,SocialAnnual,SocialResource
+        pending=[]
+        for model,label in ((SocialClaim,'社会培训积分申报'),(SocialAnnual,'学院社会培训年度考核')):
+            count=db.scalar(select(func.count()).select_from(model).where(model.period_id==ident,model.state!='ARCHIVED'))
+            if count:pending.append(label+str(count)+'项')
+        for kind,finished,label in [('correction',['ARCHIVED','VOID'],'积分更正'),('point_review',['CLOSED'],'积分核对')]:
+            count=db.scalar(select(func.count()).select_from(SocialResource).where(SocialResource.kind==kind,SocialResource.state.notin_(finished),SocialResource.data['period_id'].as_string()==ident))
+            if count:pending.append(label+str(count)+'项')
+        if pending:raise HTTPException(409,'仍有未办结社会培训事项：'+'、'.join(pending)+'；请先在对应业务中办结，再关闭周期')
         before=serial(obj);obj.state='CLOSED';obj.version+=1
         audit(db,a,'periods',ident,'关闭考核周期',before,serial(obj),data.reason);return obj
     return command(request,data.model_dump(),'settings.manage',apply)
 
 @router.get('/settings')
 def settings(request:Request):
-    return read_operation(request,'settings.manage',lambda db,a,s:{'items':db.scalars(select(Setting).where(~Setting.key.like('ssoid:%'),~Setting.key.like('ssostate:%')).order_by(Setting.key)).all()})
+    return read_operation(request,'settings.manage',lambda db,a,s:{'items':db.scalars(select(Setting).where(~Setting.key.like('ssoid:%'),~Setting.key.like('ssostate:%'),Setting.key!='code_tables').order_by(Setting.key)).all()})
 
 @router.get('/settings/{key}/history')
 def setting_history(key:str,request:Request):
@@ -258,7 +304,10 @@ def notices(request:Request):
         if 'notice.manage' not in a.permissions:q=q.where(Notice.published.is_(True))
         else:q=q.where(Notice.published.is_(True)|Notice.org_id.in_(a.org_ids))
         if f.get('q'):q=q.where(Notice.title.contains(f['q'],autoescape=True)|Notice.body.contains(f['q'],autoescape=True))
-        return page_result(db,q.order_by(Notice.created_at.desc(),Notice.id),p,z)
+        result=page_result(db,q.order_by(Notice.created_at.desc(),Notice.id),p,z)
+        names=dict(db.execute(select(Org.id,Org.name).where(Org.id.in_({x['org_id'] for x in result['items']}))).all())
+        for item in result['items']:item['org_name']=names.get(item['org_id'],'')
+        return result
     return read_operation(request,'notice.read',load)
 
 @router.post('/notices')

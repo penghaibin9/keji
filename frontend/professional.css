@@ -510,3 +510,62 @@ body:has(.modal-overlay:not(.hidden)){overflow:hidden}
 
 .assessment-overview{margin:12px 0 18px;padding:12px 16px;border:1px solid var(--line);border-radius:10px;background:#fff}
 @media(max-width:700px){#edit-form[data-rule-kind] .rule-row{grid-template-columns:repeat(2,minmax(0,1fr))}.source-changes{padding:12px}.sidebar .brand-custom strong{font-size:16px}}
+
+/* Compact business forms keep actions outside the single scrolling content area. */
+@media screen{
+ .modal:has(#edit-form) .modal-head{padding:14px 24px}
+ .modal:has(#edit-form) .modal-body{padding:16px 24px}
+ .modal:has(#edit-form) .modal-foot{padding:12px 24px}
+ .modal:has(#edit-form) .form-grid{gap:14px 20px}
+ .modal:has(#edit-form) .form-field{min-width:0}
+ .modal:has(#edit-form) .form-field textarea{width:100%}
+ .record-editor.modal{width:1600px;max-height:calc(100dvh - 24px)}
+ .record-editor .modal-head{gap:12px}
+ .record-editor .modal-head> .icon-btn{display:none}
+ .record-head-actions{display:flex;gap:10px;margin-left:auto;flex-shrink:0}
+ .record-editor .modal-body{background:white;padding:0!important}
+ .record-editor #edit-form>.form-grid{display:block;margin:0}
+ .record-editor .record-section{margin:0}
+ .record-editor .form-section-title{background:#f0f5fc;border:0;margin:0;padding:8px 24px;font-size:15px;line-height:1.5}
+ .record-fields{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:10px 24px;padding:12px 24px}
+ .record-fields .full{grid-column:1/-1}
+ .record-editor .form-field label{font-size:14px;line-height:1.4;margin-bottom:5px}
+ .record-editor .form-field input,.record-editor .form-field select,.record-editor .form-field textarea{font-size:14px;min-height:38px;padding:8px 10px;line-height:1.4}
+ .record-editor .form-field textarea{height:58px;resize:vertical}
+ .record-editor .hint{font-size:12px;line-height:1.5;margin:4px 0 0;color:#61758e}
+ .record-editor #reference-status{margin:0;grid-column:3/-1;align-self:center}
+ .record-editor #reference-status:empty{display:none}
+ .record-metrics .record-fields{grid-template-columns:repeat(3,minmax(0,1fr))}
+ .record-reason .record-fields{grid-template-columns:repeat(2,minmax(0,1fr))}
+ .record-editor #form-error:not(:empty){padding:12px 24px 0}
+ .record-editor input[readonly]{background:#f3f6fa;color:#435a76}
+ @media(min-width:1100px) and (max-height:800px){
+  .modal-overlay:has(.record-editor){padding:12px}
+  .record-editor .record-fields{padding-top:7px;padding-bottom:7px;row-gap:8px}
+  .record-editor .form-section-title{padding-top:6px;padding-bottom:6px}
+ }
+ @media(max-width:1099px){
+  .record-fields{grid-template-columns:repeat(2,minmax(0,1fr))}
+  .record-editor #reference-status{grid-column:1/-1}
+ }
+ @media(max-width:600px){
+  .record-editor .record-fields{grid-template-columns:minmax(0,1fr);padding:12px 16px}
+  .record-editor .form-section-title{padding:8px 16px}
+  .record-editor .record-head-actions{display:none}
+  .record-editor .modal-head> .icon-btn{display:inline-flex}
+  .record-editor .modal-foot .foot-note{display:none}
+  .record-editor .modal-foot .btn{flex:1;min-height:44px}
+  .record-editor .modal-head h2{font-size:19px}
+ }
+}
+
+/* 系统管理简化（2026-10-09）：合并页标签、审计“更多筛选”、对接与同步卡片 */
+.page-group-tabs{margin:0 0 16px}
+.page-group-tabs button{min-height:40px;padding:8px 18px}
+.more-filters{display:contents}
+.more-filters>summary{align-self:center;cursor:pointer;color:#164fd8;font-size:14px;white-space:nowrap;padding:0 4px}
+.more-filters:not([open])>:not(summary){display:none}
+.sync-card .overview-interface{display:flex;align-items:center;gap:12px}
+.sync-card .overview-interface h2{margin:0}
+.sync-card .overview-actions{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+.sync-card .card-foot{display:flex;gap:8px;flex-wrap:wrap}

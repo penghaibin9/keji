@@ -1,0 +1,832 @@
+diff --git a/backend/app/main.py b/backend/app/main.py
+index cde091a..5a5151e 100755
+--- a/backend/app/main.py
++++ b/backend/app/main.py
+@@ -1,149 +1,153 @@
+-"""ASGI entry point. No automatic production schema creation or sample seed."""
+-from __future__ import annotations
+-import logging, re, time, uuid
+-from pathlib import Path
+-from contextlib import asynccontextmanager
+-from fastapi import FastAPI, Request, HTTPException
+-from fastapi.exceptions import RequestValidationError
+-from starlette.exceptions import HTTPException as StarletteHTTPException
+-from fastapi.responses import JSONResponse, FileResponse
+-from fastapi.staticfiles import StaticFiles
+-from starlette.background import BackgroundTask, BackgroundTasks
+-from starlette.middleware.trustedhost import TrustedHostMiddleware
+-from sqlalchemy import text
+-from sqlalchemy.exc import IntegrityError, OperationalError
+-from sqlalchemy.orm import sessionmaker
+-from . import installation  # register immutable installation provenance
+-from .config import Settings
+-from .core import make_engine
+-from .models import Audit, utcnow
+-from .readiness import collect_readiness
+-from .maintenance_guard import configured_maintenance
+-from .access_logging import record_access_best_effort
+-from . import __version__
+-from .routes import auth, sso, admin, business, calculations, files, tasks, integrations, reference, delivery, integration_center, integration_intake, sso_trial
+-from .routes import social, ledgers
+-
+-log = logging.getLogger("nondegree")
+-
+-class BodyLimitMiddleware:
+-    """Bound actual incoming bytes, including chunked uploads, before multipart parsing."""
+-    # 学院台账常嵌入现场照片，单独放宽到 33 MiB；解析时仍按 ledger_check.MAX_BYTES 拦截。
+-    LEDGER_PATHS = ("/api/social/ledgers",)
+-    def __init__(self, app, limit): self.app, self.limit = app, limit
+-    async def __call__(self, scope, receive, send):
+-        if scope["type"] != "http" or scope.get("method") in {"GET", "HEAD", "OPTIONS"}:
+-            return await self.app(scope, receive, send)
+-        limit=max(self.limit,33*1024*1024) if scope.get("path","").startswith(self.LEDGER_PATHS) else self.limit
+-        chunks=[]; size=0
+-        while True:
+-            message=await receive()
+-            if message["type"] == "http.disconnect": return
+-            body=message.get("body",b"");size+=len(body)
+-            if size>limit:
+-                return await JSONResponse({"detail":"请求过大，附件上限为配置的单文件大小"},413)(scope,receive,send)
+-            chunks.append(body)
+-            if not message.get("more_body",False):break
+-        body=b"".join(chunks);sent=False
+-        async def replay():
+-            nonlocal sent
+-            if not sent:sent=True;return {"type":"http.request","body":body,"more_body":False}
+-            return await receive()
+-        await self.app(scope,replay,send)
+-
+-def create_app(settings: Settings | None = None):
+-    cfg = settings or Settings()
+-    if cfg.env == "production":
+-        from .releasecheck import check_source_release
+-        check_source_release()
+-    integrations.ADAPTERS.configure(cfg.env == 'production', [x.strip() for x in cfg.adapter_modules.split(',') if x.strip()])
+-    engine = make_engine(cfg.database_url)
+-    sessions = sessionmaker(bind=engine, expire_on_commit=False)
+-    @asynccontextmanager
+-    async def lifespan(app):
+-        if cfg.env == "production":
+-            with engine.connect() as connection:
+-                installation.require_canonical(connection, require_mysql=True)
+-        cfg.storage_dir.mkdir(parents=True,exist_ok=True)
+-        yield
+-        engine.dispose()
+-    app=FastAPI(title="一站式非学历教育智慧前台",version=__version__,lifespan=lifespan,
+-                docs_url="/api/docs" if cfg.env=="test" else None,redoc_url=None,openapi_url=None)
+-    app.state.settings,app.state.engine,app.state.sessions=cfg,engine,sessions
+-    app.add_middleware(BodyLimitMiddleware,limit=(cfg.upload_limit_mb+1)*1024*1024)
+-    app.add_middleware(TrustedHostMiddleware,allowed_hosts=[x.strip() for x in cfg.allowed_hosts.split(",")])
+-
+-    @app.middleware("http")
+-    async def security(request:Request,call_next):
+-        # A server-generated correlation ID prevents log pollution and spoofing.
+-        request.state.request_id=str(uuid.uuid4());started=time.monotonic()
+-        maintenance = configured_maintenance(cfg)
+-        if request.url.path.startswith('/api') and request.url.path != '/api/health' and maintenance['blocked']:
+-            response = JSONResponse({'code':'MAINTENANCE','detail':'系统维护中，暂不受理业务请求','request_id':request.state.request_id},503,headers={'Retry-After':'60'})
+-        else:
+-            response=await call_next(request)
+-        response.headers["X-Request-ID"]=request.state.request_id
+-        response.headers["X-Content-Type-Options"]="nosniff"
+-        response.headers["X-Frame-Options"]="DENY"
+-        response.headers["Referrer-Policy"]="same-origin"
+-        response.headers["Permissions-Policy"]="camera=(), microphone=(), geolocation=()"
+-        response.headers["Content-Security-Policy"]="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; connect-src 'self'; object-src 'none'; frame-ancestors 'none'; base-uri 'self'; form-action 'self'"
+-        if cfg.secure_cookie:response.headers["Strict-Transport-Security"]="max-age=31536000"
+-        if request.url.path.startswith("/api"):
+-            response.headers["Cache-Control"]="no-store"
+-            # No query string, body, cookies or authorization secrets in access audit.
+-            if request.url.path not in {"/api/health"}:
+-                event = dict(actor_id=getattr(request.state,'actor_id',None),
+-                    actor_name=getattr(request.state,'actor_name','未登录'),org_id=getattr(request.state,'org_id',None),
+-                    module='access',object_id=request.url.path[:128],action=request.method,
+-                    before={},after={'http_status':response.status_code,'elapsed_ms':round((time.monotonic()-started)*1000,1)},
+-                    reason='服务端访问记录',result='DENIED' if response.status_code in {401,403,404} else 'ERROR' if response.status_code>=400 else 'SUCCESS',request_id=request.state.request_id)
+-                # Query access logging is explicitly best-effort and must not
+-                # extend user-visible response time.  Starlette executes this
+-                # after the response has been sent; critical business audit
+-                # records remain synchronous in the command transaction.
+-                task=BackgroundTask(record_access_best_effort,sessions,log,event)
+-                if response.background is None:
+-                    response.background=task
+-                elif isinstance(response.background,BackgroundTasks):
+-                    response.background.tasks.append(task)
+-                else:
+-                    response.background=BackgroundTasks([response.background,task])
+-        return response
+-
+-    @app.exception_handler(StarletteHTTPException)
+-    async def http_error(request,exc):
+-        return JSONResponse({"detail":exc.detail,"request_id":getattr(request.state,"request_id","")},exc.status_code,headers=exc.headers)
+-    @app.exception_handler(RequestValidationError)
+-    async def validation_error(request,exc):
+-        errors=[{"field":".".join(str(x) for x in e["loc"]),"message":e["msg"]} for e in exc.errors()]
+-        return JSONResponse({"detail":"输入校验未通过","errors":errors,"request_id":getattr(request.state,"request_id","")},422)
+-    @app.exception_handler(IntegrityError)
+-    async def integrity_error(request,exc):
+-        log.warning("Integrity conflict request=%s",getattr(request.state,"request_id",""))
+-        return JSONResponse({"detail":"数据重复或关联关系冲突；本次事务已回滚，请刷新核对","request_id":getattr(request.state,"request_id","")},409)
+-    @app.exception_handler(OperationalError)
+-    async def database_error(request,exc):
+-        log.error("Database error request=%s type=%s",getattr(request.state,"request_id",""),type(exc).__name__)
+-        return JSONResponse({"detail":"数据库暂不可用或结果尚未确认，请先核对业务结果；不要直接重复提交","request_id":getattr(request.state,"request_id","")},503)
+-    @app.exception_handler(Exception)
+-    async def unexpected(request,exc):
+-        log.error("Unhandled error request=%s type=%s",getattr(request.state,"request_id",""),type(exc).__name__)
+-        return JSONResponse({"detail":"请求未完成，请凭请求编号联系管理员","request_id":getattr(request.state,"request_id","")},500)
+-
+-    @app.get("/api/health")
+-    def health():
+-        report = collect_readiness(engine,cfg,__version__)
+-        return JSONResponse(report,200 if report['status']=='ok' else 503)
+-    for router in (auth.router,sso.router,admin.router,business.router,calculations.router,files.router,tasks.router,integrations.router,reference.router,delivery.router,integration_center.router,integration_intake.router,sso_trial.router):app.include_router(router)
+-    app.include_router(social.router)
+-    app.include_router(ledgers.router)
+-    # A local review server only. Production frontend is served by the separate nginx service.
+-    if cfg.env=="test":
+-        frontend=Path(__file__).resolve().parents[2]/"frontend"
+-        if not frontend.exists():frontend=Path(__file__).resolve().parents[3]/"frontend"
+-        if frontend.exists():
+-            @app.get("/")
+-            def index():return FileResponse(frontend/"index.html")
+-            app.mount("/assets",StaticFiles(directory=frontend),name="assets")
+-    return app
++"""ASGI entry point. No automatic production schema creation or sample seed."""
++from __future__ import annotations
++import logging, re, time, uuid
++from pathlib import Path
++from contextlib import asynccontextmanager
++from fastapi import FastAPI, Request, HTTPException
++from fastapi.exceptions import RequestValidationError
++from starlette.exceptions import HTTPException as StarletteHTTPException
++from fastapi.responses import JSONResponse, FileResponse
++from fastapi.staticfiles import StaticFiles
++from starlette.background import BackgroundTask, BackgroundTasks
++from starlette.middleware.trustedhost import TrustedHostMiddleware
++from sqlalchemy import text
++from sqlalchemy.exc import IntegrityError, OperationalError
++from sqlalchemy.orm import sessionmaker
++from . import installation  # register immutable installation provenance
++from .config import Settings
++from .core import make_engine
++from .models import Audit, utcnow
++from .readiness import collect_readiness
++from .maintenance_guard import configured_maintenance
++from .access_logging import record_access_best_effort
++from . import __version__
++from .routes import auth, sso, admin, business, calculations, files, tasks, integrations, reference, delivery, integration_center, integration_intake, sso_trial
++from .routes import social, ledgers
++
++log = logging.getLogger("nondegree")
++
++class BodyLimitMiddleware:
++    """Bound actual incoming bytes, including chunked uploads, before multipart parsing."""
++    # 学院台账常嵌入现场照片，单独放宽到 33 MiB；解析时仍按 ledger_check.MAX_BYTES 拦截。
++    LEDGER_PATHS = ("/api/social/ledgers",)
++    def __init__(self, app, limit): self.app, self.limit = app, limit
++    async def __call__(self, scope, receive, send):
++        if scope["type"] != "http" or scope.get("method") in {"GET", "HEAD", "OPTIONS"}:
++            return await self.app(scope, receive, send)
++        limit=max(self.limit,33*1024*1024) if scope.get("path","").startswith(self.LEDGER_PATHS) else self.limit
++        chunks=[]; size=0
++        while True:
++            message=await receive()
++            if message["type"] == "http.disconnect": return
++            body=message.get("body",b"");size+=len(body)
++            if size>limit:
++                return await JSONResponse({"detail":"请求过大，附件上限为配置的单文件大小"},413)(scope,receive,send)
++            chunks.append(body)
++            if not message.get("more_body",False):break
++        body=b"".join(chunks);sent=False
++        async def replay():
++            nonlocal sent
++            if not sent:sent=True;return {"type":"http.request","body":body,"more_body":False}
++            return await receive()
++        await self.app(scope,replay,send)
++
++def create_app(settings: Settings | None = None):
++    cfg = settings or Settings()
++    if cfg.env == "production":
++        from .releasecheck import check_source_release
++        check_source_release()
++    integrations.ADAPTERS.configure(cfg.env == 'production', [x.strip() for x in cfg.adapter_modules.split(',') if x.strip()])
++    engine = make_engine(cfg.database_url)
++    sessions = sessionmaker(bind=engine, expire_on_commit=False)
++    @asynccontextmanager
++    async def lifespan(app):
++        if cfg.env == "production":
++            with engine.connect() as connection:
++                installation.require_canonical(connection, require_mysql=True)
++        cfg.storage_dir.mkdir(parents=True,exist_ok=True)
++        yield
++        engine.dispose()
++    app=FastAPI(title="一站式非学历教育智慧前台",version=__version__,lifespan=lifespan,
++                docs_url="/api/docs" if cfg.env=="test" else None,redoc_url=None,openapi_url=None)
++    app.state.settings,app.state.engine,app.state.sessions=cfg,engine,sessions
++    app.add_middleware(BodyLimitMiddleware,limit=(cfg.upload_limit_mb+1)*1024*1024)
++    app.add_middleware(TrustedHostMiddleware,allowed_hosts=[x.strip() for x in cfg.allowed_hosts.split(",")])
++
++    @app.middleware("http")
++    async def security(request:Request,call_next):
++        # A server-generated correlation ID prevents log pollution and spoofing.
++        request.state.request_id=str(uuid.uuid4());started=time.monotonic()
++        maintenance = configured_maintenance(cfg)
++        if request.url.path.startswith('/api') and request.url.path != '/api/health' and maintenance['blocked']:
++            response = JSONResponse({'code':'MAINTENANCE','detail':'系统维护中，暂不受理业务请求','request_id':request.state.request_id},503,headers={'Retry-After':'60'})
++        else:
++            response=await call_next(request)
++        response.headers["X-Request-ID"]=request.state.request_id
++        response.headers["X-Content-Type-Options"]="nosniff"
++        response.headers["X-Frame-Options"]="DENY"
++        response.headers["Referrer-Policy"]="same-origin"
++        response.headers["Permissions-Policy"]="camera=(), microphone=(), geolocation=()"
++        response.headers["Content-Security-Policy"]="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; connect-src 'self'; object-src 'none'; frame-ancestors 'none'; base-uri 'self'; form-action 'self'"
++        if cfg.secure_cookie:response.headers["Strict-Transport-Security"]="max-age=31536000"
++        if request.url.path.startswith("/api"):
++            response.headers["Cache-Control"]="no-store"
++            # No query string, body, cookies or authorization secrets in access audit.
++            if request.url.path not in {"/api/health"}:
++                event = dict(actor_id=getattr(request.state,'actor_id',None),
++                    actor_name=getattr(request.state,'actor_name','未登录'),org_id=getattr(request.state,'org_id',None),
++                    module='access',object_id=request.url.path[:128],action=request.method,
++                    before={},after={'http_status':response.status_code,'elapsed_ms':round((time.monotonic()-started)*1000,1)},
++                    reason='服务端访问记录',result='DENIED' if response.status_code in {401,403,404} else 'ERROR' if response.status_code>=400 else 'SUCCESS',request_id=request.state.request_id)
++                # Query access logging is explicitly best-effort and must not
++                # extend user-visible response time.  Starlette executes this
++                # after the response has been sent; critical business audit
++                # records remain synchronous in the command transaction.
++                task=BackgroundTask(record_access_best_effort,sessions,log,event)
++                if response.background is None:
++                    response.background=task
++                elif isinstance(response.background,BackgroundTasks):
++                    response.background.tasks.append(task)
++                else:
++                    response.background=BackgroundTasks([response.background,task])
++        return response
++
++    @app.exception_handler(StarletteHTTPException)
++    async def http_error(request,exc):
++        return JSONResponse({"detail":exc.detail,"request_id":getattr(request.state,"request_id","")},exc.status_code,headers=exc.headers)
++    @app.exception_handler(RequestValidationError)
++    async def validation_error(request,exc):
++        errors=[{"field":".".join(str(x) for x in e["loc"]),"message":e["msg"]} for e in exc.errors()]
++        return JSONResponse({"detail":"输入校验未通过","errors":errors,"request_id":getattr(request.state,"request_id","")},422)
++    @app.exception_handler(IntegrityError)
++    async def integrity_error(request,exc):
++        log.warning("Integrity conflict request=%s",getattr(request.state,"request_id",""))
++        text=str(getattr(exc,"orig",exc)).lower()
++        # 常见重复登记给出能照着办的提示；其他冲突仍用通用说明。
++        known=[("certificate_no","这个证书编号已经登记过，请在资质列表里找到原记录修改或补充"),("social_units","单元编号已经导入过，本批未入库；请换新的单元编号，或只导入新增的行"),("social_projects","项目编号已经存在，请换一个编号，或在项目列表里查找原项目"),("course","课程编号已经存在，请换一个编号，或在课程列表里查找原课程"),("social_resources","来源编号已经登记过，请换一个编号，或查找原记录"),("staff_no","工号已被其他账号使用"),("username","登录账号名已被使用")]
++        detail=next((m for k,m in known if k in text),"数据重复或关联关系冲突；本次事务已回滚，请刷新核对")
++        return JSONResponse({"detail":detail,"request_id":getattr(request.state,"request_id","")},409)
++    @app.exception_handler(OperationalError)
++    async def database_error(request,exc):
++        log.error("Database error request=%s type=%s",getattr(request.state,"request_id",""),type(exc).__name__)
++        return JSONResponse({"detail":"数据库暂不可用或结果尚未确认，请先核对业务结果；不要直接重复提交","request_id":getattr(request.state,"request_id","")},503)
++    @app.exception_handler(Exception)
++    async def unexpected(request,exc):
++        log.error("Unhandled error request=%s type=%s",getattr(request.state,"request_id",""),type(exc).__name__)
++        return JSONResponse({"detail":"请求未完成，请凭请求编号联系管理员","request_id":getattr(request.state,"request_id","")},500)
++
++    @app.get("/api/health")
++    def health():
++        report = collect_readiness(engine,cfg,__version__)
++        return JSONResponse(report,200 if report['status']=='ok' else 503)
++    for router in (auth.router,sso.router,admin.router,business.router,calculations.router,files.router,tasks.router,integrations.router,reference.router,delivery.router,integration_center.router,integration_intake.router,sso_trial.router):app.include_router(router)
++    app.include_router(social.router)
++    app.include_router(ledgers.router)
++    # A local review server only. Production frontend is served by the separate nginx service.
++    if cfg.env=="test":
++        frontend=Path(__file__).resolve().parents[2]/"frontend"
++        if not frontend.exists():frontend=Path(__file__).resolve().parents[3]/"frontend"
++        if frontend.exists():
++            @app.get("/")
++            def index():return FileResponse(frontend/"index.html")
++            app.mount("/assets",StaticFiles(directory=frontend),name="assets")
++    return app
+diff --git a/backend/app/routes/social.py b/backend/app/routes/social.py
+index 4342bec..9c7727a 100755
+--- a/backend/app/routes/social.py
++++ b/backend/app/routes/social.py
+@@ -46,9 +46,10 @@ def visible_projects(db,a):
+ 
+ 
+ @router.get('/project-options')
+-def project_options(request:Request,q:str=Query('',max_length=100),page:int=Query(1,ge=1),size:int=Query(25,ge=1,le=100)):
++def project_options(request:Request,q:str=Query('',max_length=100),page:int=Query(1,ge=1),size:int=Query(25,ge=1,le=100),mine:bool=Query(False)):
+     def load(db,a,s):
+         query=visible_projects(db,a)
++        if mine:query=query.where(SocialProject.id.in_(st.participated_project_ids(db,a.id) or {''}),SocialProject.state=='CLOSED')
+         if q:query=query.where(or_(*[column.contains(q,autoescape=True) for column in (SocialProject.data['name'].as_string(),SocialProject.data['code'].as_string(),SocialProject.cohort)]))
+         total=db.scalar(select(func.count()).select_from(query.order_by(None).subquery()))
+         projects=db.scalars(query.offset((page-1)*size).limit(size)).all()
+diff --git a/backend/app/social_training.py b/backend/app/social_training.py
+index 1e2fc2a..c928801 100755
+--- a/backend/app/social_training.py
++++ b/backend/app/social_training.py
+@@ -163,6 +163,11 @@ def dept_project_ids(db, actor):
+ DEPT_READABLE_RESOURCES = {'base', 'achievement', 'course_resource'}
+ 
+ 
++def participated_project_ids(db, teacher_id):
++    """本人在核算单元中担任授课或辅助的项目（积分只能就本人参与的项目申报）。"""
++    return {pid for pid, data in db.execute(select(SocialUnit.project_id, SocialUnit.data)).all() if any(t.get('teacher_id') == teacher_id for t in (data or {}).get('teachers', []))}
++
++
+ def units(db, project_id):
+     return db.scalars(select(SocialUnit).where(SocialUnit.project_id==project_id).order_by(SocialUnit.external_key)).all()
+ 
+diff --git a/frontend/app.js b/frontend/app.js
+index c8e7195..57623a8 100755
+--- a/frontend/app.js
++++ b/frontend/app.js
+@@ -1,6 +1,6 @@
+ import {icons} from './icons.js';
+-import {socialPage,socialAction} from './social-training.js?v=20261009-roles1';
+-import {ledgerPage,resourceStatsPage,homeIndicators,ledgerAction,resetLedgerView,minePage} from './social-ledgers.js?v=20261009-roles1';
++import {socialPage,socialAction} from './social-training.js?v=20261009-flow1';
++import {ledgerPage,resourceStatsPage,homeIndicators,ledgerAction,resetLedgerView,minePage} from './social-ledgers.js?v=20261009-flow1';
+ import {renderCenterStatus,renderImplementationWorkspace,handleImplementationAction} from './integration-workspace.js';
+ import {readDraftEntry,saveDraft,previewDraft} from './integration-drafts.js';
+ import {renderBusinessHistory} from './business-history.js';
+@@ -89,7 +89,7 @@ function qualificationExpiry(date){
+  return `<span>${esc(date)}</span>${Number.isFinite(days)?`<div class="cell-sub ${days<0?'red':''}">${days<0?'已过期 '+Math.abs(days)+' 天':days===0?'今天到期':'距到期 '+days+' 天'}</div>`:''}`;
+ }
+ function qualificationWorkspaceGuide(){
+- const own=me.role.kind==='teacher';return workflowContext(own?'我的资质材料':'资质审核与有效期',own?'先保存资料，再上传佐证并提交。退回后查看审核意见，补充当前版本材料。':'材料由教师本人提交；请筛选待审核记录，核对佐证后通过或退回补充。','todos','查看待办')+`<details class="business-guide"><summary>资质办理流程与责任</summary><ol><li><strong>教师准备材料</strong><p>保存本人资质信息，在详情上传真实佐证文件。</p></li><li><strong>教师提交审核</strong><p>提交后材料锁定；需修改时先撤回，退回后补充再提交。</p></li><li><strong>授权人员审核</strong><p>核对材料后通过或退回，不得审核本人资质。各次修订保留历史版本。</p></li></ol></details>`;
++ const own=me.role.kind==='teacher';return workflowContext(own?'我的资质材料':'资质审核与有效期',own?'填写证书信息并上传证书图片，一次提交审核；退回后按审核意见补正再提交。':'材料由教师本人提交；请筛选待审核记录，核对佐证后通过或退回补充。','todos','查看待办')+`<details class="business-guide"><summary>资质办理流程与责任</summary><ol><li><strong>教师准备材料</strong><p>保存本人资质信息，在详情上传真实佐证文件。</p></li><li><strong>教师提交审核</strong><p>提交后材料锁定；需修改时先撤回，退回后补充再提交。</p></li><li><strong>授权人员审核</strong><p>核对材料后通过或退回，不得审核本人资质。各次修订保留历史版本。</p></li></ol></details>`;
+ }
+ const isAccessAudit=x=>x.module==='access'||x.action==='GET';
+ function showAuditDetail(id){
+@@ -110,7 +110,7 @@ const periodName=id=>periods.find(p=>p.id===id)?.name||'未选择周期';
+ const orgName=id=>orgs.find(o=>o.id===id)?.name||'—';
+ const query=o=>{const q=new URLSearchParams;for(const[k,v]of Object.entries(o))if(v!==''&&v!==null&&v!==undefined)q.set(k,String(v));return q.toString()};
+ const requestKey=()=>typeof crypto.randomUUID==='function'?crypto.randomUUID():Array.from(crypto.getRandomValues(new Uint8Array(24)),x=>x.toString(16).padStart(2,'0')).join('');
+-const reasonFields=()=>field('reason','办理意见 / 调整原因','textarea','',{required:true,full:true,hint:'所有关键操作保存原值、新值、经办人、时间与原因。'})+field('basis','依据说明或材料编号','text','',{full:true,required:false});
++const reasonFields=(value='',label='办理意见 / 调整原因')=>field('reason',label,'textarea',value,{required:true,full:true,hint:'所有关键操作保存原值、新值、经办人、时间与原因。'})+field('basis','依据说明或材料编号','text','',{full:true,required:false});
+ async function api(path,{method='GET',body,raw=false,key,headers:providedHeaders={}}={}){
+  const headers={...providedHeaders};if(method!=='GET'){headers['X-CSRF-Token']=csrf;if(method!=='DELETE')headers['Idempotency-Key']=key||requestKey()}
+  const isBlob=typeof Blob!=='undefined'&&body instanceof Blob;
+@@ -250,7 +250,7 @@ function loginView(message=''){
+  }).catch(()=>{});
+ }
+ // 系统管理简化（2026-10-09）：几个相关页面合成一个菜单，页面顶部用标签切换；原页面和权限代码不变。
+-const pageGroups={rules:{title:'规则与配置',tabs:[['rules','考核周期与规则','rules.manage'],['settings','字典与参数','settings.manage']]},audit:{title:'日志与运行',tabs:[['audit','安全提示与操作日志','audit.read'],['operations','运行与备份','operations.read']]},imports:{title:'表格导入导出',tabs:[['imports','表格导入','import'],['exports','导出下载','export']]}};
++const pageGroups={rules:{title:'规则与配置',tabs:[['rules','考核周期与规则','rules.manage'],['policy','社会培训制度口径','rules.manage'],['settings','字典与参数','settings.manage']]},audit:{title:'日志与运行',tabs:[['audit','安全提示与操作日志','audit.read'],['operations','运行与备份','operations.read']]},assessment:{title:'三级考核管理',tabs:[['assessment','三级考核','assessment.read'],['annual','学院社会培训年度考核','assessment.read']]},points:{title:'教师积分激励',tabs:[['points','积分核对与确认','points.read'],['recognition','社会培训积分申报与认定','points.read']]},imports:{title:'表格导入导出',tabs:[['imports','表格导入','import'],['exports','导出下载','export']]}};
+ const pageGroupOf=p=>Object.keys(pageGroups).find(g=>pageGroups[g].tabs.some(([k])=>k===p));
+ const groupNavItem=(g,ico)=>{const t=pageGroups[g].tabs.find(([,,perm])=>can(perm));return t?[[t[0],ico,t[2]]]:[]};
+ const navKey=p=>['sso','hub','province','guide','implementation'].includes(p)?'sync':(pageGroupOf(p)||p);
+@@ -343,7 +343,7 @@ function scopeNav(dest,extra={}){const f=drillFilters(dest,filter,extra);return
+ async function render(){
+  if(!me)return;const seq=++renderSequence;$('#content').setAttribute('data-page',page);$('#breadcrumb').textContent=pageTitle(page);syncSidebar();
+  $('#content').innerHTML='<div class="busy-panel">正在读取授权业务数据…</div>';
+- try{if(!pageAllowed(page))throw Error('当前账号未授权访问此页面，请从左侧授权菜单进入。');let html=pageGroupTabs(page)+await pages[page]();if(page==='assessment'&&can('assessment.read'))html=act('学院社会培训年度考核','nav','annual')+html;if(seq!==renderSequence)return;$('#content').innerHTML=html+`<footer class="footer"><span>${esc(me.school_name||'湖南科技职业学院')} · 一站式非学历教育智慧前台</span><span>权限范围：${esc(me.role.kind==='teacher'?'仅本人':orgName(me.user.org_id))} · 服务端统一统计口径</span></footer>`;bindFilters();bindPortalControls()}
++ try{if(!pageAllowed(page))throw Error('当前账号未授权访问此页面，请从左侧授权菜单进入。');let html=pageGroupTabs(page)+await pages[page]();if(seq!==renderSequence)return;$('#content').innerHTML=html+`<footer class="footer"><span>${esc(me.school_name||'湖南科技职业学院')} · 一站式非学历教育智慧前台</span><span>权限范围：${esc(me.role.kind==='teacher'?'仅本人':orgName(me.user.org_id))} · 服务端统一统计口径</span></footer>`;bindFilters();bindPortalControls()}
+  catch(err){if(seq===renderSequence&&$('#content'))$('#content').innerHTML=pageHead()+note(err.message,true)+`<div class="mt16">${act('重新读取','refresh')}</div>`;}
+ }
+ function bindFilters(){
+@@ -448,7 +448,7 @@ const pages={
+  async todos(){const d=await api('/todos?'+listQuery());view=d;return pageHead('审核、核对、资质有效期与考核确认集中办理。')+workflowContext('先核对，再确认','退回材料先补充，数据核对先复核。办理完成后关闭详情，当前筛选和页码会保留。')+`<div class="card"><div class="card-head"><h2>全部待办</h2><span class="subtle">${d.total} 项</span></div><form id="filters" class="filterbar"><input name="q" aria-label="搜索待办" placeholder="搜索待办事项" value="${esc(filter.q||'')}"><select name="type" aria-label="待办类型"><option value="">全部事项</option>${[['qualification','资质审核与到期'],['assessment','教师考核'],['organization_assessment','组织考核'],['dispute','数据核对'],['sync','同步异常'],['security','安全提示'],['social_project','项目备案与结项'],['social_claim','社会培训积分认定'],['social_annual','学院年度考核'],['social_resource','积分更正与汇总公示']].map(([v,l])=>`<option value="${v}" ${filter.type===v?'selected':''}>${l}</option>`).join('')}</select><button class="btn primary">查询</button>${act('重置','reset-filters')}</form>${table(['事项','所属教师或组织','状态','办理'],d.items.map(x=>[esc(x.title),esc(x.teacher_id?teacherName(x.teacher_id):x.target_id?orgName(x.target_id):'学校系统对接'),badge(x.state),act('去办理','todo',`${x.type}|${x.id}`,'sm')]))}${pager(d)}</div>`},
+  async records(){const[d,pa]=await Promise.all([api('/records?'+listQuery(true)),api('/participations?'+query({...scopedDateFilters(filter,periods.find(x=>x.id===periodId)),page:participationPage,size:20}))]);view={...d,participations:pa.items};return pageHead('每一笔培训业务，清晰可查。',(can('records.write')?act('新增业务记录','record-form','','primary','plus'):'')+(can('export')?act('导出表格','export',recordSection==='teaching'?'records':'participations','','export'):''))+recordWorkspaceHeader(d,pa)+`<div class="card mb16 record-filters">${filtersBar({period:true,dates:true,teacher:me.role.kind!=='teacher',organization:me.role.kind!=='teacher',project:true})}</div><div class="card record-teaching" ${recordSection==='participation'?'hidden':''}>${recordTable(d.items)}${pager(d)}<p class="record-scope-note">${me.role.kind==='teacher'?'仅显示本人培训活动':'仅显示当前授权范围'} · 授课与本人参训分别统计，参训不重复计入授课收入。</p></div><div class="card record-participation mt20" ${recordSection==='teaching'?'hidden':''}><div class="card-head"><div><h2>教师参训记录</h2><p>教师作为培训参与者的记录，不参与授课收入/人次累加。</p></div>${can('export')?act('导出参训表格','export','participations','','export'):''}</div>${table(['参训日期','教师','项目 / 课程','参训学时','来源'],pa.items.map(x=>[esc(x.event_date),esc(teacherName(x.teacher_id)),`<strong>${esc(x.project)}</strong><div class="cell-sub">${esc(x.course)}</div>`,number(x.hours,2),esc(sourceLabel(x.source))]))}${pager(pa,'participation')}<div class="card-foot">参训独立翻页；选择周期时按周期日期与日期筛选的交集读取。不计入授课收入。</div></div>`},
+  async qualifications(){const d=await api('/qualifications?'+listQuery());view=d;return pageHead('上传真实佐证 → 教师提交 → 授权审核 → 版本归档与到期提醒。',can('qualification.write')&&me.user.staff_no?act('申报我的资质','qualification-form','','primary','plus'):'')+qualificationWorkspaceGuide()+`<div class="card">${filtersBar({states:['DRAFT','SUBMITTED','RETURNED','APPROVED'],teacher:me.role.kind!=='teacher',exportKind:'qualifications'})}${table(['证书名称 / 类别','教师','证书编号','有效期至','状态','版本','操作'],d.items.map(x=>[`<strong>${esc(x.name)}</strong><div class="cell-sub">${esc(x.category)}</div>`,esc(teacherName(x.teacher_id)),esc(x.certificate_no),qualificationExpiry(x.expires),badge(x.state),'版本 '+x.version,link('查看 / 办理','qualification',x.id)]))}${pager(d)}</div>`},
+- async points(){const[d,b]=await Promise.all([api('/points?'+listQuery(true)),api('/point-balances?'+query({period_id:periodId,teacher_id:filter.teacher_id||''}))]);view={...d,balances:b.items};return act('社会培训积分申报与认定','nav','recognition')+act('数据核对与复核','nav','disputes')+pageHead('查看原始值、计算公式与规则版本；纠错只追加调整项。',(can('points.calculate')?act('计算 / 重算','calculate','points','primary','refresh'):'')+(can('points.adjust')?act('追加调整项','point-adjust','','','plus'):''))+workflowContext('积分核对与确认','先查看周期、计算依据与规则版本，再确认本人积分；有异议先提出数据核对。','todos','查看我的待办')+`<div class="summary-row"><div class="summary-item"><label>当前范围积分合计</label><strong>${number(d.sum,2)}<small>分</small></strong></div><div class="summary-item"><label>积分流水</label><strong>${d.total}<small>笔</small></strong></div><div class="summary-item"><label>已确认台账</label><strong>${b.items.filter(x=>x.confirmed).length}<small>份</small></strong></div><div class="summary-item"><label>当前周期</label><p class="mt12 small">${esc(periodId?periodName(periodId):'全部周期')}</p></div></div><div class="card">${filtersBar({search:false,period:true,teacher:me.role.kind!=='teacher',exportKind:'points'})}${table(['教师','积分项','变动类型','分值','计算时间','操作'],d.items.map(x=>[esc(teacherName(x.teacher_id)),esc(pointLabel(x)),badge(x.kind),`<strong>${Number(x.amount)>0?'+':''}${number(x.amount,2)}</strong>`,ts(x.created_at),link('计算依据','point',x.id)]))}${pager(d)}</div><div class="card mt20"><div class="card-head"><h2>教师积分确认</h2><span class="subtle">确认后冻结；授权解锁必须填写原因</span></div>${table(['教师','周期','确认状态','操作'],b.items.map(x=>[esc(teacherName(x.teacher_id)),esc(periodName(x.period_id)),badge(x.confirmed?'已确认':'待本人确认'),x.teacher_id===me.user.id&&!x.confirmed?act('本人确认','balance-action',x.id,'sm'):x.confirmed&&can('points.adjust')?act('留痕解锁','balance-action',x.id,'sm'):'—']))}</div>`},
++ async points(){const[d,b]=await Promise.all([api('/points?'+listQuery(true)),api('/point-balances?'+query({period_id:periodId,teacher_id:filter.teacher_id||''}))]);view={...d,balances:b.items};return pageHead('查看原始值、计算公式与规则版本；纠错只追加调整项。',(can('dispute.write')?act('有异议？提出数据核对','nav','disputes','light','help'):'')+(can('points.calculate')?act('计算 / 重算','calculate','points','primary','refresh'):'')+(can('points.adjust')?act('追加调整项','point-adjust','','','plus'):''))+(me.role.kind==='teacher'&&me.user.staff_no?workflowContext('积分核对与确认','参加社会培训后，先到“社会培训积分申报与认定”申报本人积分；审批归档后积分进入这里，核对无误再确认。','recognition','去申报本人积分'):workflowContext('积分核对与确认','先查看周期、计算依据与规则版本，再确认本人积分；有异议先提出数据核对。','todos','查看我的待办'))+`<div class="summary-row"><div class="summary-item"><label>当前范围积分合计</label><strong>${number(d.sum,2)}<small>分</small></strong></div><div class="summary-item"><label>积分流水</label><strong>${d.total}<small>笔</small></strong></div><div class="summary-item"><label>已确认台账</label><strong>${b.items.filter(x=>x.confirmed).length}<small>份</small></strong></div><div class="summary-item"><label>当前周期</label><p class="mt12 small">${esc(periodId?periodName(periodId):'全部周期')}</p></div></div><div class="card">${filtersBar({search:false,period:true,teacher:me.role.kind!=='teacher',exportKind:'points'})}${table(['教师','积分项','变动类型','分值','计算时间','操作'],d.items.map(x=>[esc(teacherName(x.teacher_id)),esc(pointLabel(x)),badge(x.kind),`<strong>${Number(x.amount)>0?'+':''}${number(x.amount,2)}</strong>`,ts(x.created_at),link('计算依据','point',x.id)+(x.teacher_id===me.user.id&&can('dispute.write')?' '+link('有异议','new-dispute','points|'+x.id):'')]))}${pager(d)}</div><div class="card mt20"><div class="card-head"><h2>教师积分确认</h2><span class="subtle">确认后冻结；授权解锁必须填写原因</span></div>${table(['教师','周期','确认状态','操作'],b.items.map(x=>[esc(teacherName(x.teacher_id)),esc(periodName(x.period_id)),badge(x.confirmed?'已确认':'待本人确认'),x.teacher_id===me.user.id&&!x.confirmed?act('本人确认','balance-action',x.id,'sm'):x.confirmed&&can('points.adjust')?act('留痕解锁','balance-action',x.id,'sm'):'—']))}</div>`},
+  async assessment(){const pq=`<div class="progress-quick" role="group" aria-label="考核进度快捷筛选">${[['all','全部'],['pending','本级待处理'],['done','本级已完成'],['returned','已退回']].map(([k,l])=>act(l,'progress-filter',k,(filter.progress||'all')===k?'sm selected':'sm')).join('')}<span class="small muted">${esc({teacher:'本级 = 本人确认环节',dept:'本级 = 教研室确认环节',college:'本级 = 学院确认环节',school:'本级 = 学校审核与归档环节'}[me.role.kind]||'')}；已退回 = 被退回、等待重新核对</span></div>`;const tabs=me.role.kind==='school'?['teacher','dept','college','school']:me.role.kind==='college'?['teacher','college']:me.role.kind==='dept'?['teacher','dept']:['teacher'];if(!tabs.includes(assessmentTab))assessmentTab='teacher';const tabLabels={teacher:'教师考核',dept:'教研室考核',college:'学院考核',school:'学校考核'};const tabbar=`<div class="subtabs">${tabs.map(k=>`<button class="${assessmentTab===k?'active':''}" data-action="assessment-tab" data-id="${k}">${tabLabels[k]}</button>`).join('')}</div>`;if(assessmentTab==='teacher'){const d=await api('/assessments?'+listQuery(true));view=d;return pageHead('自动取数与评分 → 教师 → 教研室 → 学院 → 学校 → 归档。',(can('assessment.calculate')?act('生成 / 重算教师考核','calculate','assessment','primary','refresh'):'')+(can('export')?act('打印排名表','ranking-print','teacher','','print'):''))+tabbar+workflowContext('按当前环节办理','数据核对未解决时，系统会阻止向下确认；请从详情中的核对入口处理，不需要反复提交。','disputes','查看数据核对')+`<details class="assessment-process assessment-overview"><summary>查看完整办理流程</summary><div class="flow-strip assessment-overview-flow">${['数据采集','自动计算','教师确认 / 核对','教研室确认','学院确认','学校审核','归档'].map((x,i)=>`<div class="flow-step"><i>${i+1}</i>${x}</div>`).join('')}</div></details><div class="card">${pq}${filtersBar({search:false,period:true,teacher:me.role.kind!=='teacher',states:['TEACHER','DEPARTMENT','COLLEGE','SCHOOL','READY','ARCHIVED'],returned:true,dates:true,project:true,organization:me.role.kind!=='teacher',exportKind:'assessments'})}${table(['名次（同分并列）','教师','考核周期','得分','当前环节','是否退回','操作'],d.items.map(x=>[x.rank??x.scope_rank,esc(x.teacher_display_name||teacherName(x.teacher_id)),esc(x.period_display_name||periodName(x.period_id)),`<strong class="blue">${number(x.score,2)}</strong>`,badge(x.state),x.returned?badge('RETURNED'):'—',link('查看 / 办理','assessment',x.id)]))}${pager(d)}<div class="card-foot">${esc(d.rank_note)}</div></div>`}const q=query({period_id:periodId,target_kind:assessmentTab,page:tablePage,size:20,...(filter.state?{state:filter.state}:{}),...(filter.progress?{progress:filter.progress}:{})});const d=await api('/organization-assessments?'+q);view=d;const actions=(me.role.kind==='school'&&can('assessment.calculate')?act('生成 / 重算'+tabLabels[assessmentTab],'org-assessment-calc',assessmentTab,'primary','refresh'):'')+(can('export')?act('导出组织考核','export','organization_assessments','','export'):'');return pageHead('组织自身考核与教师考核分开保存；组织结果按规则聚合授权范围业务数据。',actions)+tabbar+`<div class="card">${pq}${filtersBar({search:false,period:true,states:['GENERATED','REVIEWED','SCHOOL_APPROVED','ARCHIVED']})}${table(['考核对象','周期','得分','状态','版本','操作'],d.items.map(x=>[esc(x.target_display_name||orgName(x.target_id)),esc(x.period_display_name||periodName(x.period_id)),`<strong class="blue">${number(x.score,2)}</strong>`,badge(x.state)+(x.returned?' '+badge('RETURNED'):''),'版本 '+x.version,link('查看 / 办理','org-assessment',x.id)]))}${pager(d)}<div class="card-foot">组织考核保存逐指标原始值、数据来源、统计范围、公式、权重、规则版本和取数时间；归档后不可覆盖。</div></div>`},
+  async credits(){
+   const admin=me.role.kind==='school'&&me.user.is_admin===true;
+@@ -475,9 +475,9 @@ const pages={
+   const d=await api('/reference/school-courses?'+query({...pick(filter,['q']),page:tablePage,size:20}));view=d;
+   return pageHead(desc)+tabbar+`<div class="card">${bar(qBox('课程号或课程名称'),'明细里提示“缺学分”时，在这里查课程总库有没有这门课、学分是否为空。')}${table(['课程号','课程名称','学分','总学时','周学时','开课单位','版本'],d.items.map(x=>[`<span class="mono">${esc(x.code)}</span>`,esc(x.name),x.credit==null?'<span class="badge red-b">无学分</span>':number(x.credit,2),x.hours==null?'—':number(x.hours,2),x.weekly_hours==null?'—':number(x.weekly_hours,2),esc(x.dept||'—'),esc(x.course_version||'—')]),'课程总库为空','在“学校数据中台”里选“课程总库（学分学时）”拉取后显示。')}${pager(d)}</div>`;
+  },
+- async disputes(){const d=await api('/disputes?'+listQuery(true));view=d;return pageHead('从业务明细发起核对，复核人与申请人分离；未解决前阻止考核确认。')+`<div class="card">${filtersBar({search:false,states:['OPEN','RESOLVED'],period:true})}${table(['提交时间','教师','业务对象','核对原因','状态','操作'],d.items.map(x=>[ts(x.created_at),esc(teacherName(x.teacher_id)),esc({record:'培训数据',points:'积分',assessment:'考核'}[x.object_type]),`<span title="${esc(x.reason)}">${esc(x.reason.slice(0,45))}</span>`,badge(x.state),link('查看 / 复核','dispute',x.id)]))}${pager(d)}</div>`},
++ async disputes(){const d=await api('/disputes?'+listQuery(true));view=d;return pageHead('从业务明细发起核对，复核人与申请人分离；未解决前阻止考核确认。')+(me.role.kind==='teacher'?workflowContext('怎么提出数据核对','觉得积分或培训数据不对：到“教师积分激励”的积分流水点“有异议”，或在“培训数据”某条记录的详情里点“提出数据核对”。提交后由教研室复核，结果会出现在这里。','points','去积分流水'):'')+`<div class="card">${filtersBar({search:false,states:['OPEN','RESOLVED'],period:true})}${table(['提交时间','教师','业务对象','核对原因','状态','操作'],d.items.map(x=>[ts(x.created_at),esc(teacherName(x.teacher_id)),esc({record:'培训数据',points:'积分',assessment:'考核'}[x.object_type]),`<span title="${esc(x.reason)}">${esc(x.reason.slice(0,45))}</span>`,badge(x.state),link('查看 / 复核','dispute',x.id)]))}${pager(d)}</div>`},
+  async organization(){const scope={...filter,...(periodId?{period_id:periodId}:{})};const w=await api('/organization-workbench?'+query(scope));const s=w.statistics;view={s,workbench:w};return pageHead('按组织自动限定业务范围，集中查看运行指标、待办与考核进度。',act('组织考核排名','org-ranking','','','chart'))+`<div class="equal2 mt20"><div class="card"><div class="card-head"><h2>本范围待处理事项</h2><span class="subtle">${w.todos.total} 项</span></div>${todosHTML(w.todos.items)}</div><div class="card"><div class="card-head"><h2>教师考核处理进度</h2><span class="subtle">当前筛选范围</span></div>${table(['环节','教师数量'],Object.entries(w.assessment_states).map(([k,v])=>[badge(k),link(String(v),'drill-state',k)]))}</div></div>`+`<div class="card mt20 mb16">${filtersBar({period:true,organization:true,teacher:true,dates:true,project:true,states:['TEACHER','DEPARTMENT','COLLEGE','SCHOOL','READY','ARCHIVED'],returned:true,exportKind:'records'})}${note(s.state_filter_note)}</div>`+metricsHTML(s)+scoreBandsHTML(s,'本范围教师考核分值汇总与分档')+`<div class="card mt20"><div class="card-head"><h2>组织运行概览</h2></div>${table(['组织','归属培训收入（元）','课程人次','参与教师','查看'],s.ranking.map(x=>[esc(x.name),number(x.income,2),number(x.participants),x.teachers,link('穿透业务明细','drill-org',x.org_id)]))}<div class="card-foot">考核进度与指标按当前条件筛选；待办按组织授权范围显示，避免遗漏其他周期的事项。筛选不改正式考核结果。</div></div>`},
+- async rules(){const[d,o]=await Promise.all([api('/rules?'+query({period_id:periodId})),api('/organization-assessment-rules?'+query({period_id:periodId}))]);view={items:d.items,orgRules:o.items};return act('学校社会培训制度执行口径','nav','policy')+pageHead('教师积分/考核与组织考核规则分别版本化；正式启用前必须试算。',(can('settings.manage')?act('新增周期','period-form','','','plus'):'')+act('新增教师规则','rule-form','','primary','plus')+act('新增组织规则','org-rule-form','','','plus'))+`<div class="card">${filtersBar({search:false,period:true})}${!d.items.length?empty('尚未配置教师规则','先选择周期，再新增或复制教师规则；完成样本试算后启用。'):table(['规则名称','类型','周期','版本','状态','操作'],d.items.map(x=>[esc(x.name),x.kind==='points'?'教师积分':'教师考核',esc(periodName(x.period_id)),x.version_no,badge(x.state),link('详情 / 试算','rule',x.id)+link('复制新规则','rule-form',x.id)]))}</div><div class="card mt20"><div class="card-head"><h2>组织考核规则</h2><span class="subtle">教研室 / 二级学院 / 学校分别配置</span></div>${!o.items.length?empty('尚未配置组织规则','按教研室、学院或学校分别配置指标，并在试算后启用。'):table(['规则名称','考核对象','周期','版本','状态','操作'],o.items.map(x=>[esc(x.name),esc({dept:'教研室',college:'二级学院',school:'学校'}[x.target_kind]),esc(periodName(x.period_id)),x.version_no,badge(x.state),link('详情 / 试算','org-rule',x.id)+(can('rules.manage')?link('复制新版本','org-rule-copy',x.id):'')]))}</div><div class="card mt20"><div class="card-head"><h2>考核周期</h2><span class="subtle">关闭周期前，教师与组织考核须归档且无未解决核对</span></div>${table(['周期','开始','结束','状态','操作'],periods.map(p=>[esc(p.name),p.start_date,p.end_date,badge(p.state),p.state==='OPEN'?link('关闭周期','close-period',p.id):'—']))}</div>`},
++ async rules(){const[d,o]=await Promise.all([api('/rules?'+query({period_id:periodId})),api('/organization-assessment-rules?'+query({period_id:periodId}))]);view={items:d.items,orgRules:o.items};return pageHead('教师积分/考核与组织考核规则分别版本化；正式启用前必须试算。',(can('settings.manage')?act('新增周期','period-form','','','plus'):'')+act('新增教师规则','rule-form','','primary','plus')+act('新增组织规则','org-rule-form','','','plus'))+`<div class="card">${filtersBar({search:false,period:true})}${!d.items.length?empty('尚未配置教师规则','先选择周期，再新增或复制教师规则；完成样本试算后启用。'):table(['规则名称','类型','周期','版本','状态','操作'],d.items.map(x=>[esc(x.name),x.kind==='points'?'教师积分':'教师考核',esc(periodName(x.period_id)),x.version_no,badge(x.state),link('详情 / 试算','rule',x.id)+link('复制新规则','rule-form',x.id)]))}</div><div class="card mt20"><div class="card-head"><h2>组织考核规则</h2><span class="subtle">教研室 / 二级学院 / 学校分别配置</span></div>${!o.items.length?empty('尚未配置组织规则','按教研室、学院或学校分别配置指标，并在试算后启用。'):table(['规则名称','考核对象','周期','版本','状态','操作'],o.items.map(x=>[esc(x.name),esc({dept:'教研室',college:'二级学院',school:'学校'}[x.target_kind]),esc(periodName(x.period_id)),x.version_no,badge(x.state),link('详情 / 试算','org-rule',x.id)+(can('rules.manage')?link('复制新版本','org-rule-copy',x.id):'')]))}</div><div class="card mt20"><div class="card-head"><h2>考核周期</h2><span class="subtle">关闭周期前，教师与组织考核须归档且无未解决核对</span></div>${table(['周期','开始','结束','状态','操作'],periods.map(p=>[esc(p.name),p.start_date,p.end_date,badge(p.state),p.state==='OPEN'?link('关闭周期','close-period',p.id):'—']))}</div>`},
+  async imports(){const d=await api('/imports?'+listQuery());view=d;return pageHead('下载标准模板 → 上传校验 → 查看错误行 → 明确确认 → 真实入库。',importKindOptions().length?act('上传表格','import-form','','primary','plus'):'')+note('教师批量导入创建的是“停用待配置”账号。管理员重置临时密码并启用后才能登录；资质批量导入为草稿，仍需本人补充附件。')+`<div class="subnav-grid mt16">${importKindOptions().map(([k,v])=>`<button data-action="template" data-id="${k}">${icon('download')} <strong>${v}模板.xlsx</strong><p>固定表头 · 最多 ${businessConfig.import_max_rows} 行 · 服务端校验</p></button>`).join('')}</div><div class="card mt20">${table(['上传文件','类型','数据行','错误行','状态','操作'],d.items.map(x=>[esc(x.filename),esc({records:'培训授课数据',participations:'教师参训',qualifications:'资质',teachers:'教师账号'}[x.kind]),x.total??'—',x.errors??'—',badge(x.state),x.access_revoked?`<span class="muted small">${esc(x.access_note)}</span>`:link('查看 / 确认','import',x.id)]))}${pager(d)}</div>`},
+ async exports(){const d=await api('/tasks?'+query({page:tablePage,size:20,kind:'export'}));view=d;return pageHead('后台生成电子表格与开放格式移交包；下载时再次校验权限。',act('刷新任务','refresh','','','refresh')+(can('data.export')?act('生成结构化移交包','export','handover','','export'):''))+`<div class="card">${table(['创建时间','导出类型','状态','处理尝试','说明','操作'],d.items.map(x=>[ts(x.created_at),esc(({records:'培训数据台账',participations:'课程人次',qualifications:'教师资质',points:'教师积分',assessments:'教师考核',organization_assessments:'组织考核',audit:'操作审计',handover:'结构化移交包'}[x.payload.kind])||'业务导出'),badge(x.state),x.attempts,esc(x.error||(x.state==='DONE'?'文件已生成，可下载核对':'后台处理')),link('任务详情','task',x.id)+(x.state==='DONE'?link('下载文件','task-download',x.id):'')]))}${pager(d)}</div>`},
+  async permissions(){
+@@ -502,7 +502,9 @@ async exports(){const d=await api('/tasks?'+query({page:tablePage,size:20,kind:'
+ };
+ async function download(path,filename){const r=await api(path,{raw:true});const disp=r.headers.get('Content-Disposition')||'';if(!filename){const utf=disp.match(/filename\*=UTF-8''([^;]+)/i),plain=disp.match(/filename="?([^";]+)/i);filename=utf?decodeURIComponent(utf[1]):plain?.[1]}const blob=await r.blob();const a=document.createElement('a'),url=URL.createObjectURL(blob);a.href=url;a.download=filename||'下载文件';a.click();setTimeout(()=>URL.revokeObjectURL(url),5000)}
+ async function saved(message='已保存到学校业务库'){closeModal();toast(message);await render()}
+-function actionForm(title,url,obj,action,{basis=false,after}={}){formModal(title,reasonFields(),async v=>{await api(url,{method:'POST',body:{...v,expected_version:obj.version,action}});if(after){closeModal();await after()}else await saved()},{submit:title,hint:basis?'请核对影响范围后填写原因和依据。':'此操作由当前登录账号办理，服务端将再次校验权限、版本与业务状态。'})}
++// 常规确认、提交、通过给出可修改的默认意见；退回、解锁、停用等须本人写明原因。
++const actionDefaults={'启用此规则版本':'样本试算核对无误，启用此版本','启用组织规则':'样本试算核对无误，启用此版本','确认本人积分':'已核对本人积分，确认无误','提交资质审核':'提交资质审核','审核通过':'材料核对无误，审核通过','组织复核':'复核无误','学校审核':'审核无误','归档组织考核':'考核完成，归档'};
++function actionForm(title,url,obj,action,{basis=false,after}={}){formModal(title,reasonFields(actionDefaults[title]||'',/^退回/.test(title)?'退回原因（对方会看到，写清要补什么）':undefined),async v=>{await api(url,{method:'POST',body:{...v,expected_version:obj.version,action}});if(after){closeModal();await after()}else await saved()},{submit:title,hint:basis?'请核对影响范围后填写原因和依据。':'此操作由当前登录账号办理，服务端将再次校验权限、版本与业务状态。'})}
+ function changePassword(forced=false){formModal(forced?'首次登录修改临时密码':'修改登录密码',field('old_password','当前密码','password')+field('new_password','新密码（至少 12 位）','password')+field('repeat','再次输入新密码','password'),async v=>{if(v.new_password!==v.repeat)throw Error('两次新密码不一致');delete v.repeat;await api('/auth/password',{method:'POST',body:v});closeModal();me=null;loginView('密码已修改，请使用新密码登录。')},{submit:'修改并重新登录',hint:'密码不能只有数字或只有字母。修改后所有旧登录会话失效。'})}
+ async function recordForm(id){
+  const x=id?(await api('/records/'+id)).record:{},manualSources=businessConfig.record_sources.filter(v=>!['学校数据中台','Excel导入','表格导入'].includes(v));
+@@ -605,14 +607,14 @@ async function boundUpload(kind,id){const x=modalContext;formModal('上传'+boun
+ async function upload(kind,id,assessmentId=''){const d=await api('/'+(kind==='qualification'?'qualifications':'disputes')+'/'+id),x=d[kind];formModal('上传业务佐证',field('file','选择附件','file','',{accept:'.pdf,.png,.jpg,.jpeg',full:true})+field('reason','上传依据','textarea','',{full:true}),async(v,f)=>{const fd=new FormData(f);fd.set('expected_version',String(x.version));await api(`/attachments/${kind}/${id}`,{method:'POST',body:fd});closeModal();await render();await(kind==='qualification'?showQualification(id):showDispute(id,assessmentId))},{submit:'上传并绑定业务',hint:'单文件最大 10 兆字节。文件由服务端校验，绑定业务和权限，不提供公开下载地址。'})}
+ async function showPoint(id){const x=await api('/points/'+id);if(x.kind==='SOCIAL'&&x.source_snapshot?.social_claim)return socialAction('social-detail',x.source_snapshot.correction_id?'social_resource|'+x.source_snapshot.correction_id:'social_claim|'+x.source_snapshot.social_claim,socialContext());modalContext=x;modal('积分计算依据',`<div class="between"><div><h2>${esc(teacherName(x.teacher_id))} · ${esc(pointLabel(x))}</h2><p class="small muted mt8">${esc(periodName(x.period_id))}</p></div><strong class="assessment-total">${Number(x.amount)>0?'+':''}${number(x.amount,2)}</strong></div><div class="formula mt20">${esc(businessFormula(x.formula))}</div><dl class="kv mt20"><dt>类型</dt><dd>${badge(x.kind)}</dd><dt>适用规则</dt><dd>${esc(x.rule_display_name||x.source_snapshot?.rule?.name||'人工复核调整')}</dd><dt>计算批次时间</dt><dd>${x.batch_created_at?ts(x.batch_created_at):'独立调整项'}</dd><dt>调整原因</dt><dd>${esc(x.reason)}</dd><dt>依据</dt><dd>${esc(x.basis)}</dd><dt>计算时间</dt><dd>${ts(x.created_at)}</dd></dl>${detailSections(x.source_snapshot)}`,act('关闭','close')+(x.teacher_id===me.user.id?act('提出核对申请','new-dispute','points|'+id,'primary','help'):''),true)}
+ async function calculate(kind){if(!periods.some(p=>p.state==='OPEN'))throw Error('请先新建开放的考核周期。');const options=periods.filter(p=>p.state==='OPEN').map(p=>[p.id,p.name]);
+- formModal(kind==='points'?'计算 / 重算教师积分':'生成 / 重算三级考核',field('period_id','适用周期','select',periodId||options[0]?.[0],{options,full:true})+`<div class="form-field full"><label>选择教师（每批最多 200 人） <b>*</b></label><div class="flex"><input id="calc-search" placeholder="输入姓名或工号检索"><button type="button" class="btn" data-action="calc-search">检索</button><button type="button" class="btn" data-action="calc-all">选择当前列表</button></div><div id="calc-people" class="checkbox-list mt12">${teachers.filter(t=>t.active).map(t=>`<label><input type="checkbox" name="person" value="${t.id}">${esc(t.name)} · ${esc(t.staff_no)}</label>`).join('')}</div><p class="hint">通过检索选择教师；已归档或未经退回的考核不会被重算覆盖。</p></div>`+(kind==='points'?'<div class="form-field full"><label>重算范围</label><div id="calculation-items" aria-live="polite">正在读取本周期积分项目…</div><p class="hint">不勾选表示计算全部生效项目；勾选后仅重新计算指定项目。</p></div>':'')+`<section id="calculation-impact" class="full impact-panel" aria-live="polite">正在读取本次计算规则…</section>`+reasonFields(),async(v,f)=>{const ids=$$('input[name=person]:checked',f).map(i=>i.value);if(!ids.length)throw Error('至少选择一名教师');if(!$('#calculation-impact')?.dataset.ready)throw Error('请先核对生效规则；规则读取失败或未启用时不能计算');const body={period_id:v.period_id,teacher_ids:ids,reason:v.reason,basis:v.basis};if(kind==='points'){if(!$('#calculation-items').dataset.ready)throw Error('请先等待积分项目读取完成');body.item_keys=$$('input[name=calculation_item]:checked',f).map(x=>x.value);}const d=await api('/'+(kind==='points'?'points':'assessments')+'/calculate',{method:'POST',body});periodId=v.period_id;closeModal();await render();modal('计算批次已完成',note('结果已真实写入业务表；计算成功不等于学校已确认考核结果。')+calculationSummary(d,kind),act('返回台账','close'));},{wide:true,submit:'确认计算入库'});
++ formModal(kind==='points'?'计算 / 重算教师积分':'生成 / 重算三级考核',field('period_id','适用周期','select',periodId||options[0]?.[0],{options,full:true})+`<div class="form-field full"><label>选择教师（每批最多 200 人） <b>*</b></label><div class="flex"><input id="calc-search" placeholder="输入姓名或工号检索"><button type="button" class="btn" data-action="calc-search">检索</button><button type="button" class="btn" data-action="calc-all">选择当前列表</button></div><div id="calc-people" class="checkbox-list mt12">${teachers.filter(t=>t.active).map(t=>`<label><input type="checkbox" name="person" value="${t.id}">${esc(t.name)} · ${esc(t.staff_no)}</label>`).join('')}</div><p class="hint">通过检索选择教师；已归档或未经退回的考核不会被重算覆盖。</p></div>`+(kind==='points'?'<div class="form-field full"><label>重算范围</label><div id="calculation-items" aria-live="polite">正在读取本周期积分项目…</div><p class="hint">不勾选表示计算全部生效项目；勾选后仅重新计算指定项目。</p></div>':'')+`<section id="calculation-impact" class="full impact-panel" aria-live="polite">正在读取本次计算规则…</section>`+reasonFields(kind==='points'?'按已启用规则计算本期积分':'按已启用规则生成本期考核'),async(v,f)=>{const ids=$$('input[name=person]:checked',f).map(i=>i.value);if(!ids.length)throw Error('至少选择一名教师');if(!$('#calculation-impact')?.dataset.ready)throw Error('请先核对生效规则；规则读取失败或未启用时不能计算');const body={period_id:v.period_id,teacher_ids:ids,reason:v.reason,basis:v.basis};if(kind==='points'){if(!$('#calculation-items').dataset.ready)throw Error('请先等待积分项目读取完成');body.item_keys=$$('input[name=calculation_item]:checked',f).map(x=>x.value);}const d=await api('/'+(kind==='points'?'points':'assessments')+'/calculate',{method:'POST',body});periodId=v.period_id;closeModal();await render();modal('计算批次已完成',note('结果已真实写入业务表；计算成功不等于学校已确认考核结果。')+calculationSummary(d,kind),act('返回台账','close'));},{wide:true,submit:'确认计算入库'});
+  if(kind==='points'){let sequence=0;const panel=$('#calculation-items'),select=$('#f-period_id');const refresh=async()=>{const current=++sequence;delete panel.dataset.ready;panel.innerHTML=note('正在读取生效积分项目…');try{const data=await api('/points/calculation-items?'+query({period_id:select.value}));if(sequence!==current||$('#calculation-items')!==panel)return;panel.innerHTML=data.items.length?'<div class="checkbox-list">'+data.items.map(x=>`<label><input type="checkbox" name="calculation_item" value="${esc(x.key)}">${esc(x.label)}</label>`).join('')+'</div>':note('当前周期没有已启用的积分规则，请先配置规则、试算并启用。',true);if(data.items.length)panel.dataset.ready='true'}catch(error){if(sequence===current)panel.innerHTML=note(error.message,true)}};select.addEventListener('change',refresh);await refresh()}
+  await bindCalculationImpact(kind);
+ }
+ async function pointAdjust(){const open=periods.filter(p=>p.state==='OPEN');formModal('追加积分调整项',teacherField('')+field('period_id','考核周期','select',periodId||open[0]?.id,{options:open.map(p=>[p.id,p.name])})+field('item_key','调整类别','select','manual_review',{options:[['manual_review','人工复核调整'],['manual_correction','业务纠错调整']]})+field('amount','调整分值（负数为冲销）','number',0,{step:0.01})+reasonFields(),async v=>{delete v.teacher_id_search;if(!v.basis||v.basis.length<2)throw Error('人工调整必须填写依据');await api('/points/adjust',{method:'POST',body:v});await saved('已追加调整流水，原始明细没有被改写')},{wide:true,submit:'追加调整项'})}
+ async function showAssessment(id){const d=await api('/assessments/'+id),x=d.assessment;modalContext=x;const match={TEACHER:'teacher',DEPARTMENT:'dept',COLLEGE:'college',SCHOOL:'school',READY:'school'}[x.state]===me.role.kind&&(x.state==='TEACHER'?x.teacher_id===me.user.id&&can('assessment.confirm'):x.teacher_id!==me.user.id&&can(x.state==='READY'?'assessment.archive':'assessment.review'));
+  let actions=act('关闭','close');if(can('export'))actions+=act('打印结果','print',id,'','print');if(d.immutable&&can('export'))actions+=act('下载归档证据','assessment-proof',id); if(x.teacher_id===me.user.id&&x.state!=='ARCHIVED')actions+=act('提出核对','new-dispute','assessment|'+id);
+- if(match){if(me.role.kind!=='teacher')actions+=act('退回教师核对','assess-action','return|'+id,'danger');actions+=d.confirmation_blockers?.count?act(d.confirmation_blockers.can_resolve?'处理数据核对':'查看核对进度','assessment-blockers',id,'primary','help'):act(x.state==='READY'?'归档结果':me.role.kind==='teacher'?'本人确认':'确认并提交下一级','assess-action',(x.state==='READY'?'archive':'confirm')+'|'+id,'primary','check')}
++ if(match){if(me.role.kind!=='teacher')actions+=act('退回教师核对','assess-action','return|'+id,'danger');actions+=d.confirmation_blockers?.count?act(d.confirmation_blockers.can_resolve?'处理数据核对':'查看核对进度','assessment-blockers',id,'primary','help'):act(x.state==='READY'?'归档结果':me.role.kind==='teacher'?'本人确认':({DEPARTMENT:'确认并提交学院',COLLEGE:'确认并提交学校审核',SCHOOL:'审核通过，进入归档'})[x.state]||'确认并提交下一级','assess-action',(x.state==='READY'?'archive':'confirm')+'|'+id,'primary','check')}
+  if(x.state==='TEACHER'&&can('assessment.calculate'))actions+=act('留痕更正分值','score-adjust',id);
+  const stages=['TEACHER','DEPARTMENT','COLLEGE','SCHOOL','READY','ARCHIVED'];
+  if(d.source_changes?.changed&&x.state==='TEACHER'&&can('assessment.calculate'))actions+=act('重新取数并计算','source-recalculate','teacher|'+id,'primary','refresh');
+@@ -657,7 +659,7 @@ async function assessmentAction(code){
+  const next={TEACHER:'教研室确认',DEPARTMENT:'学院确认',COLLEGE:'学校审核',SCHOOL:'归档准备'};
+  const title={confirm:x.state==='TEACHER'?'本人确认并提交教研室':'确认并提交'+(next[x.state]||'下一环节'),return:'退回教师重新核对',archive:'确认归档结果'}[action];
+  const hint=action==='return'?'退回后由教师重新核对；如需更正分值或重算，请由授权人员办理。':action==='archive'?'归档后本次考核结果及依据将冻结，请核对后提交。':'当前环节：'+(labels[x.state]||'待确认')+'。确认后进入'+(next[x.state]||'下一环节')+'。';
+- formModal(title,note(hint)+reasonFields(),async v=>{
++ formModal(title,note(hint)+(action==='return'?reasonFields('','退回原因（教师会看到，写清要核对什么）'):reasonFields(action==='archive'?'考核结果核对无误，归档':x.state==='TEACHER'?'已核对本人考核结果，确认无误':'考核结果核对无误，确认提交')),async v=>{
+   try{await api('/assessments/'+id+'/actions',{method:'POST',body:{...v,expected_version:x.version,action}})}
+   catch(error){
+    if(['confirm','archive'].includes(action)&&/计算依据已变化/.test(error.message)){await showAssessment(id);return}
+@@ -686,10 +688,10 @@ async function printAssessment(id){
+  el.innerHTML=`<h1>非学历教育考核结果 · ${d.immutable?'归档件':'过程稿（非最终结果）'}</h1><p>学校：${esc(school)}　教师：${esc(d.teacher.name)}　工号：${esc(d.teacher.staff_no)}</p><p>周期：${esc(d.period.name)}　规则：${esc(d.rule.name)} 版本 ${esc(d.rule.version_no)}　状态：${esc(labels[x.state])}　总分：${number(x.score,2)}</p>${d.identity_note?`<p>${esc(d.identity_note)}</p>`:''}<table><thead><tr><th>指标</th><th>原始值</th><th>计算过程</th><th>分值</th></tr></thead><tbody>${x.detail.map(i=>`<tr><td>${esc(i.label)}</td><td>${esc(i.raw)}</td><td>${esc(businessFormula(i.formula))}</td><td>${number(i.score,2)}</td></tr>`).join('')}</tbody></table><p>归档校验：${esc(x.archive_sha256||'尚未归档，本打印件不替代最终确认结果')}</p><small>业务编号 ${esc(x.id)}　打印人 ${esc(me.user.name)}　时间 ${new Date().toLocaleString('zh-CN')}</small>`;
+  document.body.append(el);document.body.classList.add('print-mode');try{window.print()}finally{document.body.classList.remove('print-mode')}
+ }
+-async function newDispute(code){const[k,id]=code.split('|');formModal('提交本人数据核对申请',reasonFields(),async v=>{const d=await api('/disputes',{method:'POST',body:{...v,object_type:k,object_id:id}});closeModal();await nav('disputes');await showDispute(d.id)},{submit:'提交核对申请',hint:'请描述有异议的基础数据或计算依据。未解决的申请会阻止相关考核确认。'})}
++async function newDispute(code){const[k,id]=code.split('|');formModal('提交本人数据核对申请',reasonFields('','哪里不对？写清有异议的数据和你的理由'),async v=>{const d=await api('/disputes',{method:'POST',body:{...v,object_type:k,object_id:id}});closeModal();await nav('disputes');await showDispute(d.id)},{submit:'提交核对申请',hint:'请描述有异议的基础数据或计算依据。未解决的申请会阻止相关考核确认。'})}
+ async function showDispute(id,assessmentId=''){const d=await api('/disputes/'+id),x=d.dispute;modalContext=x;let actions=act('关闭','close')+(assessmentId?act('返回考核并刷新','assessment',assessmentId):'');if(x.state==='OPEN'){actions+=act('补充佐证','upload','dispute|'+id+'|'+assessmentId);if(can('dispute.resolve')&&x.teacher_id!==me.user.id)actions+=act('完成复核','resolve',id+'|'+assessmentId,'primary','check')}
+  modal('数据核对申请',`<dl class="kv"><dt>教师</dt><dd>${esc(teacherName(x.teacher_id))}</dd><dt>状态</dt><dd>${badge(x.state)}</dd><dt>核对原因</dt><dd>${esc(x.reason)}</dd><dt>目标业务</dt><dd>${act('查看原业务','todo',`${x.object_type}|${x.object_id}`,'text')}</dd><dt>复核结果</dt><dd>${esc(x.resolution||'等待授权人员核对')}</dd></dl><h3 class="mt20">佐证材料</h3>${downloads(d.attachments)}<h3 class="mt20">办理轨迹</h3>${eventsHtml(d.events)}`,actions,true)}
+-async function resolveDispute(code){const[id,assessmentId='']=code.split('|');const x=(await api('/disputes/'+id)).dispute;formModal('完成核对复核',field('resolution','复核结论','textarea','',{full:true})+reasonFields(),async v=>{await api('/disputes/'+id+'/resolve',{method:'POST',body:{...v,expected_version:x.version}});closeModal();await render();await showDispute(id,assessmentId)},{submit:'确认复核完成',hint:'本操作只记录复核结论。需要更正数据时，先在原业务页留痕更正 / 重算，再完成复核。'})}
++async function resolveDispute(code){const[id,assessmentId='']=code.split('|');const x=(await api('/disputes/'+id)).dispute;formModal('完成核对复核',field('resolution','复核结论（教师会看到）','textarea','',{full:true,hint:'写清核对后的结论：数据无误，或已更正哪一项、更正为多少。'})+reasonFields('完成数据核对复核'),async v=>{await api('/disputes/'+id+'/resolve',{method:'POST',body:{...v,expected_version:x.version}});closeModal();await render();await showDispute(id,assessmentId)},{submit:'确认复核完成',hint:'本操作只记录复核结论。需要更正数据时，先在原业务页留痕更正 / 重算，再完成复核。'})}
+ async function periodForm(){formModal('新建考核周期',field('name','周期名称','text','')+field('start_date','开始日期','date','')+field('end_date','结束日期','date','')+reasonFields(),async v=>{await api('/periods',{method:'POST',body:v});periods=(await api('/periods')).items;await saved()},{submit:'创建周期'})}
+ const sources=[['hours','授课学时'],['participants','课程人次'],['income','归属培训收入'],['qualifications','有效资质数'],['points','本期积分'],['assessment_score','上一已归档考核分'],['credits','授课学分（教务+超星）']];
+ const methodOptions=[['','默认公式（积分=原始值×系数；考核=达标比例×权重）'],['ratio','达标比例 × 权重'],['linear','原始值 × 系数'],['tier','分档'],['deduct','扣分'],['bonus','加分']];
+@@ -717,7 +719,7 @@ function syncRuleType(){
+  $$('.rule-row select[data-r=source]',form).forEach(el=>{const circular=$('option[value=points]',el);if(circular)circular.disabled=points;if(points&&el.value==='points')el.value='hours'});
+ }
+ async function ruleForm(id){const all=(await api('/rules')).items,x=all.find(x=>x.id===id);const options=periods.filter(p=>p.state==='OPEN').map(p=>[p.id,p.name]);if(!options.length)throw Error('请先创建开放的考核周期');
+- formModal(id?'复制规则形成新版本':'新建规则版本',field('kind','规则类型','select',x?.kind||'points',{options:[['points','教师积分'],['assessment','三级考核']]})+field('name','规则名称','text',x?x.name+'（新版本）':'')+field('period_id','适用周期','select',periodId||x?.period_id||options[0][0],{options,full:true})+`<div class="form-field full"><label>指标配置 <b>*</b></label><div class="rule-row rule-labels"><span>指标名称</span><span>数据来源</span><span>积分系数</span><span>考核权重</span><span>考核达标值</span><span>积分上限</span></div><div id="rule-rows">${(x?.config.components||[{key:'hours',label:'授课贡献',source:'hours',factor:2,weight:100,target:96}]).map(ruleRow).join('')}</div><div class="mt12">${act('增加指标','rule-add','','sm','plus')}</div><p class="hint">默认：积分 = 原始值 × 系数（可设上限）；考核 = 达标比例 × 权重，权重总和必须为 100。可为每项改选“分档 / 扣分 / 加分”，并设封顶、保底；表单只显示所选方式需要的参数，计算步骤会写入计算明细。正式指标及口径由学校确认。</p></div>`+(x?note('复制来源：'+x.name+'（版本 '+x.version_no+'）。新草稿记录来源规则，需重新试算后启用；原规则不受影响。'):'')+reasonFields(),async(v,f)=>{if(x)v.kind=x.kind;v.config={components:$$('.rule-row',$('#rule-rows')).map(row=>ruleComponent(row,v.kind))};if(x){const{kind,...body}=v;await api('/rules/'+x.id+'/copy',{method:'POST',body:{...body,expected_version:x.version}})}else await api('/rules',{method:'POST',body:v});await saved('已创建新规则草稿，请试算确认后启用')},{wide:true,submit:'保存规则草稿'});$('#f-kind').addEventListener('change',syncRuleType);$('#rule-rows')?.addEventListener?.('change',e=>{if(e.target?.dataset?.r==='method')syncRuleType()});syncRuleType();if(x)$('#f-kind').disabled=true;}
++ formModal(id?'复制规则形成新版本':'新建规则版本',field('kind','规则类型','select',x?.kind||'points',{options:[['points','教师积分'],['assessment','三级考核']]})+field('name','规则名称','text',x?x.name+'（新版本）':'')+field('period_id','适用周期','select',periodId||x?.period_id||options[0][0],{options,full:true})+`<div class="form-field full"><label>指标配置 <b>*</b></label><div class="rule-row rule-labels"><span>指标名称</span><span>数据来源</span><span>积分系数</span><span>考核权重</span><span>考核达标值</span><span>积分上限</span></div><div id="rule-rows">${(x?.config.components||[{key:'hours',label:'授课贡献',source:'hours',factor:2,weight:100,target:96}]).map(ruleRow).join('')}</div><div class="mt12">${act('增加指标','rule-add','','sm','plus')}</div><p class="hint">默认：积分 = 原始值 × 系数（可设上限）；考核 = 达标比例 × 权重，权重总和必须为 100。可为每项改选“分档 / 扣分 / 加分”，并设封顶、保底；表单只显示所选方式需要的参数，计算步骤会写入计算明细。正式指标及口径由学校确认。</p></div>`+(x?note('复制来源：'+x.name+'（版本 '+x.version_no+'）。新草稿记录来源规则，需重新试算后启用；原规则不受影响。'):'')+reasonFields(x?'复制为新规则草稿':'新建规则草稿'),async(v,f)=>{if(x)v.kind=x.kind;v.config={components:$$('.rule-row',$('#rule-rows')).map(row=>ruleComponent(row,v.kind))};let created;if(x){const{kind,...body}=v;created=await api('/rules/'+x.id+'/copy',{method:'POST',body:{...body,expected_version:x.version}})}else created=await api('/rules',{method:'POST',body:v});await saved('已创建新规则草稿，请在详情里试算确认后启用');const newId=created?.id||created?.item?.id;if(newId)await showRule(newId).catch(()=>{})},{wide:true,submit:'保存规则草稿'});$('#f-kind').addEventListener('change',syncRuleType);{const nm=$('#f-name');if(nm&&!x){const auto=()=>{if(!nm.dataset.touched)nm.value=(($('#f-period_id')?.selectedOptions[0]?.textContent||'')+' '+($('#f-kind').selectedOptions[0]?.textContent||'')+'规则').trim()};nm.addEventListener('input',()=>{nm.dataset.touched='1'});$('#f-kind').addEventListener('change',auto);$('#f-period_id')?.addEventListener('change',auto);auto()}}$('#rule-rows')?.addEventListener?.('change',e=>{if(e.target?.dataset?.r==='method')syncRuleType()});syncRuleType();if(x)$('#f-kind').disabled=true;}
+ async function showRule(id){const x=(await api('/rules')).items.find(x=>x.id===id);if(!x)throw Error('规则不存在');modalContext=x;modal('规则版本 · '+x.name,`<div class="between"><div><p class="small muted">${esc(periodName(x.period_id))} · 版本 ${x.version_no}${x.copied_from?' · 复制自 '+esc(view.items?.find(r=>r.id===x.copied_from)?.name||'其他周期规则'):''}</p><p class="mt8">${badge(x.state)}</p></div><details><summary>实施人员使用：规则校验</summary><span class="mono">${esc(x.fingerprint)}</span></details></div>${table(['指标','数据来源','评分方式','系数','权重','达标值','上限 / 封顶'],x.config.components.map(c=>[esc(c.label),esc(sources.find(s=>s[0]===c.source)?.[1]),esc(methodSummary(c)),c.factor,c.weight,c.target,c.cap??'—']))}<div id="trial-result" class="mt16"></div>${note('启用新规则不会自动重写任何历史结果。已确认积分需先授权解锁；已归档结果保持冻结。')}`,act('关闭','close')+act('选择教师试算','trial',id)+act(x.state==='ACTIVE'?'停用规则':'启用规则','rule-action',(x.state==='ACTIVE'?'deactivate':'activate')+'|'+id,'primary'),true)}
+ async function trial(id){formModal('选择样本教师试算',`<div class="form-field full"><label>选择样本（最多 20 名）</label><input id="calc-search" placeholder="输入姓名或工号"><button type="button" class="btn mt8" data-action="calc-search">检索</button><div id="calc-people" class="checkbox-list mt12">${teachers.slice(0,20).map(t=>`<label><input type="checkbox" name="person" value="${t.id}">${esc(t.name)} · ${esc(t.staff_no)}</label>`).join('')}</div></div>`,async(v,f)=>{const ids=$$('input[name=person]:checked',f).map(x=>x.value);if(!ids.length||ids.length>20)throw Error('请选择 1～20 名教师');const result=await api('/rules/'+id+'/trial',{method:'POST',body:{teacher_ids:ids}});await showRule(id);$('#trial-result').innerHTML=`<h3>本次试算结果（未写业务台账）</h3>${table(['教师','试算合计','各项公式'],result.items.map(x=>[esc(teacherName(x.teacher_id)),number(x.total,2),x.detail.map(i=>`<div class="small">${esc(i.label)}：${esc(businessFormula(i.formula))} = ${esc(i.score)}</div>`).join('')]))}`},{wide:true,submit:'执行样本试算'})}
+ const orgSources=[['hours','授课学时'],['participants','课程人次'],['income','归属培训收入'],['teachers','参与教师数'],['projects','培训项目数'],['courses','课程数'],['qualifications','有效资质数'],['points','本期积分'],['assessment_score','已归档教师考核平均分']];
+@@ -1187,7 +1189,7 @@ const handlers={
+  todo:code=>{const[k,id]=code.split('|');closeModal();if(k==='social_report')return nav('recognition');if(k.startsWith('social_'))return socialAction('social-detail',k+'|'+id,socialContext());return ({qualification:showQualification,assessment:showAssessment,organization_assessment:showOrgAssessment,points:showPoint,record:showRecord,dispute:id=>showDispute(id),sync:showTask,security:()=>nav('audit')}[k]||(()=>nav('todos')))(id)},
+  'record-expand':toggleRecordDetail,'record-form':recordForm,record:showRecord,'qualification-form':qualificationForm,qualification:showQualification,point:showPoint,assessment:showAssessment,'org-assessment':showOrgAssessment,'org-print':printOrganizationAssessment,'org-ranking':organizationRanking,'ranking-print':printRanking,'ledger-sync':ledgerSyncForm,'ledger-preview':ledgerPreview,
+  'rank-metric':id=>{if(!RANK_METRICS.some(x=>x.key===id))return;rankMetric=id;const el=$('#rank-card');if(el&&view?.s&&'outerHTML' in el){el.outerHTML=rankHTML(view.s);return}return render()},
+- 'progress-filter':id=>{filter=pageFilters(page,{...filter,progress:id==='all'?'':id});tablePage=1;syncLocation(true);return render()},'org-ranking-page':p=>showOrganizationRanking(orgRankingContext,Number(p)),dispute:showDispute,
++ 'progress-filter':id=>{filter=pageFilters(page,{...filter,progress:id==='all'?'':id});tablePage=1;syncLocation(true);return render()},'org-ranking-page':p=>showOrganizationRanking(orgRankingContext,Number(p)),dispute:id=>showDispute(id),
+  upload:code=>{const[k,id,assessmentId]=code.split('|');return upload(k,id,assessmentId)},'bound-upload':code=>{const[k,id]=code.split('|');return boundUpload(k,id)},
+  'attachment-download':id=>download('/attachments/'+id+'/download'),
+  detach:async id=>{const x=modalContext;formModal('从当前材料移除附件',reasonFields(),async v=>{await api('/attachments/'+id+'/detach',{method:'POST',body:{...v,expected_version:x.version}});await showQualification(x.id)},{submit:'移除当前关联',hint:'仅解除当前版本关联，历史证据文件保留，不删除归档依据。'})},
+@@ -1206,7 +1208,7 @@ const handlers={
+  'rule-form':ruleForm,rule:showRule,'rule-add':()=>{$('#rule-rows').insertAdjacentHTML('beforeend',ruleRow());syncRuleType()},'rule-remove':(id,el)=>el.closest('.rule-row').remove(),trial,'org-rule-form':()=>orgRuleForm(),'org-rule-copy':copyOrganizationRule,'org-rule':showOrgRule,'org-rule-trial':id=>orgRuleTrial(id),'org-rule-action':id=>orgRuleAction(id),'org-rule-add':()=>$('#org-rule-rows').insertAdjacentHTML('beforeend',orgRuleRow()),'org-rule-remove':(id,el)=>el.closest('.org-rule-row')?.remove(),
+  'rule-action':async code=>{const[action,id]=code.split('|'),x=(await api('/rules')).items.find(x=>x.id===id);actionForm(action==='activate'?'启用此规则版本':'停用此规则版本','/rules/'+id+'/actions',x,action,{after:async()=>{await render();await showRule(id)}})},
+  template:id=>download('/imports/templates/'+id,`${{records:'培训业务',participations:'教师参训',qualifications:'教师资质',teachers:'教师账号'}[id]}_导入模板.xlsx`),
+- 'import-form':importForm,import:showImport,'import-page':code=>{const[id,p]=code.split('|');return showImport(id,Number(p))},
++ 'import-form':importForm,import:id=>showImport(id),'import-page':code=>{const[id,p]=code.split('|');return showImport(id,Number(p))},
+  'import-errors':id=>download('/imports/'+id+'/errors','导入错误行.xlsx'),
+  'import-confirm':async id=>{const x=modalContext;formModal('确认整批真实入库',reasonFields(),async v=>{await api('/imports/'+id+'/confirm',{method:'POST',body:{...v,expected_version:x.version}});teachers=(await api('/teachers?size=200')).items;closeModal();await render();await showImport(id)},{submit:'确认入库',hint:`本批 ${x.total} 行，服务端会重新校验，全部成功才提交；任一行错误则整批回滚。`})},
+  export:exportRows,'delivery-config':()=>download('/delivery/configuration.xlsx','平台初始化配置与数据字典.xlsx'),task:showTask,'task-download':async id=>{const x=(await api('/tasks/'+id)).task;return download('/tasks/'+id+'/download',x.result.filename)},
+@@ -1215,10 +1217,10 @@ const handlers={
+  'user-form':userForm,'reset-password':resetPassword,'role-permissions':rolePermissions,'role-copy':roleCopy,setting:settingForm,'setting-create':settingCreate,'setting-history':settingHistory,'setting-select':id=>{settingsSelection=id;return render()},'setting-copy':async id=>{const x=view.items.find(item=>item.key===id);if(!x)throw Error('配置项不存在');await navigator.clipboard.writeText(JSON.stringify(x.value,null,2));toast('原始配置已复制')},
+  'notice-form':noticeForm,notice:async id=>{const n=await api('/notices/'+encodeURIComponent(id));modal(n.title,`<p class="muted small">${esc(n.category)} · ${ts(n.created_at)}</p><article class="policy-text mt16">${esc(n.body)}</article>`)},
+  'audit-detail':id=>showAuditDetail(id),'audit-actor':id=>{filter=pageFilters('audit',{actor:id,result:'DENIED'});tablePage=1;syncLocation(true);return render()},
+- connection:connectionForm,'data-type-adapter':dataTypeAdapterForm,'connection-proof':showConnectionProof,'connection-probe':id=>connectionLifecycle('probe',id),'connection-activate':id=>connectionLifecycle('activate',id),'connection-disconnect':id=>connectionLifecycle('disconnect',id),'sync-proof':id=>download('/sync-tasks/'+id+'/evidence','同步佐证_'+id+'.json'),'mapping-trial':mappingTrial,'manual-sync':manualSync,'inbound-preview':inboundPreview,'inbound-pull':inboundPull,'schedule-form':id=>scheduleForm(id),'schedule-edit':id=>{const x=view.schedules?.find(s=>s.id===id);return x?scheduleForm(x.connection_id,id):undefined},'inbound':showInbound,'inbound-rollback':async id=>{const x=modalContext;formModal('撤销本批入库',reasonFields(),async v=>{await api('/inbound-batches/'+id+'/rollback',{method:'POST',body:{...v,expected_version:x.version}});closeModal();await showInbound(id)},{submit:'确认撤销',hint:'将把本批写入的主数据恢复为入库前的值（本批新建的主数据改为停用，台账记录作废），不删除任何审计记录。若后续批次或本地已修改同一数据，系统会拒绝并列出冲突。'})},'inbound-confirm':async id=>{const x=modalContext;formModal('确认数据中台入站整批入库',reasonFields(),async v=>{await api('/inbound-batches/'+id+'/confirm',{method:'POST',body:{...v,expected_version:x.version}});closeModal();await showInbound(id)},{submit:'确认入库',hint:'确认后才写教师人事/项目/课程主数据；教师组织或启停变化会使旧登录会话失效。'})},'sync-item':showSyncItem,'sync-item-retry':async id=>{const x=(await api('/sync-items/'+id)).item;formModal('单条同步补传',reasonFields(),async v=>{await api('/sync-items/'+id+'/retry',{method:'POST',body:{...v,expected_version:x.version}});await showSyncItem(id)},{submit:'创建单条补传',hint:'原失败记录保留；真实接口未连接时继续明确阻断。'})},
++ connection:connectionForm,'data-type-adapter':dataTypeAdapterForm,'connection-proof':showConnectionProof,'connection-probe':id=>connectionLifecycle('probe',id),'connection-activate':id=>connectionLifecycle('activate',id),'connection-disconnect':id=>connectionLifecycle('disconnect',id),'sync-proof':id=>download('/sync-tasks/'+id+'/evidence','同步佐证_'+id+'.json'),'mapping-trial':mappingTrial,'manual-sync':manualSync,'inbound-preview':inboundPreview,'inbound-pull':inboundPull,'schedule-form':id=>scheduleForm(id),'schedule-edit':id=>{const x=view.schedules?.find(s=>s.id===id);return x?scheduleForm(x.connection_id,id):undefined},'inbound':id=>showInbound(id),'inbound-rollback':async id=>{const x=modalContext;formModal('撤销本批入库',reasonFields(),async v=>{await api('/inbound-batches/'+id+'/rollback',{method:'POST',body:{...v,expected_version:x.version}});closeModal();await showInbound(id)},{submit:'确认撤销',hint:'将把本批写入的主数据恢复为入库前的值（本批新建的主数据改为停用，台账记录作废），不删除任何审计记录。若后续批次或本地已修改同一数据，系统会拒绝并列出冲突。'})},'inbound-confirm':async id=>{const x=modalContext;formModal('确认数据中台入站整批入库',reasonFields(),async v=>{await api('/inbound-batches/'+id+'/confirm',{method:'POST',body:{...v,expected_version:x.version}});closeModal();await showInbound(id)},{submit:'确认入库',hint:'确认后才写教师人事/项目/课程主数据；教师组织或启停变化会使旧登录会话失效。'})},'sync-item':showSyncItem,'sync-item-retry':async id=>{const x=(await api('/sync-items/'+id)).item;formModal('单条同步补传',reasonFields(),async v=>{await api('/sync-items/'+id+'/retry',{method:'POST',body:{...v,expected_version:x.version}});await showSyncItem(id)},{submit:'创建单条补传',hint:'原失败记录保留；真实接口未连接时继续明确阻断。'})},
+ };
+ for(const action of ['tz-year','tz-upload','tz-preview','tz-submit','tz-detail','tz-back','tz-filter','tz-fill','tz-review-save','tz-tab','tz-drafts','tz-figure','tz-targets-save','tz-suggest','tz-conflicts','tz-conflict-save','tz-conflict-withdraw','tz-bind-person','tz-bind-project','tz-bind-owner'])handlers[action]=id=>ledgerAction(action,id,ledgerContext());
+-for(const action of ['social-detail','social-project-new','social-project-edit','social-course-new','social-resource-new','social-claim-new','social-annual-new','social-policy-new','social-duties','social-transition','social-upload','social-export','social-close','social-unit-import','social-note','social-claim-edit','social-annual-edit','social-course-resources','social-course-import','social-correction-new','social-correction-edit','social-report-new','social-print','social-list-page','social-list-search','social-list-reset','social-resource-page','social-project-lookup','social-course-chaoxing','social-policy-recommended'])handlers[action]=id=>socialAction(action,id,socialContext());
++for(const action of ['social-detail','social-project-new','social-project-edit','social-course-new','social-resource-new','social-claim-new','social-annual-new','social-policy-new','social-duties','social-transition','social-upload','social-export','social-close','social-unit-import','social-course-for-project','social-note','social-claim-edit','social-annual-edit','social-course-resources','social-course-import','social-correction-new','social-correction-edit','social-report-new','social-print','social-list-page','social-list-search','social-list-reset','social-resource-page','social-project-lookup','social-course-chaoxing','social-policy-recommended'])handlers[action]=id=>socialAction(action,id,socialContext());
+ for(const action of ['impl-step','impl-handover','impl-copy','impl-materials','impl-credential-meta','impl-acceptance','impl-probe','impl-publish','impl-health','impl-reset','impl-login-test'])handlers[action]=id=>handleImplementationAction(action,id,implementationContext());
+ document.addEventListener('submit',async e=>{if(e.target.id!=='social-search-form')return;e.preventDefault();try{await socialAction('social-list-apply','',socialContext())}catch(err){toast(err.message,true)}});
+ document.addEventListener('click',async e=>{const target=e.target.closest('[data-action]');if(!target||target.disabled)return;const fn=handlers[target.dataset.action];if(!fn){toast('此操作入口暂不可用',true);return}actionTrigger=target;target.disabled=true;try{await fn(target.dataset.id,target)}catch(err){toast(err.message,true)}finally{if(target.isConnected)target.disabled=false;actionTrigger=null}});
+diff --git a/frontend/index.html b/frontend/index.html
+index c42c837..9687707 100755
+--- a/frontend/index.html
++++ b/frontend/index.html
+@@ -1,4 +1,4 @@
+ <!doctype html>
+-<html lang="zh-CN"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>湖南科技职业学院 · 一站式非学历教育智慧前台</title><link rel="icon" href="data:,"><link rel="stylesheet" href="/assets/styles.css?v=20261003-procurement-batch2"><link rel="stylesheet" href="/assets/integration.css?v=20261003-procurement-batch2"><link rel="stylesheet" href="/assets/portal.css?v=20261003-procurement-batch2">
+-<link rel="stylesheet" href="/assets/professional.css?v=20261009-sysadmin1"><link rel="stylesheet" href="/assets/social-training.css?v=20261009-compact-registration4"><link rel="stylesheet" href="/assets/business-focus.css?v=20261009-4"></head><body><div id="app"></div><div id="modal-root" class="modal-overlay hidden"></div><div id="toasts" class="toast-stack" aria-live="polite"></div><noscript>请启用浏览器脚本以使用学校工作台。</noscript><script type="module" src="/assets/app.js?v=20261009-roles1"></script></body></html>
++<html lang="zh-CN"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>湖南科技职业学院 · 一站式非学历教育智慧前台</title><link rel="icon" href="data:,"><link rel="stylesheet" href="/assets/styles.css?v=20261003-procurement-batch2"><link rel="stylesheet" href="/assets/integration.css?v=20261009-flow1"><link rel="stylesheet" href="/assets/portal.css?v=20261003-procurement-batch2">
++<link rel="stylesheet" href="/assets/professional.css?v=20261009-sysadmin1"><link rel="stylesheet" href="/assets/social-training.css?v=20261009-flow1"><link rel="stylesheet" href="/assets/business-focus.css?v=20261009-4"></head><body><div id="app"></div><div id="modal-root" class="modal-overlay hidden"></div><div id="toasts" class="toast-stack" aria-live="polite"></div><noscript>请启用浏览器脚本以使用学校工作台。</noscript><script type="module" src="/assets/app.js?v=20261009-flow1"></script></body></html>
+ 
+diff --git a/frontend/integration.css b/frontend/integration.css
+index f0ab922..f8926f8 100755
+--- a/frontend/integration.css
++++ b/frontend/integration.css
+@@ -4,7 +4,7 @@ body{margin:0;font-family:Inter,"Microsoft YaHei","Noto Sans CJK SC",Arial,sans-
+ .icon{width:20px;height:20px;stroke-width:1.7;flex-shrink:0}button,input,select,textarea{font:inherit}button{cursor:pointer}button:disabled{opacity:.55;cursor:wait}input,select,textarea{border:1px solid #d7e0ed;border-radius:8px;padding:10px;background:white;max-width:100%;box-sizing:border-box}textarea{resize:vertical;min-height:80px}input:focus,select:focus,textarea:focus{outline:2px solid #bfdbfe;border-color:var(--blue)}
+ .login-shell{min-height:100vh;display:grid;grid-template-columns:1.05fr 1fr}.login-story{padding:12vh 8vw;background:linear-gradient(145deg,#173d8f,#2563eb);color:white}.login-story h1{font-size:48px;line-height:1.4;margin:60px 0 20px}.login-story p{line-height:1.9;font-size:17px;color:#e0ebff}.login-features{display:flex;flex-wrap:wrap;gap:12px;margin-top:35px}.login-features span{border:1px solid #ffffff66;border-radius:20px;padding:8px 14px;font-size:13px}.login-form-shell{display:flex;align-items:center;justify-content:center;padding:36px}.login-form{width:370px;max-width:100%;background:white;border:1px solid var(--line);border-radius:22px;padding:36px;box-shadow:0 16px 50px #173d8f0c}.login-form h2{font-size:26px}.login-form>p{color:var(--muted);margin:12px 0 28px}.login-form .form-field{margin:18px 0}.login-form input{width:100%}.login-form .btn{width:100%;justify-content:center}.login-foot{font-size:12px;line-height:1.9;color:var(--muted);margin-top:24px}.error-text{color:#b42318;background:#fff1ee;padding:12px;border-radius:8px;white-space:pre-line}
+ .brand{display:flex;align-items:center;gap:10px;padding:24px 18px}.brand-title{font-weight:700;font-size:16px}.brand-sub{font-size:9px;letter-spacing:1.1px;color:var(--muted);margin-top:5px}.brand-logo{background:var(--blue);color:white;border-radius:10px;padding:10px}.nav-group{font-size:11px;color:var(--muted);padding:14px 18px 6px}.nav-item{display:flex;gap:10px;align-items:center;width:100%;border:0;background:transparent;border-radius:8px;text-align:left;padding:11px 14px;font-size:13px;color:#516078}.nav-item.active{color:var(--blue);background:#eef4ff;font-weight:600}.nav-scroll{overflow:auto;padding:0 12px}.sidebar{display:flex;flex-direction:column}.sidebar-foot{padding:12px 20px;margin-top:auto;border-top:1px solid var(--line)}.powered{font-size:10px;color:var(--muted);margin-top:10px}.header-actions{display:flex;gap:14px;align-items:center}.identity{display:flex;gap:8px;align-items:center}.current-identity small{display:block;color:var(--muted);font-size:10px;margin-top:3px}.search-trigger{display:flex;align-items:center;gap:8px;border:1px solid var(--line);padding:8px 12px;background:#f8fafc;border-radius:8px;color:var(--muted);font-size:12px}.search-trigger kbd{margin-left:16px}.app-flag{font-size:10px;color:#2563eb;background:#eef4ff;border-radius:6px;padding:5px 8px}.mobile-nav{display:none}.breadcrumb{display:flex;align-items:center;gap:8px;font-size:12px}.pagehead{display:flex;align-items:center;justify-content:space-between;margin-bottom:24px;gap:16px}.pagehead h1{font-size:26px;margin:8px 0}.pagehead p{font-size:13px;color:var(--muted);line-height:1.8}.page-actions{display:flex;gap:8px;flex-wrap:wrap}.content{padding:28px 32px;max-width:1800px;margin:0 auto}.footer{display:flex;justify-content:space-between;gap:20px;font-size:10px;color:var(--muted);border-top:1px solid var(--line);margin-top:32px;padding:16px 0}
+-.form-grid{display:grid;grid-template-columns:1fr 1fr;gap:18px}.form-field{min-width:0}.form-field>label{display:block;font-size:13px;font-weight:600;margin-bottom:8px}.form-field>input,.form-field>textarea,.form-field>select{width:100%}.form-field b{color:#b42318}.hint{font-size:11px;color:var(--muted);line-height:1.7;margin-top:6px}.modal-overlay{position:fixed;inset:0;background:#14233c66;display:flex;align-items:center;justify-content:center;z-index:1000;padding:24px}.modal{max-height:90vh;width:640px;max-width:100%;display:flex;flex-direction:column;background:white;border-radius:16px;box-shadow:0 24px 80px #0003}.modal.wide{width:1020px}.modal-head{display:flex;align-items:center;justify-content:space-between;padding:22px 26px;border-bottom:1px solid var(--line);gap:12px}.modal-head h2{font-size:20px}.modal-head p{font-size:10px;color:var(--muted);margin-top:6px}.modal-body{padding:24px 26px;overflow:auto}.modal-foot{display:flex;justify-content:flex-end;gap:10px;padding:16px 26px;border-top:1px solid var(--line);flex-wrap:wrap}.data-json{background:#f7f9fc;border-radius:8px;padding:16px;white-space:pre-wrap;font-size:11px;line-height:1.7;max-height:340px;overflow:auto;word-break:break-all}.kv{display:grid;grid-template-columns:125px 1fr;gap:12px;font-size:13px}.kv dt{color:var(--muted)}.kv dd{margin:0;overflow-wrap:anywhere}.checkbox-list{display:grid;grid-template-columns:repeat(2,1fr);gap:10px;max-height:260px;overflow:auto;padding:10px;border:1px solid var(--line);border-radius:8px}.checkbox-list label{font-size:12px;display:flex;align-items:center;gap:8px}.rule-row{display:grid;grid-template-columns:1fr 1.2fr 1.3fr .8fr .8fr .9fr .8fr auto;gap:5px;margin-bottom:10px}.rule-row input,.rule-row select{min-width:0;width:100%;padding:8px 5px;font-size:11px}.rule-labels{font-size:10px;color:var(--muted)}.filterbar{display:flex;gap:8px;flex-wrap:wrap;padding:16px}.filterbar input,.filterbar select{max-width:165px;font-size:12px}.field-search{display:flex;align-items:center;gap:7px}.filter-teacher{width:150px}.summary-row{display:grid;grid-template-columns:repeat(4,1fr);background:white;border:1px solid var(--line);border-radius:12px;margin:18px 0}.summary-item{padding:20px;border-right:1px solid var(--line)}.summary-item:last-child{border:0}.summary-item label{display:block;font-size:12px;color:var(--muted);margin-bottom:10px}.summary-item strong{font-size:26px}.summary-item small{font-size:12px;font-weight:400;margin-left:8px}.busy-panel{padding:80px;text-align:center;color:var(--muted)}.state-lock{background:#ecfdf3;color:#157347;padding:12px;border-radius:8px;font-size:13px;display:flex;gap:10px}.upload-meta{display:flex;gap:12px;align-items:center;border:1px solid var(--line);padding:12px;border-radius:8px}.assessment-total{font-size:38px;color:var(--blue)}.print-sheet{display:none}.toast-stack{position:fixed;right:24px;top:80px;z-index:2000;display:grid;gap:10px;pointer-events:none}.toast{background:#172b4d;color:white;border-radius:10px;padding:14px 20px;max-width:420px;font-size:13px;box-shadow:0 8px 24px #0002}.toast.error{background:#b42318}.policy-text{white-space:pre-wrap;line-height:1.9;font-size:14px}
++.form-grid{display:grid;grid-template-columns:1fr 1fr;gap:18px}.form-field{min-width:0}.form-field>label{display:block;font-size:13px;font-weight:600;margin-bottom:8px}.form-field>input,.form-field>textarea,.form-field>select{width:100%}.form-field b{color:#b42318}.hint{font-size:11px;color:var(--muted);line-height:1.7;margin-top:6px}.modal-overlay{position:fixed;inset:0;background:#14233c66;display:flex;align-items:center;justify-content:center;z-index:1000;padding:24px}.modal{max-height:90vh;width:640px;max-width:100%;display:flex;flex-direction:column;background:white;border-radius:16px;box-shadow:0 24px 80px #0003}.modal.wide{width:1020px}.modal-head{display:flex;align-items:center;justify-content:space-between;padding:22px 26px;border-bottom:1px solid var(--line);gap:12px}.modal-head h2{font-size:20px}.modal-head p{font-size:10px;color:var(--muted);margin-top:6px}.modal-body{padding:24px 26px;overflow:auto}.modal-foot{display:flex;justify-content:flex-end;gap:10px;padding:16px 26px;border-top:1px solid var(--line);flex-wrap:wrap}.data-json{background:#f7f9fc;border-radius:8px;padding:16px;white-space:pre-wrap;font-size:11px;line-height:1.7;max-height:340px;overflow:auto;word-break:break-all}.kv{display:grid;grid-template-columns:125px 1fr;gap:12px;font-size:13px}.kv dt{color:var(--muted)}.kv dd{margin:0;overflow-wrap:anywhere}.checkbox-list{display:grid;grid-template-columns:repeat(2,1fr);gap:10px;max-height:260px;overflow:auto;padding:10px;border:1px solid var(--line);border-radius:8px}.checkbox-list label{font-size:12px;display:flex;align-items:center;gap:8px}.rule-row{display:grid;grid-template-columns:1fr 1.2fr 1.3fr .8fr .8fr .9fr .8fr auto;gap:5px;margin-bottom:10px}.rule-row input,.rule-row select{min-width:0;width:100%;padding:8px 5px;font-size:11px}.rule-labels{font-size:10px;color:var(--muted)}.filterbar{display:flex;gap:8px;flex-wrap:wrap;padding:16px}.filterbar input,.filterbar select{max-width:165px;font-size:12px}.field-search{display:flex;align-items:center;gap:7px}.filter-teacher{width:150px}.summary-row{display:grid;grid-template-columns:repeat(4,1fr);background:white;border:1px solid var(--line);border-radius:12px;margin:18px 0}.summary-item{padding:20px;border-right:1px solid var(--line)}.summary-item:last-child{border:0}.summary-item label{display:block;font-size:12px;color:var(--muted);margin-bottom:10px}.summary-item strong{font-size:26px}.summary-item small{font-size:12px;font-weight:400;margin-left:8px}.busy-panel{padding:80px;text-align:center;color:var(--muted)}.state-lock{background:#ecfdf3;color:#157347;padding:12px;border-radius:8px;font-size:13px;display:flex;gap:10px}.upload-meta{display:flex;gap:12px;align-items:center;border:1px solid var(--line);padding:12px;border-radius:8px}.assessment-total{font-size:38px;color:var(--blue)}.print-sheet{display:none}.toast-stack{position:fixed;right:24px;top:80px;bottom:auto;z-index:2000;display:grid;align-content:start;gap:10px;pointer-events:none}.toast{background:#172b4d;color:white;border-radius:10px;padding:14px 20px;max-width:420px;font-size:13px;box-shadow:0 8px 24px #0002}.toast.error{background:#b42318}.policy-text{white-space:pre-wrap;line-height:1.9;font-size:14px}
+ @media(max-width:800px){.login-shell{grid-template-columns:1fr}.login-story{display:none}.login-form-shell{min-height:100vh;padding:20px}.content{padding:20px 16px}.header-actions .search-trigger,.current-identity,.app-flag,.hide-phone{display:none}.mobile-nav{display:inline-flex}.form-grid,.summary-row{grid-template-columns:1fr 1fr}.pagehead{align-items:flex-start;flex-direction:column}.rule-row{min-width:770px}.modal-body{overflow:auto}.checkbox-list{grid-template-columns:1fr}.footer{display:block}}
+ @media print{body{background:white;color:#111}body>#app,body>#modal-root,body>#toasts{display:none!important}.print-sheet{display:block!important;padding:20mm;font-size:12px}.print-sheet h1{text-align:center;font-size:22px;margin-bottom:20px}.print-sheet p{margin:10px 0}.print-sheet table{width:100%;border-collapse:collapse;margin:20px 0}.print-sheet th,.print-sheet td{border:1px solid #777;padding:9px;text-align:left}.print-sheet small{display:block;margin-top:20px}}
+ /* R2 offline real-login rendering caught 410px intrinsic grid width at 390px.
+diff --git a/frontend/social-training.css b/frontend/social-training.css
+index 9f79f40..ac560d2 100755
+--- a/frontend/social-training.css
++++ b/frontend/social-training.css
+@@ -270,3 +270,6 @@
+   .modal.record-editor:has(.social-form) .modal-head,.modal.record-editor:has(.social-form) .modal-foot{padding-top:8px;padding-bottom:8px}
+  }
+ }
++/* 辅助工作逐行填写：日期、积分、说明 */
++.aux-rows{display:grid;gap:8px}.aux-rows:empty{display:none}.aux-row{display:grid;grid-template-columns:150px 110px minmax(0,1fr) auto;gap:8px;align-items:center}.aux-row input{min-width:0}#aux-add{justify-self:start;margin-top:8px}
++@media (max-width:640px){.aux-row{grid-template-columns:1fr 1fr}.aux-row .aux-desc{grid-column:1/-1}}
+diff --git a/frontend/social-training.js b/frontend/social-training.js
+index 085e61c..8aaeb00 100755
+--- a/frontend/social-training.js
++++ b/frontend/social-training.js
+@@ -11,9 +11,11 @@ const statusBadge=(label,state)=>'<span class="social-badge" data-tone="'+tone(s
+ const identity=(name,code,icon)=>'<div class="social-identity"><span class="social-list-icon">'+context.icon(icon)+'</span><div><strong>'+context.esc(name)+'</strong><small>'+context.esc(code)+'</small></div></div>';
+ 
+ export function parseTrainingRows(text,mode,teachers){
+- const lines=text.trim().split(/\r?\n/);if(lines.length<2)throw Error('请粘贴包含表头和明细的制表符分隔数据');
++ const raw=String(text??'').replace(/^\ufeff/,'').split(/\r?\n/).filter(line=>line.replace(/[\t,\s]/g,'')),sep=raw[0]?.includes('\t')?'\t':',';
++ const lines=raw.map(line=>{const v=splitCells(line,sep);while(v.length>18&&v[v.length-1]==='')v.pop();return v.join('\t')});
++ if(lines.length<2)throw Error('请上传模板文件或粘贴包含表头和明细的表格内容');
+  const expected=['单元编号','课程编号','班级编号','模块名称','培训日期','学员编号','本校全日制生','准毕业生例外','实名签到','学时达标','全程参训','结业通过','重点群体','剔除原因','教师工号','岗位','人员类型','佐证说明'];
+- if(lines[0].split('\t').join('|')!==expected.join('|'))throw Error('表头不符，请使用页面给出的18列表头');
++ if(lines[0].split('\t').join('|')!==expected.join('|'))throw Error('表头不符，请点“下载导入模板”，按模板18列填写');
+  const yes=(v,row)=>{if(!['是','否'].includes(v))throw Error('第'+row+'行的判断项须填“是”或“否”');return v==='是'};
+  const groups=new Map();
+  for(let i=1;i<lines.length;i++){
+@@ -22,7 +24,7 @@ export function parseTrainingRows(text,mode,teachers){
+   if(!t&&!/^[A-Za-z0-9_-]{1,64}$/.test(v[14]))throw Error('外聘人员请使用学校唯一编号，限字母、数字、下划线或短横线');
+   const role={'主讲':'lecturer','实训指导':'instructor','管理辅助':'manager'}[v[15]],staff_type={'校内':'internal','外聘':'external'}[v[16]];
+   if(!role||!staff_type)throw Error('岗位须为主讲、实训指导或管理辅助；人员类型须为校内或外聘');
+-  const meta={external_key:v[0],course_code:v[1],class_code:v[2],module:v[3],event_date:v[4],mode,evidence_note:v[17]};
++  const day=String(v[4]).trim().match(/^(\d{4})[-/.年](\d{1,2})[-/.月](\d{1,2})日?$/);if(!day)throw Error('第'+(i+1)+'行培训日期“'+v[4]+'”无法识别，请写成 2026-09-10 或 2026/9/10');const meta={external_key:v[0],course_code:v[1],class_code:v[2],module:v[3],event_date:day[1]+'-'+day[2].padStart(2,'0')+'-'+day[3].padStart(2,'0'),mode,evidence_note:v[17]};
+   let group=groups.get(v[0]);if(!group){group={...meta,learners:[],teachers:[]};groups.set(v[0],group)}
+   if(Object.keys(meta).some(k=>group[k]!==meta[k]))throw Error('同一单元编号的课程、日期等信息不一致');
+   const learner={reference:v[5],full_time_student:yes(v[6],i+1),graduate_exception:yes(v[7],i+1),signed:yes(v[8],i+1),hours_met:yes(v[9],i+1),full_attendance:yes(v[10],i+1),passed:yes(v[11],i+1),priority_group:yes(v[12],i+1),exclusion_reason:v[13]};
+@@ -129,15 +131,18 @@ export async function socialPage(section,c){
+ }
+ 
+ function formSection(title,body,description=''){return '<fieldset class="social-fieldset"><legend>'+context.esc(title)+'</legend>'+(description?'<p class="social-fieldset-note">'+context.esc(description)+'</p>':'')+'<div class="social-form-fields">'+body+'</div></fieldset>'}
+-function commonForm(title,body,save,options={}){const c=context;c.formModal(title,'<div class="social-form">'+(body.includes('class="social-fieldset"')?body:formSection('办理内容',body))+formSection('办理说明',options.compact||options.reasonLabel?c.field('reason',options.reasonLabel||'办理意见 / 调整原因','textarea',options.reasonDefault||'',{rows:2,full:true})+c.field('basis','依据说明或材料编号（选填）','textarea','',{rows:2,required:false,full:true}):c.reasonFields(),options.compact?'':'填写本次办理原因与依据，便于后续核验追溯。')+'</div>',async(v,f)=>{const result=await save(v,f);c.closeModal();await c.render();if(options.after)await options.after(result)},{wide:true,...options})}
++function commonForm(title,body,save,options={}){const c=context;c.formModal(title,'<div class="social-form">'+(body.includes('class="social-fieldset"')?body:formSection('办理内容',body))+formSection('办理说明',c.field('reason',options.reasonLabel||'办理说明','textarea',options.reasonDefault??title,{rows:2,full:true,hint:options.compact||options.reasonLabel?'':'已按本次操作预填，可修改；会和经办人、时间一起留痕。'})+c.field('basis',options.basisLabel||'依据说明或材料编号（选填）','textarea','',{rows:2,required:!!options.basisRequired,full:true}),options.compact?'':'填写本次办理原因与依据，便于后续核验追溯。')+'</div>',async(v,f)=>{const back=options.reopen&&opened?{kind:opened.kind,id:opened.id}:null,result=await save(v,f);c.closeModal();await c.render();if(options.after)await options.after(result);else if(back)await showDetail(back.kind,back.id).catch(()=>{})},{wide:true,...options});
++ if(options.reopen&&opened&&typeof document!=='undefined'){const back={kind:opened.kind,id:opened.id};document.querySelectorAll('#modal-root button[data-action="close"]').forEach(b=>{if(!b.textContent.trim())return;b.textContent='返回详情';b.addEventListener('click',e=>{e.preventDefault();e.stopImmediatePropagation();showDetail(back.kind,back.id)},true)})}
++}
+ function projectOptionsHtml(result,selected){
+  const c=context,key=projectChoice.key,options=result.items.map(p=>[p[key],p.name+' · '+p.code+' · '+p.cohort]);
+  if(selected?.value&&!options.some(([value])=>value===selected.value))options.unshift([selected.value,selected.label]);
+- return '<div class="form-field full"><label for="social-project-query">检索关联项目</label><div class="social-picker-tools"><input id="social-project-query" type="search" maxlength="100" placeholder="输入项目名称、编号或期次" value="'+c.esc(result.q)+'">'+c.act('查找项目','social-project-lookup','1')+'</div></div>'+c.field(projectChoice.name,'选择关联项目','select',selected?.value||'',{full:true,options:[['','请选择一个项目'],...options]})+'<div class="social-picker-pager"><span>共 '+result.total+' 项 · 第 '+result.page+' 页</span>'+(result.page>1?c.act('上一页项目','social-project-lookup',String(result.page-1)):'')+(result.page*result.size<result.total?c.act('下一页项目','social-project-lookup',String(result.page+1)):'')+'</div>';
++ const empty=projectChoice.mine&&!result.total&&!result.q?context.note('还没有可申报的项目：项目须已正常结项，且“参训明细”里登记了你的工号（授课或辅助）。项目还在办理中的，等学院结项后再来申报；如有遗漏，请联系学院补录参训明细。',true):'';
++ return empty+'<div class="form-field full"><label for="social-project-query">检索关联项目</label><div class="social-picker-tools"><input id="social-project-query" type="search" maxlength="100" placeholder="输入项目名称、编号或期次" value="'+c.esc(result.q)+'">'+c.act('查找项目','social-project-lookup','1')+'</div></div>'+c.field(projectChoice.name,'选择关联项目','select',selected?.value||'',{full:true,options:[['','请选择一个项目'],...options]})+'<div class="social-picker-pager"><span>共 '+result.total+' 项 · 第 '+result.page+' 页</span>'+(result.page>1?c.act('上一页项目','social-project-lookup',String(result.page-1)):'')+(result.page*result.size<result.total?c.act('下一页项目','social-project-lookup',String(result.page+1)):'')+'</div>';
+ }
+-async function projectPicker(name,key){projectChoice={name,key,q:'',sequence:0};const result=await context.api('/social/project-options');return '<div id="social-project-picker" class="social-project-picker">'+projectOptionsHtml(result)+'</div>'}
++async function projectPicker(name,key,mine=false){projectChoice={name,key,q:'',sequence:0,mine};const result=await context.api('/social/project-options'+(mine?'?mine=true':''));return '<div id="social-project-picker" class="social-project-picker">'+projectOptionsHtml(result)+'</div>'}
+ function collegeField(value=''){const c=context;return c.field('org_id','承办学院','select',value,{options:c.orgs.filter(x=>x.kind==='college').map(x=>[x.id,x.name])})}
+-function policyFields(x){const c=context;return c.field('period_id','认定周期','select',x?.period_id||'',{options:c.periods.filter(x=>x.state==='OPEN').map(x=>[x.id,x.name])})+c.field('policy_id','制度执行口径','select',x?.policy_id||'',{options:workspace.policies.map(x=>[x.id,x.name+' · '+(x.state_label||workspace.states[x.state])])})}
++function policyFields(x){const c=context,active=workspace.policies.filter(p=>p.state==='ACTIVE'),list=active.length?active:workspace.policies;return c.field('period_id','认定周期','select',x?.period_id||'',{options:c.periods.filter(x=>x.state==='OPEN').map(x=>[x.id,x.name])})+c.field('policy_id','制度执行口径','select',x?.policy_id||'',{options:list.map(x=>[x.id,x.name+' · '+(x.state_label||workspace.states[x.state])])})}
+ const cleanReason=v=>{const{reason,basis,...data}=v;return{reason,basis,data}};
+ 
+ async function showDetail(kind,id){
+@@ -158,12 +163,13 @@ async function showDetail(kind,id){
+   opened.printBody=body;return c.modal(data.name||x.name||'社会培训办理',body,buttons.join(''),true);
+  }
+  const uploadable=kind==='social_claim'||(kind==='social_resource'&&x.kind==='correction')||(kind==='social_policy'?c.can('rules.manage'):c.can('records.write'));
+- if(!d.public_summary&&!['ARCHIVED','ACTIVE','CLOSED'].includes(x.state)&&c.can('file.write')&&uploadable)buttons.push(act('上传佐证','social-upload'));
+- const add=(label,action)=>buttons.push(act(label,'social-transition',action));
++ if(!d.public_summary&&!['ARCHIVED','ACTIVE','CLOSED'].includes(x.state)&&c.can('file.write')&&uploadable)buttons.push(act('上传佐证','social-upload','',(d.attachments||[]).length?'':'light','file'));
++ opened.labels={};opened.archiveStep=false;const owner=kind==='social_claim'?x.teacher_id:kind==='social_policy'?x.created_by:kind==='social_resource'?(x.data?.teacher_id||x.data?.created_by):x.owner_id,selfOwned=owner&&owner===c.me?.user?.id,reviewActions=['file','close','approve','activate','publish','archive','resolve','finance','academic','discipline','coordinator','return'];let avoided=false;
++ const add=(label,action)=>{if(selfOwned&&reviewActions.includes(action)){avoided=true;return}opened.labels[action]=label;buttons.push(act(label,'social-transition',action))};
+  if(kind==='social_project'&&c.can('records.write')){
+   if(['DRAFT','RETURNED'].includes(x.state)){add('提交审核备案','submit');buttons.push(act('修改项目资料','social-project-edit'))}
+   if(x.state==='SUBMITTED'&&workspace.my_duties.includes('coordinator')){add('完成审核备案','file');add('退回补正','return')}
+-  if(x.state==='FILED'){buttons.push(act('导入参训明细','social-unit-import'));buttons.push(act('提交结项','social-close'));add('申请重新备案','refile')}
++  if(x.state==='FILED'){buttons.push(act('登记本项目课程','social-course-for-project'));buttons.push(act('导入参训明细','social-unit-import'));buttons.push(act('提交结项','social-close'));add('申请重新备案','refile')}
+   if(x.state==='CLOSE_REVIEW'&&workspace.my_duties.includes('coordinator')){add('核验通过结项','close');add('退回补充材料','return')}
+   if(workspace.my_duties.some(v=>['coordinator','discipline'].includes(v)))buttons.push(act('登记投诉与跟踪','social-note'));
+  }
+@@ -171,7 +177,7 @@ async function showDetail(kind,id){
+   if(x.state==='ARCHIVED'&&(x.teacher_id===c.me.user.id||workspace.my_duties.includes('secretary')))buttons.push(act('申请追加更正','social-correction-new'));
+   if(x.teacher_id===c.me.user.id&&['DRAFT','RETURNED'].includes(x.state)){add('提交本人积分申报','submit');buttons.push(act('补正及辅助积分','social-claim-edit'))}
+   const duty={SUBMITTED:'dean',DEAN:'coordinator',COORDINATOR:'vice_president',APPROVED:'secretary'}[x.state];
+-  if(workspace.my_duties.includes(duty)){add(x.state==='APPROVED'?'归档并计入个人台账':'审核通过','approve');add('退回补正','return')}
++  if(workspace.my_duties.includes(duty)){add(x.state==='APPROVED'?'归档并计入个人台账':'审核通过','approve');if(x.state==='APPROVED')opened.archiveStep=true;add('退回补正','return')}
+  }
+  if(kind==='social_resource'&&x.kind==='correction'){
+   if(x.data.created_by===c.me.user.id&&['DRAFT','RETURNED'].includes(x.state)){add('提交更正审核','submit');buttons.push(act('补正更正内容','social-correction-edit'))}
+@@ -190,7 +196,7 @@ async function showDetail(kind,id){
+   if(x.state==='PUBLIC'){add('登记公示异议','dispute');if(workspace.my_duties.includes('coordinator'))add('记录异议处理','resolve');if(workspace.my_duties.includes('secretary'))add('公示完成并归档','archive')}
+   if(['REVIEW','COMMITTEE','PUBLIC'].includes(x.state)&&workspace.my_duties.includes('coordinator'))add('退回重新核算','return');
+  }
+- let body='<div class="social-detail"><div class="social-detail-status"><strong>当前办理状态</strong>'+statusBadge(d.state_label,x.state)+'</div>'+(d.trial?.blockers||[]).map(v=>note(v,true)).join('');
++ let body='<div class="social-detail"><div class="social-detail-status"><strong>当前办理状态</strong>'+statusBadge(d.state_label,x.state)+'</div>'+(avoided?note('这是你本人登记或申报的事项，按回避规定须由其他有审核职责的人员办理。',true):'')+(d.trial?.blockers||[]).map(v=>note(v,true)).join('');
+  const steps=kind==='social_project'?[['DRAFT','项目申报'],['SUBMITTED','审核备案'],['FILED','培训实施'],['CLOSE_REVIEW','结项核验'],['CLOSED','正常结项']]:kind==='social_claim'?[['SUBMITTED','本人提交'],['DEAN','院长初审'],['COORDINATOR','归口复审'],['APPROVED','分管审批'],['ARCHIVED','归档入账']]:[];
+  if(steps.length)body+='<nav class="social-progress" aria-label="办理流程"><ol>'+steps.map(([state,label])=>'<li data-current="'+(x.state===state)+'"'+(x.state===state?' aria-current="step"':'')+'>'+label+'</li>').join('')+'</ol></nav>';
+  const data=x.data;
+@@ -218,7 +224,8 @@ async function showDetail(kind,id){
+  if(d.trial){const t=d.trial;body+=note(x.state==='ARCHIVED'?'以下为归档时的核算快照':'以下为候选试算，尚非正式认定');body+=table(['指标','分值'],[['授课积分',t.teaching??'不适用'],['辅助积分',t.auxiliary??'不适用'],['基础分',t.base??'不适用'],['认定加分',t.bonus_awarded??'不适用'],['合计',t.total??'待学校确认'],['候选等级',esc(t.grade||'待核定')],['申报期限',esc(t.deadline||'不适用或待校历确认')]]);if(t.details)body+=table(['核算单元','人次','计算依据','候选积分'],t.details.map(r=>[esc(r.unit),r.participants,esc(r.formula),r.score??'待封顶口径确认']));if(t.metrics)body+=table(['指标','实际值','任务目标','基础分','加分'],t.metrics.map(r=>[esc(r.label),r.actual,r.target??'待下达',r.base??'待核定',r.bonus??'待核定']))}
+  if(kind==='social_annual'&&d.trial){const t=d.trial;body+=table(['成果、资金及总分处理','内容'],[['综合成果基础分',t.achievement_base],['资金管理基础分',t.cost_base],['封顶前各项加分合计',t.bonus_raw],['全校总加分上限','10 分（仍须确认叠加口径）'],['封顶前总分',t.total_before_cap??'待核定'],['已确认总分上限',t.total_cap??'待核定'],['一票否决',t.veto?'已触发':'未触发'],...(!d.public_summary?[['正式处理依据',esc(t.veto_basis||data.discipline_reference||'无')],['学院个人积分合计',t.points_total],['按已确认人数的平均积分',t.points_average??'人数基准待确认']]:[])]);if(t.cost_details)body+=table(['资金管理扣分项','扣分或说明'],t.cost_details.map(r=>[esc(r.label),esc(r.value)]));if(t.outcome_details)body+=table(['成果认定依据','得分依据'],t.outcome_details.map(r=>[esc(r.label),esc(r.value)]));}
+  body+=(d.public_summary?note('公示开放评分摘要；原始核验材料由授权人员查看。'):'<section class="social-detail-section"><h3>佐证材料</h3>'+c.downloads(d.attachments)+'</section><section class="social-detail-section"><h3>办理记录</h3>'+c.eventsHtml(d.events)+'</section>')+'</div>';
+- opened.printBody=body;c.modal(data.name||x.name||'社会培训办理',body,buttons.join(''),true);
++ const pname=d.trial?.basis?.facts?.project?.data?.name||d.trial?.basis?.facts?.project?.name||'',title=data.name||x.name||({social_claim:'个人积分申报',social_annual:'学院年度自评',social_resource:'积分更正与汇总'}[kind]||'社会培训办理')+(pname?' · '+pname:'');
++ opened.printBody=body;c.modal(title,body,buttons.join(''),true);
+ }
+ 
+ function projectForm(edit=false){
+@@ -227,9 +234,25 @@ function projectForm(edit=false){
+  if(pending.dates_pending||pending.date_pending)confirmations.push(f('dates_confirmed','确认实际培训期间','checkbox',{checkLabel:'已核对开始、结束日期，占位日期已更正'}));
+  if(pending.mode_pending)confirmations.push(f('mode_confirmed','确认备案核算方式','checkbox',{checkLabel:'已核对模块或培训工作日明细'}));
+  for(const [key,label] of [['level','项目层级'],['scene','授课场景']])if((pending.policy_pending||[]).includes(key)||(pending.ledger_id&&!v[key+'_confirmed']))confirmations.push(f(key+'_confirmed','确认'+label,'checkbox',{checkLabel:'已依据项目材料核实'+label}));
+- const body=formSection('一、项目基本资料',f('code','项目编号')+f('name','项目名称')+f('cohort','项目期次')+collegeField(v.org_id)+c.teacherField(v.owner_id||'', 'owner_id','项目负责人（输入工号或姓名检索）')+f('category','培训类别','select',{options:selectable(['subsidy','enterprise','community','rural','other'])})+f('high_risk','高风险项目','checkbox',{required:false,checkLabel:'属于其他高风险项目（须前置审核，备案时登记审核日期及依据）'}),'项目编号与期次用于识别同一期培训。')+formSection('二、培训安排',f('start_date','开始日期','date')+f('end_date','结束日期','date')+f('expected_income','预计收入（公益类填0）','number',{min:0,step:0.01})+f('expected_participants','预计人次','number',{min:0,step:1})+f('expected_outcomes','预期成果','textarea')+f('target_groups','重点群体与行动对接','textarea',{required:false}))+formSection('三、积分核算依据',f('mode','核算方式','select',{options:selectable(['module','person_day'])})+f('class_type','标准班类型','select',{options:selectable(['technical','lecture'])})+f('level','项目层级','select',{options:selectable(['province','city','school'])})+f('scene','授课场景','select',{options:selectable(['dispatched','full_day','ordinary'])})+f('auxiliary_standard','随项目备案的辅助积分细则','textarea',{required:false})+f('auxiliary_daily_cap','个人辅助积分每日上限','number',{required:false,min:0,step:0.01}),'同期项目只采用一种核算方式；尚未确认的辅助积分标准请留空。')+(confirmations.length?formSection('四、台账草稿待核实事项',confirmations.join(''),'核实并保存后才能提交正式备案；自动生成的值不能代替材料核验。'):'');
++ const body=formSection('一、项目基本资料',f('code','项目编号')+f('name','项目名称')+f('cohort','项目期次')+collegeField(v.org_id)+c.teacherField(v.owner_id||'', 'owner_id','项目负责人（输入工号或姓名检索）')+f('category','培训类别','select',{options:[...(edit?[]:[['','请选择培训类别']]),...selectable(['subsidy','enterprise','community','rural','other'])]})+f('high_risk','高风险项目','checkbox',{required:false,checkLabel:'属于其他高风险项目（须前置审核，备案时登记审核日期及依据）'}),'项目编号与期次用于识别同一期培训。')+formSection('二、培训安排',f('start_date','开始日期','date')+f('end_date','结束日期','date')+f('expected_income','预计收入（公益类填0）','number',{min:0,step:0.01})+f('expected_participants','预计人次','number',{min:0,step:1})+f('expected_outcomes','预期成果','textarea')+f('target_groups','重点群体与行动对接','textarea',{required:false,hint:'补贴性培训必填：写明面向哪些重点群体、对接哪项行动；其他类别可不填。'}))+formSection('三、积分核算依据',f('mode','核算方式','select',{options:selectable(['module','person_day'])})+f('class_type','标准班类型','select',{options:selectable(['technical','lecture'])})+f('level','项目层级','select',{options:selectable(['province','city','school'])})+f('scene','授课场景','select',{options:selectable(['dispatched','full_day','ordinary'])})+f('auxiliary_standard','随项目备案的辅助积分细则','textarea',{required:false})+f('auxiliary_daily_cap','个人辅助积分每日上限','number',{required:false,min:0,step:0.01}),'同期项目只采用一种核算方式；尚未确认的辅助积分标准请留空。')+(confirmations.length?formSection('四、台账草稿待核实事项',confirmations.join(''),'核实并保存后才能提交正式备案；自动生成的值不能代替材料核验。'):'');
+  commonForm(edit?'修改项目申报':'申报培训项目',body,async v=>{delete v.owner_id_search;const data=cleanReason(v);return c.api('/social/projects'+(edit?'/'+x.id:''),{method:edit?'PUT':'POST',body:{...data,...(edit?{expected_version:x.version}:{})}})},
+-  edit?{}:{submit:'保存草稿',reasonLabel:'申报说明',reasonDefault:'学院申报培训项目',hint:'第一步保存草稿；保存后会打开项目详情，在那里上传申报材料，再点“提交审核备案”。',after:r=>r?.item?.id?showDetail('social_project',r.item.id):null});
++  edit?{reopen:true}:{submit:'保存草稿',reasonLabel:'申报说明',reasonDefault:'学院申报培训项目',hint:'第一步保存草稿；保存后会打开项目详情，在那里上传申报材料，再点“提交审核备案”。',after:r=>r?.item?.id?showDetail('social_project',r.item.id):null});
++ bindProjectCategory();
++}
++function bindCloseForm(){
++ if(typeof document==='undefined')return;const $=id=>document.getElementById(id),show=(id,on)=>{const el=$('cond-'+id);if(el)el.style.display=on?'contents':'none'};
++ const income=$('f-actual_income'),source=$('f-funding_source'),sat=$('f-satisfaction'),loc=$('f-location'),ret=$('f-retained'),per=$('f-personnel'),hint=$('close-split-hint'),all=$('close-check-all');if(!income||!source)return;
++ const sync=()=>{const money=Number(income.value||0),special=source.value==='government_special';show('special',special);show('split',!special);show('rect',sat.value!==''&&Number(sat.value)<85);
++  if(hint){const r=Number(ret.value||0),p=Number(per.value||0),off=loc.value==='offsite',minR=off?10:20,maxP=off?70:60;hint.textContent=money>0&&!special?'按到账收入 '+money+' 元：学校留存至少 '+(money*minR/100).toFixed(2)+' 元，人员支出至多 '+(money*maxP/100).toFixed(2)+' 元'+(r||p?'；当前留存 '+(r/money*100).toFixed(1)+'%、人员支出 '+(p/money*100).toFixed(1)+'%'+(r<money*minR/100||p>money*maxP/100?'，不符合比例要求':'，符合比例要求'):''):'';hint.style.color=/不符合/.test(hint.textContent)?'#c0392b':/符合/.test(hint.textContent)?'#218b74':''}};
++ for(const el of [income,source,sat,loc,ret,per])el?.addEventListener('input',sync),el?.addEventListener('change',sync);sync();
++ const boxes=[...document.querySelectorAll('#edit-form input[type=checkbox][name^="checked_"]')];
++ all?.addEventListener('change',()=>boxes.forEach(b=>b.checked=all.checked));boxes.forEach(b=>b.addEventListener('change',()=>{all.checked=boxes.every(x=>x.checked)}));
++}
++function bindProjectCategory(){
++ if(typeof document==='undefined')return;
++ const cat=document.getElementById('f-category'),tg=document.getElementById('f-target_groups'),lab=document.querySelector('label[for="f-target_groups"]');if(!cat||!tg||!lab)return;
++ const sync=()=>{const need=cat.value==='subsidy';tg.required=need;lab.querySelector('b')?.remove();if(need)lab.insertAdjacentHTML('beforeend',' <b>*</b>')};
++ cat.addEventListener('change',sync);sync();
+ }
+ 
+ function policyForm(){
+@@ -244,7 +267,7 @@ function policyForm(){
+  for(const [k,l] of [['total_cap','年度总分上限'],['excellent_from','三等制优秀门槛'],['qualified_from','三等制合格门槛']])body+=c.field(k,l,'number','',{required:false,min:0,step:0.01});
+  for(const [k,l] of [['effective_date','本口径适用开始日期'],['calendar_start','校历开始日期'],['calendar_end','校历结束日期']])body+=c.field(k,l,'date','',{required:false});
+  for(const [k,l] of [['holidays','放假日期（每行一个）'],['workdays','周末补班日期（每行一个）'],['calendar_reference','学校工作日历依据'],['interpretation_reference','学校书面解释依据']])body+=c.field(k,l,'textarea','',{required:false});
+- commonForm('登记学校制度执行口径',body,async v=>{const {name,period_id,reason,basis,...raw}=v;const data=blankNull(raw);for(const k of ['holidays','workdays'])data[k]=(raw[k]||'').split(/\s+/).filter(Boolean);for(const k of ['calendar_reference','interpretation_reference'])data[k]=raw[k]||'';for(const k of ['precision','title_precision'])if(data[k]!=null)data[k]=Number(data[k]);if(data.satisfaction_inclusive!=null)data.satisfaction_inclusive=data.satisfaction_inclusive==='true';await c.api('/social/policies',{method:'POST',body:{name,period_id,reason,basis,data}})},{hint:'只登记学校书面确认的选项；尚未确认的保持空白。如学校解释不在当前支持范围内，先保留待确认，由实施人员补充实现。'});
++ commonForm('登记学校制度执行口径',body,async v=>{const {name,period_id,reason,basis,...raw}=v;const data=blankNull(raw);for(const [k,l] of [['holidays','放假日期'],['workdays','周末补班日期']])data[k]=(raw[k]||'').split(/[\s,，、；;]+/).filter(Boolean).map((d,i)=>{const m=d.match(/^(\d{4})[-/.年](\d{1,2})[-/.月](\d{1,2})日?$/);if(!m)throw Error(l+'第'+(i+1)+'个“'+d+'”不是日期，请写成 2026-10-01，每行一个');return m[1]+'-'+m[2].padStart(2,'0')+'-'+m[3].padStart(2,'0')});for(const k of ['calendar_reference','interpretation_reference'])data[k]=raw[k]||'';if((raw.calendar_start||raw.calendar_end)&&!(raw.calendar_start&&raw.calendar_end&&(raw.calendar_reference||'').trim()))throw Error('校历要三项一起填：校历开始日期、校历结束日期、学校工作日历依据（如校历文件名称或文号）。缺一项时，积分申报会提示“学校工作日历尚未确认”。');for(const k of ['precision','title_precision'])if(data[k]!=null)data[k]=Number(data[k]);if(data.satisfaction_inclusive!=null)data.satisfaction_inclusive=data.satisfaction_inclusive==='true';return c.api('/social/policies',{method:'POST',body:{name,period_id,reason,basis,data}})},{after:r=>r?.item?.id?showDetail('social_policy',r.item.id):null,hint:'只登记学校书面确认的选项；尚未确认的保持空白。如学校解释不在当前支持范围内，先保留待确认，由实施人员补充实现。'});
+  document.getElementById('policy-recommend')?.addEventListener('click',()=>{for(const [k,v] of Object.entries(RECOMMENDED_POLICY)){const el=document.getElementById('f-'+k);if(el){el.value=String(v);el.dispatchEvent(new Event('change',{bubbles:true}))}}const ref=document.getElementById('f-interpretation_reference');if(ref&&!ref.value)ref.value='系统推荐口径（见《社会培训模块重新规划》第八节），待学校书面确认';});
+ }
+ // 推荐口径：与《社会培训模块重新规划》第八节确认清单一致；学校书面确认前不得启用。
+@@ -258,7 +281,7 @@ export async function socialAction(action,id,c){
+  if(action==='social-list-reset'){listSearch='';listPage=1;resourcePage=1;return c.render()}
+  if(action==='social-project-lookup'){
+   const choice=projectChoice,sequence=++choice.sequence,target=document.getElementById('social-project-picker'),select=document.getElementById('f-'+projectChoice.name),q=document.getElementById('social-project-query').value.trim(),selected={value:select.value,label:select.selectedOptions[0]?.textContent||''};
+-  const result=await c.api('/social/project-options?page='+(q===projectChoice.q?id:1)+'&q='+encodeURIComponent(q));
++  const result=await c.api('/social/project-options?page='+(q===projectChoice.q?id:1)+'&q='+encodeURIComponent(q)+(choice.mine?'&mine=true':''));
+   if(choice===projectChoice&&sequence===choice.sequence&&target===document.getElementById('social-project-picker')){projectChoice.q=q;target.innerHTML=projectOptionsHtml(result,selected);document.getElementById('social-project-query').focus()}return;
+  }
+  if(action==='social-list-search')return c.formModal('检索当前业务列表',c.field('q','名称、编号或状态','text',listSearch,{required:false}),async v=>{listSearch=v.q;listPage=1;c.closeModal();await c.render()},{submit:'查询'});
+@@ -276,7 +299,7 @@ export async function socialAction(action,id,c){
+   if(!String(text||'').trim())throw Error('请上传导出文件或粘贴导出表内容');
+   await importCourses(parseChaoxingCourses(text,v.project_code),v);
+  },{submit:'预检课程清单'});
+- if(action==='social-policy-recommended')return commonForm('一键生成推荐口径草稿',c.note('按系统推荐口径生成名为“推荐口径（待学校书面确认）”的草稿，供试算参考，不会启用。学校书面确认后，在这份草稿上点“登记学校书面依据”填写文号，再办理启用。')+c.field('period_id','适用周期','select','',{options:c.periods.filter(x=>x.state==='OPEN').map(x=>[x.id,x.name])}),v=>c.api('/social/policies/recommended',{method:'POST',body:{period_id:v.period_id,reason:v.reason,basis:v.basis}}),{submit:'生成草稿'});
++ if(action==='social-policy-recommended')return commonForm('一键生成推荐口径草稿',c.note('按系统推荐口径生成名为“推荐口径（待学校书面确认）”的草稿，供试算参考，不会启用。学校书面确认后，在这份草稿上点“登记学校书面依据”填写文号，再办理启用。')+c.field('period_id','适用周期','select','',{options:c.periods.filter(x=>x.state==='OPEN').map(x=>[x.id,x.name])}),v=>c.api('/social/policies/recommended',{method:'POST',body:{period_id:v.period_id,reason:v.reason,basis:v.basis}}),{submit:'生成草稿',after:r=>r?.item?.id?showDetail('social_policy',r.item.id):null});
+  if(['social-correction-new','social-correction-edit'].includes(action)){
+   const x=opened.item,edit=action==='social-correction-edit',old=edit?x.data:{};
+   const body=c.note('正数增加、负数扣减。须上传正式处理或更正依据，并经过院长、归口、分管副校长审批及教学秘书归档。')+c.field('period_id','入账或更正周期','select',old.period_id||'',{options:c.periods.filter(p=>p.state==='OPEN').map(p=>[p.id,p.name])})+c.field('teaching','授课积分变动','number',old.teaching||0,{step:0.01})+c.field('auxiliary','辅助积分变动','number',old.auxiliary||0,{step:0.01})+c.field('decision_reference','正式处理或更正依据','textarea',old.decision_reference||'');
+@@ -286,6 +309,7 @@ export async function socialAction(action,id,c){
+  if(action==='social-project-new')return projectForm();if(action==='social-project-edit')return projectForm(true);if(action==='social-policy-new')return policyForm();
+  if(action==='social-export'){const[k,i]=id.split('|');return c.download(path(k,i)+'/export','社会培训办理材料.xlsx')}
+  if(action==='social-course-resources'){const[code,p='1']=id.split('|'),result=await c.api('/social/courses/'+encodeURIComponent(code)+'/resources?page='+p);return c.modal('课程资源',c.table(['名称','类型','视频时长（分钟）','操作'],result.items.map(r=>[c.esc(r.name),c.esc({video:'视频',document:'文档',link:'其他链接'}[r.data.resource_type]),r.data.duration_minutes??'不适用',c.act('查看详情','social-detail','social_resource|'+r.id)])),(result.page>1?c.act('上一页','social-course-resources',code+'|'+(result.page-1)):'')+(result.page*result.size<result.total?c.act('下一页','social-course-resources',code+'|'+(result.page+1)):''))}
++ if(action==='social-course-for-project'){const code=opened.item.data.code;return commonForm('登记本项目课程',c.note('课程将关联到本项目（'+code+'）。登记后，参训明细里的“课程编号”填这里的编号。')+c.field('code','课程编号')+c.field('name','课程名称'),v=>c.api('/social/courses',{method:'POST',body:{...v,project_code:code}}),{submit:'保存课程',reasonLabel:'办理说明',reasonDefault:'登记项目课程',reopen:true})}
+  if(action==='social-course-new')return commonForm('登记培训课程',c.field('code','课程编号')+c.field('name','课程名称')+await projectPicker('project_code','code'),v=>c.api('/social/courses',{method:'POST',body:v}),{compact:true,submit:'保存课程'});
+  if(action==='social-resource-new'){
+   let body=collegeField()+c.field('code','来源唯一编号')+c.field('name','名称')+c.field('location','地点或资源说明','textarea','',{required:false})+c.field('recognition','认定或登记依据','textarea');
+@@ -296,33 +320,48 @@ export async function socialAction(action,id,c){
+  }
+  if(['social-claim-new','social-claim-edit'].includes(action)){
+   const x=action==='social-claim-edit'?opened.item:null;
+-  let body=(x?c.note('项目与周期保留原申报；修改后重新审核。'):await projectPicker('project_id','id'))+policyFields(x)+c.field('recognition_form_reference','学校制式积分认定表及附件对应说明','textarea',x?.data.recognition_form_reference||'')+c.field('auxiliary_rows','辅助工作（每行：日期、积分、工作说明；用制表符分隔）','textarea',(x?.data.auxiliary||[]).map(r=>[r.work_date,r.amount,r.description].join('\t')).join('\n'),{required:false,full:true});
+-  return commonForm(x?'补正本人积分':'本人积分申报',body,v=>{const{auxiliary_rows,...data}=v;const auxiliary=auxiliary_rows.trim()?auxiliary_rows.trim().split(/\r?\n/).map(line=>{const[work_date,amount,description,...extra]=line.split('\t');if(!description||extra.length)throw Error('辅助工作每行须为日期、积分、说明三列');return {work_date,amount,description}}):[];return c.api('/social/claims'+(x?'/'+x.id:''),{method:x?'PUT':'POST',body:{...data,...(x?{project_id:x.project_id,period_id:x.period_id,expected_version:x.version}:{}),auxiliary}})});
++  const policies=workspace.policies||[],auxRow=(r={})=>'<div class="aux-row"><input type="date" class="aux-date" aria-label="工作日期" value="'+c.esc(r.work_date||'')+'"><input type="number" class="aux-amount" aria-label="辅助积分" min="0" step="0.01" placeholder="积分" value="'+c.esc(r.amount??'')+'"><input class="aux-desc" aria-label="工作说明" maxlength="200" placeholder="做了什么辅助工作" value="'+c.esc(r.description||'')+'"><button type="button" class="btn text aux-del" aria-label="删除这一行">删除</button></div>';
++  let body=(x?c.note('项目与周期保留原申报；修改后重新审核。'):await projectPicker('project_id','id',true))+(!x&&!policies.length?c.note('学校还没有登记积分认定口径，暂时无法申报。请联系学校社会培训管理员。',true):'')+policyFields(x)+c.field('recognition_form_reference','学校制式积分认定表及附件对应说明','textarea',x?.data.recognition_form_reference||'',{hint:'写明认定表编号或附件名称；认定表扫描件保存后在详情里“上传佐证”。'})
++   +'<div class="form-field full"><label>辅助工作积分（没有可不填）</label><div id="aux-rows" class="aux-rows">'+(x?.data.auxiliary||[]).map(auxRow).join('')+'</div><button type="button" class="btn light sm" id="aux-add">＋ 添加一行辅助工作</button><p class="hint">每行一项：日期、积分、工作说明。授课积分按参训明细自动核算，不用在这里填。</p></div>';
++  setTimeout(()=>{const box=typeof document!=='undefined'&&document.getElementById('aux-rows');if(!box)return;document.getElementById('aux-add')?.addEventListener('click',()=>{box.insertAdjacentHTML('beforeend',auxRow());box.lastElementChild.querySelector('input')?.focus()});box.addEventListener('click',e=>{if(e.target.closest('.aux-del'))e.target.closest('.aux-row').remove()});for(const id of ['f-period_id','f-policy_id']){const el=document.getElementById(id);if(el&&el.options.length===1)el.value=el.options[0].value}},0);
++  return commonForm(x?'补正本人积分':'本人积分申报',body,(v,f)=>{const{auxiliary_rows='',...data}=v;const domRows=f?[...f.querySelectorAll('.aux-row')].map((r,i)=>({work_date:r.querySelector('.aux-date').value,amount:r.querySelector('.aux-amount').value,description:r.querySelector('.aux-desc').value.trim(),row:i+1})).filter(r=>r.work_date||r.amount||r.description):null;const auxiliary=domRows?domRows.map(({row,...r})=>{if(!r.work_date||r.amount===''||!r.description)throw Error('辅助工作第'+row+'行的日期、积分、说明都要填写；不需要的行请删除');return r}):auxiliary_rows.trim()?auxiliary_rows.trim().split(/\r?\n/).map(line=>{const[work_date,amount,description,...extra]=line.split('\t');if(!description||extra.length)throw Error('辅助工作每行须为日期、积分、说明三列');return {work_date,amount,description}}):[];return c.api('/social/claims'+(x?'/'+x.id:''),{method:x?'PUT':'POST',body:{...data,...(x?{project_id:x.project_id,period_id:x.period_id,expected_version:x.version}:{}),auxiliary}})},x?{reopen:true,reasonLabel:'补正说明',reasonDefault:'按退回意见补正'}:{submit:'保存申报',reasonLabel:'申报说明',reasonDefault:'申报本人社会培训积分',hint:'保存后会打开这条申报，上传积分认定表等材料后点“提交本人积分申报”。',after:r=>r?.item?.id?showDetail('social_claim',r.item.id):null});
+  }
+  if(['social-annual-new','social-annual-edit'].includes(action)){
+   const x=action==='social-annual-edit'?opened.item:null,old=x?.data||{};
+   let body=(x?c.note('保留当前学院和周期，补正后重新提交。'):collegeField())+policyFields(x);for(const[k,l]of [['income_target','到账收入目标'],['participants_target','有效人次目标'],['priority_target','重点群体人次目标'],['staff_denominator','组织人数基准'],['compliance_failures','正式确认的不合规次数'],['other_bonus','其他加分']])body+=c.field(k,l,'number',old[k]??'',{required:false,min:0,step:k==='other_bonus'?0.01:1});
+   for(const[k,l]of [['target_reference','年度任务下达依据'],['staff_basis','组织人数依据'],['self_report','单位自评报告'],['discipline_reference','正式处理或处分依据'],['other_bonus_basis','其他加分依据']])body+=c.field(k,l,'textarea',old[k]||'',{required:k==='self_report'});
+   body+=c.field('confirmed_veto','已确认一票否决','checkbox',old.confirmed_veto||false);
+-  return commonForm('学院年度自评',body,v=>{let{org_id,period_id,policy_id,reason,basis,...data}=v;if(x){org_id=x.org_id;period_id=x.period_id}data={...data,compliance_failures:data.compliance_failures??0,other_bonus:data.other_bonus??0};return c.api('/social/annuals'+(x?'/'+x.id:''),{method:x?'PUT':'POST',body:{org_id,period_id,policy_id,reason,basis,...(x?{expected_version:x.version}:{}),data:{...data,achievements:workspace.resources.filter(r=>{const period=c.periods.find(p=>p.id===period_id),date=r.data.confirmed_on;return r.kind==='achievement'&&r.org_id===org_id&&r.data.source!=='satisfaction'&&date&&period&&date>=period.start_date&&date<=period.end_date}).map(r=>({reference:r.code,name:r.name,level:r.data.level,confirmed_on:r.data.confirmed_on,recognition_reference:r.data.recognition}))}}})});
++  return commonForm('学院年度自评',body,v=>{let{org_id,period_id,policy_id,reason,basis,...data}=v;if(x){org_id=x.org_id;period_id=x.period_id}data={...data,compliance_failures:data.compliance_failures??0,other_bonus:data.other_bonus??0};return c.api('/social/annuals'+(x?'/'+x.id:''),{method:x?'PUT':'POST',body:{org_id,period_id,policy_id,reason,basis,...(x?{expected_version:x.version}:{}),data:{...data,achievements:workspace.resources.filter(r=>{const period=c.periods.find(p=>p.id===period_id),date=r.data.confirmed_on;return r.kind==='achievement'&&r.org_id===org_id&&r.data.source!=='satisfaction'&&date&&period&&date>=period.start_date&&date<=period.end_date}).map(r=>({reference:r.code,name:r.name,level:r.data.level,confirmed_on:r.data.confirmed_on,recognition_reference:r.data.recognition}))}}})},x?{reopen:true}:{submit:'保存自评',hint:'保存后会打开自评，上传自评材料后点“提交学院自评”。',after:r=>r?.item?.id?showDetail('social_annual',r.item.id):null});
+  }
+  if(action==='social-transition'){
+-  const x=opened.item;return commonForm('办理确认',c.note('当前：'+opened.state_label)+(id==='file'&&(x.data.category==='subsidy'||x.data.high_risk)?c.field('prior_review_on','正式前置审核日期','date'):''),async v=>{const route=opened.kind==='social_resource'?(x.kind==='correction'?'corrections':'reports'):{social_project:'projects',social_claim:'claims',social_annual:'annuals',social_policy:'policies'}[opened.kind];await c.api('/social/'+route+'/'+x.id+'/actions',{method:'POST',body:{...v,expected_version:x.version,action:id}})},{submit:'确认办理'});
++  const x=opened.item,label=opened.labels?.[id]||'办理确认',back=['return','refile','dispute'].includes(id),reasons={submit:'材料已备齐，提交审核',approve:'审核通过',file:'材料齐全，同意备案',close:'结项材料核验通过',archive:'公示期满，予以归档',activate:'按学校书面确认启用',record_basis:'登记学校书面确认依据',publish:'委员会评分完成',finance:'财务核验通过',academic:'成果核验通过',discipline:'纪检核验无异议',coordinator:'归口初核通过'};return commonForm(label,(id==='submit'&&(opened.trial?.blockers||[]).length?c.note('系统检查发现以下问题，提交会被拦下，请先处理：'+opened.trial.blockers.join('；'),true):'')+(['submit','activate'].includes(id)&&!(opened.attachments||[]).length?c.note('还没有上传佐证材料，这一步会被系统拦下。请点“返回详情”，先“上传佐证”，再来办理。',true):'')+c.note('当前状态：'+opened.state_label+(back?'。请写清原因，对方会看到这段说明。':''))+(id==='file'&&(x.data.category==='subsidy'||x.data.high_risk)?c.field('prior_review_on','正式前置审核日期','date'):''),async v=>{const route=opened.kind==='social_resource'?(x.kind==='correction'?'corrections':'reports'):{social_project:'projects',social_claim:'claims',social_annual:'annuals',social_policy:'policies'}[opened.kind];await c.api('/social/'+route+'/'+x.id+'/actions',{method:'POST',body:{...v,expected_version:x.version,action:id}})},{submit:(/^确认/.test(label)?'':'确认')+label.replace(/（.*$/,''),reasonLabel:back?(id==='return'?'退回原因（告诉对方要补什么）':'说明'):'办理意见',reasonDefault:(id==='approve'&&opened.archiveStep?'审核材料齐全，归档入账':reasons[id])||'',reopen:true,...(id==='record_basis'?{basisLabel:'学校书面依据文号',basisRequired:true}:{})});
+  }
+  if(action==='social-upload'){
+-  const x=opened.item,k=opened.kind;return commonForm('上传社会培训佐证',c.field('file','选择佐证文件','file','',{accept:'.pdf,.png,.jpg,.jpeg'}),async(v,f)=>{const data=new FormData(f);data.set('expected_version',String(x.version));await c.api('/attachments/'+k+'/'+x.id,{method:'POST',body:data})});
++  const x=opened.item,k=opened.kind;return commonForm('上传社会培训佐证',c.field('file','选择佐证文件','file','',{accept:'.pdf,.png,.jpg,.jpeg'}),async(v,f)=>{const data=new FormData(f);data.set('expected_version',String(x.version));await c.api('/attachments/'+k+'/'+x.id,{method:'POST',body:data})},{submit:'上传',reasonLabel:'材料说明',reasonDefault:'补充佐证材料',reopen:true});
+  }
+  if(action==='social-close'){
+-  let body=c.field('funding_source','财务确认的资金来源','select','',{required:false,options:[['','请确认资金来源（非零收入必填）'],['other_training','其他培训收入'],['government_special','政府专项培训资金']]})+c.field('funding_basis','政府专项主管部门规定及财务核验依据','textarea','',{required:false,hint:'专项资金有收入时必填；按主管部门规定专款专用，不套用其他收入比例'})+c.field('closed_on','结项日期','date')+c.field('outcome_report','成果报告','textarea')+c.field('satisfaction','满意度（百分比）','number','',{min:0,max:100,step:0.01})+c.field('actual_income','财务确认到账收入','number',0,{min:0,step:0.01})+c.field('finance_reference','财务核验凭据')+c.field('location','培训地点类型','select','onsite',{options:[['onsite','校内'],['offsite','校外']]})+c.field('implicit_cost','隐性成本','number',0,{min:0,step:0.01})+c.field('settlement_on','经费结算日期','date','',{required:false})+c.note('其他培训收入分配：校内留存不低于20%、人员支出不高于60%；校外留存不低于10%、人员支出不高于70%；项目公用20%。非零其他收入两项金额必填，零收入可留空。政府专项按主管部门规定核验。')+c.field('retained','学校留存（元）','number','',{min:0,step:0.01,required:false})+c.field('personnel','校内人员支出（元）','number','',{min:0,step:0.01,required:false});
+-  for(const[k,l]of [['province_receipt','省平台报送凭证'],['special_evidence','专项参训与成果材料'],['rectification','整改报告与期限']])body+=c.field(k,l,'textarea','',{required:false});
+-  body+=c.field('rectification_due','整改办理期限（满意度低于85%须填写）','date','',{required:false});for(const[k,l]of Object.entries({plan:'培训方案',filing_form:'学校制式备案登记表',roster:'学员名册',attendance:'实名签到',hours:'学时记录',process:'培训过程影像',assessment:'结业考核',outcomes:'培训成果'}))body+=c.field('checked_'+k,l+'已核对','checkbox',false);return commonForm('提交项目结项',body,v=>{const{reason,basis,...raw}=v;const materials_checked=Object.keys(raw).filter(k=>k.startsWith('checked_')&&raw[k]).map(k=>k.slice(8));for(const k of Object.keys(raw))if(k.startsWith('checked_'))delete raw[k];raw.materials_checked=materials_checked;raw.funding_source=raw.funding_source||null;raw.rectification_due=raw.rectification_due||null;for(const k of ['retained','personnel'])if(raw[k]===''||raw[k]==null)delete raw[k];return c.api('/social/projects/'+opened.id+'/actions',{method:'POST',body:{reason,basis,expected_version:opened.item.version,action:'close_submit',closeout:{...raw,settlement_on:raw.settlement_on||null}}})});
++  const subsidy=opened.item.data.category==='subsidy',wrap=(id,html)=>'<div class="social-cond" id="cond-'+id+'" style="display:contents">'+html+'</div>';
++  let body=(!(opened.attachments||[]).length?c.note('还没有上传结项佐证材料，提交会被系统拦下。请点“返回详情”，先“上传佐证”（签到表、成果报告、财务凭证等）。',true):'')+formSection('一、结项情况',c.field('closed_on','结项日期','date')+c.field('satisfaction','满意度（百分比）','number','',{min:0,max:100,step:0.01})+c.field('location','培训地点类型','select','onsite',{options:[['onsite','校内'],['offsite','校外']]})+c.field('outcome_report','成果报告','textarea','',{full:true}))
++   +formSection('二、经费与财务核验',c.field('actual_income','财务确认到账收入（元）','number',0,{min:0,step:0.01})+c.field('funding_source','财务确认的资金来源','select','',{required:false,options:[['','请确认资金来源（非零收入必填）'],['other_training','其他培训收入'],['government_special','政府专项培训资金']]})+c.field('finance_reference','财务核验凭据')+c.field('implicit_cost','隐性成本（元）','number',0,{min:0,step:0.01})+c.field('settlement_on','经费结算日期','date','',{required:false})
++    +wrap('split',c.field('retained','学校留存（元）','number','',{min:0,step:0.01,required:false})+c.field('personnel','校内人员支出（元）','number','',{min:0,step:0.01,required:false})+'<p class="hint full" id="close-split-hint"></p>')
++    +wrap('special',c.field('funding_basis','政府专项主管部门规定及财务核验依据','textarea','',{required:false,full:true,hint:'专项资金有收入时必填；按主管部门规定专款专用，不套用其他收入比例'})),'其他培训收入分配：校内留存不低于20%、人员支出不高于60%；校外留存不低于10%、人员支出不高于70%；项目公用20%。非零其他收入两项金额必填，零收入可留空。政府专项按主管部门规定核验。')
++   +(subsidy?formSection('三、补贴项目专项材料',c.field('province_receipt','省平台报送凭证','textarea','',{required:false})+c.field('special_evidence','专项参训与成果材料','textarea','',{required:false}),'补贴性培训须登记省平台报送凭证和专项材料，否则结项核验不能通过。'):'')
++   +wrap('rect',formSection('整改（满意度低于85%时填写）',c.field('rectification','整改报告与期限','textarea','',{required:false})+c.field('rectification_due','整改办理期限','date','',{required:false})))
++   +formSection('结项材料核对','<div class="form-field full"><label class="flex" style="gap:8px;font-weight:600"><input type="checkbox" id="close-check-all">以下材料全部已核对</label></div>'+Object.entries({plan:'培训方案',filing_form:'学校制式备案登记表',roster:'学员名册',attendance:'实名签到',hours:'学时记录',process:'培训过程影像',assessment:'结业考核',outcomes:'培训成果'}).map(([k,l])=>c.field('checked_'+k,l+'已核对','checkbox',false)).join(''),'逐项对照纸质或电子材料核对后勾选。');
++  setTimeout(()=>bindCloseForm(),0);
++  return commonForm('提交项目结项',body,v=>{const{reason,basis,...raw}=v;const materials_checked=Object.keys(raw).filter(k=>k.startsWith('checked_')&&raw[k]).map(k=>k.slice(8));for(const k of Object.keys(raw))if(k.startsWith('checked_'))delete raw[k];raw.materials_checked=materials_checked;raw.funding_source=raw.funding_source||null;raw.rectification_due=raw.rectification_due||null;for(const k of ['retained','personnel'])if(raw[k]===''||raw[k]==null)delete raw[k];return c.api('/social/projects/'+opened.id+'/actions',{method:'POST',body:{reason,basis,expected_version:opened.item.version,action:'close_submit',closeout:{...raw,settlement_on:raw.settlement_on||null}}})},{reopen:true,submit:'提交结项核验',reasonLabel:'办理说明',reasonDefault:'项目已完成，提交结项核验'});
+  }
++
+  if(action==='social-unit-import'){
+   const header='单元编号\t课程编号\t班级编号\t模块名称\t培训日期\t学员编号\t本校全日制生\t准毕业生例外\t实名签到\t学时达标\t全程参训\t结业通过\t重点群体\t剔除原因\t教师工号\t岗位\t人员类型\t佐证说明';
+-  return commonForm('参训明细预检',c.note('从表格粘贴以下18列；学员编号使用学校内部编号，不填写身份证号。多人同堂使用相同单元编号。')+c.field('rows','表头与明细（制表符分隔）','textarea',header,{rows:12,full:true}),async v=>{
+-   const rows=parseTrainingRows(v.rows,opened.item.data.mode,c.teachers),body={rows,expected_version:opened.item.version,reason:v.reason,basis:v.basis};const preview=await c.api('/social/projects/'+opened.id+'/units/preview',{method:'POST',body});
+-   const projectId=opened.id;setTimeout(()=>c.formModal('确认参训明细入库',c.note('预检通过：'+preview.rows+'个核算单元，有效'+preview.effective+'人次，剔除'+preview.excluded+'人次。'),async()=>{await c.api('/social/projects/'+projectId+'/units/confirm',{method:'POST',body:{...body,preview_hash:preview.preview_hash}});c.closeModal();await c.render()},{submit:'确认整批入库'}),0);
+-  },{submit:'只做预检'});
++  const code=opened.item.data.code,list=await c.api('/social/workspace?section=courses&q='+encodeURIComponent(code)).then(w=>(w.courses?.items||w.courses||[]).filter(x=>x.project_code===code)).catch(()=>[]);
++  setTimeout(()=>typeof document!=='undefined'&&document.getElementById('unit-template')?.addEventListener('click',()=>{const sample=['U001','C001','B01','模块一','2026-09-10','S0001','否','否','是','是','是','是','否','','J001','主讲','校内','签到表第1页'];const blob=new Blob(['\ufeff'+header.split('\t').join(',')+'\r\n'+sample.join(',')+'\r\n'],{type:'text/csv;charset=utf-8'}),a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download='参训明细导入模板.csv';a.click();setTimeout(()=>URL.revokeObjectURL(a.href),5000)}),0);
++  const courseNote=list.length?c.note('本项目已登记课程（“课程编号”列填这些编号）：'+list.map(x=>x.code+' '+x.name).join('；')):c.note('本项目还没有登记课程，参训明细里的课程编号无处关联。请先点下面“返回详情”，再点“登记本项目课程”。',true);
++  return commonForm('导入参训明细',courseNote+c.note('三步完成：①下载模板，用 Excel 打开，删掉示例行后按行填写（每位学员每个单元一行）；②另存为 CSV 后在下面选择文件，或直接从 Excel 复制整表粘贴；③先预检，确认人数无误后再入库。判断项填“是/否”，学员编号用学校内部编号，不填身份证号。')+'<div class="form-field full"><button type="button" class="btn light" id="unit-template">下载导入模板</button><p class="hint">岗位填：主讲 / 实训指导 / 管理辅助；人员类型填：校内 / 外聘。多人同堂使用相同单元编号。</p></div>'+c.field('file','选择填好的模板（CSV）','file','',{required:false,accept:'.csv,.txt,.tsv'})+c.field('rows','或从 Excel 复制整表粘贴（含表头）','textarea',header,{rows:8,full:true,required:false}),async(v,f)=>{
++   const file=f?.querySelector('input[type=file]')?.files?.[0],text=file?await readImportFile(file):v.rows;
++   const rows=parseTrainingRows(text,opened.item.data.mode,c.teachers),body={rows,expected_version:opened.item.version,reason:v.reason,basis:v.basis};const preview=await c.api('/social/projects/'+opened.id+'/units/preview',{method:'POST',body});
++   const projectId=opened.id;setTimeout(()=>c.formModal('确认参训明细入库',c.note('预检通过：'+preview.rows+'个核算单元，有效'+preview.effective+'人次，剔除'+preview.excluded+'人次。'),async()=>{await c.api('/social/projects/'+projectId+'/units/confirm',{method:'POST',body:{...body,preview_hash:preview.preview_hash}});c.closeModal();await c.render();await showDetail('social_project',projectId).catch(()=>{})},{submit:'确认整批入库'}),0);
++  },{submit:'先预检',reasonLabel:'办理说明',reasonDefault:'导入参训明细',reopen:true,after:()=>{}});
+  }
+  if(action==='social-duties'){
+   const [duties,users]=await Promise.all([c.api('/social/duties'),c.api('/users?size=200')]);
+@@ -330,7 +369,7 @@ export async function socialAction(action,id,c){
+   return commonForm('学校社会培训审批职责',fields,v=>{const{reason,basis,...raw}=v,assignments={};for(const[k,value]of Object.entries(raw)){assignments[k]=value.split(/\s+/).filter(Boolean).map(name=>{const user=users.items.find(u=>u.username===name);if(!user)throw Error('未找到授权账号：'+name);return user.id})}return c.api('/social/duties',{method:'PUT',body:{reason,basis,expected_version:duties.version,assignments}})});
+  }
+  if(action==='social-note'){
+-  return commonForm('投诉与项目跟踪',c.field('case_reference','跟踪事项编号（再次办理使用相同编号）')+c.field('due_on','整改或结算办理期限','date','',{required:false})+c.field('kind','跟踪类型','select','complaint',{options:[['complaint','投诉'],['rectification','整改'],['settlement','结算'],...(workspace.my_duties.includes('discipline')?[['violation','登记正式处理决定']]:[])]})+(workspace.my_duties.includes('discipline')?c.field('invalidate_cohort','正式决定作废本期人次','checkbox',false)+c.field('annual_veto','正式决定触发学院年度否决','checkbox',false):'')+c.field('received_on','受理日期','date')+c.field('investigation_on','开始调查日期','date','',{required:false})+c.field('completed_on','办结日期','date','',{required:false})+c.field('major','重大投诉','checkbox',false)+c.field('reply','书面回复','textarea','',{required:false})+c.field('policy_id','已确认工作日历','select','',{options:workspace.policies.filter(p=>p.state==='ACTIVE').map(p=>[p.id,p.name])}),v=>c.api('/social/projects/'+opened.id+'/notes',{method:'POST',body:{...v,due_on:v.due_on||null,investigation_on:v.investigation_on||null,completed_on:v.completed_on||null,expected_version:opened.item.version}}));
++  return commonForm('投诉与项目跟踪',c.field('case_reference','跟踪事项编号（再次办理使用相同编号）')+c.field('due_on','整改或结算办理期限','date','',{required:false})+c.field('kind','跟踪类型','select','complaint',{options:[['complaint','投诉'],['rectification','整改'],['settlement','结算'],...(workspace.my_duties.includes('discipline')?[['violation','登记正式处理决定']]:[])]})+(workspace.my_duties.includes('discipline')?c.field('invalidate_cohort','正式决定作废本期人次','checkbox',false)+c.field('annual_veto','正式决定触发学院年度否决','checkbox',false):'')+c.field('received_on','受理日期','date')+c.field('investigation_on','开始调查日期','date','',{required:false})+c.field('completed_on','办结日期','date','',{required:false})+c.field('major','重大投诉','checkbox',false)+c.field('reply','书面回复','textarea','',{required:false})+c.field('policy_id','已确认工作日历','select','',{options:workspace.policies.filter(p=>p.state==='ACTIVE').map(p=>[p.id,p.name])}),v=>c.api('/social/projects/'+opened.id+'/notes',{method:'POST',body:{...v,due_on:v.due_on||null,investigation_on:v.investigation_on||null,completed_on:v.completed_on||null,expected_version:opened.item.version}}),{reopen:true});
+  }
+ }
+ 
+diff --git a/tests/js/social-audit-regressions.test.mjs b/tests/js/social-audit-regressions.test.mjs
+index 8ec1f27..4327d84 100755
+--- a/tests/js/social-audit-regressions.test.mjs
++++ b/tests/js/social-audit-regressions.test.mjs
+@@ -46,7 +46,7 @@ test('结项表单要求明确资金分类，零收入空来源按空值提交',
+  const c=context({'/social/projects':{}});await socialAction('social-close','',c);
+  assert.match(c.formData.body,/name="funding_source"/);assert.match(c.formData.body,/name="funding_basis"/);assert.match(c.formData.body,/政府专项按主管部门规定/);
+  await c.formData.save({reason:'合成结项',basis:'合成依据',funding_source:'',actual_income:0,retained:'',personnel:'',rectification_due:'',settlement_on:''});
+- assert.equal(c.requests.at(-1).options.body.closeout.funding_source,null);
++ assert.equal(c.requests.findLast(r=>r.options?.body?.closeout).options.body.closeout.funding_source,null);
+ });
+ test('台账人员关联使用明确账号与最新版本，拒绝只凭姓名',async()=>{
+  const d={id:'l1',version:7,can_draft:true,data:{rows:[{row_no:4,name:'合成项目',allocations:[{name:'同名教师'}]}]},teacher_options:[{id:'t1',name:'同名教师',employee_no:'J001'},{id:'t2',name:'同名教师',employee_no:'J002'}]};
+diff --git a/tests/js/social-training.test.mjs b/tests/js/social-training.test.mjs
+index 0971a1a..3ce7290 100755
+--- a/tests/js/social-training.test.mjs
++++ b/tests/js/social-training.test.mjs
+@@ -138,7 +138,7 @@ async function pickerContext(action,items){
+  context.api=async(url,options)=>{
+   context.requests.push(url);
+   if(options){context.posts.push({url,...options});return {}}
+-  if(url==='/social/project-options')return {items,q:'',page:1,size:20,total:450};
++  if(['/social/project-options','/social/project-options?mine=true'].includes(url))return {items,q:'',page:1,size:20,total:450};
+   return context.lookup(url);
+  };
+  await socialAction(action,'',context);
+@@ -157,7 +157,7 @@ test('课程和个人积分从项目候选接口取值，分别提交项目编
+  const project={id:'project-450',code:'PROJECT-450',name:'候选<img src=x onerror="alert(1)">',cohort:'第三期'};
+  for(const [action,name,key,url] of [['social-course-new','project_code','code','/social/courses'],['social-claim-new','project_id','id','/social/claims']]){
+   const context=await pickerContext(action,[project]),modal=context.modals[0];
+-  assert.deepEqual(context.requests,['/social/project-options']);
++  assert.deepEqual(context.requests,[action==='social-claim-new'?'/social/project-options?mine=true':'/social/project-options']);
+   assert.ok(modal.body.includes('<select id="f-'+name+'" name="'+name+'">'));
+   assert.ok(modal.body.includes('<option value="'+project[key]+'">'));
+   assert.ok(modal.body.includes(escapeHtml(project.name)));
+diff --git a/tests/r2/test_social_browser.py b/tests/r2/test_social_browser.py
+index 618cb06..fa653a0 100755
+--- a/tests/r2/test_social_browser.py
++++ b/tests/r2/test_social_browser.py
+@@ -64,21 +64,24 @@ def test_social_menu_form_resources_and_refresh_in_browser(tmp_path,monkeypatch)
+             page.get_by_role('button',name='查看资源',exact=True).click();page.get_by_role('button',name='查看详情',exact=True).click()
+             page.get_by_text('学校确认的演示资源',exact=True).wait_for();page.get_by_role('button',name='关闭窗口').first.click()
+             page.locator('[data-action="nav"][data-id="projects"]').first.click()
+-            def open_project():page.get_by_role('button',name='查看与办理',exact=True).first.click()
++            def open_project():
++                # 办理完成后会自动回到详情；先关掉详情再从列表重新打开，保证每一步从最新列表进入。
++                if page.locator('#modal-root .modal').count():page.get_by_role('button',name='关闭窗口').first.click()
++                page.get_by_role('button',name='查看与办理',exact=True).first.click()
+             def confirm(label):
+                 page.get_by_role('button',name=label,exact=True).click();page.locator('#f-reason').fill('隔离正常账号浏览器验证');page.locator('#f-basis').fill('隔离审核依据');page.locator('button[form="edit-form"]').first.click()
+             open_project();page.get_by_role('button',name='上传佐证',exact=True).click();page.locator('input[type=file]').set_input_files(str(proof));page.locator('#f-reason').fill('隔离材料上传');page.locator('button[form="edit-form"]').first.click()
+-            open_project();confirm('提交审核备案');page.get_by_text('待审核备案',exact=True).wait_for()
+-            open_project();confirm('完成审核备案');page.get_by_text('已备案',exact=True).wait_for()
++            open_project();confirm('提交审核备案');page.get_by_text('待审核备案',exact=True).first.wait_for()
++            open_project();confirm('完成审核备案');page.get_by_text('已备案',exact=True).first.wait_for()
+             open_project();page.get_by_role('button',name='导入参训明细',exact=True).click()
+             header=page.locator('#f-rows').input_value();line='\t'.join(['UNIT-1','BROWSER-C1','CLASS-1','实操模块','2026-10-08','LEARNER-1','否','否','是','是','是','是','是','','J001','主讲','校内','隔离完整参训依据'])
+             page.locator('#f-rows').fill(header+'\n'+line);page.locator('#f-reason').fill('隔离参训明细预检');page.locator('button[form="edit-form"]').first.click()
+             page.get_by_role('button',name='确认整批入库',exact=True).click();open_project();page.get_by_role('button',name='提交结项',exact=True).click()
+             for key,value in {'closed_on':'2026-10-08','outcome_report':'隔离完整结项报告','satisfaction':'96','finance_reference':'公益零收入确认','settlement_on':'2026-10-08','reason':'隔离结项核验'}.items():page.locator('#f-'+key).fill(value)
+             for key in ['plan','filing_form','roster','attendance','hours','process','assessment','outcomes']:page.locator('#f-checked_'+key).check()
+-            page.locator('button[form="edit-form"]').first.click();page.get_by_text('待结项核验',exact=True).wait_for()
+-            open_project();confirm('核验通过结项');page.get_by_text('已结项',exact=True).wait_for()
+-            page.reload();page.get_by_text('已结项',exact=True).wait_for();open_project()
++            page.locator('button[form="edit-form"]').first.click();page.get_by_text('待结项核验',exact=True).first.wait_for()
++            open_project();confirm('核验通过结项');page.get_by_text('已结项',exact=True).first.wait_for()
++            page.reload();page.get_by_text('已结项',exact=True).first.wait_for();open_project()
+             page.screenshot(path=str(output/'04-project-closed.png'),full_page=True,animations='disabled')
+             with page.expect_download() as download:page.get_by_role('button',name='导出办理材料',exact=True).click()
+             assert download.value.suggested_filename.endswith('.xlsx')

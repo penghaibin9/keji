@@ -1,0 +1,8 @@
+{
+  "parent": "20261008_0002",
+  "revision": "20261009_0003",
+  "sha256": {
+    "backend/alembic/versions/20261009_0003_teacher_course_terms.py": "29a6013f78be41a2e89ceb057ba76d34318723c21a6f5ce24c14d1ec3524cb77",
+    "backend/teaching_schema.json": "0616696a73ca6cf0256c5c4d15c9c8ff31e684d7f07740a09ccd146f54c197ea"
+  }
+}

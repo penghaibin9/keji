@@ -13,6 +13,7 @@ import gzip
 import json
 import os
 from pathlib import Path
+import re
 import secrets
 import shutil
 import stat
@@ -94,8 +95,50 @@ def sync_backup_tree(root):
         fsync_dir(directory)
 
 
+def redact_diagnostic(value):
+    if isinstance(value,bytes):value=value.decode('utf-8',errors='replace')
+    value=re.sub(r'[A-Za-z][A-Za-z0-9+.-]*://[^\s\'"<>]+','***',value or '')
+    value=re.sub(r'''(?i)(\b[\w.-]*(?:password|passwd|pwd|secret|token|api[_-]?key)[\w.-]*["']?\s*[:=]\s*)(?:"[^"\r\n]*"|'[^'\r\n]*'|[^\s,;]+)''',r'\1***',value)
+    return re.sub(r'(?<![A-Za-z0-9_+/.=-])[A-Za-z0-9_+/.=-]{24,}','***',value)
+
+
+def command_summary(command):
+    # Only known command/service words are useful; arbitrary positional values may be secrets.
+    words={'docker','compose','config','ps','stop','up','run','exec','image','inspect','version',
+           'migrate','api','worker','frontend','db','mysql','mysqldump','python','alembic','upgrade','head','check','init','verify','id'}
+    result=[];skip=False
+    for arg in command:
+        if skip:skip=False;continue
+        if arg in {'--env-file','-f','--defaults-extra-file','-e','-c'}:skip=True;continue
+        if any(word in arg.lower() for word in ('password','secret','token','://')):
+            skip=arg.startswith('-') and '=' not in arg;continue
+        if arg in words:result.append(arg)
+    return ' '.join(result[:12])
+
+
+def diagnostic_error(root,stage,command,returncode,stderr,message):
+    ident=secrets.token_hex(4);error=ControlError(message+'; diagnostic id='+ident)
+    error.diagnostic_id=ident;error.stage=stage or 'unknown';error.diagnostic_written=False
+    try:
+        root=Path(root) if root is not None else Path(__file__).resolve().parents[1]
+        logdir=safe_directory(root/'runtime/logs',0o700);os.chmod(logdir,0o700)
+        record={'time':datetime.now(timezone.utc).isoformat(),'id':ident,'stage':error.stage,
+                'command':command_summary(command),'returncode':returncode,
+                'stderr':'\n'.join(redact_diagnostic(stderr).splitlines()[-40:])}
+        fd=os.open(logdir/'deploy-diagnostics.log',os.O_WRONLY|os.O_CREAT|os.O_APPEND|os.O_NOFOLLOW|os.O_NONBLOCK,0o600)
+        with os.fdopen(fd,'a',encoding='utf-8') as log:
+            info=os.fstat(log.fileno())
+            if not stat.S_ISREG(info.st_mode) or info.st_nlink!=1 or info.st_uid!=os.geteuid():
+                raise ControlError('unsafe diagnostic log')
+            os.fchmod(log.fileno(),0o600)
+            log.write(json.dumps(record,ensure_ascii=False)+'\n');log.flush();os.fsync(log.fileno())
+        error.diagnostic_written=True
+    except Exception:pass # A full disk or unsafe log path must not replace the command failure.
+    return error
+
+
 class Runner:
-    def run(self,command,*,extra_env=None,input_bytes=None,input_stream=None,output=None,timeout=180):
+    def run(self,command,*,extra_env=None,input_bytes=None,input_stream=None,output=None,timeout=180,root=None,stage=None):
         if input_stream is not None and input_bytes is not None:raise ControlError('ambiguous command input')
         env=os.environ.copy()
         for key in list(env):
@@ -106,10 +149,11 @@ class Runner:
         try:
             result=subprocess.run(command,stdin=input_stream,input=input_bytes,stdout=output if output is not None else subprocess.PIPE,
                                   stderr=subprocess.PIPE,env=env,timeout=timeout,check=False)
-        except (OSError,subprocess.TimeoutExpired):
-            raise ControlError('command unavailable or timed out; output suppressed') from None
+        except (OSError,subprocess.TimeoutExpired) as exc:
+            stderr=exc.stderr if isinstance(exc,subprocess.TimeoutExpired) else str(exc)
+            raise diagnostic_error(root,stage,command,None,stderr,'command unavailable or timed out; output suppressed') from None
         if result.returncode:
-            raise ControlError('command failed; sensitive command output suppressed')
+            raise diagnostic_error(root,stage,command,result.returncode,result.stderr,'command failed; sensitive command output suppressed')
         return result.stdout or b''
 
 
@@ -143,7 +187,7 @@ class Maintenance:
         return self
     def mark(self,stage,**diagnostics):
         if not self.owned or self.fd is None or self.done:raise ControlError('operation does not own maintenance')
-        self.stage=stage
+        self.stage=stage;self.pipeline.stage=stage
         write_json(self.active,{'operation':self.operation,'owner_pid':os.getpid(),'started_at':self.started,
                                'stage':stage,'accepting_requests':False,**diagnostics},0o644)
     def success(self):
@@ -174,9 +218,9 @@ class Maintenance:
 
 class Pipeline:
     def __init__(self,root,runner=None):
-        self.root=Path(root).resolve();self.runner=runner or Runner();self.config={}
+        self.root=Path(root).resolve();self.runner=runner or Runner();self.config={};self.stage=None
         self.compose=['docker','compose','--env-file',str(self.root/'deploy/.env'),'-f',str(self.root/'deploy/compose.yml')]
-    def dc(self,*args,**kwargs):return self.runner.run(self.compose+list(args),**kwargs)
+    def dc(self,*args,**kwargs):return self.runner.run(self.compose+list(args),root=self.root,stage=self.stage,**kwargs)
     def preflight(self,operation):
         # Never stop a school before detecting the current missing-source baseline.
         assembly=inspect_assembly(self.root)
@@ -204,7 +248,7 @@ class Pipeline:
         self.dc('config','--quiet')
         # The declared MySQL image must match the private file ownership contract.
         actual_uid=self.runner.run(['docker','run','--rm','--network','none','--pull','never',
-            '--entrypoint','id',self.config['ND_MYSQL_IMAGE'],'-u','mysql']).strip()
+            '--entrypoint','id',self.config['ND_MYSQL_IMAGE'],'-u','mysql'],root=self.root,stage=self.stage).strip()
         if actual_uid!=str(DB_UID).encode():raise ControlError('MySQL image user identity mismatch')
     def installation_receipt(self):
         raw = self.dc('run','--rm','--no-deps','--pull','never','migrate',
@@ -232,7 +276,7 @@ class Pipeline:
         expected={}
         for name,ref in (('api',api),('frontend',frontend)):
             validate_image(ref)
-            result=json.loads(self.runner.run(['docker','image','inspect',ref]))
+            result=json.loads(self.runner.run(['docker','image','inspect',ref],root=self.root,stage=self.stage))
             if len(result)!=1 or not isinstance(result[0].get('Id'),str) or not result[0]['Id'].startswith('sha256:'):
                 raise ControlError('requested image could not be resolved')
             expected[name]=result[0]['Id']
@@ -242,7 +286,7 @@ class Pipeline:
         for service in START_ORDER:
             ids=self.dc('ps','-q',service).decode().split()
             if not ids:raise ControlError('new service container missing')
-            containers=json.loads(self.runner.run(['docker','inspect',*ids]))
+            containers=json.loads(self.runner.run(['docker','inspect',*ids],root=self.root,stage=self.stage))
             if len(containers)!=len(ids):raise ControlError('container inspection incomplete')
             for container in containers:
                 if container.get('Image')!=expected[service] or container.get('State',{}).get('Running') is not True:
@@ -436,8 +480,11 @@ def main():
         elif a.operation=='upgrade':result=pipeline.run_upgrade(a.api,a.frontend)
         elif a.operation=='install':result=pipeline.run_install()
         else:result=pipeline.run_restore(a.backup,a.username)
-    except (ControlError,ValueError,OSError):
-        p.exit(2,'BLOCKED: operation failed. Inspect source assembly and runtime/maintenance/active; writes are not automatically reopened.\n')
+    except (ControlError,ValueError,OSError) as exc:
+        error=exc if getattr(exc,'diagnostic_id',None) else diagnostic_error(pipeline.root,pipeline.stage,[],None,str(exc),'operation failed')
+        hint=f' at stage {error.stage}; see runtime/logs/deploy-diagnostics.log id={error.diagnostic_id}'
+        if not error.diagnostic_written:hint+=' (diagnostic log unavailable)'
+        p.exit(2,'BLOCKED: operation failed'+hint+'. Inspect source assembly and runtime/maintenance/active; writes are not automatically reopened.\n')
     print(json.dumps(result,ensure_ascii=False))
 
 if __name__=='__main__':main()

@@ -17,6 +17,13 @@ from app.reference_data import (TrainingProjectMaster,TrainingCourseMaster,Inbou
     preview_inbound,confirm_inbound,validate_inbound)
 REASON={'reason':'R5隔离回归测试','basis':'合成测试，不是学校验收'}
 
+def run_due_sync(db,task,registry):
+    # Explicit due tick survives MySQL's whole-second timestamp rounding.
+    for item in task_sync_items(db,task):
+        if item.state in {'PENDING','RETRY'}:item.next_at=utcnow()-timedelta(seconds=2)
+    return process_sync_task_once(db,task,registry)
+
+
 class ContractAdapter:
     """No network operations: a deliberate protocol double, test DB only."""
     adapter_id='unit.protocol.contract'
@@ -95,7 +102,7 @@ def test_sync_requires_explicit_positive_ack_and_logs_failure(app2,response):
         if response is None:adapter.send=lambda **kwargs:None
         registry=AdapterRegistry();registry.register_for_test('middle',adapter)
         task=enqueue_sync(db,_actor(db,'schooladmin'),c,'training_project',[{'business_key':'R5ACK','code':'RP','name':'项目'}],'测试')
-        process_sync_task_once(db,task,registry);db.flush()
+        run_due_sync(db,task,registry);db.flush()
         item=task_sync_items(db,task)[0];log=db.scalar(select(SyncCallLog).where(SyncCallLog.item_id==item.id))
         assert task.state=='RETRY' and item.state=='RETRY' and log.result=='ERROR' and not log.acknowledged
 
@@ -104,8 +111,8 @@ def test_reused_sync_rows_keep_receipts_and_no_duplicate_send(app2,client2):
     with Session(app2.state.engine) as db:
         c=connection(db);c.state='CONNECTED';a=_actor(db,'schooladmin')
         one={'business_key':'R5D1','code':'D1','name':'项目1'};two={'business_key':'R5D2','code':'D2','name':'项目2'}
-        task=enqueue_sync(db,a,c,'training_project',[one],'测试');process_sync_task_once(db,task,registry)
-        next_task=enqueue_sync(db,a,c,'training_project',[one,two],'测试');process_sync_task_once(db,next_task,registry)
+        task=enqueue_sync(db,a,c,'training_project',[one],'测试');run_due_sync(db,task,registry)
+        next_task=enqueue_sync(db,a,c,'training_project',[one,two],'测试');run_due_sync(db,next_task,registry)
         assert len(adapter.calls)==2 and next_task.state=='DONE'
         assert next_task.result['total']==2 and next_task.result['reused']==1
         assert 'NEVER_PERSIST_TOKEN' not in json.dumps([x.result for x in task_sync_items(db,next_task)])

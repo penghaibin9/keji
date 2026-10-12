@@ -50,6 +50,7 @@ class User(Entity, Base):
     role_id: Mapped[str] = mapped_column(ForeignKey("roles.id"), index=True)
     password_hash: Mapped[str] = mapped_column(String(255))
     active: Mapped[bool] = mapped_column(Boolean, default=True)
+    authorization_pending: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False, server_default="0")
     is_admin: Mapped[bool] = mapped_column(Boolean, default=False)
     must_change_password: Mapped[bool] = mapped_column(Boolean, default=True)
     auth_version: Mapped[int] = mapped_column(Integer, default=1)
@@ -63,6 +64,7 @@ class AuthSession(Base):
     csrf: Mapped[str] = mapped_column(String(64))
     user_id: Mapped[str] = mapped_column(ForeignKey("users.id"), index=True)
     auth_version: Mapped[int] = mapped_column(Integer)
+    auth_method: Mapped[str] = mapped_column(String(10), nullable=False, default="local", server_default="local")
     expires_at: Mapped[datetime] = mapped_column(DateTime, index=True)
     last_seen: Mapped[datetime] = mapped_column(DateTime)
 

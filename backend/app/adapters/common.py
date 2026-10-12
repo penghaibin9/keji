@@ -329,11 +329,11 @@ def validate_adapter_config(adapter):
                     except ValueError:raise AdapterContractError('ADAPTER_PATH_INVALID') from None
                 if key in object_keys and not isinstance(item,dict):raise AdapterContractError('ADAPTER_CONFIG_INVALID')
                 if key=='method' and item not in {'GET','POST','PUT','PATCH','DELETE'}:raise AdapterContractError('REQUEST_METHOD_INVALID')
-                if key in {'auth','login_auth'} and item.get('mode','none') not in {'none','bearer','header','basic','hmac_sha256','signature','oauth2_client_credentials'}:
+                if key in {'auth','login_auth'} and item.get('mode','none') not in {'none','bearer','header','basic','hmac_sha256','signature','oauth2_client_credentials','datahub_access_token'}:
                     raise AdapterContractError('AUTH_MODE_UNSUPPORTED')
                 if key=='pagination':
                     if item.get('mode','cursor') not in {'cursor','page'}:raise AdapterContractError('PULL_PAGING_INVALID')
-                    for name,low,high in [('page_size',1,1000),('max_pages',1,100),('start_page',0,1000000)]:
+                    for name,low,high in [('page_size',1,1000),('max_pages',1,1000),('start_page',0,1000000)]:
                         if name in item and (type(item[name]) is not int or not low<=item[name]<=high):raise AdapterContractError('PULL_PAGING_INVALID')
                 if key=='credential_bindings' and not isinstance(item,list):raise AdapterContractError('CREDENTIAL_BINDING_INVALID')
                 if key not in {'body','query','headers','identity_fields','org_map','authorize_params','login_params','logout_params'}:walk(item)

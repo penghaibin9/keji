@@ -57,7 +57,7 @@ def login(data:Login,request:Request):
                     if old: db.execute(delete(AuthSession).where(AuthSession.token_hash==sha256(old.encode()).hexdigest()))
                     token=secrets.token_urlsafe(32)
                     session=AuthSession(token_hash=sha256(token.encode()).hexdigest(),csrf=secrets.token_urlsafe(32),user_id=user.id,
-                         auth_version=user.auth_version,expires_at=now+timedelta(hours=cfg.session_hours),last_seen=now)
+                         auth_version=user.auth_version,auth_method='local',expires_at=now+timedelta(hours=cfg.session_hours),last_seen=now)
                     db.add(session);user.failures=0;user.locked_until=None
                     request.state.actor_id,request.state.actor_name,request.state.org_id=user.id,user.name,user.org_id
                     audit(db,actor,'auth',user.id,'本地登录',after={'must_change_password':user.must_change_password},reason='本人密码登录')
@@ -69,6 +69,7 @@ def login(data:Login,request:Request):
     if failure: return JSONResponse({'detail':failure[1],'request_id':getattr(request.state,'request_id','')},failure[0])
     response=JSONResponse({'authenticated':True})
     response.set_cookie(cfg.cookie_name,token,httponly=True,secure=cfg.secure_cookie,samesite='strict',path='/',max_age=cfg.session_hours*3600)
+    response.delete_cookie('nd_sso_session',path='/',secure=cfg.secure_cookie,httponly=True,samesite='strict')
     response.delete_cookie(cfg.demo_cookie_name,path='/',secure=cfg.secure_cookie,httponly=True,samesite='strict')
     return response
 
@@ -76,10 +77,11 @@ def login(data:Login,request:Request):
 def me(request:Request):
     def result(db,a,s):
         branding=db.get(Setting,'branding')
-        return {'user':serial(a.user),'role':serial(a.role),'org':serial(a.org),'permissions':sorted(a.permissions),
+        sso=sso_session(s)
+        return {'user':{**serial(a.user),**({'must_change_password':False} if sso else {})},'role':serial(a.role),'org':serial(a.org),'permissions':sorted(a.permissions),
                 'csrf':s.csrf,'school_name':(branding.value if branding else {}).get('school_name',''),
                 'environment':request.app.state.settings.env,'demo_switch':demo_options(a),
-                'sso_session':secrets.compare_digest(request.cookies.get('nd_sso_session',''),sha256(('sso:'+request.cookies.get(request.app.state.settings.cookie_name,'')).encode()).hexdigest())}
+                'sso_session':sso}
     # csrf deliberately returned only here; generic business serial redacts it.
     with request.app.state.sessions.begin() as db:
         a,s=current_actor(db,request,allow_password=True)

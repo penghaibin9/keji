@@ -67,7 +67,7 @@ def test_archive_freezes_identity_period_rule_and_final_event(client2,app2):
     assert 'storage_key' not in proof.text
     wb=load_workbook(io.BytesIO(export(c,app2,'assessments')),read_only=True)
     rows=list(wb.active.values);wb.close()
-    assert rows[1][1]=='测试教师一' and str(rows[1][3])=='100.00'
+    assert rows[1][1]=='测试教师一' and isinstance(rows[1][3],(int,float)) and rows[1][3]==100
 
 
 @pytest.mark.parametrize('mutation',['hash','score','detail','payload','source'])

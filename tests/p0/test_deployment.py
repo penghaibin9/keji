@@ -201,7 +201,7 @@ def test_actual_fresh_source_passes_but_missing_contract_blocks_before_docker(tm
     import shutil
     report=inspect_assembly(ROOT)
     assert report['status']=='PASS'
-    assert report['observed_alembic_heads']==['20260918_0001']
+    assert report['observed_alembic_heads']==['20261012_0004']
     assert report['legacy_upgrade_allowed'] is False and report['historical_graph_verified'] is False
     source=tmp_path/'source'
     shutil.copytree(ROOT,source,ignore=shutil.ignore_patterns('.git','__pycache__','.pytest_cache','runtime','evidence'))

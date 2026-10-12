@@ -151,7 +151,7 @@ class PinnedHttpsTransport:
                                        timeout_seconds=timeout_seconds,
                                        allowed_content_types={'application/json', '*+json'})
         try:
-            value = json.loads(raw.decode('utf-8'))
+            value = json.loads(raw.decode('utf-8-sig'))
         except Exception:
             raise TransportError('UPSTREAM_JSON_INVALID') from None
         if not isinstance(value, (dict, list)):
@@ -173,7 +173,7 @@ class PinnedHttpsTransport:
                                        timeout_seconds=timeout_seconds,
                                        allowed_content_types={'application/json', '*+json'})
         try:
-            value = json.loads(raw.decode('utf-8'))
+            value = json.loads(raw.decode('utf-8-sig'))
         except Exception:
             raise TransportError('UPSTREAM_JSON_INVALID') from None
         if not isinstance(value, (dict, list)):
@@ -191,6 +191,6 @@ class PinnedHttpsTransport:
         _, _, raw = self.request_bytes(method, relative_path, headers=request_headers, body=body,
                                        timeout_seconds=timeout_seconds, allowed_content_types=allowed_content_types)
         try:
-            return raw.decode('utf-8')
+            return raw.decode('utf-8-sig')
         except UnicodeDecodeError:
             raise TransportError('UPSTREAM_TEXT_INVALID') from None

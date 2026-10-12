@@ -7,8 +7,10 @@ training is never mistaken for teaching that class or credited the class income.
 from fastapi import APIRouter,Request,HTTPException
 from sqlalchemy import select,func
 from ..core import *
-from ..schemas import ParticipationIn,ParticipationUpdate
-from ..reference_data import TrainingProjectMaster,TrainingCourseMaster,TrainingClassMaster,TeacherParticipation,TeacherHrProfile,record_reference_errors
+from ..schemas import ParticipationIn,ParticipationUpdate,Reason
+from pydantic import Field
+from .. import code_tables as codes
+from ..reference_data import TrainingProjectMaster,TrainingCourseMaster,TrainingClassMaster,TeacherParticipation,TeacherHrProfile,TeacherCourseTerm,SchoolCourse,annual_teaching_credits,UNKNOWN_YEAR,record_reference_errors,staff_roster,school_year_now,school_year_of,ROSTER_PROBLEMS,HR_PRIVATE_KEYS,credit_summary,source_status
 from ..read_queries import authorized_org_descendants
 from ..settings_catalog import business_dictionary,validate_manual_source
 
@@ -114,9 +116,12 @@ def courses(request:Request):
 
 @router.get('/reference/teacher-hr')
 def teacher_hr(request:Request):
-    f,p,z=filters_from(request,{'q','org_code','active'})
+    f,p,z=filters_from(request,{'q','org_code','active','unmatched'})
+    if f.get('unmatched') not in (None,'true'):raise HTTPException(422,'unmatched参数无效')
     def load(db,a,s):
         a.require_admin();q=select(TeacherHrProfile)
+        # 人事表有、本系统没账号: the list an admin works through to create the missing accounts.
+        if f.get('unmatched'):q=q.where(TeacherHrProfile.user_id.is_(None))
         if f.get('q'):q=q.where(TeacherHrProfile.name.contains(f['q'],autoescape=True)|TeacherHrProfile.staff_no.contains(f['q'],autoescape=True))
         if f.get('org_code'):q=q.where(TeacherHrProfile.org_code==f['org_code'])
         if f.get('active'):
@@ -124,6 +129,160 @@ def teacher_hr(request:Request):
             q=q.where(TeacherHrProfile.active.is_(f['active'] in {'true','1'}))
         return page_result(db,q.order_by(TeacherHrProfile.staff_no),p,z)
     return read_operation(request,'users.manage',load)
+
+
+# Managers see gender/education/degree only when the school turns this custom parameter on.
+HR_EDU_PARAM='param:hr_managers_see_education'
+
+def _roster_scope(db,a,f):
+    q=select(TeacherHrProfile)
+    # Staff not yet matched to a local account have no organisation here; only the school sees them.
+    q=q.where(a.scope(TeacherHrProfile.user_id)|TeacherHrProfile.user_id.is_(None)) if a.role.kind=='school' else q.where(a.scope(TeacherHrProfile.user_id))
+    if f.get('org_id'):
+        ids=authorized_org_descendants(db,a,f['org_id']);q=q.where(TeacherHrProfile.user_id.in_(select(User.id).where(User.org_id.in_(ids))))
+    if f.get('active'):
+        if f['active'] not in {'true','false'}:raise HTTPException(422,'active参数无效')
+        q=q.where(TeacherHrProfile.active.is_(f['active']=='true'))
+    if f.get('q'):q=q.where(TeacherHrProfile.name.contains(f['q'],autoescape=True)|TeacherHrProfile.staff_no.contains(f['q'],autoescape=True))
+    return q.order_by(TeacherHrProfile.staff_no)
+
+def _private_ok(db,a):
+    if a.role.kind in {'teacher','school'}:return True  # a teacher only ever gets their own row
+    flag=db.get(Setting,HR_EDU_PARAM)
+    return bool(flag and isinstance(flag.value,dict) and flag.value.get('value') is True)
+
+def _school_year(f):
+    year=f.get('school_year') or school_year_now()
+    if school_year_of(year)!=year:raise HTTPException(422,'学年格式应为 2025-2026')
+    return year
+
+@router.get('/reference/staff-roster')
+def staff_roster_view(request:Request):
+    """教职工名册 within the viewer's scope: school fields, account match, this year's credits, problems."""
+    f,p,z=filters_from(request,{'q','org_id','active','problem','school_year'})
+    if f.get('problem') not in (None,'true','false'):raise HTTPException(422,'problem参数无效')
+    def load(db,a,s):
+        year=_school_year(f);private=_private_ok(db,a);q=_roster_scope(db,a,f)
+        if f.get('problem')=='true':
+            rows=[r for r in staff_roster(db,db.scalars(q),school_year=year,private=private) if r['problems']]
+            total=len(rows);rows=rows[(p-1)*z:p*z]
+        else:
+            total=db.scalar(select(func.count()).select_from(q.order_by(None).subquery()))
+            rows=staff_roster(db,db.scalars(q.offset((p-1)*z).limit(z)),school_year=year,private=private)
+        synced=db.scalar(select(func.max(TeacherHrProfile.created_at)))
+        return {'items':rows,'total':total,'page':p,'size':z,'school_year':year,'private_fields':private,
+                'problem_labels':ROSTER_PROBLEMS,'ever_synced':synced is not None}
+    return read_operation(request,'organization.read',load)
+
+@router.get('/reference/staff-roster/{staff_no}')
+def staff_roster_detail(staff_no:str,request:Request):
+    """One teacher: roster row, every school year's credits and their 超星 courses."""
+    def load(db,a,s):
+        profile=db.scalar(_roster_scope(db,a,{}).where(TeacherHrProfile.staff_no==staff_no))
+        if profile is None:raise HTTPException(404,'教师不存在或不在授权范围')
+        row=staff_roster(db,[profile],school_year=school_year_now(),private=_private_ok(db,a))[0]
+        terms=db.scalars(select(TeacherCourseTerm).where(TeacherCourseTerm.staff_no==staff_no,TeacherCourseTerm.active.is_(True))).all()
+        years=[{k:g[k] for k in ('school_year','jw_credit','cx_credit','total_credit','courses','missing_credit')} for g in annual_teaching_credits(db,terms)]
+        online=[{'course_code':t.course_code,'course_name':t.course_name,'term_name':t.term_name,'credit':t.credit,'hours':t.hours,
+                 **{k:(t.extra or {}).get(k) for k in ('cover_url','course_url','group_name','chapters','course_type','course_source','archived','team_names','jw_course_code','nature','major')}}
+                for t in sorted(terms,key=lambda t:t.term_name,reverse=True) if t.origin=='CX']
+        return {'staff':row,'years':years,'online_courses':online}
+    return read_operation(request,'organization.read',load)
+
+
+@router.get('/reference/credit-summary')
+def credit_summary_view(request:Request):
+    """人均授课学分 within the viewer's scope for one school year, with one row per college."""
+    f,_,_=filters_from(request,{'org_id','school_year'})
+    def load(db,a,s):
+        if a.role.kind=='teacher':raise HTTPException(403,'人均学分仅管理角色查看')
+        year=_school_year(f)
+        return credit_summary(db,db.scalars(_roster_scope(db,a,f)),school_year=year)
+    return read_operation(request,'organization.read',load)
+
+@router.get('/reference/source-status')
+def source_status_view(request:Request):
+    """对接与同步: rows held per data-hub table and how many need follow-up."""
+    f,_,_=filters_from(request,{'school_year'})
+    def load(db,a,s):
+        if a.role.kind!='school':raise HTTPException(403,'仅学校管理角色查看全校接口数据')
+        year=_school_year(f)
+        return {'school_year':year,'items':source_status(db,school_year=year)}
+    return read_operation(request,'portal.read',load)
+
+@router.get('/reference/teacher-courses')
+def teacher_courses(request:Request):
+    """Teacher-course-term rows from the 教务 schedule (JW) and 超星 course library (CX)."""
+    f,p,z=filters_from(request,{'q','origin','term_name','staff_no'})
+    def load(db,a,s):
+        q=select(TeacherCourseTerm).where(TeacherCourseTerm.active.is_(True))
+        # Rows whose staff number has no local account yet are visible to the school admin only.
+        admin=a.role.kind=='school' and a.user.is_admin
+        q=q.where(a.scope(TeacherCourseTerm.user_id)|TeacherCourseTerm.user_id.is_(None)) if admin else q.where(a.scope(TeacherCourseTerm.user_id))
+        if f.get('origin'):
+            if f['origin'] not in {'JW','CX'}:raise HTTPException(422,'origin参数无效')
+            q=q.where(TeacherCourseTerm.origin==f['origin'])
+        for key in ('term_name','staff_no'):
+            if f.get(key):q=q.where(getattr(TeacherCourseTerm,key)==f[key])
+        if f.get('q'):
+            word=f['q'];q=q.where(TeacherCourseTerm.course_name.contains(word,autoescape=True)|TeacherCourseTerm.course_code.contains(word,autoescape=True)|TeacherCourseTerm.teacher_name.contains(word,autoescape=True)|TeacherCourseTerm.staff_no.contains(word,autoescape=True))
+        return page_result(db,q.order_by(TeacherCourseTerm.term_name.desc(),TeacherCourseTerm.staff_no,TeacherCourseTerm.course_code),p,z)
+    return read_operation(request,'records.read',load)
+
+
+@router.get('/reference/school-courses')
+def school_courses(request:Request):
+    """教务课程总库: official credit and hours per course code."""
+    f,p,z=filters_from(request,{'q','code','missing_credit'})
+    if f.get('missing_credit') not in (None,'true'):raise HTTPException(422,'missing_credit参数无效')
+    def load(db,a,s):
+        q=select(SchoolCourse).where(SchoolCourse.active.is_(True))
+        if f.get('missing_credit'):q=q.where(SchoolCourse.credit.is_(None))
+        if f.get('code'):q=q.where(SchoolCourse.code==f['code'])
+        if f.get('q'):q=q.where(SchoolCourse.name.contains(f['q'],autoescape=True)|SchoolCourse.code.contains(f['q'],autoescape=True))
+        return page_result(db,q.order_by(SchoolCourse.code,SchoolCourse.course_version.desc()),p,z)
+    return read_operation(request,'records.read',load)
+
+
+@router.get('/reference/teacher-credits')
+def teacher_credits(request:Request):
+    """Per teacher per school year: 教务 + 超星 course credits of both terms added up."""
+    f,p,z=filters_from(request,{'q','school_year','staff_no','problem','detail','org_id'})
+    for key in ('problem','detail'):
+        if f.get(key) not in (None,'true','false'):raise HTTPException(422,key+'参数无效')
+    def load(db,a,s):
+        q=select(TeacherCourseTerm).where(TeacherCourseTerm.active.is_(True))
+        admin=a.role.kind=='school' and a.user.is_admin
+        q=q.where(a.scope(TeacherCourseTerm.user_id)|TeacherCourseTerm.user_id.is_(None)) if admin else q.where(a.scope(TeacherCourseTerm.user_id))
+        if f.get('staff_no'):q=q.where(TeacherCourseTerm.staff_no==f['staff_no'])
+        if f.get('org_id'):
+            ids=authorized_org_descendants(db,a,f['org_id']);q=q.where(TeacherCourseTerm.user_id.in_(select(User.id).where(User.org_id.in_(ids))))
+        if f.get('q'):q=q.where(TeacherCourseTerm.teacher_name.contains(f['q'],autoescape=True)|TeacherCourseTerm.staff_no.contains(f['q'],autoescape=True))
+        problem=f.get('problem')=='true';detail=f.get('detail')=='true'
+        pairs=list(db.execute(q.with_only_columns(TeacherCourseTerm.staff_no,TeacherCourseTerm.term_name).distinct()))
+        groups={(staff,school_year_of(term) or UNKNOWN_YEAR) for staff,term in pairs}
+        years=sorted({year for staff,year in groups},key=lambda y:(y!=UNKNOWN_YEAR,y),reverse=True)
+        selected={key for key in groups if not f.get('school_year') or key[1]==f['school_year']}
+        if problem:
+            # shortcut: totals still inspect scoped teachers; batches bound course memory until an indexed summary is justified.
+            numbers=sorted({staff for staff,year in selected});items=[]
+            terms={term for staff,term in pairs if (school_year_of(term) or UNKNOWN_YEAR)==f['school_year']} if f.get('school_year') else None
+            for offset in range(0,len(numbers),64):
+                batch=q.where(TeacherCourseTerm.staff_no.in_(numbers[offset:offset+64]))
+                if terms is not None:batch=batch.where(TeacherCourseTerm.term_name.in_(terms))
+                items.extend(x for x in annual_teaching_credits(db,db.scalars(batch),include_details=False)
+                    if x['missing_credit'] or not x['user_id'] or not x['in_staff_table'])
+        else:items=[{'staff_no':staff,'school_year':year} for staff,year in selected]
+        items.sort(key=lambda x:x['staff_no'])
+        items.sort(key=lambda x:(x['school_year']!=UNKNOWN_YEAR,x['school_year']),reverse=True)
+        total=len(items);items=items[(p-1)*z:p*z]
+        if items and (not problem or detail):
+            keys={(x['staff_no'],x['school_year']) for x in items}
+            terms={term for staff,term in pairs if (staff,school_year_of(term) or UNKNOWN_YEAR) in keys}
+            rows=db.scalars(q.where(TeacherCourseTerm.staff_no.in_({staff for staff,year in keys}),TeacherCourseTerm.term_name.in_(terms)))
+            items=annual_teaching_credits(db,(r for r in rows if (r.staff_no,school_year_of(r.term_name) or UNKNOWN_YEAR) in keys),include_details=detail)
+        return {'items':items,'total':total,'page':p,'size':z,'years':years}
+    return read_operation(request,'records.read',load)
 
 
 @router.get('/reference/classes')
@@ -136,3 +295,29 @@ def classes(request:Request):
         if f.get('q'):q=q.where(TrainingClassMaster.name.contains(f['q'],autoescape=True)|TrainingClassMaster.code.contains(f['q'],autoescape=True))
         return page_result(db,q.order_by(TrainingClassMaster.code),p,z)
     return read_operation(request,'records.read',load)
+
+
+class CodeTableIn(Reason):
+    text: str = Field(min_length=1,max_length=200000)
+
+@router.get('/reference/code-tables')
+def code_tables_view(request:Request):
+    """学校码表：页面用它把人事和课程里的代码翻成中文。"""
+    def load(db,a,s):
+        return {'types':codes.TYPES,'tables':codes.tables(db)}
+    return read_operation(request,'portal.read',load)
+
+@router.put('/reference/code-tables/{code_type}')
+def code_table_import(code_type:str,data:CodeTableIn,request:Request):
+    """Replace one code table with rows pasted from the school's Excel (代码、名称[、是否在职])."""
+    def apply(db,a,s):
+        a.require_admin()
+        rows=codes.parse_rows(code_type,data.text)
+        row=db.get(Setting,codes.SETTING_KEY)
+        if row is None:row=Setting(key=codes.SETTING_KEY,value={'tables':{}},version=0);db.add(row)
+        value=dict(row.value or {});all_tables=dict(value.get('tables') or {})
+        before=all_tables.get(code_type)
+        all_tables[code_type]=rows;row.value={**value,'tables':all_tables};row.version=(row.version or 0)+1
+        audit(db,a,'settings',codes.SETTING_KEY,'导入学校码表：'+codes.TYPES[code_type],{'type':code_type,'rows':len(before or {})},{'type':code_type,'rows':len(rows)},data.reason)
+        return {'type':code_type,'rows':len(rows),'version':row.version}
+    return command(request,data.model_dump(),'settings.manage',apply)

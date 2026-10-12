@@ -1,0 +1,8 @@
+{
+  "revision": "20261012_0004",
+  "parent": "20261009_0003",
+  "sha256": {
+    "backend/alembic/versions/20261012_0004_session_auth_method.py": "88ecb3194f8e0ac13d85a3ae176190666434bf40f43739eccb796aa24b3a1a10",
+    "backend/auth_session_schema.json": "1ea77ea24c1c7ff35c2181ed86ebcda2b627b96cca60bf28e103c7db9b34252e"
+  }
+}

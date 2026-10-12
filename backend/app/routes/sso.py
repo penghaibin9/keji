@@ -192,10 +192,10 @@ def sso_callback(request: Request):
     expected = request.cookies.get(_state_cookie(cfg), '')
     if not state or len(state)>128 or not state.isascii() or not expected or len(expected)>128 or not expected.isascii() or len(request.query_params.getlist(state_param))!=1 or not hmac.compare_digest(state, expected):
         with request.app.state.sessions.begin() as db:
+            if state and len(state)<=128 and state.isascii():db.execute(delete(Setting).where(Setting.key==_state_key(state)))
             _record_rejection(db, request, '统一认证回调 state 校验失败', 401)
-        response = JSONResponse({'detail': '统一认证回调校验失败，请重新登录', 'request_id': getattr(request.state, 'request_id', '')}, 401)
-        response.delete_cookie(_state_cookie(cfg), path='/', secure=cfg.secure_cookie, httponly=True, samesite='lax')
-        return response
+        detail = '同一浏览器同时打开了多个登录页，请关闭其他登录页后重试' if expected and state != expected else '统一认证回调校验失败，请重新登录'
+        return JSONResponse({'detail': detail, 'request_id': getattr(request.state, 'request_id', '')}, 401)
 
     now = utcnow(); token = None; failure = None
     with request.app.state.sessions.begin() as db:
@@ -237,11 +237,15 @@ def sso_callback(request: Request):
             if not role or not org or not role.active or not org.active:
                 failure = (403, '账号组织或角色配置不可用，请联系学校管理员', '本地角色或组织配置不可用')
 
-        # Adapter must return the mapped local organization code if the school
-        # supplied an organization identity. A mismatch fails closed rather than
-        # silently retaining a stale data scope.
-        if failure is None and identity['org_code'] and identity['org_code'] != org.code:
-            failure = (403, '学校组织信息与本系统权限范围尚未同步，请联系管理员', '统一认证组织与本地权限组织不一致')
+        # Schools may supply a parent organization; authorization still uses the local organization.
+        if failure is None and identity['org_code']:
+            ancestor=org;seen=set()
+            while ancestor and ancestor.id not in seen and len(seen)<10:
+                if identity['org_code']==ancestor.code:break
+                seen.add(ancestor.id)
+                ancestor=db.get(Org,ancestor.parent_id) if ancestor.parent_id else None
+            else:
+                failure = (403, '学校组织信息与本系统权限范围尚未同步，请联系管理员', '统一认证组织与本地权限组织不一致')
 
         identity_binding_created = False
         if failure is None:
@@ -259,7 +263,7 @@ def sso_callback(request: Request):
                 db.execute(delete(AuthSession).where(AuthSession.token_hash == sha256(old.encode()).hexdigest()))
             token = secrets.token_urlsafe(32)
             session = AuthSession(token_hash=sha256(token.encode()).hexdigest(), csrf=secrets.token_urlsafe(32), user_id=user.id,
-                auth_version=user.auth_version, expires_at=now + timedelta(hours=cfg.session_hours), last_seen=now)
+                auth_version=user.auth_version, auth_method='sso', expires_at=now + timedelta(hours=cfg.session_hours), last_seen=now)
             db.add(session)
             request.state.actor_id, request.state.actor_name, request.state.org_id = user.id, user.name, user.org_id
             audit(db, actor, 'auth', user.id, '学校统一认证登录', after={
@@ -272,11 +276,10 @@ def sso_callback(request: Request):
 
     if failure is not None:
         response = JSONResponse({'detail': failure[1], 'request_id': getattr(request.state, 'request_id', '')}, failure[0])
-        response.delete_cookie(_state_cookie(cfg), path='/', secure=cfg.secure_cookie, httponly=True, samesite='lax')
         return response
     response = RedirectResponse(cfg.public_origin + '/', status_code=303)
     response.set_cookie(cfg.cookie_name, token, httponly=True, secure=cfg.secure_cookie, samesite='strict', path='/', max_age=cfg.session_hours * 3600)
-    response.set_cookie('nd_sso_session',sha256(('sso:'+token).encode()).hexdigest(),httponly=True,secure=cfg.secure_cookie,samesite='strict',path='/',max_age=cfg.session_hours*3600)
+    response.delete_cookie('nd_sso_session',path='/',secure=cfg.secure_cookie,httponly=True,samesite='strict')
     response.delete_cookie(cfg.demo_cookie_name,path='/',secure=cfg.secure_cookie,httponly=True,samesite='strict')
     response.delete_cookie(_state_cookie(cfg), path='/', secure=cfg.secure_cookie, httponly=True, samesite='lax')
     return response

@@ -2,7 +2,7 @@
 
 > 由 `scripts/generate_api_catalog.py` 从当前源码自动生成。认证原语列只表示源码入口使用标准服务端认证/事务原语，不能替代运行时越权测试。
 
-当前 API 路由：**164**；静态认证门：**PASS**。
+当前 API 路由：**225**；静态认证门：**PASS**。
 
 | 方法 | 路径 | 模块文件 | 处理函数 | 认证/事务原语 | 公开 |
 |---|---|---|---|---|---|
@@ -137,8 +137,17 @@
 | GET | `/api/records/{ident}` | `backend\app\routes\business.py` | `record_detail` | read_operation | 否 |
 | PUT | `/api/records/{ident}` | `backend\app\routes\business.py` | `record_update` | command | 否 |
 | GET | `/api/reference/classes` | `backend\app\routes\reference.py` | `classes` | read_operation | 否 |
+| GET | `/api/reference/code-tables` | `backend\app\routes\reference.py` | `code_tables_view` | read_operation | 否 |
+| PUT | `/api/reference/code-tables/{code_type}` | `backend\app\routes\reference.py` | `code_table_import` | command | 否 |
 | GET | `/api/reference/courses` | `backend\app\routes\reference.py` | `courses` | read_operation | 否 |
+| GET | `/api/reference/credit-summary` | `backend\app\routes\reference.py` | `credit_summary_view` | read_operation | 否 |
 | GET | `/api/reference/projects` | `backend\app\routes\reference.py` | `projects` | read_operation | 否 |
+| GET | `/api/reference/school-courses` | `backend\app\routes\reference.py` | `school_courses` | read_operation | 否 |
+| GET | `/api/reference/source-status` | `backend\app\routes\reference.py` | `source_status_view` | read_operation | 否 |
+| GET | `/api/reference/staff-roster` | `backend\app\routes\reference.py` | `staff_roster_view` | read_operation | 否 |
+| GET | `/api/reference/staff-roster/{staff_no}` | `backend\app\routes\reference.py` | `staff_roster_detail` | read_operation | 否 |
+| GET | `/api/reference/teacher-courses` | `backend\app\routes\reference.py` | `teacher_courses` | read_operation | 否 |
+| GET | `/api/reference/teacher-credits` | `backend\app\routes\reference.py` | `teacher_credits` | read_operation | 否 |
 | GET | `/api/reference/teacher-hr` | `backend\app\routes\reference.py` | `teacher_hr` | read_operation | 否 |
 | GET | `/api/roles` | `backend\app\routes\admin.py` | `roles` | read_operation | 否 |
 | POST | `/api/roles` | `backend\app\routes\admin.py` | `copy_role` | command | 否 |
@@ -152,6 +161,58 @@
 | POST | `/api/settings` | `backend\app\routes\admin.py` | `create_setting` | command | 否 |
 | PUT | `/api/settings/{key}` | `backend\app\routes\admin.py` | `update_setting` | command | 否 |
 | GET | `/api/settings/{key}/history` | `backend\app\routes\admin.py` | `setting_history` | read_operation | 否 |
+| POST | `/api/social/annuals` | `backend\app\routes\social.py` | `annual_create` | command | 否 |
+| PUT | `/api/social/annuals/{ident}` | `backend\app\routes\social.py` | `annual_edit` | command | 否 |
+| POST | `/api/social/annuals/{ident}/actions` | `backend\app\routes\social.py` | `annual_action` | command | 否 |
+| POST | `/api/social/claims` | `backend\app\routes\social.py` | `claim_create` | command | 否 |
+| PUT | `/api/social/claims/{ident}` | `backend\app\routes\social.py` | `claim_edit` | command | 否 |
+| POST | `/api/social/claims/{ident}/actions` | `backend\app\routes\social.py` | `claim_action` | command | 否 |
+| GET | `/api/social/conflicts` | `backend\app\routes\ledgers.py` | `conflict_list` | read_operation | 否 |
+| POST | `/api/social/conflicts` | `backend\app\routes\ledgers.py` | `conflict_declare` | command | 否 |
+| POST | `/api/social/conflicts/{ident}/withdraw` | `backend\app\routes\ledgers.py` | `conflict_withdraw` | command | 否 |
+| POST | `/api/social/corrections` | `backend\app\routes\social.py` | `correction_create` | command | 否 |
+| PUT | `/api/social/corrections/{ident}` | `backend\app\routes\social.py` | `correction_edit` | command | 否 |
+| POST | `/api/social/corrections/{ident}/actions` | `backend\app\routes\social.py` | `correction_action` | command | 否 |
+| POST | `/api/social/courses` | `backend\app\routes\social.py` | `course_create` | command | 否 |
+| POST | `/api/social/courses/import/{operation}` | `backend\app\routes\social.py` | `course_import` | command | 否 |
+| GET | `/api/social/courses/{code}/resources` | `backend\app\routes\social.py` | `course_resources` | read_operation | 否 |
+| GET | `/api/social/departments` | `backend\app\routes\ledgers.py` | `departments` | read_operation | 否 |
+| GET | `/api/social/duties` | `backend\app\routes\social.py` | `duties` | read_operation | 否 |
+| PUT | `/api/social/duties` | `backend\app\routes\social.py` | `set_duties` | command | 否 |
+| GET | `/api/social/ledger-summary` | `backend\app\routes\social.py` | `ledger_summary` | read_operation | 否 |
+| GET | `/api/social/ledgers` | `backend\app\routes\ledgers.py` | `ledger_list` | read_operation | 否 |
+| POST | `/api/social/ledgers` | `backend\app\routes\ledgers.py` | `ledger_submit` | command | 否 |
+| POST | `/api/social/ledgers/preview` | `backend\app\routes\ledgers.py` | `ledger_preview` | current_actor | 否 |
+| GET | `/api/social/ledgers/{ident}` | `backend\app\routes\ledgers.py` | `ledger_detail` | read_operation | 否 |
+| POST | `/api/social/ledgers/{ident}/projects` | `backend\app\routes\ledgers.py` | `ledger_drafts` | command | 否 |
+| POST | `/api/social/ledgers/{ident}/review` | `backend\app\routes\ledgers.py` | `ledger_review` | command | 否 |
+| POST | `/api/social/ledgers/{ident}/rows/{row_no}/person` | `backend\app\routes\ledgers.py` | `bind_person` | command | 否 |
+| POST | `/api/social/ledgers/{ident}/rows/{row_no}/project-link` | `backend\app\routes\ledgers.py` | `bind_project` | command | 否 |
+| POST | `/api/social/ledgers/{ident}/school-figure` | `backend\app\routes\ledgers.py` | `ledger_school_figure` | command | 否 |
+| GET | `/api/social/mine` | `backend\app\routes\ledgers.py` | `mine` | read_operation | 否 |
+| GET | `/api/social/objects/{kind}/{ident}` | `backend\app\routes\social.py` | `object_detail` | read_operation | 否 |
+| GET | `/api/social/objects/{kind}/{ident}/export` | `backend\app\routes\social.py` | `object_export` | read_operation | 否 |
+| GET | `/api/social/overview` | `backend\app\routes\ledgers.py` | `overview` | read_operation | 否 |
+| POST | `/api/social/point-reviews` | `backend\app\routes\social.py` | `point_review_create` | command | 否 |
+| POST | `/api/social/point-reviews/{ident}/actions` | `backend\app\routes\social.py` | `point_review_action` | command | 否 |
+| POST | `/api/social/policies` | `backend\app\routes\social.py` | `policy_create` | command | 否 |
+| POST | `/api/social/policies/recommended` | `backend\app\routes\social.py` | `policy_recommended` | command | 否 |
+| POST | `/api/social/policies/{ident}/actions` | `backend\app\routes\social.py` | `policy_action` | command | 否 |
+| PUT | `/api/social/policies/{ident}/calendar` | `backend\app\routes\social.py` | `policy_calendar` | command | 否 |
+| GET | `/api/social/project-options` | `backend\app\routes\social.py` | `project_options` | read_operation | 否 |
+| POST | `/api/social/projects` | `backend\app\routes\social.py` | `project_create` | command | 否 |
+| PUT | `/api/social/projects/{ident}` | `backend\app\routes\social.py` | `project_edit` | command | 否 |
+| POST | `/api/social/projects/{ident}/actions` | `backend\app\routes\social.py` | `project_action` | command | 否 |
+| POST | `/api/social/projects/{ident}/notes` | `backend\app\routes\social.py` | `case_note` | command | 否 |
+| POST | `/api/social/projects/{ident}/units/{operation}` | `backend\app\routes\social.py` | `import_units` | command | 否 |
+| POST | `/api/social/reports` | `backend\app\routes\social.py` | `report_create` | command | 否 |
+| POST | `/api/social/reports/{ident}/actions` | `backend\app\routes\social.py` | `report_action` | command | 否 |
+| GET | `/api/social/resource-stats` | `backend\app\routes\ledgers.py` | `resource_stats` | read_operation | 否 |
+| POST | `/api/social/resources` | `backend\app\routes\social.py` | `resource_create` | command | 否 |
+| PUT | `/api/social/resources/{ident}` | `backend\app\routes\social.py` | `resource_update` | command | 否 |
+| GET | `/api/social/targets` | `backend\app\routes\ledgers.py` | `targets` | read_operation | 否 |
+| PUT | `/api/social/targets` | `backend\app\routes\ledgers.py` | `save_targets` | command | 否 |
+| GET | `/api/social/workspace` | `backend\app\routes\social.py` | `workspace` | read_operation | 否 |
 | GET | `/api/statistics` | `backend\app\routes\business.py` | `statistics` | read_operation | 否 |
 | GET | `/api/statistics/comparison` | `backend\app\routes\business.py` | `statistics_comparison` | read_operation | 否 |
 | GET | `/api/sync-items` | `backend\app\routes\integrations.py` | `sync_items` | read_operation | 否 |

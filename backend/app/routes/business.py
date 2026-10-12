@@ -98,7 +98,7 @@ def qualification_summary(request:Request):
         q=select(Qualification.state,Qualification.expires).where(a.scope(Qualification.teacher_id))
         if f.get('teacher_id'):q=q.where(Qualification.teacher_id==f['teacher_id'])
         setting=db.get(Setting,'qualification');days=int((setting.value or {}).get('expiry_days',0)) if setting else 0
-        today=date.today();limit=today+timedelta(days=days)
+        today=school_today();limit=today+timedelta(days=days)
         counts={'SUBMITTED':0,'RETURNED':0,'EXPIRING':0,'VALID':0,'EXPIRED':0,'DRAFT':0}
         for state,expires in db.execute(q):
             if state=='APPROVED':counts['EXPIRED' if expires and expires<today else 'EXPIRING' if expires and expires<=limit else 'VALID']+=1
@@ -165,6 +165,9 @@ def qualification_action(ident:str,data:Action,request:Request):
             if own or a.role.kind=='teacher':raise HTTPException(403,'不能审核本人资质')
             if obj.state!='SUBMITTED':raise HTTPException(409,'资质不在待审核环节')
             obj.state='APPROVED' if data.action=='approve' else 'RETURNED'
+            if data.action=='return':
+                from ..message_push import queue
+                queue(db,[obj.teacher_id],'你的资质申报被退回','请登录非学历教育智慧前台，在“个人培训”查看退回原因并补正后重新提交。')
         else:raise HTTPException(422,'资质操作无效')
         obj.version+=1;qualification_revision(db,a,obj,data.reason)
         workflow(db,a,'qualification',obj.id,{'submit':'提交资质','withdraw':'撤回资质','approve':'资质审核通过','return':'资质退回补充'}[data.action],before,serial(obj),data.reason,data.basis)
@@ -220,9 +223,9 @@ def _todo_items(db,a):
             elif q.state=='APPROVED' and q.expires:
                 setting=db.get(Setting,'qualification')
                 days=setting.value['expiry_days'] if setting else 0
-                if q.expires<=date.today()+timedelta(days=days):
+                if q.expires<=school_today()+timedelta(days=days):
                     add('qualification',q,'资质有效期核对：'+q.name,'EXPIRING',
-                        expires=q.expires,days_remaining=(q.expires-date.today()).days)
+                        expires=q.expires,days_remaining=(q.expires-school_today()).days)
     if 'assessment.read' in a.permissions:
         stage={'dept':'DEPARTMENT','college':'COLLEGE','school':'SCHOOL'}.get(a.role.kind)
         for x in db.scalars(select(Assessment).where(a.scope(Assessment.teacher_id))):
@@ -248,7 +251,7 @@ def _todo_items(db,a):
                     elif x.state=='SCHOOL_APPROVED':add('organization_assessment',x,'归档组织考核：'+name,target_id=x.target_id)
     if 'dispute.write' in a.permissions:
         for x in db.scalars(select(Dispute).where(a.scope(Dispute.teacher_id),Dispute.state=='OPEN')):
-            if x.teacher_id==a.id or 'dispute.resolve' in a.permissions:add('dispute',x,'数据核对：'+x.reason[:40])
+            if x.teacher_id==a.id or 'dispute.resolve' in a.permissions:add('dispute',x,('我提出的异议：' if x.teacher_id==a.id else '数据核对：')+x.reason[:40])
     if 'audit.read' in a.permissions and a.role.kind=='school' and a.user.is_admin:
         from ..security_alerts import security_summary
         summary=security_summary(db,a)
@@ -258,21 +261,28 @@ def _todo_items(db,a):
     if 'sync.manage' in a.permissions:
         for x in db.scalars(select(Task).where(Task.kind.in_(['sync','inbound_pull']),Task.state.in_(['FAILED','BLOCKED'])).order_by(Task.created_at.desc(),Task.id)):
             add('sync',x,'数据中台拉取异常' if x.kind=='inbound_pull' else '接口同步异常',task_kind=x.kind)
+    from ..social_training import todo_items
+    out.extend(todo_items(db,a))
     return out
 
 @router.get('/todos')
 def todos(request:Request):
-    f,p,z=filters_from(request,{'q','type'})
+    f,p,z=filters_from(request,{'q','type','stage'})
     from ..read_queries import clean_filters
-    f=clean_filters(f,{'q','type'})
-    if f.get('type') and f['type'] not in {'qualification','assessment','organization_assessment','dispute','sync','security'}:
+    f=clean_filters(f,{'q','type','stage'})
+    if f.get('type') and f['type'] not in {'qualification','assessment','organization_assessment','dispute','sync','security','social_project','social_claim','social_annual','social_resource','social_report'}:
         raise HTTPException(422,'待办类型无效')
+    # 待归档清单只是只读筛选：积分认定、更正待教学秘书归档，教师考核待学校归档；办理仍走原单条接口。
+    if f.get('stage') and f['stage']!='archive':raise HTTPException(422,'待办环节无效')
     def load(db,a,s):
         items=_todo_items(db,a)
+        counts={}
+        for x in items:counts[x['type']]=counts.get(x['type'],0)+1
         if f.get('type'):items=[x for x in items if x['type']==f['type']]
+        if f.get('stage')=='archive':items=[x for x in items if (x['type'] in {'social_claim','social_resource'} and x['state']=='待教学秘书归档') or (x['type']=='assessment' and x['state']=='READY')]
         if f.get('q'):items=[x for x in items if f['q'].casefold() in x['title'].casefold()]
         total=len(items)
-        return {'items':items[(p-1)*z:p*z],'total':total,'page':p,'size':z}
+        return {'items':items[(p-1)*z:p*z],'total':total,'page':p,'size':z,'counts':counts}
     return read_operation(request,'portal.read',load)
 
 @router.get('/portal/workbench')
@@ -295,7 +305,7 @@ def portal_workbench(request:Request):
         tasks=sorted((x for x in items if x['state']!='EXPIRING'),
                      key=lambda x:(0 if x['state']=='RETURNED' else 1 if x['type']=='dispute' else 2,x['type'],x['id']))
         return {'scope_label':'仅本人' if a.role.kind=='teacher' else a.org.name,
-                'as_of':date.today(),
+                'as_of':school_today(),
                 'tasks':{'total':len(tasks),'items':tasks[:6],
                          'returned':sum(x['state']=='RETURNED' for x in tasks)},
                 'reminders':{'total':len(reminders),'items':reminders[:4],
@@ -341,7 +351,7 @@ def organization_workbench(request:Request):
         if not target:raise HTTPException(404,'组织不存在')
         scoped={**f,'org_id':target_id}
         summary=stats(db,a,scoped)
-        teacher_ids=set(db.scalars(select(User.id).where(User.org_id.in_(org_ids),User.staff_no.is_not(None))))
+        teacher_ids=set(db.scalars(select(User.id).where(User.org_id.in_(org_ids),User.staff_no.is_not(None),User.authorization_pending.is_(False))))
         # The unified source already applies action permissions and separation of duties.
         # Keep organization-owned assessment tasks inside this exact authorized subtree;
         # do not admit every non-teacher object just because teacher_id is absent.

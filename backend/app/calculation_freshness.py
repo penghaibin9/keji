@@ -5,7 +5,7 @@ from fastapi import HTTPException
 from .models import Dispute, TrainingRecord
 from .core import digest
 
-SOURCE_NAMES={'hours':'授课学时','participants':'课程人次','income':'归属培训收入','qualifications':'有效资质','points':'本期积分','assessment_score':'归档考核分','teachers':'参与教师','projects':'培训项目','courses':'课程'}
+SOURCE_NAMES={'hours':'授课学时','participants':'课程人次','income':'归属培训收入','qualifications':'有效资质','points':'本期积分','assessment_score':'归档考核分','credits':'授课学分','teachers':'参与教师','projects':'培训项目','courses':'课程'}
 RECORD_FIELDS={'hours':'hours','participants':'participants','income':'income','teachers':'teacher_id','projects':'project_code','courses':'course_code'}
 
 def source_basis(snapshot, source):
@@ -16,6 +16,7 @@ def source_basis(snapshot, source):
                 for r in snapshot.get('training_records',[])}
     if source=='qualifications':return {q['id']:q for q in snapshot.get('qualifications',[])}
     if source=='points':return {p['id']:p for p in snapshot.get('point_entries',[])}
+    if source=='credits':return (snapshot.get('teaching_credits') or {}).get('courses',[])
     if source=='assessment_score':return snapshot.get('assessment_references',snapshot.get('previous_archived_assessment'))
     raise HTTPException(409,'计算依据的数据来源无法识别，请先核实规则')
 

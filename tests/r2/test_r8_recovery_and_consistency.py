@@ -6,9 +6,10 @@ from sqlalchemy import select,func
 from conftest import auth,post,put
 from test_r3_excel import fill_template,upload_preview,REASON
 from test_r8_regressions import setup,scheduled,Adapter,record
+from test_r5_closeout import run_due_sync
 from app.models import Task,User,Role,Connection,ImportJob,ImportRow,TrainingRecord,utcnow
 from app.sync_policy import retry_sync_items,retry_pull_task,invalidate_schedule_tasks
-from app.integrations import enqueue_sync,process_sync_task_once,SyncItem,SyncCallLog,finalize_sync_task
+from app.integrations import enqueue_sync,SyncItem,SyncCallLog,finalize_sync_task
 from app.inbound_sync import create_pull_task,process_pull_task_once,_actor
 from app.reference_data import (TeacherHrProfile,TrainingCourseMaster,TrainingProjectMaster,TeacherParticipation,
     preview_inbound,confirm_inbound,record_reference_errors,ensure_reference_from_training_record)
@@ -21,7 +22,7 @@ def test_mixed_failed_and_waiting_rows_do_not_strand_unfinished_work(app2):
         items[0].state='FAILED';items[0].attempts=4
         finalize_sync_task(db,task)
         assert task.state=='RETRY' and task.result['failed']==1 and task.result['waiting']==1
-        process_sync_task_once(db,task,r)
+        run_due_sync(db,task,r)
         assert items[1].state=='DONE' and task.state=='FAILED'
 
 
@@ -30,7 +31,7 @@ def test_worker_failure_with_pending_rows_can_be_explicitly_resumed(app2):
         a,c,r=setup(db);task=enqueue_sync(db,a,c,'training_project',[{'business_key':'P81','code':'P81','name':'P81'}]);db.flush()
         task.state='FAILED';task.error='WORKER_EXECUTOR_ERROR:RuntimeError'
         item=db.scalar(select(SyncItem).where(SyncItem.task_id==task.id));key=item.idempotency_key
-        retry_sync_items(db,a,task,'执行器异常后人工核对补传');process_sync_task_once(db,task,r)
+        retry_sync_items(db,a,task,'执行器异常后人工核对补传');run_due_sync(db,task,r)
         assert task.state=='DONE' and item.idempotency_key==key
 
 
@@ -39,12 +40,12 @@ def test_manual_retry_uses_new_cycle_without_losing_historical_attempts(app2):
         adapter=Adapter(fail=True);a,c,r=setup(db,adapter=adapter)
         task=enqueue_sync(db,a,c,'training_project',[{'business_key':'P81','code':'P81','name':'P81'}]);db.flush()
         item=db.scalar(select(SyncItem).where(SyncItem.task_id==task.id));key=item.idempotency_key
-        for _ in range(4):item.next_at=utcnow();process_sync_task_once(db,task,r);db.flush()
+        for _ in range(4):item.next_at=utcnow();run_due_sync(db,task,r);db.flush()
         assert task.state=='FAILED'
         retry_sync_items(db,a,task,'经确认重新尝试');db.flush()
-        for _ in range(3):item.next_at=utcnow();process_sync_task_once(db,task,r);db.flush()
+        for _ in range(3):item.next_at=utcnow();run_due_sync(db,task,r);db.flush()
         assert task.state=='RETRY' and item.attempts==7
-        adapter.fail=False;item.next_at=utcnow();process_sync_task_once(db,task,r);db.flush()
+        adapter.fail=False;item.next_at=utcnow();run_due_sync(db,task,r);db.flush()
         assert task.state=='DONE' and item.attempts==8 and key==item.idempotency_key
         assert list(db.scalars(select(SyncCallLog.attempt).where(SyncCallLog.item_id==item.id).order_by(SyncCallLog.attempt)))==list(range(1,9))
         assert len({x['idempotency_key'] for x in adapter.calls})==1
@@ -54,11 +55,11 @@ def test_reused_failed_rows_retry_original_parent_not_successful_siblings(app2):
     with app2.state.sessions() as db:
         adapter=Adapter();a,c,r=setup(db,adapter=adapter)
         records=[{'business_key':k,'code':k,'name':k} for k in ('P81','P82')]
-        old=enqueue_sync(db,a,c,'training_project',records);process_sync_task_once(db,old,r);db.flush()
+        old=enqueue_sync(db,a,c,'training_project',records);run_due_sync(db,old,r);db.flush()
         items=db.scalars(select(SyncItem).where(SyncItem.task_id==old.id).order_by(SyncItem.business_key)).all()
         items[0].state='FAILED';old.state='FAILED';db.flush()
         wrapper=enqueue_sync(db,a,c,'training_project',records);finalize_sync_task(db,wrapper)
-        retry_sync_items(db,a,wrapper,'仅补传失败项');process_sync_task_once(db,old,r);finalize_sync_task(db,wrapper);db.flush()
+        retry_sync_items(db,a,wrapper,'仅补传失败项');run_due_sync(db,old,r);finalize_sync_task(db,wrapper);db.flush()
         assert old.state==wrapper.state=='DONE'
         assert len(adapter.calls)==3 and items[1].attempts==1
 
@@ -70,7 +71,7 @@ def test_other_admin_can_reauthorize_but_revoked_permissions_cannot_execute(app2
         original=db.get(User,'schooladmin')
         db.add(User(id='r8-new-admin',username='r8-new-admin',name='合成管理员',org_id=original.org_id,role_id=original.role_id,password_hash=original.password_hash,active=True,is_admin=True,must_change_password=False));db.flush()
         new=_actor(db,'r8-new-admin');retry_sync_items(db,new,task,'明确接管失败补传');original.active=False;db.flush()
-        process_sync_task_once(db,task,r);assert task.state=='DONE' and task.owner_id=='schooladmin'
+        run_due_sync(db,task,r);assert task.state=='DONE' and task.owner_id=='schooladmin'
 
 
 def test_old_schedule_approval_never_revives_after_disable_and_enable(app2):

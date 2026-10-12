@@ -9,14 +9,14 @@ from sqlalchemy import select
 from fastapi import HTTPException
 from .models import Task, TaskAttempt, utcnow
 from .core import digest
-from .reference_data import InboundBatch, InboundRow, preview_inbound, confirm_inbound, inbound_content_hash
+from .reference_data import InboundBatch, InboundRow, preview_inbound, confirm_inbound, inbound_content_hash, COLLAPSE_TYPES, reconcile_full_pull
 from .integrations import transport_kwargs
 from .adapters.contracts import AdapterContractError
 from .integration_diagnostics import diagnostic, safe_code
 from .sync_policy import retry_budget
 
 
-def _advance(task, state, pending, schedule):
+def _advance(task, state, pending):
     batch_id = pending.get('batch_id')
     chunks = list(state.get('chunks', []))
     if batch_id:
@@ -32,13 +32,6 @@ def _advance(task, state, pending, schedule):
     task.error = ''
     if complete:
         state['next_cursor'] = pending['next_cursor']
-        if schedule:
-            schedule.last_run_at = utcnow()
-            schedule.next_at = utcnow() + timedelta(minutes=schedule.frequency_minutes)
-            if pending['next_cursor'] is not None:
-                schedule.last_cursor = pending['next_cursor']
-            schedule.last_error = ''
-            schedule.version += 1
     task.result = state
 
 
@@ -47,10 +40,14 @@ def _check_cross_page_keys(db, batch, state):
     if not ids:
         return
     rows = db.scalars(select(InboundRow).where(InboundRow.batch_id == batch.id)).all()
-    repeated = set(db.scalars(select(InboundRow.business_key).where(
-        InboundRow.batch_id.in_(ids), InboundRow.business_key.in_([x.business_key for x in rows]))))
+    earlier = {}
+    for key, mapped in db.execute(select(InboundRow.business_key, InboundRow.mapped).where(
+            InboundRow.batch_id.in_(ids), InboundRow.business_key.in_([x.business_key for x in rows]))):
+        earlier.setdefault(key, []).append(mapped)
+    collapse = batch.data_type in COLLAPSE_TYPES
     for row in rows:
-        if row.business_key in repeated:
+        # A schedule feed repeats one teacher-course-term on many pages; identical repeats are fine.
+        if row.business_key in earlier and not (collapse and all(m == row.mapped for m in earlier[row.business_key])):
             if not row.errors:
                 batch.errors += 1
             row.errors = [*row.errors, '同一次采集跨页业务唯一键重复，请核对源端分页规则']
@@ -63,6 +60,12 @@ def process_page(db, task, connection, actor, schedule, adapter, registry):
     state.setdefault('chunks', [])
     task.attempts += 1
     try:
+        if state.get('committed'):
+            task.state='DONE'
+            _finalize(db,task,actor,schedule)
+            task.version+=1
+            db.add(TaskAttempt(task_id=task.id,attempt=task.attempts,result=task.state,message='RECONCILE_RETRY'))
+            return task
         response = adapter.pull_chunk(data_type=task.payload['data_type'],
             mode=task.payload['mode'], cursor=task.payload.get('cursor'), limit=1000,
             checkpoint=state.get('checkpoint'), **transport_kwargs(connection, registry))
@@ -113,7 +116,8 @@ def process_page(db, task, connection, actor, schedule, adapter, registry):
         else:
             if batch:
                 confirm_inbound(db, actor, batch, batch.version, '已批准的分页采集自动确认', '原同步计划授权')
-            _advance(task, state, pending, schedule)
+            _advance(task, state, pending)
+            _finalize(db, task, actor, schedule)
         task.version += 1
         db.add(TaskAttempt(task_id=task.id, attempt=task.attempts, result=task.state,
                            message='PAGE_PREVIEW' if task.state == 'WAITING_CONFIRMATION' else 'PAGE_COMMITTED'))
@@ -152,8 +156,45 @@ def resume_confirmed_task(db, task, batch):
             or batch.state != 'COMMITTED' or (batch.receipt or {}).get('written') != batch.total
             or pending.get('received_total') != state.get('records', 0) + batch.total):
         raise HTTPException(409, '采集分页证据不一致，禁止推进游标')
-    _advance(task, state, pending, None)
+    _advance(task, state, pending)
+    from .sync_policy import sync_actor
+    _finalize(db, task, sync_actor(db, task), None)
     task.version += 1
+
+
+def _reconcile(db, task, actor):
+    """After a complete FULL run, withdraw rows the school no longer sends."""
+    state = task.result or {}
+    if task.state != 'DONE' or task.payload.get('mode') != 'FULL' or not state.get('committed'):
+        return
+    ids = [x['batch_id'] for x in state.get('chunks', []) if x.get('batch_id')]
+    total = state.get('source_total')
+    if total is not None and total != state.get('committed_records'):
+        outcome = {'blocked': '接收条数与源端总数不一致，未对账'}
+    else:
+        with db.begin_nested():
+            outcome = reconcile_full_pull(db, actor, task.payload['data_type'], ids, state.get('committed_records'))
+    if outcome is not None:
+        task.result = {**state, 'reconcile': outcome}
+        if outcome.get('blocked'):
+            task.state='BLOCKED'
+            task.error=str(outcome['blocked'])
+
+
+def _finalize(db,task,actor,schedule):
+    _reconcile(db,task,actor)
+    if task.state=='BLOCKED':
+        if schedule:schedule.last_error=task.error
+        return
+    if task.state!='DONE':return
+    task.error=''
+    if schedule:
+        schedule.last_run_at=utcnow()
+        schedule.next_at=utcnow()+timedelta(minutes=schedule.frequency_minutes)
+        cursor=(task.result or {}).get('next_cursor')
+        if cursor is not None:schedule.last_cursor=cursor
+        schedule.last_error=''
+        schedule.version+=1
 
 
 def has_unfinished_run(db, schedule):

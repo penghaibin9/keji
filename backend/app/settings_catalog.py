@@ -18,7 +18,7 @@ STATUS_LABEL_DEFAULTS = {
     'ACTIVE':'已启用','INACTIVE':'已停用','VALID':'有效记录','PENDING':'排队中','RUNNING':'处理中',
     'RETRY':'等待重试','FAILED':'处理失败','BLOCKED':'未接通 / 已阻断','DONE':'已完成',
     'PREVIEW':'待确认导入','COMMITTED':'已入库','NOT_CONNECTED':'未对接','VALIDATED':'仅本地校验',
-    'EXPIRING':'有效期核对','BASE':'初始积分','RECALC':'重算差额','MANUAL':'人工调整',
+    'EXPIRING':'有效期核对','BASE':'初始积分','RECALC':'重算差额','MANUAL':'人工调整','SOCIAL':'社会培训认定',
     'SUCCESS':'成功','DENIED':'已拦截','ERROR':'异常','VOID':'已作废',
 }
 

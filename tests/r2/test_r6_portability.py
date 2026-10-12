@@ -20,15 +20,17 @@ def put_audit(db,ident,at):
 
 def test_audit_page_and_export_use_identical_inclusive_days_and_keep_time(client2,app2):
     c=client2;auth(c,'schooladmin')
+    # Use the last representable instant for the schema's timestamp precision.
+    end=datetime(2026,9,18,23,59,59,0 if app2.state.engine.dialect.name=='mysql' else 999999)
     with app2.state.sessions.begin() as db:
-        for ident,at in [('before',datetime(2026,9,17,23,59,59)),('start',datetime(2026,9,18)),('end',datetime(2026,9,18,23,59,59,999999)),('after',datetime(2026,9,19))]:put_audit(db,ident,at)
+        for ident,at in [('before',datetime(2026,9,17,23,59,59)),('start',datetime(2026,9,18)),('end',end),('after',datetime(2026,9,19))]:put_audit(db,ident,at)
     f={'module':'r6_boundary','start':'2026-09-18','end':'2026-09-18'}
     r=c.get('/api/audit',params=f);assert r.status_code==200
     assert [x['id'] for x in r.json()['items']]==['end','start']
     wb=load_workbook(io.BytesIO(export(c,app2,'audit',f)),read_only=True)
     rows=list(wb.active.values);wb.close()
     assert len(rows)==3 and [x[4] for x in rows[1:]]==['end','start']
-    assert rows[1][0]=='2026-09-18T23:59:59.999999'
+    assert rows[1][0]==end.isoformat()
 
 
 @pytest.mark.parametrize('f',[{'start':'2026-09-19','end':'2026-09-18'},{'start':'20260918'},{'end':'not-date'},{'end':'2026-02-30'}])
@@ -65,7 +67,7 @@ def test_handover_contains_complete_evidence_and_lossless_jsonl(client2,app2,tmp
         db.get(TrainingRecord,'rec1').income='-12.30'
     data=export(c,app2,'handover');path=tmp_path/'all-evidence.zip';path.write_bytes(data)
     result=mod.verify(path);assert result['status']=='PASS',result
-    assert result['details']['typed_tables']==40 and result['details']['foreign_key_checks']>40
+    assert result['details']['typed_tables']==48 and result['details']['foreign_key_checks']>40
     assert result['details']['typed_roundtrip_verified'] and not result['disaster_restore_proven']
     with zipfile.ZipFile(io.BytesIO(data)) as z:
         m=json.loads(z.read('manifest.json'));assert m['format'].endswith('v2')

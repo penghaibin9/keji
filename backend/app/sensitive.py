@@ -55,7 +55,7 @@ class MaskPolicy:
     def _in_scope(self, owner):
         if owner is None:return True  # rows already limited by the query scope (e.g. admin-only staging)
         if owner not in self._orgs:
-            self._orgs[owner] = self.db.scalar(select(User.org_id).where(User.id == owner))
+            self._orgs[owner] = self.db.scalar(select(User.org_id).where(User.id == owner,True if self.actor.role.kind=='school' else User.authorization_pending.is_(False)))
         return self._orgs[owner] in set(self.actor.org_ids) and self.actor.role.kind != 'teacher'
 
     def full(self, key, owner):

@@ -3,6 +3,7 @@
 R2 new implementation against the recovered model/frontend contract. Historical
 password formats and historical Alembic graphs are NOT inferred here.
 """
+import logging
 from pathlib import Path
 from typing import Literal
 from urllib.parse import urlsplit
@@ -30,6 +31,9 @@ class Settings(BaseSettings):
     release_guard: bool = True
     adapter_modules: str = ''
     demo_identity_switch_enabled: bool = False
+    # 学校移动门户消息推送：留空即关闭；地址按《湖科职消息中心集成标准接口文档v1.0》。
+    message_push_yyid: str = ''
+    message_push_endpoint: str = 'https://ydmh.hnkjxy.net.cn/ydmh/api/send/send'
 
     @property
     def demo_cookie_name(self):
@@ -65,4 +69,6 @@ class Settings(BaseSettings):
                 raise ValueError('生产环境禁止自动建表、样例初始化或绕过发布核验')
         elif not self.database_url.startswith(('sqlite://','mysql+pymysql://')):
             raise ValueError('测试数据库驱动不支持')
+        # Default server access logs include SSO tickets; application/nginx logs omit queries.
+        logging.getLogger('uvicorn.access').disabled=True
         return self

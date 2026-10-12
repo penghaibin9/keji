@@ -27,7 +27,7 @@ def test_rejects_data_from_different_installation(inputs):
 def test_report_writer_works_without_unix_fchmod(tmp_path,monkeypatch):
     import os
     from delivery.common import secure_json
-    monkeypatch.delattr(os,'fchmod')
+    monkeypatch.delattr(os,'fchmod',raising=False)
     target=tmp_path/'browser-report.json'
     secure_json(target,{'status':'BLOCKED','normal_browser_business':False})
     assert json.loads(target.read_text())['status']=='BLOCKED'

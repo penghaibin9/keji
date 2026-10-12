@@ -8,8 +8,9 @@ argon2-cffi==25.1.0
 uvicorn==0.48.0
 python-multipart==0.0.29
 Pillow==12.3.0
-pypdf==5.9.0
+pypdf==6.20.0
 PyMySQL[rsa]==1.2.0
 cryptography==46.0.7
 alembic==1.18.4
 openpyxl==3.1.5
+xlrd==2.0.1

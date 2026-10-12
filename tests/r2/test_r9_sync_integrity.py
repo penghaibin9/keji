@@ -5,7 +5,7 @@ from fastapi import HTTPException
 from sqlalchemy import select, update
 from sqlalchemy.orm import Session
 from conftest import auth, post
-from test_r5_closeout import connection, ContractAdapter, REASON
+from test_r5_closeout import connection, ContractAdapter, REASON, run_due_sync
 from app.models import Task, TaskAttempt, Connection, utcnow
 from app.core import digest
 from app.inbound_sync import _actor
@@ -29,10 +29,11 @@ def prepare(db, response=None):
 def test_disconnected_duplicate_request_cannot_destroy_success_receipt(app2,client2):
     with app2.state.sessions.begin() as db:
         a,c,adapter,registry,task=prepare(db)
-        process_sync_task_once(db,task,registry)
+        run_due_sync(db,task,registry)
         assert task.state=='DONE'
         ident,cid=task.id,c.id
-        item=task_sync_items(db,task)[0];original=digest({'task':task,'item':item})
+        item=task_sync_items(db,task)[0];db.flush();db.refresh(task);db.refresh(item)
+        original=digest({'task':task,'item':item})
         c.state='NOT_CONNECTED'
     auth(client2,'schooladmin')
     r=post(client2,'/api/connections/'+cid+'/sync',{'data_type':'training_project','records':RECORDS,**REASON})

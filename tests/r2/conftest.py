@@ -1,5 +1,5 @@
 from pathlib import Path
-import sys,uuid
+import os,sys,uuid
 import pytest
 from fastapi.testclient import TestClient
 from app.main import create_app
@@ -7,12 +7,33 @@ from app.config import Settings
 sys.path.insert(0,str(Path(__file__).parent))
 from support import populate,FIXTURE_PASSWORD
 
+def _database_url(tmp_path):
+    # ND_TEST_MYSQL_URL=mysql+pymysql://user:pw@host:port runs the same tests on a throwaway MySQL database each.
+    base=os.environ.get('ND_TEST_MYSQL_URL')
+    if not base:return 'sqlite:///'+str(tmp_path/'r2-test.sqlite'),None
+    import sqlalchemy as sa
+    name='t_'+uuid.uuid4().hex[:16];server=sa.create_engine(base)
+    with server.begin() as c:c.execute(sa.text(f'CREATE DATABASE {name} CHARACTER SET utf8mb4'))
+    def drop():
+        with server.begin() as c:c.execute(sa.text(f'DROP DATABASE IF EXISTS {name}'))
+        server.dispose()
+    return f'{base}/{name}?charset=utf8mb4',drop
+
 @pytest.fixture
-def app2(tmp_path):
-    cfg=Settings(env='test',database_url='sqlite:///'+str(tmp_path/'r2-test.sqlite'),secure_cookie=False,
+def app2(tmp_path,monkeypatch):
+    url,drop=_database_url(tmp_path)
+    if drop:
+        # MySQL DATETIME has no fractional seconds and rounds up, so a row written a moment ago can look 1s in the
+        # future to a worker polling immediately. Production polls every 2s; tests poll at once, so read the clock 1s late.
+        from datetime import timedelta
+        import app.worker as worker
+        real=worker.utcnow
+        monkeypatch.setattr(worker,'utcnow',lambda:real()+timedelta(seconds=1))
+    cfg=Settings(env='test',database_url=url,secure_cookie=False,
        public_origin='http://testserver',allowed_hosts='testserver',storage_dir=tmp_path/'files')
     app=create_app(cfg);populate(app.state.engine)
-    return app
+    yield app
+    if drop:app.state.engine.dispose();drop()
 
 @pytest.fixture
 def client2(app2):

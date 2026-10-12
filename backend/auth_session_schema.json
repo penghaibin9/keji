@@ -1,0 +1,201 @@
+{
+  "revision": "20261012_0004",
+  "tables": {
+    "auth_sessions": {
+      "checks": [],
+      "columns": {
+        "auth_version": {
+          "family": "integer",
+          "nullable": false
+        },
+        "csrf": {
+          "family": "string",
+          "length": 64,
+          "nullable": false
+        },
+        "expires_at": {
+          "family": "datetime",
+          "nullable": false
+        },
+        "last_seen": {
+          "family": "datetime",
+          "nullable": false
+        },
+        "token_hash": {
+          "family": "string",
+          "length": 64,
+          "nullable": false
+        },
+        "user_id": {
+          "family": "string",
+          "length": 36,
+          "nullable": false
+        },
+        "auth_method": {
+          "family": "string",
+          "length": 10,
+          "nullable": false
+        }
+      },
+      "foreign_keys": [
+        [
+          [
+            "user_id"
+          ],
+          "users",
+          [
+            "id"
+          ]
+        ]
+      ],
+      "indexes": [
+        [
+          "ix_auth_sessions_expires_at",
+          [
+            "expires_at"
+          ],
+          false
+        ],
+        [
+          "ix_auth_sessions_user_id",
+          [
+            "user_id"
+          ],
+          false
+        ]
+      ],
+      "primary_key": [
+        "token_hash"
+      ],
+      "unique": []
+    },
+    "users": {
+      "checks": [],
+      "columns": {
+        "active": {
+          "family": "integer",
+          "nullable": false
+        },
+        "auth_version": {
+          "family": "integer",
+          "nullable": false
+        },
+        "created_at": {
+          "family": "datetime",
+          "nullable": false
+        },
+        "failures": {
+          "family": "integer",
+          "nullable": false
+        },
+        "id": {
+          "family": "string",
+          "length": 36,
+          "nullable": false
+        },
+        "is_admin": {
+          "family": "integer",
+          "nullable": false
+        },
+        "locked_until": {
+          "family": "datetime",
+          "nullable": true
+        },
+        "must_change_password": {
+          "family": "integer",
+          "nullable": false
+        },
+        "name": {
+          "family": "string",
+          "length": 100,
+          "nullable": false
+        },
+        "org_id": {
+          "family": "string",
+          "length": 36,
+          "nullable": false
+        },
+        "password_hash": {
+          "family": "string",
+          "length": 255,
+          "nullable": false
+        },
+        "role_id": {
+          "family": "string",
+          "length": 36,
+          "nullable": false
+        },
+        "staff_no": {
+          "family": "string",
+          "length": 64,
+          "nullable": true
+        },
+        "title": {
+          "family": "string",
+          "length": 80,
+          "nullable": false
+        },
+        "username": {
+          "family": "string",
+          "length": 64,
+          "nullable": false
+        },
+        "version": {
+          "family": "integer",
+          "nullable": false
+        },
+        "authorization_pending": {
+          "family": "integer",
+          "nullable": false
+        }
+      },
+      "foreign_keys": [
+        [
+          [
+            "org_id"
+          ],
+          "organizations",
+          [
+            "id"
+          ]
+        ],
+        [
+          [
+            "role_id"
+          ],
+          "roles",
+          [
+            "id"
+          ]
+        ]
+      ],
+      "indexes": [
+        [
+          "ix_users_org_id",
+          [
+            "org_id"
+          ],
+          false
+        ],
+        [
+          "ix_users_role_id",
+          [
+            "role_id"
+          ],
+          false
+        ]
+      ],
+      "primary_key": [
+        "id"
+      ],
+      "unique": [
+        [
+          "staff_no"
+        ],
+        [
+          "username"
+        ]
+      ]
+    }
+  }
+}

@@ -1,4 +1,5 @@
 from sqlalchemy.orm import Session
+from datetime import timedelta
 from sqlalchemy import select
 from conftest import auth,post,put
 from app.models import Connection,Task
@@ -67,11 +68,10 @@ def test_sync_retries_at_least_three_times_and_logs_each_call(client2,app2):
         for _ in range(4):
             with Session(app2.state.engine) as db:
                 task=db.get(Task,rj['id']);
-                item=db.scalar(select(SyncItem).where(SyncItem.task_id==task.id));item.next_at=task.next_at=__import__('app.models',fromlist=['utcnow']).utcnow()
+                item=db.scalar(select(SyncItem).where(SyncItem.task_id==task.id));item.next_at=task.next_at=__import__('app.models',fromlist=['utcnow']).utcnow()-timedelta(seconds=2)
                 process_sync_task_once(db,task,ADAPTERS);db.commit()
-                # make scheduled retry due immediately for the next explicit worker tick
-                item=db.scalar(select(SyncItem).where(SyncItem.task_id==task.id));item.next_at=task.next_at=__import__('app.models',fromlist=['utcnow']).utcnow()
-                item.next_at=__import__('app.models',fromlist=['utcnow']).utcnow();db.commit()
+                # Keep the explicit tick due even when MySQL stores whole seconds.
+                item=db.scalar(select(SyncItem).where(SyncItem.task_id==task.id));item.next_at=task.next_at=__import__('app.models',fromlist=['utcnow']).utcnow()-timedelta(seconds=2);db.commit()
         with Session(app2.state.engine) as db:
             task=db.get(Task,rj['id']);item=db.scalar(select(SyncItem).where(SyncItem.task_id==task.id));logs=db.scalars(select(SyncCallLog).where(SyncCallLog.item_id==item.id).order_by(SyncCallLog.attempt)).all()
             assert item.state=='FAILED' and item.attempts==4 and task.state=='FAILED'
