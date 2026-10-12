@@ -5,6 +5,17 @@ test('brand reflects configured identity without applying another school emblem'
  e.t.setUser({school_name:'湖南科技职业学院'});assert.match(brand(),/school-brand-image/);
  e.t.setUser({school_name:'测试<学校>'});assert.match(brand(),/测试&lt;学校&gt;/);assert.doesNotMatch(brand(),/school-brand-image|湖南科技职业学院/);
 });
+test('public header uses the official school mark, live identity and the original action hooks',()=>{
+ const e=engine(),head=vm.runInContext('headerBrand',e.ctx),shell=vm.runInContext('shell',e.ctx);
+ e.t.setUser({school_name:'湖南科技职业学院',environment:'production',user:{name:'<张>老师'},role:{name:'学院<负责人>'}});
+ assert.match(head(),/school-brand-header\.png/);shell();const html=e.node('#app').innerHTML;
+ assert.match(html,/class="nd-header"/);assert.doesNotMatch(html,/school-masthead|class="topbar"/);
+ assert.match(html,/&lt;张&gt;老师/);assert.match(html,/学院&lt;负责人&gt;/);assert.match(html,/nd-header__avatar" aria-hidden="true">&lt;/);assert.match(html,/学校本地部署/);
+ for(const hook of ['id="breadcrumb"','current-identity','data-action="search"','data-action="nav" data-id="todos"','data-action="profile"','data-action="logout"','mobile-nav" data-action="toggle-menu"','aria-controls="sidebar"','id="sidebar"','class="main-shell"'])assert.ok(html.includes(hook),hook);
+ assert.ok(html.indexOf('nd-header')>html.indexOf('class="main-shell"'),'header stays inside .main-shell so the mobile menu can make it inert');
+ e.t.setUser({school_name:'测试<学校>',environment:'test',user:{name:'甲'},role:{name:'乙'}});
+ assert.match(head(),/测试&lt;学校&gt;/);assert.doesNotMatch(head(),/school-brand-header|湖南科技职业学院/);shell();assert.match(e.node('#app').innerHTML,/隔离合成数据/);
+});
 test('changed calculation evidence is escaped and explains the blocked next step',()=>{
  const e=engine(),notice=vm.runInContext('sourceChangesNotice',e.ctx);
  assert.equal(notice({source_changes:{changed:false,items:[]}}),'');
