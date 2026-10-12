@@ -1,11 +1,20 @@
 """Diff-sensitive preservation checks; these do not prove business E2E."""
-import ast,re
+import ast,hashlib,json,re
 from pathlib import Path
 ROOT=Path(__file__).resolve().parents[2]
+BEFORE=ROOT/'tests/fixtures/p0_before'
+
+
+def test_preservation_baseline_bytes_match_recorded_hashes():
+    manifest=json.loads((BEFORE/'MANIFEST.json').read_text(encoding='utf-8'))
+    assert {row['path'] for row in manifest['files']}=={'backend/app/models.py','backend/app/services.py','frontend/app.js'}
+    for row in manifest['files']:
+        raw=(BEFORE/row['path']).read_bytes()
+        assert len(raw)==row['size'] and hashlib.sha256(raw).hexdigest()==row['sha256']
 
 
 def test_existing_models_preserved_except_authorized_security_columns():
-    before=ast.parse((ROOT/'evidence/before/backend/app/models.py').read_text(encoding='utf-8'))
+    before=ast.parse((BEFORE/'backend/app/models.py').read_text(encoding='utf-8'))
     after=ast.parse((ROOT/'backend/app/models.py').read_text(encoding='utf-8'))
     additions={'User':{'authorization_pending'},'AuthSession':{'auth_method'}}
     for node in after.body:
@@ -18,8 +27,8 @@ def test_existing_models_preserved_except_authorized_security_columns():
 
 def test_existing_scoring_and_ledger_business_functions_are_preserved():
     def functions(path):
-        return {node.name:ast.dump(node,include_attributes=False) for node in ast.parse(path.read_text()).body if isinstance(node,(ast.FunctionDef,ast.AsyncFunctionDef))}
-    before=functions(ROOT/'evidence/before/backend/app/services.py');after=functions(ROOT/'backend/app/services.py')
+        return {node.name:ast.dump(node,include_attributes=False) for node in ast.parse(path.read_text(encoding='utf-8')).body if isinstance(node,(ast.FunctionDef,ast.AsyncFunctionDef))}
+    before=functions(BEFORE/'backend/app/services.py');after=functions(ROOT/'backend/app/services.py')
     # R6 intentionally validates previously archived evidence before reusing its score.
     # Formula evaluation and all ledger/calculation mutations remain AST-identical.
     # 2026-09-26 procurement fixes intentionally changed three functions:
@@ -41,6 +50,6 @@ def test_existing_scoring_and_ledger_business_functions_are_preserved():
 
 def test_existing_frontend_function_entries_not_removed():
     pattern=r'(?m)(?:async\s+)?function\s+([A-Za-z_$][\w$]*)\('
-    before=set(re.findall(pattern,(ROOT/'evidence/before/frontend/app.js').read_text()))
-    after=set(re.findall(pattern,(ROOT/'frontend/app.js').read_text()))
+    before=set(re.findall(pattern,(BEFORE/'frontend/app.js').read_text(encoding='utf-8')))
+    after=set(re.findall(pattern,(ROOT/'frontend/app.js').read_text(encoding='utf-8')))
     assert before<=after

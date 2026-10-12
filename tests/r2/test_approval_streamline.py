@@ -4,7 +4,7 @@
 本人事项被拦、来源变化被拦、一条失败不影响其余条，归档仍校验附件并入账；多附件按版本顺序上传，
 失败项不增加版本，只需补传失败项；退回补正期限口径未配置时保存成功、提交被拦。
 """
-from datetime import date
+from datetime import date, datetime
 from io import BytesIO
 import copy
 import uuid
@@ -67,7 +67,7 @@ def test_batch_one_failure_leaves_others_and_each_keeps_own_trail(submitted_clai
         stale=db.get(SocialClaim,ids['batch2']);trial=copy.deepcopy(stale.snapshot['trial'])
         trial['basis']['facts']['units'][0]['data']['learners']=trial['basis']['facts']['units'][0]['data']['learners'][:-1]
         stale.snapshot=st.freeze(trial)
-    before={k:len(events(app2,v)) for k,v in ids.items()}
+    before={k:{event.id for event in events(app2,v)} for k,v in ids.items()}
     auth(client2,'collegehead')
     results={}
     for key in ['teacher','batch1','batch2','batch3']:  # 前端批量：每条先取最新版本，再调用原单条接口
@@ -75,13 +75,19 @@ def test_batch_one_failure_leaves_others_and_each_keeps_own_trail(submitted_clai
         results[key]=post(client2,'/api/social/claims/'+ids[key]+'/actions',{'action':'approve','expected_version':item['version'],'reason':'核对无误，审核通过','basis':'批量办理第1/4条'})
     assert {k:r.status_code for k,r in results.items()}=={'teacher':200,'batch1':200,'batch2':409,'batch3':200}
     assert '审批依据已变化' in results['batch2'].json()['detail']
-    with app2.state.sessions() as db:
+    same_time=datetime(2026,9,3,12,0,0)
+    with app2.state.sessions.begin() as db:
         states={k:db.get(SocialClaim,v).state for k,v in ids.items()}
+        # MySQL stores seconds; force old/new ties so UUID order cannot stand in for new evidence.
+        for event in db.scalars(select(WorkflowEvent).where(WorkflowEvent.object_type=='social_claim',WorkflowEvent.object_id.in_(ids.values()))):
+            event.created_at=same_time
     assert states=={'teacher':'DEAN','batch1':'DEAN','batch2':'SUBMITTED','batch3':'DEAN'}
     for key in ('teacher','batch1','batch3'):
-        rows=events(app2,ids[key]);assert len(rows)==before[key]+1
-        assert rows[-1].actor_id=='collegehead' and rows[-1].reason=='核对无误，审核通过' and rows[-1].after['state']=='DEAN'
-    assert len(events(app2,ids['batch2']))==before['batch2']
+        rows=events(app2,ids[key]);assert len(rows)==len(before[key])+1
+        assert all(event.created_at==same_time for event in rows)
+        added=[event for event in rows if event.id not in before[key]];assert len(added)==1
+        assert added[0].actor_id=='collegehead' and added[0].reason=='核对无误，审核通过' and added[0].after['state']=='DEAN'
+    assert len(events(app2,ids['batch2']))==len(before['batch2'])
     # 旧版本号（批量开始前读到的版本）不能继续办理
     old=post(client2,'/api/social/claims/'+ids['batch1']+'/actions',{'action':'approve','expected_version':1,'reason':'核对无误','basis':''})
     assert old.status_code==409

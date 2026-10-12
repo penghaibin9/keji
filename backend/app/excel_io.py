@@ -309,7 +309,7 @@ def _commit_import(db,actor,job,rows,reason,basis,preview_sha):
         stored={r.row_no:r for r in db.scalars(select(ImportRow).where(ImportRow.job_id==job.id))}
         for x in checked:
             stored[x['row_no']].payload={'raw':x['raw'],'normalized':x['normalized']};stored[x['row_no']].errors=x['errors']
-        job.errors=sum(bool(x['errors']) for x in checked);job.version+=1;job.receipt={**proof,'written':0,'stale':True,'message':'确认时数据已变化，请按错误行重新处理'}
+        job.state='INVALID';job.errors=sum(bool(x['errors']) for x in checked);job.version+=1;job.receipt={**proof,'written':0,'stale':True,'message':'确认时数据已变化，请下载错误明细，修正后重新上传；可放弃本批'}
         audit(db,actor,'imports',job.id,'确认前重新校验未通过',after={'errors':job.errors},reason=reason)
         return job
     written=[]

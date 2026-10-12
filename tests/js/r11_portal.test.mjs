@@ -893,11 +893,71 @@ test('组织规则新建目标值必须由学校填写，不预填1',()=>{
  assert.equal(typeof engine().t.handlers['social-policy-calendar'],'function');
  const e=engine(),html=vm.runInContext('orgRuleRow()',e.ctx);
  assert.match(html,/data-or="target"[^>]*value=""[^>]*required/);
+ assert.match(html,/请按学校考核细则填写/);
+});
+test('组织规则新建和复制均在提交前拒绝空目标，旧目标不被覆盖',async()=>{
+ const original={id:'r',name:'合成组织规则',period_id:'p',target_kind:'dept',version:2,config:{components:[{key:'income',label:'收入',source:'income',weight:100,target:1}]}};
+ for(const handler of ['org-rule-form','org-rule-copy']){
+  const e=engine(()=>({items:[original]}));e.t.setData([{id:'p',name:'周期',state:'OPEN'}]);e.t.captureForm();
+  await e.t.handlers[handler](handler==='org-rule-copy'?'r':undefined);
+  const values={key:'income',label:'收入',source:'income',weight:'100',target:'',method:''};
+  e.node('#org-rule-rows').querySelectorAll=()=>[{querySelectorAll:()=>Object.entries(values).map(([or,value])=>({dataset:{or},value}))}];
+  await assert.rejects(e.t.getForm().callback({name:'合成草稿',period_id:'p'}),/目标值必填，请按学校考核细则填写/);
+  assert.equal(e.requests.filter(r=>r.options.method==='POST').length,0);assert.equal(original.config.components[0].target,1);
+ }
+});
+test('收入目标1的来源待核对提示在规则详情和启用表单醒目显示',async()=>{
+ const warning='归属培训收入目标值为1，来源未记录，请按学校考核细则核对。';
+ const rule={id:'r',name:'合成规则',target_kind:'dept',period_id:'p',state:'DRAFT',version:1,version_no:1,fingerprint:'fixture',warnings:[warning],config:{components:[{label:'收入',source:'income',weight:100,target:1}]}};
+ const e=engine(()=>({items:[rule]}));await e.t.handlers['org-rule']('r');
+ assert.match(e.node('#modal-root').innerHTML,/info-banner warn/);assert.match(e.node('#modal-root').innerHTML,/来源未记录/);
+ e.t.captureForm();await e.t.handlers['org-rule-action']('activate|r');
+ assert.match(e.t.getForm().body,/info-banner warn/);assert.match(e.t.getForm().body,/请按学校考核细则核对/);assert.doesNotMatch(e.t.getForm().body,/系统默认/);
+});
+test('组织试算和正式计算保留结果并展示后端目标核对提示',async()=>{
+ const warning='归属培训收入目标值为1，来源未记录，请按学校考核细则核对。';
+ const rule={id:'r',name:'合成规则',target_kind:'dept',period_id:'p',state:'DRAFT',version:1,version_no:1,warnings:[warning],config:{components:[]}};
+ const e=engine(url=>url==='/api/organization-assessment-rules'?{items:[rule]}:{items:[{target_id:'d',total:100,detail:[]}],count:1,warnings:[warning]});
+ e.t.setData([{id:'p',name:'周期',state:'OPEN'}],[],[{id:'d',name:'合成教研室',kind:'dept',active:true}]);e.t.captureForm();
+ const selected={querySelectorAll:()=>[{value:'d'}]};
+ await e.t.handlers['org-rule-trial']('r');await e.t.getForm().callback({},selected);
+ assert.match(e.node('#modal-root').innerHTML,/组织规则试算结果/);assert.match(e.node('#modal-root').innerHTML,/info-banner warn/);assert.match(e.node('#modal-root').innerHTML,/来源未记录/);
+ vm.runInContext('render=async()=>{}',e.ctx);await vm.runInContext("calculateOrgAssessment('dept')",e.ctx);
+ await e.t.getForm().callback({period_id:'p',reason:'合成计算',basis:'合成细则'},selected);
+ assert.match(e.node('#modal-root').innerHTML,/组织考核已生成，请核对目标/);assert.match(e.node('#modal-root').innerHTML,/info-banner warn/);assert.match(e.node('#modal-root').innerHTML,/来源未记录/);
+ assert.equal(e.requests.filter(r=>r.url==='/api/organization-assessments/calculate'&&r.options.method==='POST').length,1);
 });
 test('有错误行的导入预览显示校验未通过',async()=>{
  const e=engine(async()=>({items:[{id:'bad-import',filename:'测试.xlsx',kind:'records',state:'PREVIEW',total:1,errors:1}],total:1,page:1,size:20}));
  const html=await e.t.pages.imports();
- assert.match(html,/校验未通过/);assert.doesNotMatch(html,/>待确认导入</);
+ assert.match(html,/导入有误/);assert.match(html,/查看 \/ 放弃/);assert.doesNotMatch(html,/>待确认导入</);
+});
+test('导入错误批次可下载和放弃，已放弃批次保留说明且不再办理',async()=>{
+ for(const state of ['PREVIEW','INVALID','VOID']){
+  const job={id:'bad',filename:'合成.xlsx',kind:'records',state,total:1,errors:1,sha256:'a'.repeat(64),version:3};
+  const e=engine(url=>url.startsWith('/api/imports/bad?')?{job,rows:{items:[],page:1,size:30,total:1}}:{items:[job],total:1,page:1,size:20});
+  const list=await e.t.pages.imports();await e.t.handlers.import('bad');const html=e.node('#modal-root').innerHTML;
+  assert.match(html,/下载错误明细/);assert.doesNotMatch(html,/data-action="import-confirm"/);
+  if(state==='VOID'){
+   assert.match(list,/已放弃/);assert.match(html,/本批已放弃，未写入业务数据/);assert.match(html,/审计记录保留/);assert.doesNotMatch(html,/data-action="import-discard"|可放弃本批/);
+  }else{
+   assert.match(list,/导入有误/);assert.match(html,/data-action="import-discard"/);assert.match(html,/整批未入库/);
+  }
+ }
+});
+test('放弃导入沿用版本和理由提交，成功后重新读取批次',async()=>{
+ let state='INVALID';const job=()=>({id:'bad',filename:'合成.xlsx',kind:'records',state,total:1,errors:1,sha256:'b'.repeat(64),version:7});
+ const e=engine((url,options)=>{if(url==='/api/imports/bad/discard'&&options.method==='POST'){state='VOID';return {...job(),version:8}}return {job:job(),rows:{items:[],page:2,size:30,total:31}}});
+ vm.runInContext('render=async()=>{}',e.ctx);await vm.runInContext("showImport('bad',2)",e.ctx);e.t.captureForm();await e.t.handlers['import-discard']('bad');
+ const form=e.t.getForm();assert.match(form.body,/name="reason"[^>]*required/);await form.options.returnTo();assert.ok(e.requests.some(r=>r.url.includes('/imports/bad?page=2')));
+ await form.callback({reason:'原表有误，放弃本批',basis:'合成纠正依据'});
+ const request=e.requests.find(r=>r.url==='/api/imports/bad/discard');assert.equal(request.options.method,'POST');assert.deepEqual(JSON.parse(request.options.body),{reason:'原表有误，放弃本批',basis:'合成纠正依据',expected_version:7});
+ assert.match(e.node('#modal-root').innerHTML,/已放弃/);assert.doesNotMatch(e.node('#modal-root').innerHTML,/data-action="import-discard"/);
+});
+test('无错待确认导入继续显示确认入库',async()=>{
+ const e=engine(()=>({job:{id:'ok',filename:'合成.xlsx',state:'PREVIEW',total:1,errors:0,sha256:'c'.repeat(64),version:1},rows:{items:[],page:1,size:30,total:1}}));
+ await e.t.handlers.import('ok');const html=e.node('#modal-root').innerHTML;
+ assert.match(html,/data-action="import-confirm"/);assert.doesNotMatch(html,/data-action="import-discard"|导入有误/);
 });
 test('过期资质详情提示有效期并解释记录版本',async()=>{
  const e=engine(async()=>({qualification:{id:'q',teacher_id:'u',name:'隔离证书',category:'职业资格',version:3,state:'DRAFT',certificate_no:'TEST',issuer:'测试机构',obtained:'1999-01-01',expires:'2000-01-01'},attachments:[],events:[],revisions:[]}));

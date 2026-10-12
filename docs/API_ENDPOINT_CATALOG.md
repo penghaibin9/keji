@@ -1,8 +1,8 @@
-# API 接口目录
+# 接口目录（交付候选）
 
 > 由 `scripts/generate_api_catalog.py` 从当前源码自动生成。认证原语列只表示源码入口使用标准服务端认证/事务原语，不能替代运行时越权测试。
 
-当前 API 路由：**225**；静态认证门：**PASS**。
+当前接口共 **227** 项：业务路由 **226** 项、健康检查 **1** 项；业务静态认证门：**PASS**。
 
 | 方法 | 路径 | 模块文件 | 处理函数 | 认证/事务原语 | 公开 |
 |---|---|---|---|---|---|
@@ -74,10 +74,12 @@
 | GET | `/api/disputes/{ident}` | `backend\app\routes\business.py` | `dispute_detail` | read_operation | 否 |
 | POST | `/api/disputes/{ident}/resolve` | `backend\app\routes\business.py` | `dispute_resolve` | command | 否 |
 | POST | `/api/exports` | `backend\app\routes\tasks.py` | `create_export` | command | 否 |
+| GET | `/api/health` | `backend/app/main.py` | `health` | — | 是 |
 | GET | `/api/imports` | `backend\app\routes\tasks.py` | `imports` | read_operation | 否 |
 | GET | `/api/imports/templates/{kind}` | `backend\app\routes\tasks.py` | `import_template` | current_actor | 否 |
 | GET | `/api/imports/{ident}` | `backend\app\routes\tasks.py` | `import_detail` | read_operation | 否 |
 | POST | `/api/imports/{ident}/confirm` | `backend\app\routes\tasks.py` | `import_confirm` | command | 否 |
+| POST | `/api/imports/{ident}/discard` | `backend\app\routes\tasks.py` | `import_discard` | command | 否 |
 | GET | `/api/imports/{ident}/errors` | `backend\app\routes\tasks.py` | `import_errors` | current_actor | 否 |
 | POST | `/api/imports/{kind}/preview` | `backend\app\routes\tasks.py` | `import_preview` | command, current_actor | 否 |
 | GET | `/api/inbound-batches` | `backend\app\routes\integrations.py` | `inbound_batches` | read_operation | 否 |
@@ -234,6 +236,8 @@
 
 ## 使用边界
 
-- `/api/auth/login` 是当前唯一公开业务 API；其他接口必须进入服务端认证/权限路径。
+- 公开列按当前路由审计清单生成；登录、统一认证回调等公开入口仍需各自的票据、状态与防伪校验。
+- 健康检查是主程序的公开只读入口，另计1项；静态业务认证门仍核对业务路由目录，不将健康接口视为受业务角色授权的操作。
+- `GET /api/todos?stage=archive`：待归档清单；只接受 `archive` 这一筛选值，仍按当前角色权限、本人回避和组织范围筛选。实现见 `backend/app/routes/business.py`。
 - 路由目录不包含学校 SSO、数据中台和湘培的外部协议细节；外部协议以真实联调文档和责任方签认为准。
 - 生产 OpenAPI/Swagger 默认关闭；本文件用于交付、审计和版本比对。

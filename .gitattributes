@@ -10,3 +10,4 @@ backend/teaching_release.json text eol=lf
 backend/alembic/versions/20261012_0004_session_auth_method.py text eol=lf
 backend/auth_session_schema.json text eol=lf
 backend/auth_session_release.json text eol=lf
+tests/fixtures/p0_before/** -text

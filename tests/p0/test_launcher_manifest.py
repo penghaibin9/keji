@@ -4,6 +4,20 @@ from pathlib import Path
 import refresh_launcher_manifest as manifest
 
 
+def test_school_manifest_excludes_demo_entries_without_removing_source(tmp_path):
+    for name in ('README_START_HERE.md', '开始部署.sh', '先读我_部署与演示.html'):
+        (tmp_path/name).write_text('fixture')
+    assert set(manifest.program_names(tmp_path))=={'README_START_HERE.md','开始部署.sh','先读我_部署与演示.html'}
+    assert manifest.program_names(tmp_path,school_package=True)==['README_START_HERE.md']
+    assert (tmp_path/'开始部署.sh').is_file() and (tmp_path/'先读我_部署与演示.html').is_file()
+
+
+def test_school_program_manifest_uses_the_same_private_file_filter(tmp_path):
+    for name in ('tests/fixtures/test-accounts.txt','frontend/assets/screenshot.png','backend/app/main.py'):
+        path=tmp_path/name;path.parent.mkdir(parents=True,exist_ok=True);path.write_text('fixture')
+    assert manifest.program_names(tmp_path,school_package=True)==['backend/app/main.py']
+
+
 def test_actual_program_files_and_untracked_migrations_are_included(tmp_path):
     for name in ('backend/alembic/versions/new.py', 'backend/auth_session_schema.json',
                  'frontend/social-training.js', 'scripts/new.py', 'tests/new.py',

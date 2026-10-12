@@ -1,0 +1,162 @@
+{
+  "scan_date": "2026-10-12",
+  "scanner": "pip-audit",
+  "raw_record_count": 24,
+  "deduplicated_count": 13,
+  "upgrades_performed": false,
+  "records": [
+    {
+      "package": "pydantic-settings",
+      "version": "2.14.1",
+      "id": "CVE-2026-58203",
+      "aliases": [
+        "GHSA-4xgf-cpjx-pc3j"
+      ],
+      "fix_versions": [
+        "2.14.2"
+      ]
+    },
+    {
+      "package": "python-multipart",
+      "version": "0.0.29",
+      "id": "PYSEC-2026-3040",
+      "aliases": [
+        "CVE-2026-53540",
+        "GHSA-v9pg-7xvm-68hf"
+      ],
+      "fix_versions": [
+        "0.0.31"
+      ]
+    },
+    {
+      "package": "python-multipart",
+      "version": "0.0.29",
+      "id": "PYSEC-2026-3036",
+      "aliases": [
+        "CVE-2026-53539",
+        "GHSA-5rvq-cxj2-64vf"
+      ],
+      "fix_versions": [
+        "0.0.30"
+      ]
+    },
+    {
+      "package": "python-multipart",
+      "version": "0.0.29",
+      "id": "PYSEC-2026-3037",
+      "aliases": [
+        "CVE-2026-53538",
+        "GHSA-6jv3-5f52-599m"
+      ],
+      "fix_versions": [
+        "0.0.30"
+      ]
+    },
+    {
+      "package": "cryptography",
+      "version": "46.0.7",
+      "id": "PYSEC-2026-3554",
+      "aliases": [
+        "CVE-2026-69248",
+        "GHSA-m2h6-j472-rp4c"
+      ],
+      "fix_versions": [
+        "49.0.0"
+      ]
+    },
+    {
+      "package": "cryptography",
+      "version": "46.0.7",
+      "id": "PYSEC-2026-3552",
+      "aliases": [
+        "CVE-2026-69247",
+        "GHSA-g6cj-pr64-35w5"
+      ],
+      "fix_versions": [
+        "50.0.0"
+      ]
+    },
+    {
+      "package": "cryptography",
+      "version": "46.0.7",
+      "id": "PYSEC-2026-3553",
+      "aliases": [
+        "CVE-2026-69249",
+        "GHSA-jwv3-5hgf-82ww"
+      ],
+      "fix_versions": [
+        "49.0.0"
+      ]
+    },
+    {
+      "package": "cryptography",
+      "version": "46.0.7",
+      "id": "GHSA-537c-gmf6-5ccf",
+      "aliases": [],
+      "fix_versions": [
+        "48.0.1"
+      ]
+    },
+    {
+      "package": "starlette",
+      "version": "0.50.0",
+      "id": "PYSEC-2026-161",
+      "aliases": [
+        "CVE-2026-48710",
+        "GHSA-86qp-5c8j-p5mr",
+        "X41-2026-002"
+      ],
+      "fix_versions": [
+        "1.0.1"
+      ]
+    },
+    {
+      "package": "starlette",
+      "version": "0.50.0",
+      "id": "PYSEC-2026-2281",
+      "aliases": [
+        "CVE-2026-48818",
+        "GHSA-wqp7-x3pw-xc5r"
+      ],
+      "fix_versions": [
+        "1.1.0"
+      ]
+    },
+    {
+      "package": "starlette",
+      "version": "0.50.0",
+      "id": "PYSEC-2026-2280",
+      "aliases": [
+        "CVE-2026-48817",
+        "GHSA-x746-7m8f-x49c"
+      ],
+      "fix_versions": [
+        "1.1.0"
+      ]
+    },
+    {
+      "package": "starlette",
+      "version": "0.50.0",
+      "id": "PYSEC-2026-249",
+      "aliases": [
+        "CVE-2026-54283",
+        "GHSA-82w8-qh3p-5jfq"
+      ],
+      "fix_versions": [
+        "1.3.1"
+      ]
+    },
+    {
+      "package": "starlette",
+      "version": "0.50.0",
+      "id": "PYSEC-2026-248",
+      "aliases": [
+        "CVE-2026-54282",
+        "GHSA-jp82-jpqv-5vv3"
+      ],
+      "fix_versions": [
+        "1.3.0"
+      ]
+    }
+  ]
+}

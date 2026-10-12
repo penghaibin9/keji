@@ -81,6 +81,7 @@ def require_import_access(db, actor, job):
 
 def public_import(job):
     data=serial(job)
+    if job.state=='PREVIEW' and job.errors:data['state']='INVALID'
     data['receipt']=deepcopy(data.get('receipt') or {})
     data['receipt'].pop('access_proof', None)
     data['access_revoked']=False
@@ -95,7 +96,7 @@ def import_summary(db, actor, job):
             raise
         # Preserve a discoverable audit reference, but never return former rows,
         # generated object IDs, filenames or checksums as an authorization bypass.
-        return {'id':job.id,'kind':job.kind,'state':job.state,'version':job.version,
+        return {'id':job.id,'kind':job.kind,'state':'INVALID' if job.state=='PREVIEW' and job.errors else job.state,'version':job.version,
                 'created_at':serial(job.created_at),'filename':'导入批次（访问已受限）',
                 'total':None,'errors':None,'receipt':{},'access_revoked':True,
                 'access_note':'授权已变化或旧批次缺少授权来源。请重新上传；历史审计保留。'}

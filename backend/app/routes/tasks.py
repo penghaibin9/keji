@@ -58,7 +58,8 @@ async def import_preview(kind:str,request:Request,file:UploadFile=File(...)):
         def apply(db,a,s):
             require_import_permission(a,kind)
             checked=validate_rows(db,a,kind,parsed)
-            job=ImportJob(kind=kind,owner_id=a.id,filename=filename,sha256=file_sha,state='PREVIEW',total=len(checked),errors=sum(bool(x['errors']) for x in checked),receipt={'preview_rows_sha256':import_preview_digest(checked),'access_proof':make_import_proof(a,kind,checked)})
+            errors=sum(bool(x['errors']) for x in checked)
+            job=ImportJob(kind=kind,owner_id=a.id,filename=filename,sha256=file_sha,state='INVALID' if errors else 'PREVIEW',total=len(checked),errors=errors,receipt={'preview_rows_sha256':import_preview_digest(checked),'access_proof':make_import_proof(a,kind,checked)})
             db.add(job);db.flush()
             for x in checked:db.add(ImportRow(job_id=job.id,row_no=x['row_no'],payload={'raw':x['raw'],'normalized':x['normalized']},errors=x['errors']))
             audit(db,a,'imports',job.id,'生成Excel导入预览',after={'kind':kind,'rows':job.total,'errors':job.errors,'sha256':file_sha},reason='上传标准Excel，仅预览未入库')
@@ -98,11 +99,23 @@ def import_errors(ident:str,request:Request):
 def import_confirm(ident:str,data:VersionedReason,request:Request):
     def apply(db,a,s):
         job=_owned_import(db,a,ident);check_version(job,data.expected_version)
+        if job.state=='INVALID' or (job.state=='PREVIEW' and job.errors):raise HTTPException(409,'批次有错误，请下载错误明细并放弃本批，修正后重新上传')
         if job.state!='PREVIEW':raise HTTPException(409,'该导入批次已处理')
-        if job.errors:raise HTTPException(409,'预览仍有错误行，不能确认入库')
         stored=db.scalars(select(ImportRow).where(ImportRow.job_id==ident).order_by(ImportRow.row_no)).all()
         rows=[{'row_no':x.row_no,'raw':(x.payload or {}).get('raw',{}),'normalized':(x.payload or {}).get('normalized',{}),'errors':list(x.errors or [])} for x in stored]
         return public_import(commit_import(db,a,job,rows,data.reason,data.basis))
+    return command(request,data.model_dump(),'import',apply)
+
+@router.post('/imports/{ident}/discard')
+def import_discard(ident:str,data:VersionedReason,request:Request):
+    def apply(db,a,s):
+        job=_owned_import(db,a,ident);check_version(job,data.expected_version)
+        if job.state not in {'PREVIEW','INVALID'} or not job.errors:raise HTTPException(409,'仅有错误且未入库的批次可以放弃')
+        before={'state':job.state,'errors':job.errors,'version':job.version}
+        job.state='VOID';job.version+=1
+        job.receipt={**(job.receipt or {}),'written':0,'discarded_at':utcnow().isoformat(),'discarded_by':a.id,'discard_reason':data.reason,'discard_basis':data.basis}
+        audit(db,a,'imports',job.id,'放弃Excel导入批次',before=before,after={'state':job.state,'errors':job.errors,'version':job.version,'written':0},reason=data.reason)
+        return public_import(job)
     return command(request,data.model_dump(),'import',apply)
 
 EXPORT_FILTERS={

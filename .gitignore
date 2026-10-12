@@ -10,3 +10,5 @@ node_modules/
 .venv/
 evidence/
 .keji-closeout-backup-*/
+_claude_tmp/
+本地测试环境/

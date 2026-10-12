@@ -21,7 +21,7 @@ from ..read_queries import assessment_query,ASSESSMENT_FILTERS,authorized_org_de
 from ..social_training import point_entry_read_item
 from .business import owned_object,events
 from ..org_assessment import (OrganizationAssessmentRule,OrganizationRuleTrial,OrganizationAssessment,OrganizationAssessmentMetricEvidence,
-    validate_org_rule_config,organization_facts,evaluate_org_rule,archive_payload,ORG_TARGET_KINDS,organization_source_changes)
+    validate_org_rule_config,organization_facts,evaluate_org_rule,archive_payload,ORG_TARGET_KINDS,organization_source_changes,org_rule_warnings)
 router=APIRouter(prefix='/api',tags=['积分与教师考核'])
 
 @router.get('/rules')
@@ -429,7 +429,7 @@ def organization_rules(request:Request):
         if f.get('target_kind'):
             if f['target_kind'] not in ORG_TARGET_KINDS:raise HTTPException(422,'组织考核对象无效')
             q=q.where(OrganizationAssessmentRule.target_kind==f['target_kind'])
-        return {'items':db.scalars(q.order_by(OrganizationAssessmentRule.created_at.desc(),OrganizationAssessmentRule.id)).all()}
+        return {'items':[{**serial(obj),'warnings':org_rule_warnings(obj.config)} for obj in db.scalars(q.order_by(OrganizationAssessmentRule.created_at.desc(),OrganizationAssessmentRule.id))]}
     return read_operation(request,'rules.manage',load)
 
 @router.post('/organization-assessment-rules')
@@ -479,7 +479,7 @@ def trial_organization_rule(ident:str,data:OrgRuleTrial,request:Request):
                           'total':str(rounded(sum((Decimal(x['score']) for x in detail),Decimal(0))))})
         db.add(OrganizationRuleTrial(rule_id=rule.id,fingerprint=rule.fingerprint,target_ids=list(data.target_ids),result=items,actor_id=a.id))
         audit(db,a,'organization_rules',rule.id,'组织考核样本试算',after={'targets':len(items),'fingerprint':rule.fingerprint},reason='规则样本试算，不写正式考核')
-        return {'items':items}
+        return {'items':items,'warnings':org_rule_warnings(rule.config)}
     return command(request,data.model_dump(),'rules.manage',apply)
 
 @router.post('/organization-assessment-rules/{ident}/actions')
@@ -498,7 +498,7 @@ def organization_rule_action(ident:str,data:Action,request:Request):
             obj.state='ACTIVE'
         elif data.action=='deactivate':obj.state='INACTIVE'
         else:raise HTTPException(422,'组织规则操作无效')
-        obj.version+=1;audit(db,a,'organization_rules',ident,'组织规则启停',before,serial(obj),data.reason);return obj
+        obj.version+=1;audit(db,a,'organization_rules',ident,'组织规则启停',before,serial(obj),data.reason);return {**serial(obj),'warnings':org_rule_warnings(obj.config)}
     return command(request,data.model_dump(),'rules.manage',apply)
 
 @router.post('/organization-assessments/calculate')
@@ -534,7 +534,7 @@ def calculate_organization_assessments(data:OrgAssessmentCalculate,request:Reque
                     data_source=d['source'],scope_snapshot={'target':snapshot['target'],'org_ids':snapshot['org_ids'],'teacher_ids':snapshot['teacher_ids']},
                     formula=d['formula'],target_value=d['target'],weight=Decimal(d['weight']),rule_version=rule.version_no,calculated_score=Decimal(d['score'])))
             workflow(db,a,'organization_assessment',obj.id,'生成组织考核',before,serial(obj),data.reason,data.basis);out.append(serial(obj))
-        return {'items':out,'count':len(out)}
+        return {'items':out,'count':len(out),'warnings':org_rule_warnings(rule.config)}
     return command(request,data.model_dump(),'assessment.calculate',apply)
 
 @router.get('/organization-assessments')

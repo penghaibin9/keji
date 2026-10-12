@@ -1,0 +1,98 @@
+{
+  "用途": "学校数据接口的安全字段映射模板，仅提供来源字段到本地业务字段的对应关系，不含接口地址、认证参数、凭据或学校原始数据。",
+  "实施要求": [
+    "教职工14项、课程总库18项、教师课程6项与当前申请清单对应，共38项。",
+    "超星保留现有配置建议能够确认的20个来源字段，仍需学校核对完整正式授权字段字典。",
+    "在对接与同步中分别选择对应数据类型配置字段映射；不同类型不能混用。",
+    "所有未列出的个人信息字段不自行补采集；完整来源返回字段须符合学校书面授权。",
+    "人事来源更新时间必须带学校确认的时区；学年与学期分别映射，不猜时间或码义。",
+    "课程是否可开设仅保存原码，不作为启用、授权或计分条件。",
+    "配置变更后重新生成预览，校验通过并留痕确认后才入正式表。"
+  ],
+  "码表要求": {
+    "teacher_hr": [
+      "当前状态码必须导入学校在职状态码表，并注明哪些代码算在职；缺码表时禁止猜测。",
+      "教职工类别、单位、学历和学位使用学校码表；学历学位缺码表时只显示原码和待码表。",
+      "学校需确认性别代码是否与既有常用国标一致。"
+    ],
+    "school_course": [
+      "单位、课程性质、类别、属性、大类、授课方式和考核方式使用学校码表。",
+      "学校确认启用状态、删除标记的布尔语义；是否可开设保持原码。"
+    ],
+    "teacher_course": [
+      "学校确认工号唯一性、课程号与课程总库对应、学年学期命名。"
+    ],
+    "online_course": [
+      "学校确认创建人账号对应工号、学年学期含义、归档标记和课程性质码义。",
+      "保持现行仅创建人计分，不新增团队人员工号收集或团队计分。"
+    ]
+  },
+  "字段映射": {
+    "teacher_hr": {
+      "ZGH": "staff_no",
+      "XM": "name",
+      "SZDWDM": "org_code",
+      "SZDWMC": "org_name",
+      "DQZTM": "hr_status_code",
+      "JZGLBM": "staff_type",
+      "GWMC": "post_name",
+      "GWLB": "post_type",
+      "ZCMC": "title",
+      "ZWMC": "duty",
+      "XLM": "edu",
+      "XWM": "degree",
+      "XBM": "gender",
+      "TSTAMP": "source_updated_at"
+    },
+    "school_course": {
+      "JX02ID": "external_key",
+      "KCH": "code",
+      "KCMC": "name",
+      "KKDW": "dept",
+      "GLDW": "manage_dept",
+      "XF": "credit",
+      "SKFSM": "teach_mode",
+      "KHFS": "exam_mode",
+      "KCXZM": "nature",
+      "KCLB": "category",
+      "KCSX": "attribute",
+      "KCDL": "group",
+      "ISKKS": "can_open",
+      "QYZT": "active",
+      "ISDEL": "deleted",
+      "ZXS": "hours",
+      "ZHOUXS": "weekly_hours",
+      "VERSION": "course_version"
+    },
+    "teacher_course": {
+      "ZGH": "staff_no",
+      "XM": "teacher_name",
+      "KCH": "course_code",
+      "KCMC": "course_name",
+      "XQMC": "term_name",
+      "TSTAMP": "source_stamp"
+    },
+    "online_course": {
+      "creater_login_name": "staff_no",
+      "teachername": "teacher_name",
+      "courseid": "course_code",
+      "coursename": "course_name",
+      "xn": "school_year",
+      "xq": "term_no",
+      "credit": "credit",
+      "coursePeriod": "hours",
+      "update_time": "source_stamp",
+      "courseIdentifier": "jw_course_code",
+      "imageUrl": "cover_url",
+      "courseurl": "course_url",
+      "groupname": "group_name",
+      "chapterCount": "chapters",
+      "type": "course_type",
+      "sourse": "course_source",
+      "isFiled": "archived",
+      "teamteachername": "team_names",
+      "kcxz": "nature",
+      "major": "major"
+    }
+  }
+}

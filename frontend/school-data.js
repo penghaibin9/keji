@@ -2,11 +2,9 @@
 // 数据范围和可见字段由服务器决定（/api/reference/staff-roster），这里只负责显示。
 'use strict';
 
-// 国标常用值（GB/T 2261.1 性别、GB/T 4658 学历、GB/T 6864 学位大类）。学校码表到位后以学校为准。
+// 性别沿用国标常用值；学历、学位必须按学校码表显示，不能猜测学校代码含义。
 const CODE_TABLES = {
-  gender: {'0': '未知', '1': '男', '2': '女', '9': '未说明'},
-  edu: {'10': '研究生', '11': '博士研究生', '14': '硕士研究生', '20': '大学本科', '21': '大学本科', '30': '大学专科', '31': '大学专科', '40': '中专', '41': '中专'},
-  degree: {'2': '博士', '3': '硕士', '4': '学士'}
+  gender: {'0': '未知', '1': '男', '2': '女', '9': '未说明'}
 };
 const PROBLEM_BADGE = {no_account: 'red-b', unit_mismatch: 'orange-b', inactive_teaching: 'orange-b', missing_credit: 'orange-b'};
 const PROBLEM_SHORT = {no_account: '未对应账号', unit_mismatch: '单位对不上', inactive_teaching: '不在职但有授课', missing_credit: '缺学分'};
@@ -25,8 +23,7 @@ export function codeLabel(c, type, code) {
   if (!v) return '<span class="muted small">—</span>';
   const school = schoolCodes[CODE_ALIAS[type] || type]?.[v]?.label;
   if (school) return c.esc(school);
-  const table = CODE_TABLES[type] || {};
-  const hit = table[v] || (type === 'degree' ? table[v.slice(0, 1)] : null);
+  const hit = CODE_TABLES[type]?.[v];
   if (hit) return c.esc(hit);
   // 学校直接给了中文的，原样显示；只有代码才提示待码表。
   return /[\u4e00-\u9fa5]/.test(v) ? c.esc(v) : `${c.esc(v)}<span class="muted small">（待码表）</span>`;
@@ -145,7 +142,7 @@ export async function showCourseDetail(c, code, back='') {
   if (!d.items.length) return c.modal(`课程 ${code}`, c.note('课程总库里没有这门课，所以教务授课取不到学分。请联系教务处核对课程号。', true),back?c.act('返回学年明细','credit-detail',back):'');
   const x = d.items[0], ex = x.extra || {};
   const kv = [['课程号', `<span class="mono">${e(x.code)}</span>`], ['学分', x.credit == null ? '<span class="badge red-b">无学分</span>' : `<strong>${c.number(x.credit, 2)}</strong>`], ['总学时', x.hours == null ? '—' : c.number(x.hours, 2)], ['周学时', x.weekly_hours == null ? '—' : c.number(x.weekly_hours, 2)],
-    ['开课单位', e(x.dept || '—')], ['年度版本', e(x.course_version || '—')],
+    ['开课单位', codeLabel(c, 'unit', x.dept)], ['年度版本', e(x.course_version || '—')],
     ...[['nature', '课程性质'], ['category', '课程类别'], ['attribute', '课程属性'], ['group', '课程大类'], ['teach_mode', '授课方式'], ['exam_mode', '考核方式'], ['manage_dept', '管理单位']].filter(([k]) => ex[k]).map(([k, l]) => [l, codeLabel(c, k, ex[k])])];
   const versions = d.items.length > 1 ? `<h3 class="mt20">所有版本</h3>${c.table(['版本', '学分', '总学时', ''], d.items.map((v, i) => [e(v.course_version || '—'), v.credit == null ? '—' : c.number(v.credit, 2), v.hours == null ? '—' : c.number(v.hours, 2), i === 0 ? '<span class="badge green-b">计分用这一版</span>' : '']))}` : '';
   c.modal(`${x.name}`, `<dl class="kv">${kv.map(([k, v]) => `<dt>${k}</dt><dd>${v}</dd>`).join('')}</dl>${versions}<p class="small muted mt16">来自教务课程总库，只读。学分有误请联系教务处更正，下次同步自动更新。</p>`,back?c.act('返回学年明细','credit-detail',back):'');

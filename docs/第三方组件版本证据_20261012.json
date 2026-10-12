@@ -1,0 +1,474 @@
+[
+  {
+    "name": "alembic",
+    "version": "1.18.4",
+    "license": "MIT",
+    "direct": true,
+    "project_urls": [
+      "Homepage, https://alembic.sqlalchemy.org",
+      "Documentation, https://alembic.sqlalchemy.org/en/latest/",
+      "Changelog, https://alembic.sqlalchemy.org/en/latest/changelog.html",
+      "Source, https://github.com/sqlalchemy/alembic/",
+      "Issue Tracker, https://github.com/sqlalchemy/alembic/issues/"
+    ],
+    "license_files": [
+      "alembic-1.18.4.dist-info/licenses/LICENSE"
+    ]
+  },
+  {
+    "name": "annotated-doc",
+    "version": "0.0.5",
+    "license": "MIT",
+    "direct": false,
+    "project_urls": [
+      "Homepage, https://github.com/fastapi/annotated-doc",
+      "Documentation, https://github.com/fastapi/annotated-doc",
+      "Repository, https://github.com/fastapi/annotated-doc",
+      "Issues, https://github.com/fastapi/annotated-doc/issues",
+      "Changelog, https://github.com/fastapi/annotated-doc/release-notes.md"
+    ],
+    "license_files": [
+      "annotated_doc-0.0.5.dist-info/licenses/LICENSE"
+    ]
+  },
+  {
+    "name": "annotated-types",
+    "version": "0.8.0",
+    "license": "MIT",
+    "direct": false,
+    "project_urls": [
+      "Homepage, https://github.com/annotated-types/annotated-types",
+      "Source, https://github.com/annotated-types/annotated-types",
+      "Changelog, https://github.com/annotated-types/annotated-types/releases"
+    ],
+    "license_files": [
+      "annotated_types-0.8.0.dist-info/licenses/LICENSE"
+    ]
+  },
+  {
+    "name": "anyio",
+    "version": "4.15.1",
+    "license": "MIT",
+    "direct": false,
+    "project_urls": [
+      "Documentation, https://anyio.readthedocs.io/en/latest/",
+      "Changelog, https://anyio.readthedocs.io/en/stable/versionhistory.html",
+      "Source code, https://github.com/agronholm/anyio",
+      "Issue tracker, https://github.com/agronholm/anyio/issues"
+    ],
+    "license_files": [
+      "anyio-4.15.1.dist-info/licenses/LICENSE"
+    ]
+  },
+  {
+    "name": "argon2-cffi",
+    "version": "25.1.0",
+    "license": "MIT",
+    "direct": true,
+    "project_urls": [
+      "Documentation, https://argon2-cffi.readthedocs.io/",
+      "Changelog, https://github.com/hynek/argon2-cffi/blob/main/CHANGELOG.md",
+      "GitHub, https://github.com/hynek/argon2-cffi",
+      "Funding, https://github.com/sponsors/hynek",
+      "Tidelift, https://tidelift.com/?utm_source=lifter&utm_medium=referral&utm_campaign=hynek"
+    ],
+    "license_files": [
+      "argon2_cffi-25.1.0.dist-info/licenses/LICENSE"
+    ]
+  },
+  {
+    "name": "argon2-cffi-bindings",
+    "version": "26.1.0",
+    "license": "MIT",
+    "direct": false,
+    "project_urls": [
+      "Tidelift, https://tidelift.com/?utm_source=lifter&utm_medium=referral&utm_campaign=hynek",
+      "Changelog, https://github.com/hynek/argon2-cffi-bindings/blob/main/CHANGELOG.md",
+      "GitHub, https://github.com/hynek/argon2-cffi-bindings",
+      "Funding, https://github.com/sponsors/hynek"
+    ],
+    "license_files": [
+      "argon2_cffi_bindings-26.1.0.dist-info/licenses/LICENSE"
+    ]
+  },
+  {
+    "name": "cffi",
+    "version": "2.1.1",
+    "license": "MIT-0",
+    "direct": false,
+    "project_urls": [
+      "Documentation, https://cffi.readthedocs.io/",
+      "Changelog, https://cffi.readthedocs.io/en/latest/whatsnew.html",
+      "Download, https://github.com/python-cffi/cffi/releases",
+      "Contact, https://groups.google.com/forum/#!forum/python-cffi",
+      "Source Code, https://github.com/python-cffi/cffi",
+      "Issue Tracker, https://github.com/python-cffi/cffi/issues"
+    ],
+    "license_files": [
+      "cffi-2.1.1.dist-info/licenses/LICENSE"
+    ]
+  },
+  {
+    "name": "click",
+    "version": "8.5.0",
+    "license": "BSD-3-Clause",
+    "direct": false,
+    "project_urls": [
+      "Changes, https://click.palletsprojects.com/page/changes/",
+      "Chat, https://discord.gg/pallets",
+      "Documentation, https://click.palletsprojects.com/",
+      "Donate, https://palletsprojects.com/donate",
+      "Source, https://github.com/pallets/click/"
+    ],
+    "license_files": [
+      "click-8.5.0.dist-info/licenses/LICENSE.txt"
+    ]
+  },
+  {
+    "name": "cryptography",
+    "version": "46.0.7",
+    "license": "Apache-2.0 OR BSD-3-Clause",
+    "direct": true,
+    "project_urls": [
+      "homepage, https://github.com/pyca/cryptography",
+      "documentation, https://cryptography.io/",
+      "source, https://github.com/pyca/cryptography/",
+      "issues, https://github.com/pyca/cryptography/issues",
+      "changelog, https://cryptography.io/en/latest/changelog/"
+    ],
+    "license_files": [
+      "cryptography-46.0.7.dist-info/licenses/LICENSE",
+      "cryptography-46.0.7.dist-info/licenses/LICENSE.APACHE",
+      "cryptography-46.0.7.dist-info/licenses/LICENSE.BSD"
+    ]
+  },
+  {
+    "name": "et_xmlfile",
+    "version": "2.0.0",
+    "license": "MIT",
+    "direct": false,
+    "project_urls": [
+      "Documentation, https://openpyxl.pages.heptapod.net/et_xmlfile/",
+      "Source, https://foss.heptapod.net/openpyxl/et_xmlfile",
+      "Tracker, https://foss.heptapod.net/openpyxl/et_xmfile/-/issues"
+    ],
+    "license_files": []
+  },
+  {
+    "name": "fastapi",
+    "version": "0.128.2",
+    "license": "MIT",
+    "direct": true,
+    "project_urls": [
+      "Homepage, https://github.com/fastapi/fastapi",
+      "Documentation, https://fastapi.tiangolo.com/",
+      "Repository, https://github.com/fastapi/fastapi",
+      "Issues, https://github.com/fastapi/fastapi/issues",
+      "Changelog, https://fastapi.tiangolo.com/release-notes/"
+    ],
+    "license_files": [
+      "fastapi-0.128.2.dist-info/licenses/LICENSE"
+    ]
+  },
+  {
+    "name": "greenlet",
+    "version": "3.5.6",
+    "license": "MIT AND PSF-2.0",
+    "direct": false,
+    "project_urls": [
+      "Homepage, https://greenlet.readthedocs.io",
+      "Documentation, https://greenlet.readthedocs.io",
+      "Repository, https://github.com/python-greenlet/greenlet",
+      "Issues, https://github.com/python-greenlet/greenlet/issues",
+      "Changelog, https://greenlet.readthedocs.io/en/latest/changes.html"
+    ],
+    "license_files": [
+      "greenlet-3.5.6.dist-info/licenses/LICENSE",
+      "greenlet-3.5.6.dist-info/licenses/LICENSE.PSF"
+    ]
+  },
+  {
+    "name": "h11",
+    "version": "0.16.0",
+    "license": "MIT",
+    "direct": false,
+    "project_urls": [],
+    "license_files": [
+      "h11-0.16.0.dist-info/licenses/LICENSE.txt"
+    ]
+  },
+  {
+    "name": "idna",
+    "version": "3.20",
+    "license": "BSD-3-Clause",
+    "direct": false,
+    "project_urls": [
+      "Changelog, https://github.com/kjd/idna/blob/master/HISTORY.md",
+      "Issue tracker, https://github.com/kjd/idna/issues",
+      "Source, https://github.com/kjd/idna"
+    ],
+    "license_files": [
+      "idna-3.20.dist-info/licenses/LICENSE.md"
+    ]
+  },
+  {
+    "name": "Mako",
+    "version": "1.4.3",
+    "license": "MIT",
+    "direct": false,
+    "project_urls": [
+      "Homepage, https://www.makotemplates.org/",
+      "Documentation, https://docs.makotemplates.org",
+      "Issue Tracker, https://github.com/sqlalchemy/mako"
+    ],
+    "license_files": [
+      "mako-1.4.3.dist-info/licenses/LICENSE"
+    ]
+  },
+  {
+    "name": "MarkupSafe",
+    "version": "3.0.4",
+    "license": "BSD-3-Clause",
+    "direct": false,
+    "project_urls": [
+      "Donate, https://palletsprojects.com/donate",
+      "Documentation, https://markupsafe.palletsprojects.com/",
+      "Changes, https://markupsafe.palletsprojects.com/page/changes/",
+      "Source, https://github.com/pallets/markupsafe/",
+      "Chat, https://discord.gg/pallets"
+    ],
+    "license_files": [
+      "markupsafe-3.0.4.dist-info/licenses/LICENSE.txt"
+    ]
+  },
+  {
+    "name": "openpyxl",
+    "version": "3.1.5",
+    "license": "MIT",
+    "direct": true,
+    "project_urls": [
+      "Documentation, https://openpyxl.readthedocs.io/en/stable/",
+      "Source, https://foss.heptapod.net/openpyxl/openpyxl",
+      "Tracker, https://foss.heptapod.net/openpyxl/openpyxl/-/issues"
+    ],
+    "license_files": []
+  },
+  {
+    "name": "pillow",
+    "version": "12.3.0",
+    "license": "MIT-CMU",
+    "direct": true,
+    "project_urls": [
+      "Release notes, https://pillow.readthedocs.io/en/stable/releasenotes/index.html",
+      "Changelog, https://github.com/python-pillow/Pillow/releases",
+      "Documentation, https://pillow.readthedocs.io",
+      "Funding, https://tidelift.com/subscription/pkg/pypi-pillow?utm_source=pypi-pillow&utm_medium=pypi",
+      "Homepage, https://python-pillow.github.io",
+      "Mastodon, https://fosstodon.org/@pillow",
+      "Source, https://github.com/python-pillow/Pillow"
+    ],
+    "license_files": [
+      "pillow-12.3.0.dist-info/licenses/LICENSE"
+    ]
+  },
+  {
+    "name": "pycparser",
+    "version": "3.0",
+    "license": "BSD-3-Clause",
+    "direct": false,
+    "project_urls": [
+      "Homepage, https://github.com/eliben/pycparser"
+    ],
+    "license_files": [
+      "pycparser-3.0.dist-info/licenses/LICENSE"
+    ]
+  },
+  {
+    "name": "pydantic",
+    "version": "2.13.4",
+    "license": "MIT",
+    "direct": true,
+    "project_urls": [
+      "Homepage, https://github.com/pydantic/pydantic",
+      "Documentation, https://docs.pydantic.dev",
+      "Funding, https://github.com/sponsors/samuelcolvin",
+      "Source, https://github.com/pydantic/pydantic",
+      "Changelog, https://docs.pydantic.dev/latest/changelog/"
+    ],
+    "license_files": [
+      "pydantic-2.13.4.dist-info/licenses/LICENSE"
+    ]
+  },
+  {
+    "name": "pydantic_core",
+    "version": "2.46.4",
+    "license": "MIT",
+    "direct": false,
+    "project_urls": [
+      "Funding, https://github.com/sponsors/samuelcolvin",
+      "Homepage, https://github.com/pydantic",
+      "Source, https://github.com/pydantic/pydantic/tree/main/pydantic-core"
+    ],
+    "license_files": [
+      "pydantic_core-2.46.4.dist-info/licenses/LICENSE"
+    ]
+  },
+  {
+    "name": "pydantic-settings",
+    "version": "2.14.1",
+    "license": "MIT",
+    "direct": true,
+    "project_urls": [
+      "Homepage, https://github.com/pydantic/pydantic-settings",
+      "Funding, https://github.com/sponsors/samuelcolvin",
+      "Source, https://github.com/pydantic/pydantic-settings",
+      "Changelog, https://github.com/pydantic/pydantic-settings/releases",
+      "Documentation, https://docs.pydantic.dev/dev-v2/concepts/pydantic_settings/"
+    ],
+    "license_files": [
+      "pydantic_settings-2.14.1.dist-info/licenses/LICENSE"
+    ]
+  },
+  {
+    "name": "PyMySQL",
+    "version": "1.2.0",
+    "license": "MIT",
+    "direct": true,
+    "project_urls": [
+      "Project, https://github.com/PyMySQL/PyMySQL",
+      "Documentation, https://pymysql.readthedocs.io/",
+      "Changelog, https://github.com/PyMySQL/PyMySQL/blob/main/CHANGELOG.md"
+    ],
+    "license_files": [
+      "pymysql-1.2.0.dist-info/licenses/LICENSE"
+    ]
+  },
+  {
+    "name": "pypdf",
+    "version": "6.20.0",
+    "license": "BSD-3-Clause",
+    "direct": true,
+    "project_urls": [
+      "Bug Reports, https://github.com/py-pdf/pypdf/issues",
+      "Changelog, https://pypdf.readthedocs.io/en/latest/meta/CHANGELOG.html",
+      "Documentation, https://pypdf.readthedocs.io/en/latest/",
+      "Source, https://github.com/py-pdf/pypdf"
+    ],
+    "license_files": [
+      "pypdf-6.20.0.dist-info/licenses/LICENSE"
+    ]
+  },
+  {
+    "name": "python-dotenv",
+    "version": "1.2.4",
+    "license": "BSD-3-Clause",
+    "direct": false,
+    "project_urls": [
+      "Source, https://github.com/theskumar/python-dotenv"
+    ],
+    "license_files": [
+      "python_dotenv-1.2.4.dist-info/licenses/LICENSE"
+    ]
+  },
+  {
+    "name": "python-multipart",
+    "version": "0.0.29",
+    "license": "Apache-2.0",
+    "direct": true,
+    "project_urls": [
+      "Homepage, https://github.com/Kludex/python-multipart",
+      "Documentation, https://kludex.github.io/python-multipart/",
+      "Changelog, https://github.com/Kludex/python-multipart/blob/master/CHANGELOG.md",
+      "Source, https://github.com/Kludex/python-multipart"
+    ],
+    "license_files": [
+      "python_multipart-0.0.29.dist-info/licenses/LICENSE.txt"
+    ]
+  },
+  {
+    "name": "SQLAlchemy",
+    "version": "2.0.50",
+    "license": "MIT",
+    "direct": true,
+    "project_urls": [
+      "Documentation, https://docs.sqlalchemy.org",
+      "Issue Tracker, https://github.com/sqlalchemy/sqlalchemy/"
+    ],
+    "license_files": [
+      "sqlalchemy-2.0.50.dist-info/licenses/LICENSE"
+    ]
+  },
+  {
+    "name": "starlette",
+    "version": "0.50.0",
+    "license": "BSD-3-Clause",
+    "direct": false,
+    "project_urls": [
+      "Homepage, https://github.com/Kludex/starlette",
+      "Documentation, https://starlette.dev/",
+      "Changelog, https://starlette.dev/release-notes/",
+      "Funding, https://github.com/sponsors/Kludex",
+      "Source, https://github.com/Kludex/starlette"
+    ],
+    "license_files": [
+      "starlette-0.50.0.dist-info/licenses/LICENSE.md"
+    ]
+  },
+  {
+    "name": "typing_extensions",
+    "version": "4.16.0",
+    "license": "PSF-2.0",
+    "direct": false,
+    "project_urls": [
+      "Bug Tracker, https://github.com/python/typing_extensions/issues",
+      "Changes, https://github.com/python/typing_extensions/blob/main/CHANGELOG.md",
+      "Documentation, https://typing-extensions.readthedocs.io/",
+      "Home, https://github.com/python/typing_extensions",
+      "Q & A, https://github.com/python/typing/discussions",
+      "Repository, https://github.com/python/typing_extensions"
+    ],
+    "license_files": [
+      "typing_extensions-4.16.0.dist-info/licenses/LICENSE"
+    ]
+  },
+  {
+    "name": "typing-inspection",
+    "version": "0.4.4",
+    "license": "MIT",
+    "direct": false,
+    "project_urls": [
+      "Homepage, https://github.com/pydantic/typing-inspection",
+      "Documentation, https://pydantic.github.io/typing-inspection/dev/",
+      "Source, https://github.com/pydantic/typing-inspection",
+      "Changelog, https://github.com/pydantic/typing-inspection/blob/main/HISTORY.md"
+    ],
+    "license_files": [
+      "typing_inspection-0.4.4.dist-info/licenses/LICENSE"
+    ]
+  },
+  {
+    "name": "uvicorn",
+    "version": "0.48.0",
+    "license": "BSD-3-Clause",
+    "direct": true,
+    "project_urls": [
+      "Changelog, https://uvicorn.dev/release-notes",
+      "Funding, https://github.com/sponsors/encode",
+      "Homepage, https://uvicorn.dev/",
+      "Source, https://github.com/Kludex/uvicorn"
+    ],
+    "license_files": [
+      "uvicorn-0.48.0.dist-info/licenses/LICENSE.md"
+    ]
+  },
+  {
+    "name": "xlrd",
+    "version": "2.0.1",
+    "license": "BSD",
+    "direct": true,
+    "project_urls": [],
+    "license_files": [
+      "xlrd-2.0.1.dist-info/LICENSE"
+    ]
+  }
+]

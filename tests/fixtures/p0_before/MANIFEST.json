@@ -1,0 +1,23 @@
+{
+  "purpose": "旧版纯代码回归基线，不是现行部署程序；禁止用现行源码重建",
+  "files": [
+    {
+      "path": "backend/app/models.py",
+      "source_relative_path": "evidence/before/backend/app/models.py",
+      "size": 17361,
+      "sha256": "97756b8d50ed28f7e50b9816b5d49df2dc243b0dd3ba3bbb33dbb2fecec49109"
+    },
+    {
+      "path": "backend/app/services.py",
+      "source_relative_path": "evidence/before/backend/app/services.py",
+      "size": 13454,
+      "sha256": "fc50f1cc4822fc9ef08ba08c20524ffbb7118244d9cb06fb835301fcaf755772"
+    },
+    {
+      "path": "frontend/app.js",
+      "source_relative_path": "evidence/before/frontend/app.js",
+      "size": 86729,
+      "sha256": "5ac8503a0845abff50cbcb657e5aa246aeeec3b56c62d9382cd3ab01d14ef6f4"
+    }
+  ]
+}

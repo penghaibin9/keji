@@ -85,6 +85,19 @@ ORG_TARGET_KINDS = {"dept", "college", "school"}
 ORG_SOURCES = {"hours", "participants", "income", "teachers", "projects", "courses", "qualifications", "points", "assessment_score"}
 
 
+def org_rule_warnings(config):
+    for item in config.get("components", []):
+        if item.get("source") != "income" or item.get("method") not in (None, "", "ratio"):
+            continue
+        try:
+            if Decimal(str(item.get("target"))) == 1:
+                # Historic rules did not record whether the target was entered or prefilled.
+                return ["归属培训收入目标值为1，来源未记录，请按学校考核细则核对。"]
+        except (ValueError, TypeError, ArithmeticError):
+            continue
+    return []
+
+
 def validate_org_rule_config(target_kind: str, config: dict) -> dict:
     if target_kind not in ORG_TARGET_KINDS:
         raise HTTPException(422, "组织考核对象无效")
@@ -97,6 +110,8 @@ def validate_org_rule_config(target_kind: str, config: dict) -> dict:
     normalized=[]
     for item in components:
         if not isinstance(item, dict): raise HTTPException(422, "组织考核指标无效")
+        if item.get("target") is None or str(item["target"]).strip() == "":
+            raise HTTPException(422, "组织考核目标值必填，请按学校考核细则填写")
         required={"key","label","source","weight","target"}
         if not required <= set(item): raise HTTPException(422, "组织考核指标字段不完整")
         key=str(item["key"]).strip(); label=str(item["label"]).strip(); source=str(item["source"]).strip()
