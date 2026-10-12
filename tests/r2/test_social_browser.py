@@ -40,6 +40,8 @@ def test_social_menu_form_resources_and_refresh_in_browser(tmp_path,monkeypatch)
             page.locator('.pagehead').get_by_role('button',name='申报培训项目',exact=True).click()
             for key,value in {'code':'BROWSER-P1','name':'隔离演示 技能培训项目','cohort':'第一期','expected_income':'0','expected_participants':'30','expected_outcomes':'掌握基础技能','start_date':'2026-10-01','end_date':'2026-10-08'}.items():page.locator('#f-'+key).fill(value)
             page.locator('#owner_id-search').fill('J001');page.locator('#f-category').select_option('community')
+            page.locator('#f-org_id').select_option('college1')
+            page.locator('#f-level').select_option('school');page.locator('#f-scene').select_option('ordinary')
             page.locator('#f-reason').fill('隔离浏览器验证项目申报')
             page.locator('button[form="edit-form"]').first.click()
             # 保存草稿后直接打开项目详情，提示下一步上传材料并提交备案
@@ -55,7 +57,8 @@ def test_social_menu_form_resources_and_refresh_in_browser(tmp_path,monkeypatch)
             page.locator('button[form="edit-form"]').first.click();page.get_by_text('隔离演示 实操课程',exact=True).wait_for()
             page.locator('.pagehead').get_by_role('button',name='登记课程资源',exact=True).click()
             for key,value in {'code':'VIDEO-1','name':'隔离演示 视频资源','recognition':'学校确认的演示资源','duration_minutes':'12.5','reason':'登记视频时长验证'}.items():page.locator('#f-'+key).fill(value)
-            page.locator('button[form="edit-form"]').first.click();page.get_by_text('隔离演示 视频资源',exact=True).wait_for()
+            page.locator('#f-org_id').select_option('college1')
+            page.locator('button[form="edit-form"]').first.click();page.locator('#modal-root h2',has_text='隔离演示 视频资源').wait_for()
             page.screenshot(path=str(output/'02-courses-resources.png'),full_page=True)
             page.set_viewport_size({'width':390,'height':844});page.reload();page.get_by_text('隔离演示 视频资源',exact=True).wait_for()
             assert page.evaluate('document.documentElement.scrollWidth <= window.innerWidth+1')
@@ -65,9 +68,10 @@ def test_social_menu_form_resources_and_refresh_in_browser(tmp_path,monkeypatch)
             page.get_by_text('学校确认的演示资源',exact=True).wait_for();page.get_by_role('button',name='关闭窗口').first.click()
             page.locator('[data-action="nav"][data-id="projects"]').first.click()
             def open_project():
-                # 办理完成后会自动回到详情；先关掉详情再从列表重新打开，保证每一步从最新列表进入。
-                if page.locator('#modal-root .modal').count():page.get_by_role('button',name='关闭窗口').first.click()
-                page.get_by_role('button',name='查看与办理',exact=True).first.click()
+                # 保存后异步回到最新详情；等待保存完成，避免提前关闭表单后详情又遮住列表。
+                if not page.locator('#modal-root .modal').count():
+                    page.get_by_role('button',name='查看与办理',exact=True).first.click()
+                page.get_by_role('dialog',name='隔离演示 技能培训项目',exact=True).wait_for()
             def confirm(label):
                 page.get_by_role('button',name=label,exact=True).click();page.locator('#f-reason').fill('隔离正常账号浏览器验证');page.locator('#f-basis').fill('隔离审核依据');page.locator('button[form="edit-form"]').first.click()
             open_project();page.get_by_role('button',name='上传佐证',exact=True).click();page.locator('input[type=file]').set_input_files(str(proof));page.locator('#f-reason').fill('隔离材料上传');page.locator('button[form="edit-form"]').first.click()

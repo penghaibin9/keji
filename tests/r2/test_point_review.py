@@ -80,6 +80,15 @@ def test_teacher_explains_and_dean_rules(recognized,client2,app2):
     auth(client2,'depthead');assert review(client2,claim_id).status_code==409
     auth(client2,'teacher');r=post(client2,'/api/social/corrections',{'claim_id':claim_id,'period_id':'period2026','teaching':'-0.56','auxiliary':'0','decision_reference':'另行更正','reason':'重复更正'})
     assert r.status_code==409,r.text
+    original=detail(client2,'social_claim',claim_id)['item']['snapshot']
+    for user in ('reviewer','vice','schooladmin'):
+        auth(client2,user);r=action(client2,'corrections','social_resource',fix,'approve');assert r.status_code==200,r.text
+    assert r.json()['item']['state']=='ARCHIVED'
+    assert action(client2,'corrections','social_resource',fix,'approve').status_code==409
+    assert detail(client2,'social_claim',claim_id)['item']['snapshot']==original
+    with app2.state.sessions() as db:
+        entries=db.scalars(select(PointEntry).where(PointEntry.teacher_id=='teacher')).all()
+        assert len(entries)==4 and sum(x.amount for x in entries)==Decimal('1.00')
 
 
 def test_other_department_cannot_review_and_open_review_blocks_assessment(recognized,client2,app2):

@@ -787,7 +787,7 @@ def mine(request: Request, year: int = Query(..., ge=2020, le=2100)):
         for x in _todo_items(db, a):
             code = x['type'] + '|' + str(x['id'])
             if x.get('teacher_id') != a.id or x['state'] == 'EXPIRING' or x['type'] in ('social_claim', 'social_project', 'dispute') or code in listed or ('social_resource|' + str(x['id'])) in listed: continue
-            text = {'social_resource': '教研室请你核对一条积分，请查看材料后回应同意或不同意', 'assessment': '本人年度考核结果已生成，请核对后确认'}.get(x['type'], x['title'])
+            text = {'assessment': '本人年度考核结果已生成，请核对后确认'}.get(x['type'], x['title'])
             reminders.insert(0, {'level': 'warn', 'text': text, 'action': 'todo', 'id': code})
         # 申报按钮旁直接说清能不能申报，免得老师点开表单才发现。
         claimable = db.scalar(select(func.count()).select_from(st.visible_projects(db, a).where(SocialProject.id.in_(st.participated_project_ids(db, a.id) or {''}), SocialProject.state == 'CLOSED').order_by(None).subquery())) if allowed['records'] and allowed['points'] else 0

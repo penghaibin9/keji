@@ -24,6 +24,14 @@ def submit_sheet(client, rows, year=2026):
     return r.json()
 
 
+@pytest.mark.parametrize('state,label',[('SUBMITTED','候选等级'),('ARCHIVED','认定等级')])
+def test_export_grade_label_matches_frozen_recognition(state,label):
+    from app.social_export import workbook
+    data=workbook({'item':{'state':state,'version':1,'data':{}},'state_label':'合成状态','trial':{'grade':'合格'}})
+    book=load_workbook(BytesIO(data),read_only=True)
+    assert (label,'合格') in list(book['业务概要'].values)
+
+
 def test_revoked_qualification_permission_must_also_apply_to_mine(app2, client2):
     with app2.state.sessions.begin() as db:
         db.add(Qualification(teacher_id='teacher', category='双师型初级', name='隔离资质', certificate_no='SYNTHETIC-1', issuer='隔离机构', obtained=date(2026,1,1), state='APPROVED'))

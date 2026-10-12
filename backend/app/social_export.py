@@ -13,7 +13,7 @@ def workbook(payload):
     if payload.get('public_summary'):sheet.append(['查看范围','仅公开年度评分摘要，不含项目原始证据及个人积分明细'])
     for reason in obj.get('closeout_pending',[]):sheet.append(['历史资料待补',reason])
     trial=payload.get('trial') or {}
-    for key,label in [('teaching','授课积分'),('auxiliary','辅助积分'),('base','考核基础分'),('bonus_awarded','认定加分'),('total','合计'),('grade','候选等级'),('deadline','申报期限')]:
+    for key,label in [('teaching','授课积分'),('auxiliary','辅助积分'),('base','考核基础分'),('bonus_awarded','认定加分'),('total','合计'),('grade','认定等级' if obj['state']=='ARCHIVED' else '候选等级'),('deadline','申报期限')]:
         if key in trial:sheet.append([label,'待核定' if trial[key] is None else str(trial[key])])
     for reason in trial.get('blockers',[]):sheet.append(['待确认事项',reason])
     files=book.create_sheet('佐证材料');files.append(['名称','字节数','完整性校验值'])
@@ -45,6 +45,9 @@ def workbook(payload):
         for row in trial.get('cost_details',[])+trial.get('outcome_details',[]):annual.append([row['label'],row['value']])
     data=obj['data']
     if obj.get('kind')=='point_report':
+        if data.get('superseded_by'):
+            sheet.append(['替代说明','已被新公示替代，旧快照保留，不作为当前公示或归档依据']);sheet.append(['替代日期',data.get('superseded_on')])
+        elif data.get('replaces'):sheet.append(['重新公示','按最新归档积分重新公示，期限从本次发布日重新计算'])
         report=book.create_sheet('已认定积分汇总');report.append(['教师','学院','项目','授课积分','辅助积分','合计'])
         for row in data['rows']:report.append([row[k] for k in ('teacher_name','org_name','project','teaching','auxiliary','total')])
         sheet.append(['公示开始',data.get('public_start')]);sheet.append(['公示截止',data.get('public_end')])

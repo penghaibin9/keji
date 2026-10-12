@@ -4,7 +4,7 @@ from fastapi import APIRouter, Request, HTTPException, Query
 from fastapi.responses import Response
 from sqlalchemy import select, func, or_
 from ..core import command, read_operation, serial, audit, workflow, check_version, require_open_period, digest
-from ..models import Org, User, Role, Setting, Period, PointEntry, Notice
+from ..models import Org, User, Role, Setting, Period, PointEntry, Notice, WorkflowEvent
 from ..reference_data import TrainingProjectMaster, TrainingCourseMaster, TrainingClassMaster
 from ..social_models import SocialProject, SocialUnit, SocialPolicy, SocialClaim, SocialAnnual, SocialResource
 from ..social_schemas import ProjectIn, UnitsIn, SocialAction, PolicyIn, RecommendedPolicyIn, PolicyData, ClaimIn, AnnualIn, ResourceIn, ResourceUpdate, DutiesIn, CourseIn, CourseBatchIn, CaseNoteIn, CorrectionIn, ReportIn, PointReviewIn
@@ -391,6 +391,7 @@ def annual_action(ident:str,data:SocialAction,request:Request):
         elif data.action in {'finance','academic','discipline','coordinator'}:
             if obj.state!='REVIEW':raise HTTPException(409,'当前不在初核阶段')
             st.duty(db,a,data.action,obj.owner_id,obj.org_id);st.require_fresh(db,obj)
+            if data.action in obj.snapshot.get('checks',{}):raise HTTPException(409,'该职能部门已完成核验；如需调整，请由归口退回后重新提交')
             obj.snapshot={**obj.snapshot,'checks':{**obj.snapshot['checks'],data.action:{'actor':a.id,'basis':data.basis,'reason':data.reason}}}
             if set(obj.snapshot['checks'])=={'finance','academic','discipline','coordinator'}:obj.state='COMMITTEE'
         elif data.action=='publish':
@@ -622,7 +623,7 @@ def report_create(data:ReportIn,request:Request):
 def report_action(ident:str,data:SocialAction,request:Request):
     def apply(db,a,s):
         obj=st.scoped(db,a,'social_resource',ident);check_version(obj,data.expected_version);before=serial(obj);d=obj.data
-        if obj.kind!='point_report' or obj.state=='ARCHIVED':raise HTTPException(409,'汇总已归档或类型不符')
+        if obj.kind!='point_report' or obj.state in {'ARCHIVED','VOID'}:raise HTTPException(409,'汇总已归档、已被新公示替代或类型不符')
         if digest(d['rows'])!=d['sha256']:raise HTTPException(409,'汇总快照校验失败')
         if data.action=='submit':
             if a.id!=d['created_by'] or obj.state!='DRAFT':raise HTTPException(403,'仅汇总人可提交草稿')
@@ -639,7 +640,26 @@ def report_action(ident:str,data:SocialAction,request:Request):
                 policy=db.get(SocialPolicy,d['policy_id']);end=st.add_workdays(st.today(),5,policy.data)
                 obj.data={**d,'public_start':st.today().isoformat(),'public_end':end.isoformat()};obj.state='PUBLIC'
                 body='公示截止：'+end.isoformat()+'（完成5个工作日）。请在社会培训积分认定中的汇总公示提出异议。\n'+'\n'.join(r['teacher_name']+' · '+r['project']+'：授课 '+r['teaching']+'，辅助 '+r['auxiliary'] for r in d['rows'])
-                db.add(Notice(title=obj.name+'公示',body=body,category='社会培训积分公示',org_id=obj.org_id,author_id=a.id,published=True))
+                notice=Notice(title=obj.name+'公示',body=body,category='社会培训积分公示',org_id=obj.org_id,author_id=a.id,published=True)
+                db.add(notice);db.flush();obj.data={**obj.data,'notice_id':notice.id}
+                replaced=[]
+                for previous in db.scalars(select(SocialResource).where(SocialResource.kind=='point_report',SocialResource.org_id==obj.org_id,SocialResource.state=='PUBLIC',SocialResource.id!=obj.id)):
+                    old=previous.data
+                    if any(old[k]!=d[k] for k in ('year','start_month','end_month')) or old['sha256']==d['sha256']:continue
+                    if any(not x['resolved'] for x in old['disputes']):raise HTTPException(409,'旧公示仍有异议未处理，请先记录处理依据，再重新公示')
+                    st.check_report_conflicts(db,a,old['rows']);old_before=serial(previous)
+                    old_notice=db.get(Notice,old['notice_id']) if old.get('notice_id') else None
+                    if not old_notice:
+                        publication=db.scalar(select(WorkflowEvent).where(WorkflowEvent.object_type=='social_resource',WorkflowEvent.object_id==previous.id,WorkflowEvent.before['state'].as_string()=='SUBMITTED',WorkflowEvent.after['state'].as_string()=='PUBLIC').order_by(WorkflowEvent.created_at.desc()).limit(1))
+                        candidates=db.scalars(select(Notice).where(Notice.org_id==previous.org_id,Notice.author_id==publication.actor_id,Notice.title==previous.name+'公示',Notice.body.contains('公示截止：'+old['public_end'],autoescape=True),Notice.created_at>=previous.created_at,Notice.created_at<=publication.created_at)).all() if publication else []
+                        if len(candidates)!=1:raise HTTPException(409,'旧公示通知关联不明确，请先核实历史公示通知关联，再重新公示')
+                        old_notice=candidates[0]
+                    if old_notice.org_id!=previous.org_id:raise HTTPException(409,'旧公示通知范围不一致，请先核实关联')
+                    previous.state='VOID';previous.data={**old,'notice_id':old_notice.id,'superseded_by':obj.id,'superseded_on':st.today().isoformat()}
+                    old_notice.published=False
+                    previous.version+=1;workflow(db,a,'social_resource',previous.id,'来源变化，已由新公示替代',old_before,serial(previous),data.reason,data.basis)
+                    replaced.append(previous.id)
+                if replaced:obj.data={**obj.data,'replaces':replaced}
             else:obj.state='ARCHIVED'
         elif data.action=='dispute':
             if obj.state!='PUBLIC':raise HTTPException(409,'当前不在公示期间')
@@ -657,7 +677,7 @@ def report_action(ident:str,data:SocialAction,request:Request):
             if digest(current)!=d['sha256']:raise HTTPException(409,'公示期间已认定积分发生变化，请重新生成并公示汇总')
             obj.state='ARCHIVED'
         else:raise HTTPException(422,'汇总办理操作无效')
-        return event(db,a,'social_resource',obj,'积分汇总：'+st.STATES[obj.state],before,data.reason,data.basis)
+        return event(db,a,'social_resource',obj,'积分汇总：'+st.state_label(obj),before,data.reason,data.basis)
     return command(request,data.model_dump(),'points.read',apply)
 
 

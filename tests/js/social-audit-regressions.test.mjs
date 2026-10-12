@@ -5,7 +5,7 @@ import {socialAction} from '../../frontend/social-training.js';
 const esc=v=>String(v??'').replace(/[&<>"']/g,x=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[x]));
 const workspace={projects:[],courses:[],resources:[],claims:[],annuals:[],policies:[],my_duties:[],states:{},decisions:{}};
 function context(answers,permissions=['records.read','points.read','qualification.read','records.write','export']){
- const c={esc,me:{role:{kind:'teacher'},user:{id:'t1',staff_no:'J001'}},teachers:[],orgs:[],periods:[],requests:[],
+ const c={esc,ts:v=>v||'—',me:{role:{kind:'teacher'},user:{id:'t1',staff_no:'J001'}},teachers:[],orgs:[],periods:[],requests:[],
   can:p=>permissions.includes(p),pageAllowed:()=>true,number:v=>Number(v??0).toString(),icon:()=>'',
   act:(l,a,id='')=>`<button data-action="${a}" data-id="${esc(id)}">${esc(l)}</button>`,link:(l,a,id='')=>`<a data-action="${a}" data-id="${esc(id)}">${esc(l)}</a>`,
   field:(n,l,t='text',v='',o={})=>`<label>${esc(l)}<input name="${n}" value="${esc(v)}">${(o.options||[]).map(x=>esc(x[1])).join('')}</label>`,
@@ -15,6 +15,58 @@ function context(answers,permissions=['records.read','points.read','qualificatio
   api:async(url,options)=>{c.requests.push({url,options});if(url==='/social/workspace')return workspace;for(const[k,v]of Object.entries(answers))if(url.startsWith(k))return v;throw Error('无匹配测试响应：'+url)}};
  return c;
 }
+
+test('被替代公示只读保留旧快照并可跳转，新公示说明重新计满期限',async()=>{
+ const d={item:{id:'old-report',kind:'point_report',state:'VOID',data:{superseded_by:'new-report',rows:[]}},state_label:'已被新公示替代',attachments:[],events:[]};
+ const c=context({'/social/objects':d},['points.read','records.write','file.write','export']);c.me.role.kind='school';
+ await socialAction('social-detail','social_resource|old-report',c);
+ assert.match(c.modalData.body,/保留原公示快照|不再作为当前公示或归档依据/);
+ assert.match(c.modalData.buttons,/查看后续公示|social_resource\|new-report/);
+ assert.doesNotMatch(c.modalData.buttons,/social-upload|social-transition/);
+ d.item={id:'new-report',kind:'point_report',state:'PUBLIC',data:{replaces:['old-report'],rows:[]}};d.state_label='公示中';
+ await socialAction('social-detail','social_resource|new-report',c);
+ assert.match(c.modalData.body,/公示期限从本次发布日重新计算|不能沿用旧公示期限/);
+});
+
+test('积分与年度考核归档详情使用认定标签，审批中保留候选标签',async()=>{
+ for(const kind of ['social_claim','social_annual'])for(const state of ['SUBMITTED','ARCHIVED']){
+  const d={item:{id:'label-case',state,data:{},teacher_id:'t1'},state_label:'合成状态',trial:{teaching:'1.00',auxiliary:'0.00',total:'1.00',grade:'合格',details:[{unit:'U1',participants:30,formula:'合成公式',score:'1.00'}]},attachments:[],events:[]};
+  const c=context({'/social/objects':d});c.periodName=esc;
+  await socialAction('social-detail',kind+'|label-case',c);
+  assert.match(c.modalData.body,state==='ARCHIVED'?/认定积分/:/候选积分/);
+  if(state==='ARCHIVED')assert.doesNotMatch(c.modalData.body,/候选积分|候选等级/);
+  if(kind==='social_annual'){assert.match(c.modalData.body,state==='ARCHIVED'?/认定等级/:/候选等级/);assert.match(c.modalData.body,/所有单项加分共用上限/);assert.doesNotMatch(c.modalData.body,/仍须确认叠加口径/)}
+ }
+});
+
+test('追加更正新建与补正保存后直接进入保存的更正详情继续办理',async()=>{
+ for(const edit of [false,true]){
+  const claim={id:'claim-save',state:'ARCHIVED',teacher_id:'t1',version:3,data:{}},fix={id:'fix-save',kind:'correction',state:edit?'RETURNED':'DRAFT',version:4,data:{claim_id:claim.id,teacher_id:'t1',created_by:'t1',period_id:'p1',teaching:'0.10',auxiliary:'0',decision_reference:'合成依据'}};
+  const saved={item:{...fix,state:'DRAFT',version:5},state_label:'草稿',attachments:[],events:[]};
+  const c=context({'/social/objects/social_claim/claim-save':{item:claim,state_label:'已归档',attachments:[],events:[]},'/social/objects/social_resource/fix-save':saved,'/social/corrections':saved},['points.read','file.write','export']);c.periodName=esc;
+  await socialAction('social-detail',(edit?'social_resource|fix-save':'social_claim|claim-save'),c);
+  await socialAction(edit?'social-correction-edit':'social-correction-new','',c);
+  await c.formData.save({period_id:'p1',teaching:'0.10',auxiliary:'0',decision_reference:'合成依据',reason:'保存更正'});
+  assert.match(c.modalData.buttons,/social-upload/);assert.match(c.modalData.buttons,/data-id="submit"/);
+  const req=c.requests.findLast(r=>r.options?.method===(edit?'PUT':'POST'));
+  assert.equal(req.options.body.claim_id,claim.id);if(edit)assert.equal(req.options.body.expected_version,5);
+  assert.equal(c.requests.at(-1).url,'/social/objects/social_resource/fix-save');
+ }
+});
+
+test('年度核验展示已完成职责并隐藏重复核验，公示摘要不泄露核验意见',async()=>{
+ const prior=workspace.my_duties;workspace.my_duties=['finance','academic'];
+ const d={item:{id:'annual-checks',state:'REVIEW',owner_id:'college-owner',data:{},snapshot:{checks:{finance:{reason:'财务已核验<合成说明>'}}}},state_label:'待职能部门核验',attachments:[],events:[]};
+ const c=context({'/social/objects':d},['assessment.read','assessment.review','records.read','export']);c.periodName=esc;c.me.role.kind='school';c.me.user.id='finance-actor';
+ try{
+  await socialAction('social-detail','social_annual|annual-checks',c);
+  assert.match(c.modalData.body,/职能部门核验进度|已核验|待核验/);assert.match(c.modalData.body,/财务已核验&lt;合成说明&gt;/);
+  assert.doesNotMatch(c.modalData.buttons,/data-id="finance"/);assert.match(c.modalData.buttons,/data-id="academic"/);
+  d.item.state='PUBLIC';d.public_summary=true;d.state_label='公示中';workspace.my_duties=[];c.me.role.kind='teacher';
+  await socialAction('social-detail','social_annual|annual-checks',c);
+  assert.doesNotMatch(c.modalData.body,/职能部门核验进度|财务已核验/);
+ }finally{workspace.my_duties=prior}
+});
 test('撤销一个业务分区仅隐藏对应卡片，授权卡片仍可用',async()=>{
  const o={scope:'本人',sections:{records:true,points:true,qualifications:false},participants:{mine:{value:30,projects:1}},dual:null,achievements:{total:0,levels:{}},points:{year:0}};
  const html=await homeIndicators(context({'/social/overview':o},['records.read','points.read']),{});

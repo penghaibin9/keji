@@ -6,7 +6,7 @@ import uuid
 import pytest
 from PIL import Image
 from sqlalchemy import select
-from app.models import User, Role, Setting, PointEntry
+from app.models import User, Role, Setting, PointEntry, WorkflowEvent, Notice
 from app.social_models import SocialClaim, SocialProject, SocialUnit, SocialResource
 from app.reference_data import TrainingProjectMaster
 from app import social_training as st
@@ -306,6 +306,12 @@ def test_bimonth_and_annual_reports_use_recognized_snapshot(recognized,client2,a
     assert r.status_code==200,r.text
     report=r.json()['item'];assert report['data']['rows'][0]['total']=='1.56'
     assert action(client2,'reports','social_resource',report['id'],'submit').status_code==200
+    assert detail(client2,'social_resource',report['id'])['events'][-1]['action']=='积分汇总：待归口复核'
+    with app2.state.sessions.begin() as db:
+        old_event=db.scalar(select(WorkflowEvent).where(WorkflowEvent.object_id==report['id'],WorkflowEvent.action=='积分汇总：待归口复核'))
+        old_id=old_event.id;old_event.action='积分汇总：待院长初审'
+    assert detail(client2,'social_resource',report['id'])['events'][-1]['action']=='积分汇总：待归口复核'
+    with app2.state.sessions() as db:assert db.get(WorkflowEvent,old_id).action=='积分汇总：待院长初审'
     auth(client2,'reviewer');assert action(client2,'reports','social_resource',report['id'],'approve').status_code==409
     monkeypatch.setattr(st,'today',lambda:date(2026,11,1));assert action(client2,'reports','social_resource',report['id'],'approve').status_code==200
     auth(client2,'vice');r=post(client2,'/api/social/reports',{'org_id':'school','policy_id':pol,'year':2026,'start_month':1,'end_month':12,'reason':'年度全校积分公示'})
@@ -329,7 +335,10 @@ def test_annual_report_cannot_archive_points_changed_after_publication(recognize
     assert r.status_code==200,r.text
     report=r.json()['item'];original=report['data']['rows']
     assert action(client2,'reports','social_resource',report['id'],'submit').status_code==200
-    auth(client2,'reviewer');assert action(client2,'reports','social_resource',report['id'],'approve').status_code==200
+    auth(client2,'reviewer');published=action(client2,'reports','social_resource',report['id'],'approve');assert published.status_code==200
+    old_notice=published.json()['item']['data']['notice_id']
+    with app2.state.sessions.begin() as db:
+        legacy=db.get(SocialResource,report['id']);legacy.data={k:v for k,v in legacy.data.items() if k!='notice_id'}
     auth(client2,'teacher')
     r=post(client2,'/api/social/corrections',{'claim_id':claim_id,'period_id':'period2026','teaching':'-0.56','auxiliary':'0','decision_reference':'公示期间正式核实更正决定','reason':'已公示数据核实后更正'})
     assert r.status_code==200,r.text
@@ -348,10 +357,54 @@ def test_annual_report_cannot_archive_points_changed_after_publication(recognize
     replacement=r.json()['item'];replacement_id=replacement['id']
     assert replacement_id!=report['id'] and replacement['data']['rows'][0]['total']=='1.00'
     assert action(client2,'reports','social_resource',replacement_id,'submit').status_code==200
+    auth(client2,'teacher');assert action(client2,'reports','social_resource',report['id'],'dispute').status_code==200
+    auth(client2,'reviewer');blocked=action(client2,'reports','social_resource',replacement_id,'approve')
+    assert blocked.status_code==409 and '旧公示仍有异议未处理' in blocked.json()['detail']
+    assert detail(client2,'social_resource',report['id'])['item']['state']=='PUBLIC'
+    assert detail(client2,'social_resource',replacement_id)['item']['state']=='SUBMITTED'
+    with app2.state.sessions() as db:assert db.get(Notice,old_notice).published
+    assert action(client2,'reports','social_resource',report['id'],'resolve').status_code==200
+    with app2.state.sessions.begin() as db:
+        notice=db.get(Notice,old_notice)
+        db.add(Notice(id='ambiguous-report-notice',title=notice.title,body=notice.body,category=notice.category,org_id=notice.org_id,author_id=notice.author_id,published=True,created_at=notice.created_at))
+    ambiguous=action(client2,'reports','social_resource',replacement_id,'approve')
+    assert ambiguous.status_code==409 and '通知关联不明确' in ambiguous.json()['detail']
+    assert detail(client2,'social_resource',report['id'])['item']['state']=='PUBLIC'
+    assert detail(client2,'social_resource',replacement_id)['item']['state']=='SUBMITTED'
+    with app2.state.sessions.begin() as db:
+        assert db.get(Notice,old_notice).published
+        db.delete(db.get(Notice,'ambiguous-report-notice'))
+    monkeypatch.setattr(st,'today',lambda:date(2028,1,10));auth(client2,'reviewer')
+    assert action(client2,'reports','social_resource',replacement_id,'approve').status_code==409
+    assert detail(client2,'social_resource',report['id'])['item']['state']=='PUBLIC'
+    assert detail(client2,'social_resource',replacement_id)['item']['state']=='SUBMITTED'
+    with app2.state.sessions() as db:assert db.get(Notice,old_notice).published
+    monkeypatch.setattr(st,'today',lambda:date(2027,1,10))
     auth(client2,'reviewer');r=action(client2,'reports','social_resource',replacement_id,'approve')
     assert r.status_code==200,r.text
     assert r.json()['item']['data']['public_start']=='2027-01-10'
     assert r.json()['item']['data']['public_end']=='2027-01-15'
+    retired=detail(client2,'social_resource',report['id'])['item']
+    assert retired['state']=='VOID' and retired['data']['superseded_by']==replacement_id
+    assert retired['data']['rows']==original and retired['data']['sha256']==report['data']['sha256']
+    assert report['id'] in r.json()['item']['data']['replaces']
+    with app2.state.sessions() as db:
+        assert not db.get(Notice,retired['data']['notice_id']).published
+        assert db.get(Notice,r.json()['item']['data']['notice_id']).published
+    new_notice=r.json()['item']['data']['notice_id'];auth(client2,'teacher')
+    assert client2.get('/api/notices/'+old_notice).status_code==404
+    assert client2.get('/api/notices/'+new_notice).status_code==200
+    assert client2.get('/api/social/objects/social_resource/'+report['id']).status_code==403
+    assert report['id'] not in {x['id'] for x in client2.get('/api/social/workspace?section=recognition').json()['resources']}
+    auth(client2,'reviewer')
+    assert report['id'] not in {x['id'] for x in client2.get('/api/todos').json()['items']}
+    assert action(client2,'reports','social_resource',report['id'],'dispute').status_code==409
+    exported=client2.get('/api/social/objects/social_resource/'+report['id']+'/export')
+    assert exported.status_code==200,exported.text
+    from openpyxl import load_workbook
+    book=load_workbook(BytesIO(exported.content),data_only=True)
+    assert dict(list(book['业务概要'].values)[1:])['办理状态']=='已被新公示替代'
+    assert list(book['已认定积分汇总'].values)[1][-1]=='1.56'
     auth(client2,'vice')
     for day in (date(2027,1,10),date(2027,1,14),date(2027,1,15)):
         monkeypatch.setattr(st,'today',lambda:day)
