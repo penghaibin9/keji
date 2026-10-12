@@ -74,3 +74,18 @@ def test_detail_is_scoped(client2,app2):
     body=r.json();assert body['staff']['staff_no']=='J001' and body['years'][0]['missing_credit']==['K404']
     auth(c,'schooladmin');assert c.get('/api/reference/staff-roster/T7788').status_code==200
     assert c.get('/api/reference/staff-roster',params={'school_year':'2025'}).status_code==422
+
+def test_detail_returns_every_mapped_chaoxing_field(client2,app2):
+    seed(client2);c=client2
+    from app.reference_data import TeacherCourseTerm
+    extra={'cover_url':'https://p.ananas.chaoxing.com/c.png','course_url':'https://mooc1.chaoxing.com/course/1.html','group_name':'公共课',
+        'chapters':'12','course_type':'1','course_source':'2','archived':'0','team_names':'测试教师一,测试教师二','team_staff_nos':'J001,J002',
+        'jw_course_code':'K404','nature':'01','course_owner':'J001','major':'计算机','score':'2.5',
+        'created_at_source':'2025-03-01 08:00:00','edited_at_source':'2025-06-01 09:30:00','description':'简介'*1500}
+    with Session(app2.state.engine) as db:
+        db.add(TeacherCourseTerm(external_key='CX-1',staff_no='J001',user_id='teacher',term_name='2025-2',course_code='CX1',
+            course_name='超星课',origin='CX',teacher_name='测试教师一',extra=extra));db.commit()
+    auth(c,'schooladmin');r=c.get('/api/reference/staff-roster/J001');assert r.status_code==200,r.text
+    o=r.json()['online_courses'][0]
+    assert {k:o[k] for k in extra if k!='description'}=={k:v for k,v in extra.items() if k!='description'}
+    assert len(o['description'])==2000 and o['credit'] is None

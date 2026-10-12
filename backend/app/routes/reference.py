@@ -174,6 +174,10 @@ def staff_roster_view(request:Request):
                 'problem_labels':ROSTER_PROBLEMS,'ever_synced':synced is not None}
     return read_operation(request,'organization.read',load)
 
+# 超星课程库映射进 extra 的字段（数据中台_适配器配置 字段映射建议.online_course）。
+ONLINE_EXTRA_KEYS=('cover_url','course_url','group_name','chapters','course_type','course_source','archived','team_names','team_staff_nos',
+    'jw_course_code','nature','course_owner','major','score','created_at_source','edited_at_source')
+
 @router.get('/reference/staff-roster/{staff_no}')
 def staff_roster_detail(staff_no:str,request:Request):
     """One teacher: roster row, every school year's credits and their 超星 courses."""
@@ -184,7 +188,8 @@ def staff_roster_detail(staff_no:str,request:Request):
         terms=db.scalars(select(TeacherCourseTerm).where(TeacherCourseTerm.staff_no==staff_no,TeacherCourseTerm.active.is_(True))).all()
         years=[{k:g[k] for k in ('school_year','jw_credit','cx_credit','total_credit','courses','missing_credit')} for g in annual_teaching_credits(db,terms)]
         online=[{'course_code':t.course_code,'course_name':t.course_name,'term_name':t.term_name,'credit':t.credit,'hours':t.hours,
-                 **{k:(t.extra or {}).get(k) for k in ('cover_url','course_url','group_name','chapters','course_type','course_source','archived','team_names','jw_course_code','nature','major')}}
+                 **{k:(t.extra or {}).get(k) for k in ONLINE_EXTRA_KEYS},
+                 'description':str((t.extra or {}).get('description') or '')[:2000]}
                 for t in sorted(terms,key=lambda t:t.term_name,reverse=True) if t.origin=='CX']
         return {'staff':row,'years':years,'online_courses':online}
     return read_operation(request,'organization.read',load)

@@ -2,7 +2,7 @@ import {icons} from './icons.js';
 import {socialPage,socialAction} from './social-training.js?v=20261012-streamline1';
 import {nextCode,runBatch,batchStage,batchMode,batchPerformer,BATCH_LABELS} from './approval-flow.js?v=20261012-streamline1';
 import {ledgerPage,resourceStatsPage,homeIndicators,ledgerAction,resetLedgerView,minePage,mineReminders} from './social-ledgers.js?v=20261012-role-walk3';
-import {rosterSection,rosterHandlers,showStaffDetail,showCourseDetail,presetRoster,loadCodeTables} from './school-data.js?v=20261011-gap5';
+import {rosterSection,rosterHandlers,onlineHandlers,showStaffDetail,showCourseDetail,presetRoster,loadCodeTables} from './school-data.js?v=20261012-cx1';
 import {renderCenterStatus,renderImplementationWorkspace,handleImplementationAction} from './integration-workspace.js?v=20261011-gap5';
 import {readDraftEntry,saveDraft,previewDraft} from './integration-drafts.js';
 import {renderBusinessHistory} from './business-history.js';
@@ -1320,7 +1320,7 @@ const handlers={
  'qual-action':async code=>{const[action,id]=code.split('|'),x=(await api('/qualifications/'+id)).qualification;actionForm({submit:'提交资质审核',withdraw:'撤回修改',approve:'审核通过',return:'退回补充'}[action],'/qualifications/'+id+'/actions',x,action,{returnTo:()=>showQualification(id),after:async()=>{await render();await showQualification(id)}})},
  'balance-action':id=>{const x=view.balances.find(x=>x.id===id);actionForm(x.confirmed?'留痕解锁积分':'确认本人积分','/point-balances/'+id+'/actions',x,x.confirmed?'reopen':'confirm',{basis:x.confirmed})},
  'source-recalculate':recalculateAffected,
- calculate,'credits-tab':id=>{filter={tab:id};tablePage=1;syncLocation(true);return render()},'credit-detail':showCreditDetail,'staff-detail':id=>showStaffDetail(ledgerContext(),id),'course-detail':id=>{const [course,...back]=id.split('|');return showCourseDetail(ledgerContext(),back.length?decodeURIComponent(course):course,back.join('|'))},...rosterHandlers,
+ calculate,'credits-tab':id=>{filter={tab:id};tablePage=1;syncLocation(true);return render()},'credit-detail':showCreditDetail,'staff-detail':id=>showStaffDetail(ledgerContext(),id),'course-detail':id=>{const [course,...back]=id.split('|');return showCourseDetail(ledgerContext(),back.length?decodeURIComponent(course):course,back.join('|'))},...rosterHandlers,'online-detail':id=>onlineHandlers['online-detail'](id,ledgerContext()),'online-all':id=>onlineHandlers['online-all'](id,ledgerContext()),
  'assessment-tab':id=>{assessmentTab=id;delete filter.state;delete filter.returned;tablePage=1;return render()},'org-assessment-calc':id=>calculateOrgAssessment(id),'org-assessment-action':id=>orgAssessmentAction(id),'point-adjust':pointAdjust,
  'calc-search':async()=>{
   const box=$('#calc-people'),q=$('#calc-search').value,d=await api('/teachers?'+query({q,size:200}));
