@@ -71,7 +71,7 @@ def facts(db,teacher_id,period):
               "values":serial(raw),"qualification_basis":"审核通过、取得日期不晚于周期结束、有效期覆盖周期结束日；无有效期视为长期有效",
               "assessment_score_basis":"本周期开始日前最近一个已归档考核结果，不引用当期未完成考核",
               "teaching_credits":credit_basis,
-              "credits_basis":"教务授课按课程号取课程总库学分，超星课程用自带学分（只算创建人）；第一学期按 9月1日、第二学期按次年 3月1日 落入考核周期"}
+              "credits_basis":"只算教研室主任已认定的课；教务授课按课程号取课程总库学分，超星课程用自带学分（只算创建人）；第一学期按 9月1日、第二学期按次年 3月1日 落入考核周期"}
     return raw,snapshot
 
 

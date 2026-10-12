@@ -13,6 +13,13 @@ from test_integration_closeout import actor
 from test_procurement_inbound_rollback import HR,REASON
 from test_r4_internal_closeout import configure_middle
 from test_teacher_course_inbound import typed
+from credit_review_support import assume_approved
+
+
+@pytest.fixture(autouse=True)
+def _approved(monkeypatch):
+    # 这些用例只核对学期去重、舍入和课程版本规则；认定流程见 test_teaching_credit_review.py。
+    assume_approved(monkeypatch)
 
 
 def preview(db,kind,rows):

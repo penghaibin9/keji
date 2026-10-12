@@ -59,7 +59,8 @@ def test_source_status_counts_and_problems(client2,app2):
     assert items['online_course']['active']==0 and items['online_course']['problems']==0
 
 def test_credit_summary_per_capita_and_colleges(client2,app2):
-    seed(client2);add_catalogue(app2);c=client2
+    from credit_review_support import approve_all
+    seed(client2);add_catalogue(app2);approve_all(app2.state.engine);c=client2
     auth(c,'teacher');assert c.get('/api/reference/credit-summary').status_code==403
     auth(c,'schooladmin')
     s=c.get('/api/reference/credit-summary').json()

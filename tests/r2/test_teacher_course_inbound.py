@@ -68,7 +68,7 @@ def test_school_course_versions_and_rollback(client2,app2):
     with Session(app2.state.engine) as db:
         assert not any(x.active for x in db.scalars(select(SchoolCourse)))
 
-def test_annual_credits_sum_both_terms_and_count_linked_cx_once(client2):
+def test_annual_credits_sum_both_terms_and_count_linked_cx_once(client2,app2):
     c=client2;auth(c,'schooladmin')
     maps=(typed('school_course',{'KCH':'code','KCMC':'name','XF':'credit','ZXS':'hours','VERSION':'course_version'},{'code','name'})
         +typed('teacher_course',{'ZGH':'staff_no','XM':'teacher_name','KCH':'course_code','KCMC':'course_name','XQMC':'term_name'},{'staff_no','course_code','course_name','term_name'})
@@ -84,6 +84,8 @@ def test_annual_credits_sum_both_terms_and_count_linked_cx_once(client2):
     inbound(c,conn,'online_course',[
         {'creater_login_name':'T9101','teachername':'王老师','courseid':'X1','coursename':'线上课','xn':'2025','xq':'2','credit':'1.5','coursePeriod':'24'},
         {'creater_login_name':'T9101','teachername':'王老师','courseid':'X2','coursename':'高数线上版','xn':'2025','xq':'1','credit':'4','courseIdentifier':'K1'}])
+    from credit_review_support import approve_all
+    approve_all(app2.state.engine)
     r=c.get('/api/reference/teacher-credits?staff_no=T9101');assert r.status_code==200,r.text
     items=r.json()['items'];assert [x['school_year'] for x in items]==['2025-2026','2024-2025']
     y=items[0]
@@ -124,6 +126,8 @@ def test_credits_feed_points_by_term_inside_period(client2,app2):
         db.add(TeacherHrProfile(staff_no='J001',user_id='teacher',name='测试教师一',org_code='dept1'));db.commit()
         # J002 is not in the 教职工 table: listed, flagged, never scored.
         assert facts(db,'otherteacher',db.get(Period,'period2026'))[0]['credits']==0
+    from credit_review_support import approve_all
+    approve_all(app2.state.engine)
     flags={x['staff_no']:x['in_staff_table'] for x in c.get('/api/reference/teacher-credits?school_year=2025-2026').json()['items']}
     assert flags=={'J001':True,'J002':False}
     r=post(c,'/api/rules',{'kind':'points','name':'学分积分','period_id':'period2026','config':{'components':[{'key':'credits','label':'授课学分','source':'credits','factor':'2','weight':'0','target':'1','cap':None}]},**REASON})
@@ -136,6 +140,10 @@ def test_credits_feed_points_by_term_inside_period(client2,app2):
         assert raw['credits']==Decimal('7.50') and {x['course_code'] for x in snap['teaching_credits']['courses']}=={'K1','K2','X1'}
         assert not point_source_changes(db,'teacher',db.get(Period,'period2026'))['changed']
     inbound(c,conn,'online_course',[{'creater_login_name':'J001','courseid':'X2','coursename':'新线上课','xn':'2026','xq':'1','credit':'1'}])
+    with Session(app2.state.engine) as db:
+        # 新拉来的课先待认定，积分不变；认定后才算进来。
+        assert not point_source_changes(db,'teacher',db.get(Period,'period2026'))['changed']
+    approve_all(app2.state.engine)
     with Session(app2.state.engine) as db:
         changes=point_source_changes(db,'teacher',db.get(Period,'period2026'))
         assert changes['changed'] and changes['items'][0]['label']=='授课学分' and changes['items'][0]['after']=='8.50'

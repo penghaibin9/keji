@@ -17,6 +17,7 @@ from .models import Base,Entity,User,Role,Org,Connection,TrainingRecord,utcnow
 from .core import serial,audit,workflow,check_version,digest,org_scope,school_today
 from .integrations import apply_mappings,configuration_hash,mask_raw
 from .code_tables import tables as code_tables,derive_hr_active
+from .social_models import SocialResource
 
 class TeacherHrProfile(Entity,Base):
     __tablename__='teacher_hr_profiles'
@@ -325,6 +326,32 @@ def _catalogue(db,codes):
         if c.code not in best or version(c)>version(best[c.code]):best[c.code]=c
     return best
 
+# 授课认定：教务、超星拉来的课先“待认定”，教研室主任认定后才计学分学时。
+# 认定结论按课存一条 SocialResource(kind='teach_credit')，不改数据库结构；
+# 认定时记下学分学时依据，重新拉取后依据变了就回到待认定。
+CREDIT_REVIEW_KIND='teach_credit'
+CREDIT_REVIEW_STATES={'APPROVED':'approved','EXCLUDED':'excluded'}
+
+def credit_review_code(row_id):return 'TC-'+row_id
+
+def credit_basis(row,credit,hours):
+    """What a reviewer approved: who, which course and term, and the credit and hours it carried."""
+    q=lambda v:None if v is None else str(Decimal(str(v)).quantize(Decimal('0.01'),rounding=ROUND_HALF_UP))
+    return {'staff_no':row.staff_no,'origin':row.origin,'course_code':row.course_code,'term_name':row.term_name,'credit':q(credit),'hours':q(hours)}
+
+def credit_reviews(db,row_ids):
+    """TeacherCourseTerm id -> its review record, if any."""
+    out={};ids=sorted({i for i in row_ids if i})
+    for i in range(0,len(ids),500):
+        for x in db.scalars(select(SocialResource).where(SocialResource.kind==CREDIT_REVIEW_KIND,SocialResource.code.in_([credit_review_code(r) for r in ids[i:i+500]]))):
+            out[x.code[3:]]=x
+    return out
+
+def review_state(review,basis):
+    """'approved' / 'excluded' while the recorded basis still matches, else 'pending'."""
+    if review is None or review.state not in CREDIT_REVIEW_STATES or review.data.get('basis')!=basis:return 'pending'
+    return CREDIT_REVIEW_STATES[review.state]
+
 def annual_teaching_credits(db,rows,*,include_details=True):
     """Sum each teacher's course credits over the two terms of a school year.
 
@@ -332,8 +359,11 @@ def annual_teaching_credits(db,rows,*,include_details=True):
     超星 (CX) rows use their own credit. A CX course linked to a JW course
     (extra.jw_course_code) that the same teacher already has in that school year
     counts once, through JW.
+    Only courses a reviewer approved add credit and hours; pending ones are totalled
+    separately (pending_credit) so teachers see what is still waiting.
     """
     rows=list(rows)
+    reviews=credit_reviews(db,[r.id for r in rows])
     def link(r):return str((r.extra or {}).get('jw_course_code') or '').strip()
     catalogue=_catalogue(db,{r.course_code for r in rows if r.origin=='JW'}|{link(r) for r in rows if r.origin=='CX' and link(r)})
     jw_taught={(r.staff_no,school_year_of(r.term_name),r.course_code) for r in rows if r.origin=='JW'}
@@ -347,7 +377,8 @@ def annual_teaching_credits(db,rows,*,include_details=True):
         year=school_year_of(r.term_name)
         g=groups.setdefault((r.staff_no,year or UNKNOWN_YEAR),{'staff_no':r.staff_no,'teacher_name':r.teacher_name,'user_id':r.user_id,
             'school_year':year or UNKNOWN_YEAR,'terms':set(),'jw_credit':Decimal('0'),'cx_credit':Decimal('0'),'hours':Decimal('0'),
-            'courses':0,'missing_credit':[],'duplicates_skipped':0,'in_staff_table':r.staff_no in staff})
+            'courses':0,'missing_credit':[],'duplicates_skipped':0,'in_staff_table':r.staff_no in staff,
+            'approved_courses':0,'pending_courses':0,'excluded_courses':0,'pending_credit':Decimal('0'),'pending_hours':Decimal('0')})
         if r.teacher_name and not g['teacher_name']:g['teacher_name']=r.teacher_name
         if r.user_id and not g['user_id']:g['user_id']=r.user_id
         g['terms'].add(r.term_name)
@@ -355,7 +386,7 @@ def annual_teaching_credits(db,rows,*,include_details=True):
         # 无明细汇总只需为同年重复课程解析学期。
         term_no=term_no_of(r.term_name) if include_details or repeats[key]>1 else None
         if include_details:
-            detail={'term_name':r.term_name,'term_no':term_no,'origin':r.origin,'course_code':r.course_code,'course_name':r.course_name,'credit':None,'hours':None,'credit_from':None,'counted':True}
+            detail={'term_name':r.term_name,'term_no':term_no,'origin':r.origin,'course_code':r.course_code,'course_name':r.course_name,'credit':None,'hours':None,'credit_from':None,'counted':True,'id':r.id,'review':None}
             g.setdefault('details',[]).append(detail)
         if term_no is not None:
             key=(*key,term_no)
@@ -374,15 +405,24 @@ def annual_teaching_credits(db,rows,*,include_details=True):
         if include_details:detail.update(credit=None if credit is None else str(Decimal(str(credit)).quantize(Decimal('0.01'),rounding=ROUND_HALF_UP)),
             hours=None if hours is None else str(Decimal(str(hours)).quantize(Decimal('0.01'),rounding=ROUND_HALF_UP)),
             credit_from=None if credit is None else ('source' if r.credit is not None else 'catalogue'))
-        g['courses']+=1
+        review=reviews.get(r.id);state=review_state(review,credit_basis(r,credit,hours))
+        if include_details:
+            detail['review']=state
+            if review is not None:detail.update(reviewed_by=review.data.get('by_name'),reviewed_at=review.data.get('at'),
+                review_reason=review.data.get('reason'),review_stale=state=='pending' and review.state in CREDIT_REVIEW_STATES)
+        g['courses']+=1;g[state+'_courses']+=1
         if credit is None:g['missing_credit'].append(r.course_code)
-        else:g['jw_credit' if r.origin=='JW' else 'cx_credit']+=Decimal(str(credit))
-        if hours is not None:g['hours']+=Decimal(str(hours))
+        if state=='approved':
+            if credit is not None:g['jw_credit' if r.origin=='JW' else 'cx_credit']+=Decimal(str(credit))
+            if hours is not None:g['hours']+=Decimal(str(hours))
+        elif state=='pending':
+            if credit is not None:g['pending_credit']+=Decimal(str(credit))
+            if hours is not None:g['pending_hours']+=Decimal(str(hours))
     out=[]
     for g in groups.values():
         g['terms']=sorted(g['terms']);g['total_credit']=g['jw_credit']+g['cx_credit']
         g['missing_credit']=sorted(set(g['missing_credit']))
-        for k in ('jw_credit','cx_credit','total_credit','hours'):g[k]=str(g[k].quantize(Decimal('0.01'),rounding=ROUND_HALF_UP))
+        for k in ('jw_credit','cx_credit','total_credit','hours','pending_credit','pending_hours'):g[k]=str(g[k].quantize(Decimal('0.01'),rounding=ROUND_HALF_UP))
         out.append(g)
     out.sort(key=lambda g:g['staff_no'])
     out.sort(key=lambda g:(g['school_year']!=UNKNOWN_YEAR,g['school_year']),reverse=True)  # newest year first, unknown last
@@ -404,10 +444,10 @@ def teaching_credit_facts(db,teacher,period):
     if not teacher or not teacher.staff_no:return Decimal('0'),{'staff_no':None,'courses':[],'excluded':[]}
     rows=db.scalars(select(TeacherCourseTerm).where(TeacherCourseTerm.staff_no==teacher.staff_no,TeacherCourseTerm.active.is_(True))
         .order_by(TeacherCourseTerm.external_key)).all()
-    total=Decimal('0');courses=[];excluded=[]
+    total=Decimal('0');courses=[];excluded=[];unapproved=[]
     if not db.scalar(select(TeacherHrProfile.id).where(TeacherHrProfile.staff_no==teacher.staff_no,TeacherHrProfile.active.is_(True))):
         # Only teachers in the school's 教职工 table earn teaching credit.
-        return total,{'staff_no':teacher.staff_no,'courses':[],'excluded':[],'not_in_staff_table':True}
+        return total,{'staff_no':teacher.staff_no,'courses':[],'excluded':[],'unapproved':[],'not_in_staff_table':True}
     for g in annual_teaching_credits(db,rows):
         for d in g['details']:
             anchor=term_anchor(g['school_year'],d['term_no'])
@@ -419,9 +459,12 @@ def teaching_credit_facts(db,teacher,period):
                     if year==UNKNOWN_YEAR or (date(int(year[:4]),9,1)<=period.end_date and date(int(year[:4])+1,8,31)>=period.start_date):
                         excluded.append({**item,'reason':'学年或学期未识别，不能确定计入日期'})
                 continue
+            if d['counted'] and d['review']!='approved':
+                # 待认定、认定不计分的课不进计分依据，单列给老师看；认定后才进 courses，积分随之提示需重算。
+                unapproved.append({**item,'review':d['review']});continue
             courses.append(item)
             if d['counted'] and d['credit'] is not None:total+=Decimal(d['credit'])
-    return total,{'staff_no':teacher.staff_no,'courses':courses,'excluded':excluded}
+    return total,{'staff_no':teacher.staff_no,'courses':courses,'excluded':excluded,'unapproved':unapproved}
 
 def hr_freshness_errors(profile, normalized):
     if profile is None or profile.source_updated_at is None:return []
