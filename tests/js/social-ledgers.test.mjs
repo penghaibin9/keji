@@ -46,11 +46,12 @@ test('缺少申报条件时说明原因并隐藏无效入口，估算期限不�
  assert.doesNotMatch(html,/data-action="social-claim-new"|已过申报期限/);
  assert.match(html,/预计截止 2026-09-23（待学校确认）/);
 });
-test('首页五项指标：人次用核定后口径，双师型分初中高级，且转义业务文字',async()=>{
- const html=await homeIndicators(context({'/social/overview':{...overview,scope:'<全校>'}}),{income:'12345.6'});
- assert.equal((html.match(/class="kpi"/g)||[]).length,5);
+test('首页指标：人次用核定后口径，双师型一格内分初中高级，且转义业务文字',async()=>{
+ const html=await homeIndicators(context({'/social/overview':{...overview,scope:'<全校>'}}),{income:'12345.6'},'<button class="kpi">人均学分</button>','<a>更多统计</a>');
+ assert.equal((html.match(/class="kpi"/g)||[]).length,5);assert.match(html,/人均学分<\/button><\/div>/);assert.match(html,/<a>更多统计<\/a>/);
  assert.match(html,/培训人次/);assert.match(html,/2,508<small>/);assert.match(html,/2 个学院的 2026 年台账待核定/);assert.match(html,/3\/12 个学院已报/);
- assert.match(html,/12345.60/);assert.match(html,/2\/3\/1/);assert.match(html,/另有 1 人未写级别/);
+ assert.match(html,/12345.60/);assert.match(html,/初级 2 · 中级 3 · 高级 1 · 未分级 1/);assert.match(html,/另有 1 人未写级别/);
+ assert.match(html,/3\/12 个学院已报台账/);assert.match(html,/国家级 0 · 省级 1 · 校级 2/);
  assert.match(html,/&lt;全校&gt;/);assert.doesNotMatch(html,/<全校>/);
 });
 test('教师首页显示我的培训人次，读取失败不冒充 0',async()=>{

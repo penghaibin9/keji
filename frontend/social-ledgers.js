@@ -275,7 +275,8 @@ export async function resourceStatsPage(c) {
 
 // 首页最上面一排：人次、收入、成果、双师型、双师型初/中/高级（老师手写菜单顶部）。
 // 老师看本人：我的人次、我参与的收入、本院成果、我的双师型级别、我的社会培训积分。
-export async function homeIndicators(c, stats) {
+// extra：调用方追加的指标格（管理角色的人均授课学分）；more：标题栏右侧的“更多统计”入口。
+export async function homeIndicators(c, stats, extra = '', more = '') {
   let o;
   try { o = await c.api('/social/overview?year=' + new Date().getFullYear()); } catch (err) { return c.note('首页指标暂时读取失败：' + err.message, true); }
   if (!o) return '';
@@ -289,7 +290,10 @@ export async function homeIndicators(c, stats) {
     explanations.push(`<li><strong>${c.esc(label)}</strong><span>${c.esc(foot)}</span></li>`);
     return `<button type="button" class="kpi" data-action="nav" data-id="${target}" ${c.pageAllowed(target) ? '' : 'disabled'}><span class="kpi-label">${c.esc(label)}</span><span class="kpi-icon">${c.icon(ico)}</span><div class="kpi-value">${value}<small>${c.esc(unit)}</small></div>${brief ? `<div class="kpi-foot">${c.esc(brief)}</div>` : ''}</button>`;
   };
-  const achievements = card(teacher || dept ? '所属学院培训成果' : '培训成果', c.number(o.achievements?.total), '项', `${teacher ? '你所在学院今年登记的成果：' : ''}国家级 ${al.national ?? 0} · 省级 ${al.province ?? 0} · 校级 ${al.school ?? 0}`, 'outcomes', 'award');
+  const achievements = card(teacher || dept ? '所属学院培训成果' : '培训成果', c.number(o.achievements?.total), '项', `${teacher ? '你所在学院今年登记的成果：' : ''}国家级 ${al.national ?? 0} · 省级 ${al.province ?? 0} · 校级 ${al.school ?? 0}`, 'outcomes', 'award', teacher ? '' : o.achievements?.total ? `国家级 ${al.national ?? 0} · 省级 ${al.province ?? 0} · 校级 ${al.school ?? 0}` : `${o.year} 年还没有登记成果`);
+  // 双师型合成一格：人数是主数，初/中/高级放在格子下方，不再单独占一格。
+  const dualCard = label => card(label, c.number(dual.total), '人', '以审核通过的教师资质为准；按资质类别中的级别分初级、中级、高级' + (lv['未分级'] ? `，另有 ${lv['未分级']} 人未写级别` : ''), 'qualifications', 'cert',
+    dual.total ? `初级 ${lv['初级'] ?? 0} · 中级 ${lv['中级'] ?? 0} · 高级 ${lv['高级'] ?? 0}` + (lv['未分级'] ? ` · 未分级 ${lv['未分级']}` : '') : '还没有审核通过的双师型资质');
   const cards = teacher
     ? [card('我的培训人次', fmt(p.mine?.value), '人次', `学院统计表里分给你的人次（涉及 ${p.mine?.projects || 0} 个项目），仅供参考，以项目核定为准`, 'mine', 'users', '原表分配 · 仅供核对'),
        card('我参与的培训收入', c.number(stats?.income, 2), '元', '你授课的项目里按规则归到你名下的收入（本统计周期）', 'records', 'wallet'),
@@ -300,16 +304,16 @@ export async function homeIndicators(c, stats) {
     ? [card('本教研室课程人次', c.number(stats?.participants), '人次', '本教研室教师授课业务 · 按当前统计周期', 'records', 'users'),
        card('本教研室培训收入', c.number(stats?.income, 2), '元', '归属培训收入 · 按当前统计周期', 'records', 'wallet'),
        achievements,
-       card('本教研室双师型教师', c.number(dual.total), '人', '以审核通过的教师资质为准', 'qualifications', 'cert'),
-       card('双师型 初/中/高级', `${lv['初级'] ?? 0}/${lv['中级'] ?? 0}/${lv['高级'] ?? 0}`, '人', lv['未分级'] ? `另有 ${lv['未分级']} 人未写级别` : '按资质类别中的级别统计', 'qualifications', 'cert')]
-    : [card(p.pending_rows ? '培训人次（待核定）' : '培训人次', fmt(p.final), '人次', (p.completion ? `完成年度目标 ${Math.round(p.completion)}%（目标 ${fmt(p.target)}）· ` : '') + `${p.reported}/${p.colleges} 个学院已报` + (Number(o.online?.views) ? ` · 线上浏览 ${fmt(o.online.views)} 另计` : ''), 'ledgers', 'users'),
+       dualCard('本教研室双师型教师')]
+    : [card(p.pending_rows ? '培训人次（待核定）' : '培训人次', fmt(p.final), '人次', (p.completion ? `完成年度目标 ${Math.round(p.completion)}%（目标 ${fmt(p.target)}）· ` : '') + `${p.reported}/${p.colleges} 个学院已报` + (Number(o.online?.views) ? ` · 线上浏览 ${fmt(o.online.views)} 另计` : ''), 'ledgers', 'users',
+         p.reported ? `${p.reported}/${p.colleges} 个学院已报台账` : `学院还没报送 ${o.year} 年台账`),
        // 两个收入口径名字分开：首页取“结项到账收入”（社会培训管理办法），驾驶舱和培训数据取“归属培训收入”（授课流水）。
-       card(o.income ? '结项到账收入' : '归属培训收入', o.income ? c.number(o.income.actual, 2) : c.number(stats?.income, 2), '元', o.income ? o.income.source_note + '驾驶舱的“归属培训收入”按授课流水统计，两者口径不同。' : '归属培训收入（按当前统计周期）', 'records', 'wallet'),
+       card(o.income ? '结项到账收入' : '归属培训收入', o.income ? c.number(o.income.actual, 2) : c.number(stats?.income, 2), '元', o.income ? o.income.source_note + '驾驶舱的“归属培训收入”按授课流水统计，两者口径不同。' : '归属培训收入（按当前统计周期）', 'records', 'wallet',
+         o.income && !Number(o.income.actual) ? '还没有结项并核验到账的项目' : ''),
        achievements,
-       card('双师型教师', c.number(dual.total), '人', '以审核通过的教师资质为准', 'qualifications', 'cert'),
-       card('双师型 初/中/高级', `${lv['初级']}/${lv['中级']}/${lv['高级']}`, '人', lv['未分级'] ? `另有 ${lv['未分级']} 人未写级别` : '按资质类别中的级别统计', 'qualifications', 'cert')];
+       dualCard('双师型教师')];
   const todo = !teacher && !dept && c.can('records.read') && o.sections?.records !== false && p.pending_ledgers ? `<div class="home-ledger-todo">${c.icon('data')}<span><strong>${p.pending_ledgers} 个学院的 ${o.year} 年台账待核定</strong> · ${p.pending_rows} 行待核定（含推荐值）</span>${c.act(o.can_review ? '去核定' : '查看核定进度', 'nav', 'ledgers', 'primary', 'arrow')}</div>` : '';
-  return `<section class="home-indicators" aria-label="${c.esc(o.scope)}核心指标"><div class="workbench-section-head"><h2>${teacher ? '培训概况' : c.esc(o.scope)+'概况'}</h2><details class="metric-help"><summary>统计说明</summary><div><p>${c.esc(o.note)}</p><ul>${explanations.join('')}</ul></div></details></div><div class="kpis kpis-5">${cards.join('')}</div>${todo}</section>`;
+  return `<section class="home-indicators" aria-label="${c.esc(o.scope)}核心指标"><div class="workbench-section-head"><h2>${teacher ? '培训概况' : c.esc(o.scope)+'概况'}</h2><div class="home-indicators-tools"><details class="metric-help"><summary>统计说明</summary><div><p>${c.esc(o.note)}</p><ul>${explanations.join('')}</ul></div></details>${more}</div></div><div class="kpis kpis-5">${cards.join('')}${extra}</div>${todo}</section>`;
 }
 
 export async function ledgerAction(name, id, c) {

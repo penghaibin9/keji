@@ -41,6 +41,7 @@ body{font-family:"Microsoft YaHei","PingFang SC",sans-serif}
 .home-indicators .kpi-icon .icon{width:18px;height:18px}
 .home-indicators .kpi-value{font-size:28px;line-height:1.4;margin:8px 0}.home-indicators .kpi-value small{font-size:12px}
 .home-indicators .kpi-foot{font-size:12px;line-height:1.5}
+.home-indicators-tools{display:flex;align-items:center;gap:20px;font-size:13px}.home-workbench .workbench-pending,.home-workbench .workbench-reminders{margin-bottom:22px}
 .workbench-pending .card-head>.btn{padding:8px 14px;min-height:40px}
 .workbench-pending .table td:first-child{width:58%;white-space:normal;line-height:1.7}
 .workbench-bottom{display:grid;grid-template-columns:1.15fr 1fr;gap:18px;margin:18px 0}
@@ -50,8 +51,6 @@ body{font-family:"Microsoft YaHei","PingFang SC",sans-serif}
 .workbench-quick>span:nth-child(2){font-size:13px;line-height:1.5}.workbench-quick>.icon{display:none}
 .workbench-quick .qicon{width:32px;height:32px}.workbench-quick:nth-child(2) .qicon{color:#7657ce;background:#f0ecfb}.workbench-quick:nth-child(3) .qicon{color:#23805b;background:#eaf7f1}.workbench-quick:nth-child(4) .qicon{color:#b66b28;background:#fff3e8}
 .workbench-empty{min-height:90px;padding:18px 20px}.workbench-empty p{font-size:13px}
-.workbench-statistics[open]{padding:0 18px 18px}.workbench-statistics>summary{margin:0}
-.workbench-statistics .workbench-section-head{margin-top:12px}.workbench-statistics .equal2{grid-template-columns:1fr}.workbench-connections{margin-top:14px}
 .social-summary{gap:0;border:1px solid var(--line);border-radius:8px;background:white;margin-bottom:8px}
 .social-stat{padding:14px 20px;border:0;border-radius:0;background:none;gap:12px;border-right:1px solid var(--line)}.social-stat:last-child{border-right:0}
 .social-stat-icon{width:34px;height:34px;border-radius:6px}.social-stat-icon .icon{width:20px;height:20px}
@@ -199,8 +198,6 @@ body{font-family:"Microsoft YaHei","PingFang SC",sans-serif}
 .rule-row,.org-rule-row{gap:12px!important;padding:14px!important;border:1px solid #e3eaf2;border-radius:10px;margin-top:12px;background:#fff}
 .rule-method>.rule-control:has(>select[data-r=method]),.rule-method>.rule-control:has(>select[data-or=method]){grid-column:1/-1}
 @media(max-width:700px){.rule-row,.org-rule-row{grid-template-columns:1fr!important}.rule-method{grid-template-columns:1fr}.rule-control>input,.rule-control>select{width:100%}}
-.credit-kpi{grid-template-columns:1fr!important;margin-top:16px}.credit-kpi .kpi{display:grid;grid-template-columns:220px 180px minmax(0,1fr);align-items:center;gap:18px;min-height:0;padding:18px 22px}.credit-kpi .kpi-label{grid-column:1;grid-row:1;min-height:0}.credit-kpi .kpi-icon{display:none}.credit-kpi .kpi-value{grid-column:2;grid-row:1;margin:0;font-size:27px}.credit-kpi .kpi-foot{grid-column:3;grid-row:1;margin:0;padding:0;border:0}
-@media(max-width:800px){.credit-kpi .kpi{grid-template-columns:1fr auto;gap:10px}.credit-kpi .kpi-value{grid-column:2}.credit-kpi .kpi-foot{grid-column:1/-1;grid-row:2}}
 
 /* 一人多身份：右上角切换身份；组织页负责人；办理轨迹的代办、连审标记 */
 .identity-switch-control select{max-width:220px}

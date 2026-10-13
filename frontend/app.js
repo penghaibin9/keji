@@ -1,12 +1,12 @@
 import {icons} from './icons.js';
 import {socialPage,socialAction} from './social-training.js?v=20261013-remediation2';
 import {nextCode,runBatch,batchStage,batchMode,batchPerformer,BATCH_LABELS} from './approval-flow.js?v=20261012-streamline1';
-import {ledgerPage,resourceStatsPage,homeIndicators,ledgerAction,resetLedgerView,minePage,mineReminders} from './social-ledgers.js?v=20261013-cx-claim1';
+import {ledgerPage,resourceStatsPage,homeIndicators,ledgerAction,resetLedgerView,minePage,mineReminders} from './social-ledgers.js?v=20261014-home1';
 import {rosterSection,rosterHandlers,onlineHandlers,showStaffDetail,showCourseDetail,presetRoster,loadCodeTables} from './school-data.js?v=20261013-cx-claim1';
 import {renderCenterStatus,renderImplementationWorkspace,renderSsoMaintenance,handleImplementationAction} from './integration-workspace.js?v=20261013-remediation2';
 import {readDraftEntry,saveDraft,previewDraft} from './integration-drafts.js';
 import {renderBusinessHistory} from './business-history.js';
-import {connectorInfo,connectorCards,incomeChart,guideCards,scopedDateFilters,incomeParticipantsChart,barChart,syncStatusChart,rankRows,percentChange,RANK_METRICS} from './portal-ui.js';
+import {connectorInfo,incomeChart,guideCards,scopedDateFilters,incomeParticipantsChart,barChart,syncStatusChart,rankRows,percentChange,RANK_METRICS} from './portal-ui.js';
 import {businessFilters, aggregateFilters, pageFilters, drillFilters, navigationHash, restoreNavigation, selectedPeriod} from './scope.js?v=20261012-credit-review4';
 'use strict';
 const $=(s,r=document)=>r.querySelector(s),$$=(s,r=document)=>[...r.querySelectorAll(s)];
@@ -467,7 +467,8 @@ async function creditKpi(){
  const c=await api('/reference/credit-summary').catch(()=>null);
  if(!c||!c.staff)return '';
  const scope={dept:'本教研室',college:'本院',school:'全校'}[me.role.kind]||'本范围';
- return `<div class="kpis credit-kpi"><button type="button" class="kpi" data-action="nav" data-id="credits" ${pageAllowed('credits')?'':'disabled'}><span class="kpi-label">${scope}人均授课学分</span><span class="kpi-icon">${icon('book')}</span><div class="kpi-value">${number(c.avg_credit,2)}<small>学分/人</small></div><div class="kpi-foot">${esc(c.school_year)} 学年 · 在职教职工 ${number(c.staff)} 人，其中有授课的 ${number(c.teaching_staff)} 人，人均 ${c.avg_teaching==null?'—':number(c.avg_teaching,2)}</div></button></div>`;
+ const brief=c.teaching_staff?`${number(c.teaching_staff)}/${number(c.staff)} 人有已认定的课`:`${esc(c.school_year)} 学年还没有已认定的课`;
+ return `<button type="button" class="kpi" data-action="nav" data-id="credits" ${pageAllowed('credits')?'':'disabled'} title="${esc(c.school_year)} 学年 · 在职教职工 ${number(c.staff)} 人，其中有已认定授课的 ${number(c.teaching_staff)} 人，人均 ${c.avg_teaching==null?'—':number(c.avg_teaching,2)}。只有教研室认定过的课才计学分。"><span class="kpi-label">${scope}人均授课学分</span><span class="kpi-icon">${icon('book')}</span><div class="kpi-value">${number(c.avg_credit,2)}<small>学分/人</small></div><div class="kpi-foot">${brief}</div></button>`;
 }
 function rankHTML(s){const m=RANKS.find(x=>x.key===rankMetric)||RANKS[0],a=rankRows(rankSource(s,m.key),m.key),max=Math.max(1,...a.map(x=>Math.abs(x.value??0)));return `<div class="card" id="rank-card"><div class="card-head"><h2>学院排行 · ${esc(m.label)}</h2><div class="metric-switch" role="group" aria-label="学院排行指标">${RANKS.map(x=>act(x.label,'rank-metric',x.key,x.key===m.key?'sm selected':'sm')).join('')}</div></div><div class="ranking">${a.length?a.map((x,i)=>`<div class="rank-row"><span class="rank-no">${String(i+1).padStart(2,'0')}</span><div class="grow"><div class="rank-title"><span>${esc(x.name)}</span><strong>${x.value===null?'—':number(x.value,m.digits)}</strong></div><div class="track"><div class="fill" style="width:${x.value===null?0:Math.max(0,x.value/max*100)}%"></div></div></div>${act('','drill-org',x.id,'text','chevron')}</div>`).join(''):empty()}</div><div class="card-foot">单位：${esc(m.unit)}；${m.key==='avg_credit'?`${esc(s.credit?.school_year||'')} 学年教务和超星授课学分合计 ÷ 在职教职工人数，不受上方筛选影响。`:'与上方指标同一统计来源。'}${m.key==='assessment_average'?'考核均分为当前筛选涉及教师已生成考核得分的平均；无考核结果的学院显示“—”并排在最后。':''}</div></div>`}
 function comparisonHTML(c){
@@ -524,12 +525,14 @@ const pages={
  ...Object.fromEntries(['projects','courses','bases','outcomes','recognition','annual','policy'].map(section=>[section,()=>socialPage(section,socialContext())])),
  async home(){
   if(me.role.kind==='teacher')return teacherHome();
-  const [s,w,n,connectionState]=await Promise.all([
+  // 管理角色首页只留四块：待处理事项、本范围概况、快捷入口、政策通知。
+  // 趋势、考核进度、统计筛选在驾驶舱（学校）或本组织管理页（教研室、学院）；接口状态在“对接与同步”，接口异常本身会进待办。
+  const [s,w,n]=await Promise.all([
    api('/statistics?'+query(aggregateFilters({...filter,period_id:periodId}))),
-   api('/portal/workbench'),can('notice.read')?api('/notices?size=4'):Promise.resolve({items:[]}),
-   me.role.kind==='school'?api('/connections/summary').then(data=>({data,error:''})).catch(error=>({data:{items:[]},error:error.message})):Promise.resolve({data:{items:[]},error:''})
+   api('/portal/workbench'),can('notice.read')?api('/notices?size=4'):Promise.resolve({items:[]})
   ]);
-  const connections=connectionState.data;let personal='';
+  view={s,w,n};
+  let personal='';
   if(me.role.kind==='teacher'){
    const [q,p,a,actv,qs]=await Promise.all([can('qualification.read')?api('/qualifications?size=1&state=APPROVED'):null,can('points.read')?api('/points?'+query({size:5,period_id:periodId})):null,can('assessment.read')?api('/assessment-summary/latest?'+query(periodId?{period_id:periodId}:{})):null,can('records.read')?api('/teacher-activity-summary'):null,can('qualification.read')?api('/qualification-summary'):null]);
    const latest=a?.assessment;
@@ -537,20 +540,15 @@ const pages={
    const creditItem=`<div class="summary-item"><label>授课学分 · ${cy?esc(cy.school_year)+' 学年':'最近学年'}</label><strong>${cy?number(cy.total_credit,2):'—'}<small>学分</small></strong><p class="cell-sub">${cy?`已认定 · 教务 ${number(cy.jw_credit,2)} · 超星 ${number(cy.cx_credit,2)}${cy.pending_courses?` · ${cy.pending_courses} 门课 ${number(cy.pending_credit,2)} 学分待认定`:''}${cy.missing_credit.length?` · ${cy.missing_credit.length} 门缺学分，请联系教务核对`:''} `+link('两学期明细','credit-detail',cy.staff_no+'|'+cy.school_year):'暂无教务或超星授课数据'}${me.user.staff_no?' · '+link('超星课没显示？认领','cx-claim',''):''}</p></div>`;
    personal=`<section class="summary-row"><div class="summary-item"><label>本人授课记录 · 全部历史</label><strong>${actv?number(actv.teaching.records):'—'}<small>条</small></strong><p class="cell-sub">${actv?number(actv.teaching.hours,2):'—'} 学时</p></div><div class="summary-item"><label>本人参训记录 · 全部历史</label><strong>${actv?number(actv.participation.records):'—'}<small>条</small></strong><p class="cell-sub">${actv?number(actv.participation.hours,2):'—'} 学时</p></div>${creditItem}<div class="summary-item"><label>审核通过的本人资质 · 当前</label><strong>${q?q.total:'—'}<small>份</small></strong></div><div class="summary-item"><label>${periodId?'所选周期积分':'全部周期积分'}</label><strong>${p?number(p.sum,2):'—'}<small>分</small></strong></div></section><section class="card mb16"><div class="card-head"><div><h2>${periodId?'所选周期考核得分':'最近考核得分'}：${latest?number(latest.score,2):'—'}</h2><p>授课与本人参训分开统计；上方活动记录明确为全部历史，不冒充所选周期数据。</p></div>${latest?badge(latest.state):'<span class="muted small">尚无考核 / 未授权读取</span>'}</div></section>`+teacherHomeDetail(qs,p);
   }
-  view={s,w,n,connections};
-  const indicators=await homeIndicators(ledgerContext(),s)+(me.role.kind==='teacher'?'':await creditKpi());
-  const headActions=act('刷新工作台','refresh','','','refresh');
-  const process=['TEACHER','DEPARTMENT','COLLEGE','SCHOOL','READY','ARCHIVED'];
-  const activeFilters=Object.values(filter).filter(v=>v!==''&&v!=null).length;
-  return `<div class="home-workbench"><div class="workbench-heading">`+pageHead(me.role.kind==='teacher'?'先处理本人待办，再核对培训、资质、积分与考核。':'先处理授权范围内的待办，再查看业务概况与通知。',headActions)+
-   `<section class="workbench-scope" aria-label="当前身份与数据范围"><div><strong>${esc(me.user.name)}</strong><span>${esc(me.role.name)}</span></div><p>查看范围：${esc(w.scope_label)}<span>更新日期：${esc(w.as_of)}</span></p></section></div>`+indicators+(me.role.kind==='teacher'?`<section class="home-personal" aria-label="本人情况"><div class="workbench-section-head"><div><h2>我的情况</h2><p>打开系统先看本人：授课、参训、资质、积分和考核。</p></div>${act('打开个人培训','nav','mine','','arrow')}</div>${personal}</section>`:'')+
-   `<section class="card workbench-pending"><div class="card-head"><div><h2>待处理事项 <span class="workbench-count">${number(w.tasks.total)}</span></h2>${w.tasks.returned?`<p>${number(w.tasks.returned)} 项退回待补充</p>`:''}</div>${act('查看全部待办','nav','todos','primary','arrow')}</div>${homeTasksHTML(w.tasks)}${note(w.scope_note,false,'待办范围')}</section><div class="workbench-bottom">${homeQuickHTML()}<section class="card"><div class="card-head"><h2>政策通知</h2>${can('notice.read')?link('查看全部','nav','notices'):''}</div><div class="card-pad">${n.items.map(x=>`<button class="notice-row" data-action="notice" data-id="${esc(x.id)}"><span>${esc(x.title)}</span><time>${esc(x.created_at?.slice(0,10))}</time></button>`).join('')||empty(can('notice.read')?'暂无政策通知':'未授权查看通知')}</div></section></div><details class="business-guide" ${w.reminders.total?'open':''}><summary>资质有效期提醒 · ${number(w.reminders.total)} 项</summary>${homeTasksHTML(w.reminders,true)}</details>`+
-   `<details class="workbench-statistics business-guide" ${activeFilters?'open':''}><summary>业务概况与统计分析</summary><div class="workbench-section-head"><div><h2>业务概况</h2><p>统计筛选仅影响下方概况，不隐藏上方待办与提醒。</p></div><label class="filter-inline">统计周期${periodSelect()}</label></div><details class="portal-filters" ${activeFilters?'open':''}><summary>更多统计筛选${activeFilters?` · 已启用 ${activeFilters} 项`:''}</summary>${filtersBar({search:false,dates:true,project:true,states:['TEACHER','DEPARTMENT','COLLEGE','SCHOOL','READY','ARCHIVED'],returned:true})}${note(s.state_filter_note||'筛选按服务端统一口径生效。',false,'筛选口径')}</details>`+
-   metricsHTML(s)+
-   trendHTML(s)+
-   `<div class="equal2 mt20"><section class="card"><div class="card-head"><div><h2>考核处理进度</h2><p>当前筛选的教师考核 · 数量与明细同源</p></div>${can('assessment.read')?link('进入考核','scope-nav','assessment'):''}</div><div class="process-grid">${process.map((key,i)=>`<div class="process-step"><div class="step-num">${i+1}</div><span>${esc(labels[key])}</span><strong>${number(s.assessment_states?.[key]||0)}</strong>${can('assessment.read')?link('查看','drill-state',key):''}</div>`).join('')}</div></section></div>`+
-   `<div class="mt20">${note((s.metric_notes?.income_note||'')+' '+(s.metric_notes?.participants_note||''))}</div></details>`+
-   (me.role.kind==='school'?`<details class="workbench-connections"><summary>学校接口状态 · ${connectionState.error||connections.items.length!==3?'状态读取待核查':connections.items.every(x=>x.connection_state==='CONNECTED')?'查看真实连接证明':'尚有接口未完成连接验证'}</summary>${connectionState.error?note('接口状态读取失败：'+connectionState.error,true):connectorCards(connections.items,{icon,compact:true,actionable:can('sync.manage')})}</details>`:'')+`</div>`;
+  const statsPage=me.role.kind==='school'?['cockpit','驾驶舱看趋势与排行']:['organization','看趋势与考核进度'];
+  const more=pageAllowed(statsPage[0])?link(statsPage[1],'nav',statsPage[0]):'';
+  const indicators=await homeIndicators(ledgerContext(),s,await creditKpi(),more);
+  const reminders=w.reminders.total?`<details class="business-guide workbench-reminders" open><summary>资质有效期提醒 · ${number(w.reminders.total)} 项</summary>${homeTasksHTML(w.reminders,true)}</details>`:'';
+  return `<div class="home-workbench"><div class="workbench-heading">`+pageHead('先处理授权范围内的待办，再查看概况与通知。',act('刷新工作台','refresh','','','refresh'))+
+   `<section class="workbench-scope" aria-label="当前身份与数据范围"><div><strong>${esc(me.user.name)}</strong><span>${esc(me.role.name)}</span></div><p>查看范围：${esc(w.scope_label)}<span>更新日期：${esc(w.as_of)}</span></p></section></div>`+
+   `<section class="card workbench-pending"><div class="card-head"><div><h2>待处理事项 <span class="workbench-count">${number(w.tasks.total)}</span></h2>${w.tasks.returned?`<p>${number(w.tasks.returned)} 项退回待补充</p>`:''}</div>${act('查看全部待办','nav','todos','primary','arrow')}</div>${homeTasksHTML({...w.tasks,items:w.tasks.items.slice(0,5)})}${note(w.scope_note,false,'待办范围')}</section>`+reminders+
+   indicators+(me.role.kind==='teacher'?`<section class="home-personal" aria-label="本人情况"><div class="workbench-section-head"><div><h2>我的情况</h2><p>打开系统先看本人：授课、参训、资质、积分和考核。</p></div>${act('打开个人培训','nav','mine','','arrow')}</div>${personal}</section>`:'')+
+   `<div class="workbench-bottom">${homeQuickHTML()}<section class="card"><div class="card-head"><h2>政策通知</h2>${can('notice.read')?link('查看全部','nav','notices'):''}</div><div class="card-pad">${n.items.map(x=>`<button class="notice-row" data-action="notice" data-id="${esc(x.id)}"><span>${esc(x.title)}</span><time>${esc(x.created_at?.slice(0,10))}</time></button>`).join('')||empty(can('notice.read')?'暂无政策通知':'未授权查看通知')}</div></section></div></div>`;
  },
  async cockpit(){
   const q=query({...filter,...(periodId?{period_id:periodId}:{})}),[s,connections,comparison]=await Promise.all([api('/statistics?'+q),api('/connections/summary'),api('/statistics/comparison?'+q).catch(()=>null)]);s.credit=await api('/reference/credit-summary').catch(()=>null);view={s,connections,comparison};

@@ -548,18 +548,26 @@ function homeResponse(url){
  return {items:[],total:0,sum:0};
 }
 // 老师的工作总览单独设计（易用性第 6 条），见下方 teacher home 用例。
+// 管理角色首页只留待办、概况、快捷入口、政策通知四块；统计分析在驾驶舱或本组织管理页，接口状态在对接与同步。
 for(const role of ['dept','college','school'])test('task-first home preserves role entry points: '+role,async()=>{
  const e=engine(homeResponse,role);e.t.setState('home');
  const html=await e.t.pages.home();
- assert.ok(html.indexOf('workbench-pending')<html.indexOf('workbench-statistics'));
- assert.ok(html.indexOf('workbench-shortcuts')<html.indexOf('workbench-statistics'));
- assert.doesNotMatch(html,/portal-hero|NOT_CONNECTED|NaN/);
+ const order=['workbench-pending','home-indicators','workbench-shortcuts'].map(x=>html.indexOf(x));
+ assert.ok(order.every(i=>i>0));assert.deepEqual([...order].sort((a,b)=>a-b),order);
+ assert.doesNotMatch(html,/portal-hero|NOT_CONNECTED|NaN|workbench-statistics|业务概况与统计分析|学校接口状态|资质有效期提醒 · 0/);
  assert.match(html,/待办理与资质提醒包含全部周期/);
- assert.equal(e.requests.some(x=>x.url.startsWith('/api/connections/summary')),role==='school');
- if(role==='teacher'){assert.match(html,/我的培训/);assert.doesNotMatch(html,/本组织工作台|学校概况|学校接口状态/);}
- if(role==='dept'||role==='college'){assert.match(html,role==='dept'?/本教研室管理/:/本学院与教研室管理/);assert.doesNotMatch(html,/data-id="cockpit"|学校接口状态/);}
- if(role==='school'){assert.match(html,/学校接口状态/);assert.ok(html.indexOf('学校接口状态')>html.indexOf('业务概况'));}
+ assert.equal(e.requests.some(x=>x.url.startsWith('/api/connections/summary')),false);
+ if(role==='dept'||role==='college'){assert.match(html,role==='dept'?/本教研室管理/:/本学院与教研室管理/);assert.doesNotMatch(html,/data-id="cockpit"/);assert.match(html,/看趋势与考核进度/);}
+ if(role==='school')assert.match(html,/data-action="nav" data-id="cockpit">驾驶舱看趋势与排行/);
  assert.ok(e.requests.every(x=>x.options.method==='GET'));
+});
+test('home shows at most five tasks and folds per-capita credit into the overview row',async()=>{
+ const items=Array.from({length:8},(_,i)=>({id:'t'+i,type:'qualification',title:'待办'+i,owner_name:'教师',state:'SUBMITTED'}));
+ const e=engine(url=>url.startsWith('/api/portal/workbench')?{...homeSummary,tasks:{total:15,returned:0,items}}:url.startsWith('/api/reference/credit-summary')?{school_year:'2026-2027',staff:733,teaching_staff:0,avg_credit:'0.00',avg_teaching:null}:homeResponse(url),'school');
+ const html=await e.t.pages.home();
+ assert.match(html,/待办4/);assert.doesNotMatch(html,/待办5/);assert.match(html,/workbench-count">15/);
+ const row=html.slice(html.indexOf('class="kpis kpis-5"'),html.indexOf('</section>',html.indexOf('class="kpis kpis-5"')));
+ assert.match(row,/全校人均授课学分/);assert.match(row,/2026-2027 学年还没有已认定的课/);assert.doesNotMatch(html,/credit-kpi/);
 });
 test('home task and expiry summaries escape business content and retain actual dates',async()=>{
  const e=engine(url=>url.startsWith('/api/portal/workbench')?{...homeSummary,
@@ -575,11 +583,9 @@ test('home permissions remove unauthorized shortcuts even for named school role'
  const shortcuts=html.slice(start,html.indexOf('</section>',start));
  assert.doesNotMatch(shortcuts,/data-id="(?:projects|courses|bases|records|qualifications|points|assessment|organization)"/);
 });
-test('home active statistics conditions are visible and never filter task summary',async()=>{
+test('home statistics period never filters task summary',async()=>{
  const e=engine(homeResponse);e.t.setState('home',{project_code:'P1'},1,1,'period-1');
- const html=await e.t.pages.home();assert.match(html,/更多统计筛选 · 已启用 1 项/);
- assert.match(html,/portal-filters" open/);
- assert.match(html,/workbench-statistics business-guide" open/);
+ await e.t.pages.home();
  assert.equal(e.requests.find(x=>x.url.includes('/portal/workbench')).url,'/api/portal/workbench');
  assert.match(e.requests.find(x=>x.url.includes('/statistics')).url,/period_id=period-1/);
 });
