@@ -145,6 +145,9 @@ def test_nginx_asset_contract_is_included_in_source_and_image_guards():
     config=(root/'deploy/nginx.conf').read_text()
     assert 'location ^~ /assets/' in config and 'alias /usr/share/nginx/html/;' in config
     assert 'Cache-Control "no-store" always' in config
+    assets=config.split('location ^~ /assets/',1)[1].split('}',1)[0]
+    assert 'Cache-Control "no-cache" always' in assets and 'X-Content-Type-Options nosniff always' in assets and 'X-Frame-Options DENY always' in assets
+    assert 'gzip on;' in config and 'application/javascript' in config
     docker=(root/'deploy/Dockerfile.api').read_text()
     assert 'deploy/compose.yml deploy/nginx.conf /opt/nondegree/deploy/' in docker
     compose=(root/'deploy/compose.yml').read_text()
