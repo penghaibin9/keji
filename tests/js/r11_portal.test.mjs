@@ -1090,3 +1090,9 @@ test('audit page shows data-changing operations by default and can switch to que
  const f=engine(async()=>({items:[],total:0,page:1,size:20}));f.t.setState('audit',{kind:'all'});
  html=await f.t.pages.audit();assert.doesNotMatch(f.requests[0].url,/kind=/);assert.match(html,/<option value="all" selected>/);
 });
+test('browser technical errors are shown in plain Chinese while server messages pass through',()=>{
+ const e=engine(),friendly=vm.runInContext('friendlyError',e.ctx);
+ assert.equal(friendly(Error('版本冲突，请刷新')),'版本冲突，请刷新');
+ const text=friendly(Object.assign(new TypeError("Cannot read properties of undefined (reading 'items')"),{requestId:'req-1'}));
+ assert.match(text,/暂时没加载出来/);assert.match(text,/req-1/);assert.doesNotMatch(text,/Cannot read/);
+});

@@ -164,7 +164,9 @@ function validationMessage(error){
  if(/date/i.test(msg))return name+'：请输入有效日期';
  return name+'：格式或取值不符合要求，请检查后重新提交';
 }
-function toast(message,error=false){let el=document.createElement('div');el.className='toast'+(error?' error':'');el.textContent=message;$('#toasts').append(el);setTimeout(()=>el.remove(),6000)}
+// 后端报错本来就是中文；浏览器里的英文技术报错（如 Cannot read properties of undefined）不直接给用户看。
+const friendlyError=err=>{const m=String(err?.message??err??'');if(/[\u4e00-\u9fff]/.test(m))return m;console.error(err);return '这一页暂时没加载出来，请点“重新读取”或刷新页面；还不行请联系管理员。'+(err?.requestId?`（请求编号 ${err.requestId}）`:'')};
+function toast(message,error=false){if(error)message=friendlyError({message});let el=document.createElement('div');el.className='toast'+(error?' error':'');el.textContent=message;$('#toasts').append(el);setTimeout(()=>el.remove(),6000)}
 function field(name,label,type='text',value='',opts={}){
  const attrs=`id="f-${name}" name="${name}" ${opts.required===false?'':'required'} ${opts.readonly?'readonly':''} ${opts.min!==undefined?`min="${opts.min}"`:''} ${opts.max!==undefined?`max="${opts.max}"`:''} ${opts.step?`step="${opts.step}"`:''}`;
  let input;if(type==='select')input=`<select ${attrs}>${(opts.options||[]).map(o=>{let [v,l]=Array.isArray(o)?o:[o,o];return `<option value="${esc(v)}" ${String(v)===String(value)?'selected':''}>${esc(l)}</option>`}).join('')}</select>`;
@@ -454,7 +456,7 @@ async function render(){
  if(!me)return;const seq=++renderSequence;$('#content').setAttribute('data-page',page);$('#breadcrumb').textContent=pageTitle(page);syncSidebar();
  $('#content').innerHTML='<div class="busy-panel">正在读取授权业务数据…</div>';
  try{if(!pageAllowed(page))throw Error('当前账号未授权访问此页面，请从左侧授权菜单进入。');let html=await pages[page]();if(!html.includes('page-group-tabs'))html=pageGroupTabs(page)+html;if(seq!==renderSequence)return;$('#content').innerHTML=html+`<footer class="footer"><span>${esc(me.school_name||'湖南科技职业学院')} · 一站式非学历教育智慧前台</span><span>权限范围：${esc(me.role.kind==='teacher'?'仅本人':orgName(me.user.org_id))}</span></footer>`;bindFilters();bindPortalControls()}
- catch(err){if(seq===renderSequence&&$('#content'))$('#content').innerHTML=pageHead()+note(err.message,true)+`<div class="mt16">${act('重新读取','refresh')}</div>`;}
+ catch(err){if(seq===renderSequence&&$('#content'))$('#content').innerHTML=pageHead()+note(friendlyError(err),true)+`<div class="mt16">${act('重新读取','refresh')}</div>`;}
 }
 function bindFilters(){
  const form=$('#filters');if(!form)return;
