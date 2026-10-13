@@ -2,7 +2,7 @@
 
 本工程的正式安装入口为 `scripts/deployment_config.py` 和 `scripts/install.sh --initialize-new-school`。安装包、镜像和版本信息以同版 `release-metadata.json` 为准；采购验收仍须完成学校实际环境、正常账号和业务流程核验。
 
-1. 接收后先执行 `sha256sum -c SHA256SUMS` 核对安装包、离线镜像及全部分卷。解压后执行 `python3 scripts/check_assembly.py --strict`，确认源码齐套及迁移头 `20261013_0005`。校验不符时停止安装。
+1. 接收后先执行 `sha256sum -c SHA256SUMS` 核对安装包、离线镜像及全部分卷。解压后执行 `python3 scripts/check_assembly.py --strict`，确认源码齐套及迁移头 `20261012_0004`。校验不符时停止安装。
 2. 在学校确认的新空目录和新空数据库安装；已有学校系统另走备份及升级流程。先核对主机、架构、端口、域名、证书、恢复管理员和服务器外的备份位置。
 3. 用 `docker image load -i <完整离线镜像包>` 加载镜像，依据版本元数据核对三个镜像的标签、内容标识和处理器架构。不要混用不同版本的镜像或分卷。
 4. 由实施人员运行 `python3 scripts/deployment_config.py prepare --help` 查看配置参数，填写学校名称、访问地址、三个同版镜像标签、匹配的正式证书和私钥，并使用 `--new-school-only`。私有配置在学校受控目录生成，不进入交付包。生成后执行 `python3 scripts/deployment_config.py verify` 核验。
