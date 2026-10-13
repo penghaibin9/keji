@@ -204,3 +204,34 @@ def test_inbound_retention_compacts_old_settled_batches_only(app2):
         assert db.scalar(sa.select(InboundRow.raw).where(InboundRow.batch_id=='ret-new',InboundRow.row_no==0))=={'a':1}
         assert db.scalar(sa.select(InboundRow.raw).where(InboundRow.batch_id=='ret-prev',InboundRow.row_no==0))=={'a':1}
         assert compact(db,90,keep_latest=1,apply=True)['rows']==0
+
+
+def test_keep_latest_pull_compacts_everything_older_whatever_its_age(app2):
+    import pytest
+    from datetime import timedelta
+    from app.core import utcnow
+    from app.inbound_retention import compact,main
+    from app.models import Connection
+    from app.reference_data import InboundBatch,InboundRow
+    with app2.state.sessions.begin() as db:
+        cid=db.scalar(sa.select(Connection.id).order_by(Connection.code))
+        def batch(name,state,hours,pull,data_type='course'):
+            db.add(InboundBatch(id=name,connection_id=cid,owner_id='schooladmin',data_type=data_type,state=state,total=1,errors=0,
+                                receipt={'pull_task_id':pull} if pull else {},created_at=utcnow()-timedelta(hours=hours)))
+            db.flush()
+            db.add(InboundRow(batch_id=name,row_no=0,business_key=name,raw={'a':1},mapped={'b':2},errors=[]))
+        # 最新一次全量拉取分成两页（两个批次），更早一次拉取也只有几小时前
+        batch('lp-new-a','COMMITTED',1,'pull-2');batch('lp-new-b','COMMITTED',1.5,'pull-2')
+        batch('lp-old-a','COMMITTED',20,'pull-1');batch('lp-old-void','VOID',30,'pull-0');batch('lp-nopull','COMMITTED',40,None)
+        batch('lp-pending','PREVIEW',50,'pull-9')  # 待确认的不动
+        batch('lp-other','COMMITTED',60,'pull-7','teacher_hr')  # 另一种数据只有一次，保留
+        db.flush()
+        dry=compact(db,0,latest_pull_only=True)
+        assert dry=={'batches':3,'rows':3,'applied':False}
+        assert compact(db,0,latest_pull_only=True,apply=True)['rows']==3
+        db.flush()
+        raw=lambda name:db.scalar(sa.select(InboundRow.raw).where(InboundRow.batch_id==name))
+        assert raw('lp-old-a')=={'_compacted':True} and raw('lp-old-void')=={'_compacted':True} and raw('lp-nopull')=={'_compacted':True}
+        assert raw('lp-new-a')=={'a':1} and raw('lp-new-b')=={'a':1} and raw('lp-pending')=={'a':1} and raw('lp-other')=={'a':1}
+    with pytest.raises(SystemExit):main(['--keep-latest-pull','--older-than-days','40'])
+    with pytest.raises(SystemExit):main(['--older-than-days','0'])
