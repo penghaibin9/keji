@@ -1069,3 +1069,11 @@ test('待办批量办理只给本人可办、同环节事项勾选框，结果�
  const modal=e.node('#modal-root').innerHTML;
  assert.match(modal,/成功 1 条；未办理 1 条/);assert.doesNotMatch(modal,/均已办理/);assert.match(modal,/&lt;b&gt;审批依据已变化/);assert.match(modal,/data-id="social_claim\|c1"/);
 });
+
+test('teacher list loads every page so schools with more than 200 staff are all selectable',async()=>{
+ const all=Array.from({length:450},(_,i)=>({id:'t'+i,name:'教师'+i,staff_no:String(1000+i)}));
+ const e=engine(async url=>{const q=new URL(url,'http://x').searchParams,page=Number(q.get('page')||1),size=Number(q.get('size'));return {items:all.slice((page-1)*size,page*size),total:all.length,page,size}});
+ const out=await vm.runInContext('loadAllTeachers',e.ctx)();
+ assert.equal(out.items.length,450);assert.equal(out.items.at(-1).name,'教师449');assert.equal(e.requests.length,3);
+ assert.ok(e.requests.every(r=>/size=200/.test(r.url)));
+});
