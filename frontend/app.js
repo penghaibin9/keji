@@ -1227,7 +1227,8 @@ function problemCell(type,h){
  if(!h)return '—';
  if(!h.problems)return '<span class="badge green-b">无</span>';
  const parts=Object.entries(h.problem_detail||{}).filter(([,n])=>n).map(([k,n])=>`${PROBLEM_NAMES[k]||k} ${number(n)}`);
- return `${link(number(h.problems)+' 条','source-problem',type)}<div class="cell-sub" title="${esc(h.problem_note||'')}">${esc(parts.join(' · ')||h.problem_note||'')}</div>`;
+ const cx=type==='online_course'&&h.problem_detail?.not_in_staff_table&&me.user.is_admin===true?`<div class="cell-sub">${link('下载没对上工号的老师名单','cx-unmatched','')}</div>`:'';
+ return `${link(number(h.problems)+' 条','source-problem',type)}<div class="cell-sub" title="${esc(h.problem_note||'')}">${esc(parts.join(' · ')||h.problem_note||'')}</div>${cx}`;
 }
 function openSourceProblem(type){
  if(type==='teacher_hr'){presetRoster({problem:'true'});return nav('organization')}
@@ -1389,7 +1390,7 @@ const handlers={
  'integration-intake-download':downloadIntegrationIntake,'integration-intake-import':importIntegrationIntake,'integration-intake-confirm':confirmIntegrationIntake,
  'coordination-checklist':downloadCoordinationChecklist,'integration-profile-download':downloadIntegrationProfile,'integration-profile-import':importIntegrationProfile,
  'inbound-page':code=>{const[id,p]=code.split('|');return showInbound(id,Number(p))},
- nav:id=>nav(id),refresh:()=>render(),'code-tables':()=>showCodeTables(),'code-table-import':id=>{closeModal();return importCodeTable(id)},'source-problem':id=>openSourceProblem(id),'hr-unmatched':()=>showHrUnmatched(),'user-from-hr':id=>{const [staff,name]=id.split('|');closeModal();userPreset={staff_no:staff,username:staff,name};return userForm(null)},close:()=>closeModal(),prev:()=>{tablePage=Math.max(1,tablePage-1);return render()},next:()=>{tablePage++;return render()},'reset-filters':()=>{filter={};periodId='';tablePage=1;participationPage=1;syncLocation(true);return render()},
+ nav:id=>nav(id),refresh:()=>render(),'code-tables':()=>showCodeTables(),'code-table-import':id=>{closeModal();return importCodeTable(id)},'source-problem':id=>openSourceProblem(id),'cx-unmatched':()=>download('/reference/cx-unmatched.xlsx'),'hr-unmatched':()=>showHrUnmatched(),'user-from-hr':id=>{const [staff,name]=id.split('|');closeModal();userPreset={staff_no:staff,username:staff,name};return userForm(null)},close:()=>closeModal(),prev:()=>{tablePage=Math.max(1,tablePage-1);return render()},next:()=>{tablePage++;return render()},'reset-filters':()=>{filter={};periodId='';tablePage=1;participationPage=1;syncLocation(true);return render()},
  'toggle-menu':()=>setMobileMenu(!$('#sidebar').classList.contains('open')),
  'close-menu':()=>setMobileMenu(false,true),
  'collapse-sidebar':toggleSidebar,

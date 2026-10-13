@@ -342,10 +342,17 @@ def _commit_import(db,actor,job,rows,reason,basis,preview_sha):
 
 
 def rows_to_xlsx(headers,rows,title='导出数据'):
-    wb=Workbook(write_only=False);ws=wb.active;ws.title=title[:31];ws.append(headers);ws.freeze_panes='A2';ws.auto_filter.ref=f'A1:{get_column_letter(len(headers))}1'
-    for cell in ws[1]:cell.font=Font(bold=True);cell.fill=PatternFill('solid',fgColor='D9EAF7')
-    for row in rows:ws.append([_safe_excel_value(x) for x in row])
-    for i,h in enumerate(headers,1):ws.column_dimensions[get_column_letter(i)].width=max(12,min(36,len(h)*2+6))
+    return sheets_to_xlsx([(title,headers,rows)])
+
+
+def sheets_to_xlsx(sheets):
+    """sheets: [(title, headers, rows), ...] -> one workbook, one sheet each."""
+    wb=Workbook(write_only=False);wb.remove(wb.active)
+    for title,headers,rows in sheets:
+        ws=wb.create_sheet(title[:31]);ws.append(headers);ws.freeze_panes='A2';ws.auto_filter.ref=f'A1:{get_column_letter(len(headers))}1'
+        for cell in ws[1]:cell.font=Font(bold=True);cell.fill=PatternFill('solid',fgColor='D9EAF7')
+        for row in rows:ws.append([_safe_excel_value(x) for x in row])
+        for i,h in enumerate(headers,1):ws.column_dimensions[get_column_letter(i)].width=max(12,min(36,len(h)*2+6))
     out=BytesIO();wb.save(out);wb.close();return out.getvalue()
 
 

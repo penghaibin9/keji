@@ -790,6 +790,37 @@ def cx_login_aliases(db):
         if sep and login.strip() and staff.strip():out[login.strip()]=staff.strip()
     return out
 
+def cx_unmatched_report(db):
+    """超星课程里还没对上在职工号的建课人，以及登录名对照每一项的核对结果，给管理员催办和清理对照用。"""
+    hr={p.staff_no:p.name for p in db.scalars(select(TeacherHrProfile).where(TeacherHrProfile.active.is_(True)))}
+    rows=db.scalars(select(TeacherCourseTerm).where(TeacherCourseTerm.origin=='CX',TeacherCourseTerm.active.is_(True))
+        .order_by(TeacherCourseTerm.term_name.desc(),TeacherCourseTerm.course_code)).all()
+    groups={};seen_logins={}
+    for r in rows:
+        login=(r.extra or {}).get('cx_login')
+        if login:seen_logins.setdefault(login,set()).add(r.teacher_name or '')
+        if r.staff_no in hr:continue
+        g=groups.setdefault(r.staff_no,{'names':[],'courses':[],'login':login})
+        if r.teacher_name and r.teacher_name not in g['names']:g['names'].append(r.teacher_name)
+        g['courses'].append(r)
+    unmatched=[]
+    for staff,g in sorted(groups.items(),key=lambda kv:-len(kv[1]['courses'])):
+        hint=('登录名对照里写的工号 '+staff+' 不在在职教职工表，请核对对照' if g['login']
+            else '请老师在超星把登录名改成本人工号；改不了的，管理员在“超星登录名对照”里加一行 登录名=工号')
+        unmatched.append([g['login'] or staff,'、'.join(g['names']),len(g['courses']),g['courses'][0].term_name,
+            '；'.join(dict.fromkeys(c.course_name for c in g['courses']))[:200],hint])
+    checks=[]
+    for login,staff in cx_login_aliases(db).items():
+        names=sorted(n for n in seen_logins.get(login,()) if n)
+        if login in hr:state='登录名本身就是在职工号，同步时按工号算、这条对照不生效，请删除'
+        elif staff not in hr:state='工号不在在职教职工表'
+        elif login not in seen_logins:state='最近一次同步没有这个登录名的课（老师可能已在超星改好），可以删除这条'
+        elif any(n!=hr[staff] for n in names):state='超星姓名和教职工表姓名不一致，请核对'
+        else:state='正常'
+        checks.append([login,staff,hr.get(staff,''),'、'.join(names),state])
+    checks.sort(key=lambda x:(x[4]=='正常',x[0]))
+    return unmatched,checks
+
 def preview_inbound(db,actor,connection:Connection,data_type,records,source_label='手工脱敏联调样本'):
     if connection.code!='middle':raise HTTPException(422,'只有学校数据中台使用本入站预览链')
     if data_type not in SUPPORTED_INBOUND:raise HTTPException(422,'该数据类型尚未建立正式入站落库契约')
@@ -798,6 +829,10 @@ def preview_inbound(db,actor,connection:Connection,data_type,records,source_labe
     db.add(batch);db.flush();seen={}
     codes=code_tables(db) if data_type=='teacher_hr' else None
     aliases=cx_login_aliases(db) if data_type=='online_course' else {}
+    if aliases:
+        # 登录名本身已是在职工号（老师已在超星改好）就按工号算，旧对照不再把它改挂到别人名下。
+        real=set(db.scalars(select(TeacherHrProfile.staff_no).where(TeacherHrProfile.staff_no.in_(list(aliases)),TeacherHrProfile.active.is_(True))))
+        aliases={k:v for k,v in aliases.items() if k not in real}
     for i,raw in enumerate(records,1):
         mapped,mapping_errors=apply_mappings(connection,raw,data_type)
         if aliases and str(mapped.get('staff_no') or '').strip() in aliases:

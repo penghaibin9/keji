@@ -237,6 +237,24 @@ def teacher_courses(request:Request):
     return read_operation(request,'records.read',load)
 
 
+@router.get('/reference/cx-unmatched.xlsx')
+def cx_unmatched_xlsx(request:Request):
+    """超星建课人还没对上工号的名单 + 登录名对照核对，学校管理员下载后催老师改超星登录名。"""
+    from urllib.parse import quote
+    from fastapi.responses import Response
+    from ..excel_io import sheets_to_xlsx
+    from ..reference_data import cx_unmatched_report
+    with request.app.state.sessions.begin() as db:
+        a,s=current_actor(db,request);a.require('records.read')
+        if a.role.kind!='school' or not a.user.is_admin:raise HTTPException(403,'仅学校管理员下载')
+        unmatched,checks=cx_unmatched_report(db)
+        data=sheets_to_xlsx([('还没对上工号',['超星登录名','超星里的姓名','课程数','最近学期','课程举例','怎么处理'],unmatched),
+            ('登录名对照核对',['超星登录名','对照到的工号','教职工表姓名','超星里的姓名','核对结果'],checks)])
+        audit(db,a,'teacher_course','cx-unmatched','下载超星未对应工号名单',after={'unmatched':len(unmatched),'aliases':len(checks)},reason='催办超星登录名改工号')
+    name=quote('超星未对应工号名单.xlsx')
+    return Response(data,media_type='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',headers={'Content-Disposition':f"attachment; filename*=UTF-8''{name}",'X-Content-Type-Options':'nosniff'})
+
+
 @router.get('/reference/school-courses')
 def school_courses(request:Request):
     """教务课程总库: official credit and hours per course code."""
