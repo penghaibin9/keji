@@ -2,7 +2,7 @@
 from sqlalchemy import select, func
 from .models import Task, TaskAttempt
 from .integrations import SyncItem, SyncCallLog, task_sync_items
-from .reference_data import InboundBatch
+from .reference_data import batch_facts
 
 
 def latest_task_status(db, connection, data_type=None):
@@ -25,7 +25,7 @@ def latest_task_status(db, connection, data_type=None):
         from .paged_inbound import run_counts
         success,failed,pending,stage=run_counts(db,task,connection)
     else:
-        result=task.result or {};batch=db.get(InboundBatch,result.get('batch_id')) if result.get('batch_id') else None
+        result=task.result or {};batch=batch_facts(db,result.get('batch_id')) if result.get('batch_id') else None
         if batch and batch.connection_id==connection.id and batch.data_type==(task.payload or {}).get('data_type'):
             if batch.state=='COMMITTED' and (batch.receipt or {}).get('written')==batch.total:
                 success=batch.total;stage='COMMITTED'

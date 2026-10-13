@@ -25,6 +25,8 @@ class Settings(BaseSettings):
     session_idle_minutes: int = Field(default=60, ge=5, le=480)
     login_window_seconds: int = Field(default=900, ge=60, le=3600)
     login_attempts: int = Field(default=10, ge=3, le=30)
+    # 学校反向代理的地址（逗号分隔，可写网段）。留空即不信任任何转发头；见 client_ip.py。
+    trusted_proxies: str = ''
     seed_enabled: bool = False
     auto_create_tables: bool = False
     auto_create_schema: bool = False
@@ -34,6 +36,11 @@ class Settings(BaseSettings):
     # 学校移动门户消息推送：留空即关闭；地址按《湖科职消息中心集成标准接口文档v1.0》。
     message_push_yyid: str = ''
     message_push_endpoint: str = 'https://ydmh.hnkjxy.net.cn/ydmh/api/send/send'
+
+    @property
+    def trusted_proxy_networks(self):
+        from .client_ip import parse_networks
+        return parse_networks(self.trusted_proxies)
 
     @property
     def demo_cookie_name(self):
@@ -61,6 +68,10 @@ class Settings(BaseSettings):
         if origin.scheme not in {'http','https'} or not origin.hostname or origin.username or origin.password or origin.query or origin.fragment or origin.path not in {'','/'}:
             raise ValueError('网站来源地址格式不正确')
         self.public_origin = self.public_origin.rstrip('/')
+        try:
+            self.trusted_proxy_networks
+        except ValueError:
+            raise ValueError('可信代理地址格式不正确')
         hosts = [x.strip() for x in self.allowed_hosts.split(',')]
         if not all(hosts) or '*' in hosts:
             raise ValueError('必须设置明确的网站域名')

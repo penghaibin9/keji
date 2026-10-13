@@ -20,8 +20,9 @@ def login(data:Login,request:Request):
     if request.headers.get('content-type','').split(';')[0]!='application/json': raise HTTPException(415,'登录只接收JSON请求')
     cfg=request.app.state.settings;now=utcnow();failure=None;token=None
     username=data.username.strip()
-    # No untrusted X-Forwarded-For; proxy deployment must configure trusted hops.
-    ip=request.client.host if request.client else 'unknown'
+    # X-Forwarded-For 不能直接信；只有配置了可信代理且直连方在其中时才采用代理转发的客户端链（client_ip.py）。
+    from ..client_ip import client_ip
+    ip=client_ip(request)
     throttle_key=sha256(('login:'+ip).encode()).hexdigest()
     with request.app.state.sessions.begin() as db:
         throttle=db.scalar(select(Throttle).where(Throttle.key==throttle_key).with_for_update())

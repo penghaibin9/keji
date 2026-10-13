@@ -84,3 +84,18 @@ def test_credit_groups_are_cached_until_the_data_changes(app2):
         second=rd.all_credit_groups(db)
         assert second is not first
         assert [g['courses'] for g in second if g['staff_no']=='CACHE1']==[2]
+
+
+def test_batch_status_reads_three_receipt_values_without_loading_the_receipt(app2):
+    from sqlalchemy import select
+    with Session(app2.state.engine) as db:
+        from app.models import Connection
+        cid=db.scalar(select(Connection.id).limit(1))
+        db.add(rd.InboundBatch(id='fat-batch',connection_id=cid,data_type='teacher_hr',owner_id='schooladmin',total=3,errors=0,state='COMMITTED',
+            receipt={'written':3,'pull_task_id':'t-1','committed_at':'2026-10-13T08:00:00','rows':['x'*1000]*50}))
+        db.commit()
+        facts=rd.batch_facts(db,'fat-batch')
+        assert (facts.state,facts.total,facts.errors,facts.connection_id)==('COMMITTED',3,0,cid)
+        assert facts.receipt=={'written':3,'pull_task_id':'t-1','committed_at':'2026-10-13T08:00:00'}
+        assert rd.batch_facts(db,'missing') is None
+        assert 'fat-batch' not in [getattr(x,'id',None) for x in db.identity_map.values()]   # 没有把整行读进会话

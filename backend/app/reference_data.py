@@ -151,6 +151,19 @@ class InboundRow(Entity,Base):
     errors: Mapped[list]=mapped_column(JSON,default=list)
     __table_args__=(UniqueConstraint('batch_id','row_no'),)
 
+def batch_facts(db,ident):
+    """The few fields the status pages read from an InboundBatch, without loading its receipt.
+
+    学校服务器上 receipt 平均每行约 200KB，状态页只看其中三个值；整行读出来要把这些大字段从慢盘上读一遍。
+    """
+    from types import SimpleNamespace
+    B=InboundBatch
+    row=db.execute(select(B.connection_id,B.data_type,B.state,B.total,B.errors,
+        B.receipt['written'].as_integer(),B.receipt['pull_task_id'].as_string(),B.receipt['committed_at'].as_string()).where(B.id==ident)).first()
+    if row is None:return None
+    return SimpleNamespace(connection_id=row[0],data_type=row[1],state=row[2],total=row[3],errors=row[4],
+        receipt={k:v for k,v in (('written',row[5]),('pull_task_id',row[6]),('committed_at',row[7])) if v is not None})
+
 SUPPORTED_INBOUND={'teacher_hr','training_project','course','training_income','course_participants','teacher_course','online_course','school_course'}
 TEACHING_TYPES={'teacher_course':'JW','online_course':'CX'}
 # Data types whose business key is the external_key field.

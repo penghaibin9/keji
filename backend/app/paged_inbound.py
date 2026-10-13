@@ -9,7 +9,7 @@ from sqlalchemy import select
 from fastapi import HTTPException
 from .models import Task, TaskAttempt, utcnow
 from .core import digest
-from .reference_data import InboundBatch, InboundRow, preview_inbound, confirm_inbound, inbound_content_hash, COLLAPSE_TYPES, reconcile_full_pull
+from .reference_data import InboundBatch, InboundRow, batch_facts, preview_inbound, confirm_inbound, inbound_content_hash, COLLAPSE_TYPES, reconcile_full_pull
 from .integrations import transport_kwargs
 from .adapters.contracts import AdapterContractError
 from .integration_diagnostics import diagnostic, safe_code
@@ -217,7 +217,7 @@ def run_counts(db, task, connection):
     if len(set(ids)) != len(ids) or any(not value for value in ids):
         return 0, 0, 0, 'BLOCKED'
     for ident in ids:
-        batch = db.get(InboundBatch, ident)
+        batch = batch_facts(db, ident)
         if (not batch or batch.connection_id != connection.id or batch.data_type != task.payload['data_type']
                 or batch.state != 'COMMITTED' or batch.receipt.get('written') != batch.total
                 or batch.receipt.get('pull_task_id') != task.id):
@@ -227,7 +227,7 @@ def run_counts(db, task, connection):
         return 0, 0, 0, 'BLOCKED'
     current = result.get('batch_id')
     if current and current not in ids:
-        batch = db.get(InboundBatch, current)
+        batch = batch_facts(db, current)
         if not batch or batch.connection_id != connection.id or batch.receipt.get('pull_task_id') != task.id:
             return success, 0, 0, 'BLOCKED'
         failed = batch.errors
