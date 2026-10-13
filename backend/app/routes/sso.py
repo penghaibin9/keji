@@ -184,6 +184,11 @@ def sso_start(request: Request):
 @router.get('/callback')
 def sso_callback(request: Request):
     cfg = request.app.state.settings
+    from .sso_trial import cookie_name, finish_trial
+    trial_state=request.cookies.get(cookie_name(cfg),'')
+    if trial_state and len(trial_state)<=128 and trial_state.isascii() and len(request.query_params)<=30:
+        if any(v.isascii() and hmac.compare_digest(v,trial_state) for v in request.query_params.values()):
+            return finish_trial(request)
     with request.app.state.sessions() as db:
         connection=_connection(db)
         protocol=((connection.config or {}).get('adapter') or {}) if connection else {}

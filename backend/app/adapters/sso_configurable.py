@@ -20,6 +20,7 @@ from .oidc import login_proof, verify_id_token
 
 class ConfigurableSsoAdapter:
     adapter_id = 'yueke.sso.configurable.v2'
+    supports_credentialless_cas = True
     transport_cls = PinnedHttpsTransport
 
     def _cfg(self, config):
@@ -40,7 +41,7 @@ class ConfigurableSsoAdapter:
     def probe(self, *, config, credential, timeout_seconds):
         adapter, protocol = self._cfg(config)
         transport = self.transport_cls(str(config.get('endpoint', '')).strip())
-        credentials = parse_credential(credential)
+        credentials = {} if protocol == 'cas' and not credential else parse_credential(credential)
         probe = adapter.get('probe') or {}
         kind = str(probe.get('kind', '')).strip().lower()
         if kind in {'cas_ticket','authorization_code'}:
@@ -93,7 +94,7 @@ class ConfigurableSsoAdapter:
     def build_login_url(self, *, state, callback_url, config, credential, timeout_seconds):
         adapter, protocol = self._cfg(config)
         transport = self.transport_cls(str(config.get('endpoint', '')).strip())
-        credentials = parse_credential(credential)
+        credentials = {} if protocol == 'cas' and not credential else parse_credential(credential)
         if protocol == 'cas':
             path = str(adapter.get('login_path', '')).strip()
             if not path:
@@ -214,7 +215,7 @@ class ConfigurableSsoAdapter:
     def complete_login(self, *, callback, callback_url, config, credential, timeout_seconds):
         adapter, protocol = self._cfg(config)
         transport = self.transport_cls(str(config.get('endpoint', '')).strip())
-        credentials = parse_credential(credential)
+        credentials = {} if protocol == 'cas' and not credential else parse_credential(credential)
         if protocol == 'cas':
             ticket_name = str(adapter.get('ticket_param', 'ticket'))
             ticket = str((callback or {}).get(ticket_name, '')).strip()

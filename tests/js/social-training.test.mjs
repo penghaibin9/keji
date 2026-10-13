@@ -70,7 +70,7 @@ test('没有开放周期时明确阻止新建申报，有未来周期时提示�
  await assert.rejects(()=>socialAction('social-claim-new','',c),/没有开放的考核周期/);
  c.periods=[{id:'future',name:'未来周期',state:'OPEN',start_date:'2099-01-01',end_date:'2099-12-31'}];
  await socialAction('social-claim-new','',c);
- assert.match(c.modals.at(-1).body,/当前日期不在任何开放周期内/);
+ assert.match(c.modals.at(-1).body,/当前适用周期不能唯一确定/);
 });
 
 test('学校可在口径草稿补校历，生效口径提供显式停用入口',async()=>{

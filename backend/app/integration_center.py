@@ -8,7 +8,7 @@ from types import SimpleNamespace
 from datetime import timedelta
 from sqlalchemy import select
 from .models import Setting, utcnow
-from .integrations import ADAPTERS, ConnectionCheck, configuration_hash, credential_fingerprint, live_connection
+from .integrations import ADAPTERS, ConnectionCheck, configuration_hash, credential_fingerprint, credential_required, live_connection
 from .integration_diagnostics import diagnostic, safe_code
 from .integration_security import credential_summary, acceptance_summary
 
@@ -92,7 +92,7 @@ def identity_policy_complete(value):
 def configuration_issues(item, confirmed_sources=()):
     config, issues = item.config, []
     adapter = config.get('adapter') or {}
-    for key, label in [('endpoint', '正式 HTTPS 总地址'), ('owner', '责任单位'), ('secret_env', '服务器凭据引用')]:
+    for key, label in [('endpoint', '正式安全接口总地址'), ('owner', '责任单位'), ('secret_env', '服务器凭据引用')]:
         if not config.get(key):
             issues.append(label)
     if item.code == 'sso':
@@ -102,7 +102,8 @@ def configuration_issues(item, confirmed_sources=()):
         if protocol not in required:
             issues.append('选择学校实际认证协议')
         else:
-            issues.extend('协议参数：' + key for key in required[protocol] if not adapter.get(key))
+            names={'login_path':'学校登录入口','validate_path':'学校票据校验地址','authorize_path':'授权入口','token_path':'令牌交换地址','userinfo_path':'人员信息地址','issuer':'认证签发方','jwks_path':'签名公钥地址'}
+            issues.extend('协议参数：' + names.get(key,'待核对参数') for key in required[protocol] if not adapter.get(key))
         fields = adapter.get('identity_fields') or {}
         if not fields.get('name') or not any(fields.get(key) for key in ('stable_id', 'staff_no', 'account')):
             issues.append('姓名和稳定身份/工号/账号字段')
@@ -145,7 +146,7 @@ def run_probe(item, *, production, health=False):
             one_time = ((item.config.get('adapter') or {}).get('probe') or {}).get('kind') in {'cas_ticket', 'authorization_code'}
             if health and item.code == 'sso' and one_time:
                 method = getattr(adapter, 'health', None)
-            if not credential:
+            if not credential and credential_required(item):
                 code = 'CREDENTIAL_MISSING'
             elif not callable(method):
                 code = 'PROBE_NOT_IMPLEMENTED'
@@ -162,6 +163,19 @@ def run_probe(item, *, production, health=False):
     receipt.update(passed=passed, adapter_id=str(getattr(adapter, 'adapter_id', '')),
                    _credential_sha256=credential_fingerprint(item))
     return code, receipt
+
+
+def verified_draft_check(db,connection,item,draft):
+    if not draft or draft.value.get('base_version')!=connection.version:return None
+    proof=db.get(ConnectionCheck,draft.value.get('check_id')) if draft.value.get('check_id') else None
+    adapter=ADAPTERS.get(connection.code);fingerprint=credential_fingerprint(item)
+    if (not proof or not proof.passed or proof.mode!='REAL' or proof.expires_at<=utcnow()
+        or proof.configuration_hash!=configuration_hash(item) or proof.receipt.get('_draft_version')!=draft.version
+        or not fingerprint or proof.receipt.get('_credential_sha256')!=fingerprint
+        or not adapter or not ADAPTERS.is_real(connection.code) or not ADAPTERS.endpoint_matches(item)
+        or not ADAPTERS.credential_matches(item) or proof.adapter_id!=getattr(adapter,'adapter_id',None)):
+        return None
+    return proof
 
 
 def workspace(db, connection, settings):
@@ -209,9 +223,13 @@ def workspace(db, connection, settings):
         connection_version=connection.version, configuration_hash=configuration_hash(connection),
         source_gaps=source_gaps, runtime_current=live and health_current and credential_current,
         identity_policy_current=policy_current)
+    publish_check=verified_draft_check(db,connection,item,draft)
     return {'connection_id': connection.id, 'code': connection.code, 'name': connection.name,
+        'can_publish':bool(not issues and publish_check and (connection.code!='sso' or publish_check.receipt.get('layer')=='browser_identity')),
         'connection_version': connection.version, 'draft_version': draft.version if draft else 0,
-        'has_draft': draft is not None, 'issues': issues,
+        'has_draft': draft is not None, 'issues': issues, 'available':live,
+        'endpoint':item.config.get('endpoint',''),
+        'draft_stale':bool(draft and draft.value.get('base_version')!=connection.version),
         'statuses': {'materials': '资料登记齐全' if set(MATERIALS) <= complete else '资料待登记',
             'configuration': '配置校验通过' if not issues else '配置待完善',
             'tests': '真实鉴权已验证' if verified else '待真实测试',
@@ -219,9 +237,10 @@ def workspace(db, connection, settings):
             'health': '最近检查通过' if health_value.get('passed') and health_value.get('mode') == 'REAL' else '最近检查未通过' if health_value else '未检查',
             'acceptance': acceptance['state']},
         'callbacks': {'login': settings.public_origin + '/api/auth/sso/callback',
-                      'test_login': settings.public_origin + '/api/auth/sso/implementation-callback',
+                      'test_login': settings.public_origin + '/api/auth/sso/callback',
                       'logout_return': settings.public_origin + '/', 'readonly': True},
         'credential': {'reference': item.config.get('secret_env', ''),
+                       'required':credential_required(item),
                        'configured': bool(credential_fingerprint(item)), 'values_returned': False,
                        'version': credential_row.version if credential_row else 0,
                        'metadata': serial(credential_value), 'asset_status': credential_info},

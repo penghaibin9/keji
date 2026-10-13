@@ -8,7 +8,7 @@ from ..models import Connection, Setting, utcnow
 from ..schemas import ConnectionUpdate, VersionedReason, Reason, Input
 from ..core import read_operation, command, check_version, serial, audit
 from ..integration_center import (candidate, stored, save_stored, workspace, configuration_issues,
-    run_probe, MATERIALS, confirmed_source_codes, invalidate_acceptance, identity_policy_complete)
+    run_probe, MATERIALS, confirmed_source_codes, invalidate_acceptance, identity_policy_complete, verified_draft_check)
 from ..integration_security import credential_summary, acceptance_requirements, acceptance_summary
 from ..integrations import (ADAPTERS, DATA_CATALOG, ConnectionCheck, configuration_hash,
     credential_fingerprint, normalize_mappings, activate_connection, pause_schedules, live_connection)
@@ -128,6 +128,21 @@ def save_draft(ident: str, data: DraftUpdate, request: Request):
     return command(request, data.model_dump(), 'sync.manage', apply)
 
 
+@router.post('/connections/{ident}/draft/prepare')
+def prepare_draft(ident:str,data:VersionedReason,request:Request):
+    def apply(db,a,s):
+        a.require_admin();obj=connection(db,ident);check_version(obj,data.expected_version)
+        if obj.code!='sso':raise HTTPException(422,'此入口仅用于统一认证试登录')
+        row=stored(db,'draft',ident)
+        if row and row.value.get('base_version')!=obj.version:
+            raise HTTPException(409,'生效配置已更新，原草稿含待核对内容；请到高级设置比较后处理，系统未覆盖任何修改')
+        if row is None:
+            row=save_stored(db,'draft',ident,{'base_version':obj.version,'config':obj.config,'mappings':obj.mappings})
+            audit(db,a,'connections',ident,'从当前配置准备统一认证试登录草稿',{}, {'draft_version':row.version},data.reason)
+        return {'connection_version':obj.version,'draft_version':row.version,'active_unchanged':True}
+    return command(request,data.model_dump(),'sync.manage',apply)
+
+
 @router.post('/connections/{ident}/draft/reset')
 def reset_draft(ident: str, data: DraftAction, request: Request):
     def apply(db, a, s):
@@ -186,22 +201,13 @@ def publish_draft(ident: str, data: DraftAction, request: Request):
     def apply(db, a, s):
         a.require_admin()
         obj, item, row = draft_for_action(db, ident, data)
-        if not data.confirm_schedule_pause:
+        if obj.code!='sso' and not data.confirm_schedule_pause:
             raise HTTPException(422, '请明确确认发布后需重新批准同步计划')
         issues = configuration_issues(item, confirmed_source_codes(db, obj.id))
         if issues:
             raise HTTPException(422, {'message': '配置不完整', 'issues': issues})
-        proof_id = row.value.get('check_id')
-        proof = db.get(ConnectionCheck, proof_id) if proof_id else None
-        adapter = ADAPTERS.get(obj.code)
-        fingerprint = credential_fingerprint(item)
-        if (not proof or not proof.passed or proof.mode != 'REAL' or proof.expires_at <= utcnow()
-                or proof.configuration_hash != configuration_hash(item)
-                or proof.receipt.get('_draft_version') != row.version
-                or not fingerprint or proof.receipt.get('_credential_sha256') != fingerprint
-                or not adapter or not ADAPTERS.is_real(obj.code)
-                or not ADAPTERS.endpoint_matches(item) or not ADAPTERS.credential_matches(item)
-                or proof.adapter_id != getattr(adapter, 'adapter_id', None)):
+        proof=verified_draft_check(db,obj,item,row)
+        if not proof:
             raise HTTPException(409, '缺少当前草稿的有效真实验证；本地测试不能发布')
         if obj.code == 'sso' and proof.receipt.get('layer') != 'browser_identity':
             raise HTTPException(409, '统一认证还需从草稿发起浏览器试登录，核对本地账号和权限范围')
@@ -222,7 +228,7 @@ def publish_draft(ident: str, data: DraftAction, request: Request):
                      'published_at': utcnow().isoformat(), 'reason': data.reason})
         db.delete(row)
         audit(db, a, 'connections', ident, '发布已验证接口草稿', before, serial(obj), data.reason)
-        return {'connection': obj, 'published': True, 'school_accepted': False, 'schedules_need_approval': True}
+        return {'connection': obj, 'published': True, 'school_accepted': False, 'schedules_need_approval': obj.code!='sso'}
     return command(request, data.model_dump(), 'sync.manage', apply)
 
 

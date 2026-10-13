@@ -7,11 +7,12 @@ import os
 import secrets
 import time
 from fastapi import APIRouter, Request, HTTPException
-from fastapi.responses import JSONResponse, RedirectResponse
+from fastapi.responses import JSONResponse, RedirectResponse, HTMLResponse
+from html import escape
 from sqlalchemy import select, delete
 from ..models import Setting, Connection, AuthSession, User, Role, Org, utcnow
 from ..core import command, Actor, audit
-from ..integrations import ADAPTERS, ConnectionCheck, configuration_hash, credential_fingerprint
+from ..integrations import ADAPTERS, ConnectionCheck, configuration_hash, credential_fingerprint, credential_required
 from ..integration_center import candidate, stored, save_stored, configuration_issues
 from ..integration_diagnostics import diagnostic, safe_code
 from ..adapters.contracts import normalize_sso_identity, AdapterContractError
@@ -37,7 +38,7 @@ def adapter_context(item, cfg):
     if cfg.env == 'production' and (not ADAPTERS.is_real('sso') or not ADAPTERS.endpoint_matches(item) or not ADAPTERS.credential_matches(item)):
         raise HTTPException(503, '认证地址或凭据引用不符合部署白名单')
     credential = os.environ.get(item.config.get('secret_env', ''), '')
-    if not credential:
+    if not credential and credential_required(item):
         raise HTTPException(503, '尚未配置服务器凭据')
     return adapter, {'config': item.config, 'credential': credential, 'timeout_seconds': 10}
 
@@ -55,7 +56,7 @@ def start_trial(ident: str, data: DraftAction, request: Request):
             raise HTTPException(422, '请先补齐认证草稿参数')
         adapter, kwargs = adapter_context(item, cfg)
         state = secrets.token_urlsafe(32)
-        callback = cfg.public_origin + '/api/auth/sso/implementation-callback'
+        callback = cfg.public_origin + '/api/auth/sso/callback'
         result = adapter.build_login_url(state=state, callback_url=callback, **kwargs)
         redirect = _safe_redirect_url(result.get('redirect_url'), production=cfg.env == 'production')
         target, approved = urlsplit(redirect), urlsplit(item.config['endpoint'])
@@ -64,7 +65,7 @@ def start_trial(ident: str, data: DraftAction, request: Request):
         db.execute(delete(Setting).where(Setting.key.like('integration.sso_trial:%'),
             Setting.value['expires'].as_integer() <= int(time.time())))
         db.add(Setting(key=trial_key(state), value={'connection_id': ident, 'draft_version': row.version,
-            'configuration_hash': configuration_hash(item), 'actor_id': a.id,
+            'configuration_hash': configuration_hash(item), 'actor_id': a.id, 'callback_url':callback,
             'token_hash': session.token_hash, '_credential_sha256': credential_fingerprint(item),
             'expires': int(time.time())+300}, version=1))
         state_holder['state'] = state
@@ -79,8 +80,10 @@ def start_trial(ident: str, data: DraftAction, request: Request):
     return response
 
 
-def failure_response(cfg, message, status=401):
-    response = JSONResponse({'detail': message, 'session_created': False}, status_code=status)
+def failure_response(cfg, message, status=401, request=None):
+    if request and 'text/html' in request.headers.get('accept',''):
+        response = HTMLResponse('<!doctype html><html lang="zh-CN"><meta charset="utf-8"><meta name="viewport" content="width=device-width"><title>试登录未完成</title><main><h1>试登录未完成</h1><p>'+escape(message)+'</p><p>没有创建业务登录会话，原管理员登录保持不变。</p><a href="/#sso?tab=maintenance">返回统一登录维护页</a></main></html>',status_code=status)
+    else:response=JSONResponse({'detail':message,'session_created':False},status_code=status)
     response.delete_cookie(cookie_name(cfg), path='/', secure=cfg.secure_cookie, httponly=True, samesite='lax')
     return response
 
@@ -90,25 +93,25 @@ def finish_trial(request: Request):
     cfg = request.app.state.settings
     expected = request.cookies.get(cookie_name(cfg), '')
     if not expected or len(expected) > 128 or not expected.isascii():
-        return failure_response(cfg, '试登录请求已失效，请从实施中心重新开始')
+        return failure_response(cfg, '试登录请求已失效，请从实施中心重新开始', request=request)
     with request.app.state.sessions.begin() as db:
         state_row = db.scalar(select(Setting).where(Setting.key == trial_key(expected)).with_for_update())
         if state_row is None:
-            return failure_response(cfg, '试登录请求已使用或不存在')
+            return failure_response(cfg, '试登录请求已使用或不存在', request=request)
         context = dict(state_row.value)
         db.delete(state_row)
         if context.get('expires', 0) <= time.time():
-            return failure_response(cfg, '试登录请求已过期')
+            return failure_response(cfg, '试登录请求已过期', request=request)
         obj = db.get(Connection, context.get('connection_id'))
         if obj is None:
-            return failure_response(cfg, '接口配置不存在', 409)
+            return failure_response(cfg, '接口配置不存在', 409, request=request)
         db.scalar(select(Setting).where(Setting.key == 'integration.draft:'+obj.id)
                   .with_for_update().execution_options(populate_existing=True))
         item, row = candidate(db, obj)
-        if (row is None or row.version != context['draft_version']
+        if (row is None or row.version != context['draft_version'] or row.value.get('base_version') != obj.version
                 or configuration_hash(item) != context['configuration_hash']
                 or credential_fingerprint(item) != context['_credential_sha256']):
-            return failure_response(cfg, '草稿或凭据已变化，请重新试登录', 409)
+            return failure_response(cfg, '生效配置、草稿或凭据已变化，请刷新核对后重新试登录', 409, request=request)
         protocol = item.config.get('adapter') or {}
         state_param = protocol.get('state_param', 'state') if protocol.get('protocol') in {'cas', 'json_ticket'} else 'state'
         params = request.query_params
@@ -116,26 +119,26 @@ def finish_trial(request: Request):
                 or not params.get(state_param, '').isascii()
                 or not hmac.compare_digest(params.get(state_param, ''), expected)
                 or any(len(params.getlist(key)) != 1 or len(value) > 8192 for key, value in params.items())):
-            return failure_response(cfg, '试登录回调校验未通过')
+            return failure_response(cfg, '试登录回调校验未通过', request=request)
         session = db.get(AuthSession, context.get('token_hash'))
         user = db.get(User, context.get('actor_id'))
         if (not session or not user or session.user_id != user.id or not user.active
                 or session.expires_at <= utcnow() or session.auth_version != user.auth_version
                 or session.last_seen < utcnow()-timedelta(minutes=cfg.session_idle_minutes)):
-            return failure_response(cfg, '发起试登录的管理员会话已失效')
+            return failure_response(cfg, '发起试登录的管理员会话已失效', request=request)
         role, org = db.get(Role, user.role_id), db.get(Org, user.org_id)
         if not role or not org:
-            return failure_response(cfg, '管理员组织或角色已失效', 403)
+            return failure_response(cfg, '管理员组织或角色已失效', 403, request=request)
         try:
             a = Actor(db, user, role, org, request)
             a.require_admin()
             a.require('sync.manage')
             adapter, kwargs = adapter_context(item, cfg)
         except HTTPException:
-            return failure_response(cfg, '管理员授权或部署配置已变化', 403)
+            return failure_response(cfg, '管理员授权或部署配置已变化', 403, request=request)
         try:
             identity = normalize_sso_identity(adapter.complete_login(callback=dict(params),
-                callback_url=cfg.public_origin+'/api/auth/sso/implementation-callback', **kwargs))
+                callback_url=context.get('callback_url',cfg.public_origin+'/api/auth/sso/implementation-callback'), **kwargs))
             preview = preview_resolved_identity(db, item.config, identity)
             passed = preview['can_login']
             code = 'VERIFIED' if passed else 'PROBE_REJECTED'
@@ -154,6 +157,6 @@ def finish_trial(request: Request):
         row.value = {**row.value, 'check_id': proof.id}
         audit(db, a, 'connections', obj.id, '完成认证草稿浏览器试登录（未创建业务会话）',
               after={'passed': passed, 'check_id': proof.id, 'mode': mode}, reason='实施人员试登录验证')
-    response = RedirectResponse(cfg.public_origin + '/#sso?tab=implementation&impl_step=tests', status_code=303)
+    response = RedirectResponse(cfg.public_origin + '/#sso?tab=maintenance', status_code=303)
     response.delete_cookie(cookie_name(cfg), path='/', secure=cfg.secure_cookie, httponly=True, samesite='lax')
     return response

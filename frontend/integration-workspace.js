@@ -10,6 +10,13 @@ function statusStrip(w,c){
  return `<div class="implementation-status">${Object.entries(statusNames).map(([key,label])=>`<section><span>${label}</span><strong>${c.esc(w.statuses[key])}</strong></section>`).join('')}</div>`;
 }
 
+export async function renderSsoMaintenance(id,c){
+ const w=await c.api('/connections/'+id+'/implementation'),check=w.check,preview=check?.receipt?.preview,binding=preview?.binding;
+ const ready=w.can_publish===true,live=w.available===true,missing=w.issues||[],status=live?'已开通':ready?'已试通过，待开通':'未开通';
+ const start=`<button type="button" class="btn primary" data-action="impl-quick-trial" data-id="${c.esc(id)}" ${missing.length||w.draft_stale?'disabled':''}>用我的学校账号试一次</button>`;
+ return `<section class="card sso-maintenance"><div class="card-head"><h2>学校统一登录</h2><strong class="${live?'green':'blue'}">${status}</strong></div><div class="card-pad"><p>使用已登记的学校认证资料，先核对账号，再明确开通。</p>${c.table(['核对内容','当前信息'],[['学校认证地址',c.esc(w.endpoint||'尚未登记')],['学校登记回调',c.esc(w.callbacks?.login||'尚未登记')],['账号对应','学校工号对应本系统账号，权限仍以本系统授权为准']])}${missing.length?c.note('认证资料待完善：'+missing.join('、')+'。请由实施人员补齐后再试登录。',true):''}${w.draft_stale?c.note('生效配置已更新，原草稿仍保留。请进入高级设置核对差异，不能直接覆盖。',true):''}${check?c.note(check.mode!=='REAL'?'这是本地测试记录，不能用于正式开通。':check.passed?(ready?'本次试登录通过，可以核对后开通。':live?'已有真实验证记录；当前服务已开通。':'验证已过期或配置已变化，请重新试一次。'):'试登录没有通过：'+(preview?.errors?.join('；')||check.receipt?.diagnostic?.message||'请核对学校返回身份与本地账号。'),!check.passed):''}${binding?c.table(['匹配人员','本地账号','所属组织','办理角色'],[[c.esc(binding.name||'已匹配'),c.esc(binding.account),c.esc(binding.organization),c.esc(binding.role)]]):''}<div class="action-row">${start}${ready?c.act('开通统一登录','impl-quick-publish',id,'primary'):''}${live?c.act('暂停统一登录','impl-quick-disable',id):''}${c.act('刷新状态','integration-tab','maintenance')}</div><details class="implementation-details mt20"><summary>高级设置（实施人员使用）</summary><p>协议、字段对应、待发布修改及学校验收资料在此维护。日常试登录不需要重新填写这些内容。</p>${c.act('查看或调整认证资料','connection',id)}${w.has_draft?c.act('核对生效版与草稿差异','impl-draft-diff',id):''}${c.act('进入完整实施与诊断','integration-tab','implementation')}</details></div></section>`;
+}
+
 export async function renderImplementationWorkspace(id,step,c){
  const w=await c.api('/connections/'+id+'/implementation');
  const stepLabel=(key,label)=>w.code!=='sso'&&key==='credentials'?'凭据与证书':label;
@@ -42,7 +49,7 @@ export async function renderImplementationWorkspace(id,step,c){
   }
  }else if(step==='tests'){
   const check=w.check,preview=check?.receipt?.preview;
-  body=c.note(w.code==='sso'?'先验证连接与身份，再核对浏览器登录和退出。正式发布需真实联调通过。':'先验证连接与鉴权，再核对样本。正式发布需真实联调通过。')+buttons(c.act('测试草稿连通与鉴权','impl-probe',id,'primary'),...(w.code==='sso'?[c.act('浏览器试登录（不切换本地账号）','impl-login-test',id)]:[]),c.act('预览脱敏样本','mapping-trial',id));
+  body=c.note(w.code==='sso'?'先验证连接与身份，再核对浏览器登录和退出。正式发布需真实联调通过。':'先验证连接与鉴权，再核对样本。正式发布需真实联调通过。')+buttons(...(w.has_draft?[c.act('测试草稿连通与鉴权','impl-probe',id,'primary')]:[edit]),...(w.code==='sso'?[c.act('用我的学校账号试一次','impl-quick-trial',id)]:[]),c.act('预览脱敏样本','mapping-trial',id));
   if(check)body+=`<h3 class="mt20">最近一次草稿验证</h3>${c.table(['验证方式','结果','记录时间','发布证明有效至'],[[(check.mode==='REAL'?'真实联调':'本地测试（不可发布）'),check.passed?'本次通过':'本次未通过',c.ts(check.created_at),c.ts(check.expires_at)]])}`+c.note(check.receipt?.diagnostic?.message||check.reason_code,!check.passed);
   if(preview?.binding)body+=c.table(['本地账号','组织','角色','最终数据范围'],[[c.esc(preview.binding.account),c.esc(preview.binding.organization),c.esc(preview.binding.role),c.esc(preview.binding.scope)]]);
   if(preview?.errors?.length)body+=c.note(preview.errors.join('；'),true);
@@ -68,6 +75,27 @@ export async function handleImplementationAction(action,id,c){
  const [connectionId,key]=String(id).split('|');
  if(action==='impl-handover'){await c.download('/connections/'+connectionId+'/handover.zip');return;}
  const w=await c.api('/connections/'+connectionId+'/implementation');
+ if(action==='impl-draft-diff'){
+  const [catalog,draft]=await Promise.all([c.api('/connections/catalog'),c.api('/connections/'+connectionId+'/draft')]);
+  const active=catalog.items.find(x=>x.connection.id===connectionId)?.connection;if(!active)throw Error('接口不存在');
+  const pending=draft.connection,rows=[['接口地址',active.config?.endpoint,pending.config?.endpoint],['责任单位',active.config?.owner,pending.config?.owner],['字段对应数量',(active.mappings||[]).length,(pending.mappings||[]).length]].map(row=>row.map(x=>c.esc(x??'尚未登记')));
+  const configChanged=JSON.stringify(active.config?.adapter||{})!==JSON.stringify(pending.config?.adapter||{}),mappingChanged=JSON.stringify(active.mappings||[])!==JSON.stringify(pending.mappings||[]);
+  return c.modal('核对待发布修改',c.note('这里只读比较，不会覆盖、发布或重建草稿。')+c.table(['项目','当前生效资料','待发布草稿'],rows)+c.note('协议参数：'+(configChanged?'有变更':'一致')+'；字段对应：'+(mappingChanged?'有变更':'一致'))+`<details class="implementation-details"><summary>实施人员使用：完整差异资料</summary><pre>${c.esc(JSON.stringify({生效参数:active.config?.adapter||{},草稿参数:pending.config?.adapter||{},生效字段:active.mappings||[],草稿字段:pending.mappings||[]},null,2))}</pre></details>`,c.act('关闭','close'),true);
+ }
+ if(action==='impl-quick-trial'){
+  if(w.issues?.length)throw Error('请先补齐：'+w.issues.join('、'));
+  try{const prepared=await c.api('/connections/'+connectionId+'/draft/prepare',{method:'POST',body:{expected_version:w.connection_version,reason:'管理员准备学校统一认证试登录'}});
+   const result=await c.api('/connections/'+connectionId+'/draft/login-test',{method:'POST',body:{expected_version:prepared.connection_version,draft_version:prepared.draft_version,reason:'管理员本人试登录学校统一认证'}});
+   if(result.redirect_url)location.assign(result.redirect_url);
+  }catch(err){if(err.status!==409)throw err;await c.render();c.toast('已重新读取最新状态，请核对后再操作；原草稿未被覆盖。'+err.message,true)}return;
+ }
+ if(action==='impl-quick-publish'||action==='impl-quick-disable'){
+  const publish=action==='impl-quick-publish',title=publish?'开通统一登录':'暂停统一登录';
+  return c.formModal(title,c.note(publish?'开通后，老师可以在登录页使用学校统一认证。':'暂停后，学校统一认证入口将不可用，本地账号密码登录保留。',!publish),async()=>{
+   try{await c.api('/connections/'+connectionId+(publish?'/draft/publish':'/disconnect'),{method:'POST',body:{expected_version:w.connection_version,...(publish?{draft_version:w.draft_version}:{}),reason:'管理员'+title}})}catch(err){if(err.status!==409)throw err;c.closeModal();await c.render();c.toast('状态已变化并重新读取，请重新核对；系统没有自动重试开通或暂停。'+err.message,true);return;}
+   c.closeModal();await c.render();c.toast(publish?'统一登录已开通':'统一登录已暂停，本地账号登录保留');
+  },{submit:'确认'+title});
+ }
  if(action==='impl-copy'){
   const value=w.callbacks[key];if(typeof value!=='string')throw Error('回调用途无效');
   if(navigator.clipboard){await navigator.clipboard.writeText(value);c.toast('已复制服务器生成的地址');}
@@ -121,7 +149,7 @@ export async function handleImplementationAction(action,id,c){
  if(!names[action])throw Error('未知实施操作');
  if(action!=='impl-health'&&!w.has_draft)throw Error('请先在协议与环境中编辑并保存一份草稿');
  let fields=c.reasonFields();
- if(action==='impl-publish')fields=c.note('只有当前版本的真实验证可发布。发布会暂停旧同步计划；业务历史和学校验收状态不会改变。',true)+c.field('confirm_schedule_pause','发布影响确认','checkbox',false,{required:false,full:true,checkLabel:'我已核对草稿，并确认发布后重新批准同步计划'})+fields;
+ if(action==='impl-publish')fields=c.note(w.code==='sso'?'开通后，老师可以使用学校统一认证登录。':'只有当前版本的真实验证可发布。发布会暂停旧同步计划；业务历史和学校验收状态不会改变。',true)+(w.code==='sso'?'':c.field('confirm_schedule_pause','发布影响确认','checkbox',false,{required:false,full:true,checkLabel:'我已核对草稿，并确认发布后重新批准同步计划'}))+fields;
  c.formModal(names[action],fields,async v=>{
   const body={expected_version:w.connection_version,reason:v.reason,basis:v.basis};
   const part={'impl-probe':'probe','impl-publish':'publish','impl-reset':'reset','impl-login-test':'login-test'}[action];
@@ -131,7 +159,7 @@ export async function handleImplementationAction(action,id,c){
   c.closeModal();
   if(result.redirect_url){location.assign(result.redirect_url);return;}
   await c.render();
-  if(action==='impl-publish')c.toast('已发布；请重新批准同步计划，学校验收仍待签认');
+  if(action==='impl-publish')c.toast(w.code==='sso'?'统一登录已开通，学校验收记录另行核对':'已发布；请重新批准同步计划，学校验收仍待签认');
   else c.toast(result.check?.passed===false?'本次检查未通过，请查看验证结果':'操作结果已记录，当前状态以页面分项结果为准',result.check?.passed===false);
  },{wide:true,submit:names[action]});
 }

@@ -126,7 +126,7 @@ def test_official_callbacks_are_server_generated_and_health_is_non_destructive(c
     action = make_draft(client2, ident)
     w = client2.get('/api/connections/'+ident+'/implementation').json()
     assert w['callbacks']['login'] == 'http://testserver/api/auth/sso/callback'
-    assert w['callbacks']['test_login'] == 'http://testserver/api/auth/sso/implementation-callback'
+    assert w['callbacks']['test_login'] == w['callbacks']['login']
     assert w['statuses']['acceptance'] == '待学校签认'
     response = post(client2, '/api/connections/'+ident+'/health', {**REASON, 'expected_version': action['expected_version']})
     assert response.status_code == 200, response.text

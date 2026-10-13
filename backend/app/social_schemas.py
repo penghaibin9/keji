@@ -172,6 +172,10 @@ class PolicyIn(Reason):
     data: PolicyData
 
 
+class PolicyUpdate(PolicyIn):
+    expected_version: int = Field(ge=1)
+
+
 class RecommendedPolicyIn(Reason):
     period_id: Ident
 

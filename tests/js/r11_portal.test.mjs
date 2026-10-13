@@ -71,6 +71,65 @@ function engine(responder=async()=>({items:[],total:0,page:1,size:20}), role='sc
  return {t:ctx.T,ctx,requests,node};
 }
 const types=[{data_type:'teacher_hr',name:'教师人事信息',local_status:'AVAILABLE',mapping_count:0},{data_type:'training_income',name:'培训收入',local_status:'AVAILABLE',mapping_count:0}];
+
+test('接口保存保留学校专用认证和未显示的凭据绑定',()=>{
+ const e=engine(),build=vm.runInContext('buildRestAuth',e.ctx),options=vm.runInContext('restAuthOptions()',e.ctx);
+ assert.ok(options.some(([v])=>v==='datahub_access_token'));
+ for(const current of [{mode:'datahub_access_token',token_in:'body',token_path:'/school/token',token_field:'accessToken'},
+  {mode:'basic',username_key:'school_user',password_key:'school_pass'},
+  {mode:'bearer',header:'X-School-Token',prefix:'Token ',credential_key:'school_token'}]){
+  assert.deepEqual(JSON.parse(JSON.stringify(build({probe_auth_mode:current.mode},'probe',current))),current);
+ }
+ const h=build({rule_auth_mode:'signature',rule_scope:''},'rule',{mode:'signature',secret_key:'school_secret',app_id_key:'school_app',separator:'',extra:'kept'});
+ assert.equal(h.separator,'');assert.equal(h.secret_key,'school_secret');assert.equal(h.extra,'kept');
+ assert.deepEqual(JSON.parse(JSON.stringify(build({probe_auth_mode:'none'},'probe',{mode:'basic',username_key:'old'}))),{mode:'none'});
+});
+
+test('允许值明确清空与未修改分开处理，保留零及布尔类型',()=>{
+ const parse=vm.runInContext('parseBusinessValues',engine().ctx);
+ assert.deepEqual(JSON.parse(JSON.stringify(parse('',[1]))),[]);
+ assert.deepEqual(JSON.parse(JSON.stringify(parse(undefined,[0]))),[0]);
+ assert.deepEqual(JSON.parse(JSON.stringify(parse('0，false'))),[0,'0',false,'false']);
+});
+
+test('表单只更新实际变更，未知参数和原分页位置原样保留',()=>{
+ const merge=vm.runInContext('mergeFormChanges',engine().ctx);
+ const original={owner:'原负责人',adapter:{request:{auth:{mode:'datahub_access_token',token_in:'body'},body:{size:'${limit}'},headers:{'X-School':'fixed'}}},optional:0};
+ const before={owner:'原负责人',adapter:{request:{auth:{mode:'none'},query:{limit:'${limit}'},body:{},headers:{'X-School':'fixed'}}},optional:0};
+ const after={...before,owner:'新负责人'};
+ assert.deepEqual(JSON.parse(JSON.stringify(merge(original,before,after))),{...original,owner:'新负责人'});
+ assert.deepEqual(JSON.parse(JSON.stringify(merge({values:[0]}, {values:[0,'0']},{values:[]}))),{values:[]});
+});
+
+test('首次保存保留部署凭据引用，未修改已有引用时不重置',async()=>{
+ const own={items:catalog.items.map(item=>({...item,connection:{...item.connection,config:{},mappings:[]}}))};
+ const e=engine(url=>url.startsWith('/api/connections/catalog')?own:responder(url));e.t.captureForm();vm.runInContext('saved=async()=>{}',e.ctx);
+ await e.t.connectionForm('c-middle');const initial={owner:'',endpoint:'',adapter:'{}',mappings:'[]',reason:'维护资料',basis:''};
+ await e.t.getForm().callback({...initial,owner:'学校负责人'},{_initialValues:initial});
+ const write=e.requests.find(r=>r.url==='/api/connections/c-middle/draft'&&r.options.method==='PUT');
+ assert.equal(JSON.parse(write.options.body).config.secret_env,'ND_MIDDLE_SECRET');
+});
+
+test('同步摘要读取失败明确显示未知，不伪装成从未同步',async()=>{
+ const e=engine(url=>{if(url.startsWith('/api/connections/summary')||url.startsWith('/api/reference/source-status'))throw Error('offline');return integrationResponder(url)});
+ e.t.setState('sync');const html=await e.t.pages.sync();
+ assert.match(html,/读取失败，请刷新重试/);assert.match(html,/未将未知数量当作零/);assert.doesNotMatch(html,/还没同步过/);
+});
+
+test('分步表单阻止缺项、定位错误并允许返回保留字段',()=>{
+ const e=engine(),inputs=[true,false,true].map((valid,i)=>({willValidate:true,valid,labels:[{textContent:'字段'+i}],checkValidity(){return this.valid},reportValidity(){this.reported=true}}));
+ const groups=inputs.map((input,i)=>({hidden:false,querySelector:()=>({textContent:'分组'+i}),querySelectorAll:()=>[input],contains:el=>el===input}));
+ const form={querySelectorAll:s=>s.includes('.social-fieldset')?groups:inputs,prepend(){}};
+ const buttons=groups.map(()=>({classList:{toggle(){}},setAttribute(){}}));
+ e.ctx.document.createElement=()=>({dataset:{},setAttribute(){},addEventListener(){},querySelectorAll:()=>buttons});
+ const submit={};e.ctx.document.querySelectorAll=()=>[submit];e.node('#modal-root .modal-foot').prepend=()=>{};
+ const flow=vm.runInContext('bindFormSteps',e.ctx)(form,'保存',false);
+ assert.deepEqual(groups.map(g=>g.hidden),[false,true,true]);
+ assert.equal(flow.submit(),false);assert.deepEqual(groups.map(g=>g.hidden),[true,false,true]);
+ assert.equal(flow.submit(),false);assert.ok(inputs[1].reported);assert.match(e.node('#form-error').innerHTML,/字段1/);
+ inputs[1].valid=true;assert.equal(flow.submit(),false);assert.equal(flow.submit(),true);
+ flow.reveal(inputs[0]);assert.equal(groups[0].hidden,false);assert.equal(inputs[1].valid,true);
+});
 test('页面和辅助说明按需展开，阻断提醒始终直接显示且转义内容',()=>{
  const e=engine();e.t.setState('records');
  const header=vm.runInContext('pageHead',e.ctx)('业务<说明>','<button>新增</button>');
@@ -281,7 +340,7 @@ test('network failure has no fixture fallback',async()=>{
 });
 test('live connection form does not invent mappings or force a default auth protocol',async()=>{
  const e=engine(responder);e.t.captureForm();await e.t.connectionForm('c-middle');const form=e.t.getForm(),visible=customerVisible(form.body);
- for(const label of ['学校基本资料','学校公开标识','连接检查','服务器交接','正式接口总地址','服务器凭据固定引用','等待学校确认'])assert.match(visible,new RegExp(label));
+ for(const label of ['学校基本资料','学校公开标识','连接检查','服务器安全交接','正式接口总地址','服务器凭据固定引用','等待学校确认'])assert.match(visible,new RegExp(label));
  assert.doesNotMatch(visible,/\[\]|teacher_no|SAMPLE-001|external_subject|X-Api-Key|X-Timestamp|X-Nonce|X-Signature/);
  assert.match(form.body,/name="secret_env"[^>]*readonly/);
 });

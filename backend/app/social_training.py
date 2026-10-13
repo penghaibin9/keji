@@ -98,7 +98,6 @@ def check_project_conflicts(db, actor, project):
 
 def review_staff_blockers(db,obj):
     """发送前按实际授权及回避规则确认后续每个环节有人可办。"""
-    from .core import Actor
     project=db.get(SocialProject,db.get(SocialClaim,obj.data['claim_id']).project_id)
     blocked=[]
     for code in ('dean','coordinator','vice_president','secretary'):
@@ -106,16 +105,41 @@ def review_staff_blockers(db,obj):
         for ident in assignments(db).get(code,[]):
             if ident in {obj.data['created_by'],obj.data['teacher_id']}:continue
             user=db.get(User,ident)
-            role=db.get(Role,user.role_id) if user else None
-            org=db.get(Org,user.org_id) if user else None
-            if not user or not role or not org or not org.active:continue
-            try:
-                actor=Actor(db,user,role,org);actor.require('points.read');actor.check_teacher(db,obj.data['teacher_id'])
-                duty(db,actor,code,obj.data['teacher_id'],obj.org_id);check_project_conflicts(db,actor,project)
-            except HTTPException:continue
-            available=True;break
+            for actor in active_identities(db,user):
+                try:
+                    actor.require('points.read');actor.check_teacher(db,obj.data['teacher_id'])
+                    duty(db,actor,code,obj.data['teacher_id'],obj.org_id);check_project_conflicts(db,actor,project)
+                except HTTPException:continue
+                available=True;break
+            if available:break
         if not available:blocked.append(DUTIES[code]+'环节没有具备权限且无需回避的办理人，请学校管理员在社会培训职责设置中配置替代人员')
     return blocked
+
+
+def active_identities(db,user):
+    from .identities import extras_for, identity_actor
+    if not user:return
+    for ident in ['',*[x['id'] for x in extras_for(db,user.id)]]:
+        try:
+            actor=identity_actor(db,user,ident)
+            if actor.org.active:yield actor
+        except HTTPException:continue
+
+
+def duty_eligible(db,user,admin,code):
+    school=code in {'vice_president','coordinator','committee','finance','academic','discipline'}
+    return any(a.org.id in admin.org_ids and 'assessment.review' in a.permissions
+               and (not school or a.role.kind=='school') for a in active_identities(db,user))
+
+
+def annual_achievements(db,org_id,period):
+    rows=db.scalars(select(SocialResource).where(SocialResource.kind=='achievement',SocialResource.org_id==org_id).order_by(SocialResource.code))
+    result=[]
+    for r in rows:
+        confirmed=achievement_date(db,r)
+        if r.data.get('source')=='satisfaction' or not confirmed or not period.start_date<=confirmed<=period.end_date:continue
+        result.append({'reference':r.code,'name':r.name,'level':r.data['level'],'confirmed_on':confirmed.isoformat(),'recognition_reference':r.data.get('recognition','')})
+    return result
 
 
 def check_annual_conflicts(db, actor, annual):

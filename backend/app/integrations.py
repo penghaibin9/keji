@@ -290,7 +290,7 @@ def probe_connection(db,actor,connection,registry=ADAPTERS,*,production=False):
         elif not callable(getattr(adapter,'probe',None)):code='PROBE_NOT_IMPLEMENTED'
         else:
             secret_name=(connection.config or {}).get('secret_env','');credential=os.environ.get(secret_name,'')
-            if not credential:code='CREDENTIAL_MISSING'
+            if not credential and credential_required(connection,registry):code='CREDENTIAL_MISSING'
             else:
                 try:
                     # The adapter is responsible for TLS verification, pinned DNS/redirect policy,
@@ -335,17 +335,24 @@ def activate_connection(db,actor,connection,check_id,registry=ADAPTERS):
     # Schedules stay disabled until an administrator explicitly approves them again.
     return connection
 
+def credential_required(connection,registry=ADAPTERS):
+    adapter=registry.get(connection.code)
+    return not (connection.code=='sso' and ((connection.config or {}).get('adapter') or {}).get('protocol')=='cas'
+                and getattr(adapter,'supports_credentialless_cas',False) is True)
+
+
 def credential_fingerprint(connection):
     from hashlib import sha256
     value=os.environ.get((connection.config or {}).get('secret_env',''),'')
-    return sha256(value.encode()).hexdigest() if value else None
+    if value:return sha256(value.encode()).hexdigest()
+    return sha256(b'credentialless-cas-v1').hexdigest() if not credential_required(connection) else None
 
 def transport_kwargs(connection,registry):
     """Explicit per-call context for deployment adapters; test doubles remain isolated."""
     if not registry.production:return {}
     if not registry.credential_matches(connection):raise RuntimeError('CREDENTIAL_REFERENCE_NOT_PINNED')
     secret=os.environ.get((connection.config or {}).get('secret_env',''),'')
-    if not secret:raise RuntimeError('CREDENTIAL_MISSING')
+    if not secret and credential_required(connection,registry):raise RuntimeError('CREDENTIAL_MISSING')
     if not registry.endpoint_matches(connection):raise RuntimeError('ENDPOINT_NOT_PINNED')
     return {'config':dict(connection.config or {}),'credential':secret,'timeout_seconds':10}
 

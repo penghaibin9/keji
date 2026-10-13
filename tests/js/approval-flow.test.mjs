@@ -125,11 +125,11 @@ function socialContext({me='teacher',duties=[],claim,handler,next=''}){
  const c={esc,me:{user:{id:me,staff_no:'J1'},role:{kind:me==='teacher'?'teacher':'college'}},can:p=>['file.write','points.read','records.read'].includes(p),periods:[{id:'y2026',name:'2026年度',state:'OPEN',start_date:'2026-01-01',end_date:'2026-12-31'}],teachers:[],orgs:[],
   icon:()=>'',note:(t,w)=>'<p class="note'+(w?' warn':'')+'">'+esc(t)+'</p>',table:()=>'<table></table>',act:(label,action,id='')=>'<button data-action="'+action+'" data-id="'+esc(id)+'">'+esc(label)+'</button>',
   teacherName:id=>'教师'+id,periodName:id=>id,orgName:id=>id,downloads:list=>'<ul>'+(list||[]).map(a=>'<li>'+esc(a.name)+'</li>').join('')+'</ul>',eventsHtml:()=>'',
-  field:(name,label,type,value,o={})=>'<label>'+esc(label)+'<input name="'+name+'" value="'+esc(value)+'">'+(o.checkLabel?esc(o.checkLabel):'')+'</label>',
+  field:(name,label,type,value,o={})=>'<label>'+esc(label)+(type==='select'?'<select name="'+name+'">'+(o.options||[]).map(([key,text])=>'<option value="'+esc(key)+'" '+(String(key)===String(value)?'selected':'')+'>'+esc(text)+'</option>').join('')+'</select>':'<input name="'+name+'" value="'+esc(value)+'">')+(o.checkLabel?esc(o.checkLabel):'')+'</label>',
   modal:(title,body,foot)=>{state.modal={title,body,foot}},formModal:(title,body,save,options)=>{state.form={title,body,save,options}},closeModal:()=>{},render:async()=>{state.renders++},
   toast:(m,e)=>state.toasts.push([m,!!e]),queueNext:code=>next&&code!==next?next:'',openNext:async code=>{state.opened.push(code)},
   api:async(url,options)=>{if(url.startsWith('/social/workspace'))return workspace;if(options){state.posts.push({url,options});return handler(url,options,state)}return {item:claim(),state_label:'退回补正',attachments:state.attachments||[{id:'old',name:'原认定表.pdf'}],events:[{action:'积分认定：退回补正',reason:'辅助积分日期写错'}],trial:{teaching:'6',auxiliary:'1',total:'7',blockers:[]}}}};
- return {c,state};
+ return {c,state,workspace};
 }
 const returned=(extra={})=>({id:'c1',teacher_id:'teacher',project_id:'p1',period_id:'y2026',policy_id:'pol',state:'RETURNED',version:3,data:{recognition_form_reference:'原认定表',auxiliary:[]},...extra});
 const formOf=files=>({querySelector:sel=>sel==='#f-file'?{files}:null,querySelectorAll:()=>[]});
@@ -139,7 +139,7 @@ test('补正一次办完：集中显示退回原因和已有材料，保存补�
  let version=3;const {c,state}=socialContext({claim:()=>returned({version}),handler:(url,o)=>{if(o.method==='PUT'){version=4;return {item:returned({version:4})}}if(url.startsWith('/attachments/')){version++;return {}}return {}}});
  await socialAction('social-detail','social_claim|c1',c);await socialAction('social-claim-edit','',c);
  assert.match(state.form.body,/退回意见：辅助积分日期写错/);assert.match(state.form.body,/原认定表\.pdf/);assert.match(state.form.body,/multiple/);
- assert.equal(state.form.options.submit,'保存补正并重新提交');assert.match(state.form.body,/2026年度/);assert.doesNotMatch(state.form.body,/请选择认定周期/);
+ assert.equal(state.form.options.submit,'保存补正并重新提交');assert.match(state.form.body,/2026年度/);assert.match(state.form.body,/<select name="period_id">/);assert.match(state.form.body,/value="y2026" selected/);
  await state.form.save(values,formOf([file('补正1.pdf'),file('补正2.png')]));
  assert.deepEqual(state.posts.map(p=>[p.options.method,p.url,p.options.body?.expected_version??Number(p.options.body.get?.('expected_version'))]),[['PUT','/social/claims/c1',3],['POST','/attachments/social_claim/c1',4],['POST','/attachments/social_claim/c1',5],['POST','/social/claims/c1/actions',6]]);
  assert.equal(state.posts.at(-1).options.body.action,'submit');assert.deepEqual(state.toasts,[['补正已保存并重新提交审批',false]]);
@@ -189,4 +189,79 @@ test('本人申报不出现办理区；退回、作废等意见不预填，须�
  const other=socialContext({me:'dean',duties:['dean'],claim:()=>returned({teacher_id:'t9',state:'SUBMITTED'}),handler:()=>({})});
  await socialAction('social-detail','social_claim|c1',other.c);await socialAction('social-transition','return',other.c);
  assert.equal(other.state.form.options.reasonDefault,'');assert.match(other.state.form.options.reasonLabel,/退回原因/);
+});
+
+test('制度草稿继续填写和复制都保留零、否以及原校历，复制不覆盖旧版本',async()=>{
+ const policy={id:'policy-preserve',name:'学校已填口径',period_id:'y2026',state:'DRAFT',version:9,data:{title_precision:0,satisfaction_inclusive:false,total_cap:0,grade_mode:'four',excellent_from:90,holidays:['2026-10-01'],workdays:[],calendar_reference:'校历通知'}};
+ const {c,state}=socialContext({me:'policy-preserve',claim:()=>policy,handler:()=>({})});
+ await socialAction('social-detail','social_policy|policy-preserve',c);
+ for(const action of ['social-policy-edit','social-policy-copy']){
+  await socialAction(action,'',c);
+  assert.match(state.form.body,/value="0" selected/);
+  assert.match(state.form.body,/value="false" selected/);
+  assert.match(state.form.body,/value="2026-10-01"/);
+  assert.equal(state.form.options.partialDraft,true);
+  await state.form.save({name:'保存口径',period_id:'y2026',title_precision:'0',satisfaction_inclusive:'false',total_cap:0,excellent_from:90,holidays:'2026-10-01',workdays:'',reason:'保留原值',basis:''});
+  const {url,options}=state.posts.at(-1);
+  assert.equal(url,action.endsWith('edit')?'/social/policies/policy-preserve':'/social/policies');
+  assert.equal(options.method,action.endsWith('edit')?'PUT':'POST');
+  assert.equal(options.body.data.title_precision,0);assert.equal(options.body.data.satisfaction_inclusive,false);
+  assert.equal(options.body.data.total_cap,0);assert.equal(options.body.data.excellent_from,90);
+  assert.deepEqual(options.body.data.holidays,['2026-10-01']);
+  assert.equal(options.body.expected_version,action.endsWith('edit')?9:undefined);
+ }
+});
+
+test('打开表单刷新周期，空周期明确拦截，重叠周期不擅自选择',async()=>{
+ const {c,state}=socialContext({me:'period-refresh',claim:()=>returned(),handler:()=>({})});
+ let calls=0;c.refreshPeriods=async()=>{calls++;return []};
+ await assert.rejects(socialAction('social-policy-new','',c),/没有开放的考核周期/);
+ assert.equal(calls,1);assert.equal(state.form,null);
+ c.refreshPeriods=async()=>{calls++;return ['a','b'].map(id=>({id,name:'周期'+id,state:'OPEN',start_date:'2000-01-01',end_date:'2200-12-31'}))};
+ await socialAction('social-policy-new','',c);
+ assert.match(state.form.body,/<option value="" selected>请选择适用年度或学年/);
+ await socialAction('social-annual-new','',c);
+ assert.match(state.form.body,/当前适用周期不能唯一确定/);
+ assert.match(state.form.body,/<option value="" selected>请选择认定周期/);
+ assert.equal(calls,3);
+});
+
+test('年度新建和补正不把前端成果分页当作完整成果清单回传',async()=>{
+ const annual={id:'annual-preserve',org_id:'college',period_id:'y2026',policy_id:'pol',state:'RETURNED',version:7,data:{self_report:'原自评',achievements:['old-hidden-item']}};
+ const {c,state,workspace}=socialContext({me:'annual-preserve',claim:()=>annual,handler:()=>({})});
+ workspace.resources=Array.from({length:200},(_,i)=>({id:'partial-'+i,kind:'achievement',org_id:'college',state:'APPROVED',data:{}}));
+ await socialAction('social-annual-new','',c);
+ await state.form.save({org_id:'college',period_id:'y2026',policy_id:'pol',self_report:'新自评',reason:'登记',basis:''});
+ assert.equal(Object.hasOwn(state.posts.at(-1).options.body.data,'achievements'),false);
+ await socialAction('social-detail','social_annual|annual-preserve',c);
+ await socialAction('social-annual-edit','',c);
+ await state.form.save({period_id:'y2026',policy_id:'pol',self_report:'只改文字',reason:'补正',basis:''});
+ const payload=state.posts.at(-1).options.body;
+ assert.equal(Object.hasOwn(payload.data,'achievements'),false);assert.equal(payload.expected_version,7);
+});
+
+test('职责配置保存完整原办理人，不依赖人员列表第一页',async()=>{
+ const {c,state}=socialContext({me:'duties-preserve',claim:()=>returned(),handler:()=>({})}),api=c.api;
+ const assignments={dean:['first','beyond-200'],finance:['other-college']};
+ c.api=async(url,options)=>url==='/social/duties'&&!options?{version:11,labels:{dean:'院长审核',finance:'财务审核'},assignments,people:[{id:'beyond-200',name:'后页办理人'}]}:api(url,options);
+ await socialAction('social-duties','',c);
+ assert.ok(state.form,'应打开职责配置表单');
+ await state.form.save({reason:'核对原配置',basis:''});
+ assert.deepEqual(state.posts.at(-1).options.body.assignments,assignments);
+ assert.equal(state.posts.at(-1).options.body.expected_version,11);
+});
+
+test('结项整改条件放在结项情况内，不创建隐藏后的空整改步骤',async()=>{
+ const project={id:'close-steps',state:'FILED',version:3,closeout:{},data:{name:'结项验证项目',category:'other',code:'TEST-CLOSE'}};
+ const {c,state}=socialContext({me:'close-steps',claim:()=>project,handler:()=>({})}),api=c.api;
+ c.api=async(url,options)=>url==='/social/objects/social_project/close-steps'&&!options?{item:project,facts:{units:[],followups:[],effective:0,excluded:0},attachments:[],events:[]}:api(url,options);
+ await socialAction('social-detail','social_project|close-steps',c);
+ await socialAction('social-close','',c);
+ const first=state.form.body.match(/<fieldset class="social-fieldset">([\s\S]*?)<\/fieldset>/)?.[1];
+ assert.ok(first,'应存在结项情况分组');
+ assert.match(first,/<legend>一、结项情况<\/legend>/);
+ assert.match(first,/id="cond-rect"/);
+ assert.match(first,/name="rectification"/);assert.match(first,/name="rectification_due"/);
+ assert.doesNotMatch(state.form.body,/<legend>整改/);
+ assert.equal((state.form.body.match(/class="social-fieldset"/g)||[]).length,4,'普通结项为三个业务分组加办理说明');
 });

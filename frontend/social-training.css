@@ -369,3 +369,12 @@
 .batch-actions{display:flex;flex-wrap:wrap;gap:8px}
 .field-summary{margin:4px 0 0;padding:8px 10px;border:1px dashed var(--line);border-radius:6px;color:var(--ink)}
 @media(max-width:620px){.social-handle-actions .btn,.batch-actions .btn{flex:1;justify-content:center;min-height:44px}.upload-status li{flex-direction:column;gap:2px}.upload-status li b{max-width:none;text-align:left}}
+/* 同类长表单共用步骤与人员选择，不改变原业务字段。 */
+.social-fieldset[hidden],.integration-form-section[hidden]{display:none!important}
+.social-form .form-field[hidden]{display:none!important}
+.form-step-nav{display:flex;flex-wrap:wrap;gap:8px;margin:0 0 16px}
+.form-step-nav .btn{white-space:normal;text-align:left}
+.duty-person{display:flex;gap:10px;align-items:flex-start;padding:12px 0;border-bottom:1px solid var(--border,#e2e8f0)}
+.duty-person input{width:18px;height:18px;flex:0 0 18px;margin-top:4px}
+.duty-person small{display:block;color:var(--muted,#526985)}
+@media(max-width:600px){.form-step-nav .btn{flex:1 1 42%}.modal-foot{flex-wrap:wrap}.modal-foot .btn{min-height:42px}}

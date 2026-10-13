@@ -8,7 +8,7 @@ from ..core import command, read_operation, serial, audit, workflow, check_versi
 from ..models import Org, User, Role, Setting, Period, PointEntry, Notice, WorkflowEvent
 from ..reference_data import TrainingProjectMaster, TrainingCourseMaster, TrainingClassMaster
 from ..social_models import SocialProject, SocialUnit, SocialPolicy, SocialClaim, SocialAnnual, SocialResource
-from ..social_schemas import ProjectIn, UnitsIn, SocialAction, PolicyIn, RecommendedPolicyIn, PolicyCalendarIn, PolicyData, ClaimIn, AnnualIn, ResourceIn, ResourceUpdate, DutiesIn, CourseIn, CourseBatchIn, CaseNoteIn, CorrectionIn, ReportIn, PointReviewIn
+from ..social_schemas import ProjectIn, UnitsIn, SocialAction, PolicyIn, PolicyUpdate, RecommendedPolicyIn, PolicyCalendarIn, PolicyData, ClaimIn, AnnualIn, ResourceIn, ResourceUpdate, DutiesIn, CourseIn, CourseBatchIn, CaseNoteIn, CorrectionIn, ReportIn, PointReviewIn
 from .. import social_training as st
 
 router=APIRouter(prefix='/api/social',tags=['社会培训项目与制度'])
@@ -112,7 +112,28 @@ def course_resources(code:str,request:Request,page:int=Query(1,ge=1)):
 def duties(request:Request):
     def load(db,a,s):
         a.require_admin();setting=db.get(Setting,'social_training_duties')
-        return {'assignments':st.assignments(db),'version':setting.version if setting else 0,'labels':st.DUTIES}
+        assignments=st.assignments(db)
+        people=[]
+        for ident in {i for ids in assignments.values() for i in ids}:
+            user=db.get(User,ident)
+            people.append({'id':ident,'name':user.name if user else '原账号已不存在','username':user.username if user else '',
+                           'staff_no':user.staff_no if user else '', 'org_name':db.get(Org,user.org_id).name if user and db.get(Org,user.org_id) else ''})
+        return {'assignments':assignments,'version':setting.version if setting else 0,'labels':st.DUTIES,'people':people}
+    return read_operation(request,'roles.manage',load)
+
+
+@router.get('/duty-options')
+def duty_options(request:Request,duty:str,q:str=Query('',max_length=100),page:int=Query(1,ge=1)):
+    def load(db,a,s):
+        a.require_admin()
+        if duty not in st.DUTIES:raise HTTPException(422,'审批职责不存在')
+        query=select(User).where(User.org_id.in_(a.org_ids))
+        if q:query=query.where(or_(User.name.contains(q,autoescape=True),User.username.contains(q,autoescape=True),User.staff_no.contains(q,autoescape=True)))
+        total=db.scalar(select(func.count()).select_from(query.subquery()))
+        rows=db.scalars(query.order_by(User.name,User.id).offset((page-1)*25).limit(25)).all()
+        return {'items':[{'id':u.id,'name':u.name,'username':u.username,'staff_no':u.staff_no,
+                          'org_name':db.get(Org,u.org_id).name,'eligible':st.duty_eligible(db,u,a,duty)} for u in rows],
+                'total':total,'page':page,'size':25}
     return read_operation(request,'roles.manage',load)
 
 
@@ -123,9 +144,8 @@ def set_duties(data:DutiesIn,request:Request):
         if (setting.version if setting else 0)!=data.expected_version:raise HTTPException(409,'职责配置已变化，请刷新')
         for code,ids in data.assignments.items():
             for ident in ids:
-                u=db.get(User,ident);r=db.get(Role,u.role_id) if u else None
-                if not u or not u.active or u.org_id not in a.org_ids or not r or not r.active or 'assessment.review' not in r.permissions:raise HTTPException(422,'职责人员须具有有效审核权限')
-                if code in {'vice_president','coordinator','committee','finance','academic','discipline'} and r.kind!='school':raise HTTPException(422,'校级职责须授予校级范围账号')
+                u=db.get(User,ident)
+                if not st.duty_eligible(db,u,a,code):raise HTTPException(422,st.DUTIES[code]+'人员须具有有效审核身份及对应组织范围')
         if not setting:setting=Setting(key='social_training_duties',value=data.assignments,version=1);db.add(setting)
         else:setting.value=data.assignments;setting.version+=1
         db.flush();audit(db,a,'social_duties','social_training_duties','配置社会培训职责',before,serial(setting),data.reason)
@@ -155,6 +175,8 @@ def project_edit(ident:str,data:ProjectIn,request:Request):
         if any(getattr(data.data,k)!=obj.data[k] for k in ('code','cohort','org_id')):raise HTTPException(422,'项目编号、期次及承办学院不能直接替换')
         project_owner(db,data.data.owner_id,obj.org_id)
         if st.units(db,obj.id) and data.data.mode!=obj.data['mode']:raise HTTPException(409,'已有培训明细，不能更换核算方式')
+        outside=[u.external_key for u in st.units(db,obj.id) if not data.data.start_date.isoformat()<=u.data['event_date']<=data.data.end_date.isoformat()]
+        if outside:raise HTTPException(409,'已有参训明细超出修改后的培训期间：'+'、'.join(outside[:10])+'；请核对明细后再调整日期')
         values=serial(data.data.model_dump());source=dict(obj.data.get('source',{}))
         if source:
             if data.data.dates_confirmed:source.pop('dates_pending',None);source.pop('date_pending',None)
@@ -304,6 +326,19 @@ def policy_recommended(data:RecommendedPolicyIn,request:Request):
     return command(request,data.model_dump(),'rules.manage',apply)
 
 
+@router.put('/policies/{ident}')
+def policy_edit(ident:str,data:PolicyUpdate,request:Request):
+    def apply(db,a,s):
+        obj=st.scoped(db,a,'social_policy',ident,write=True);check_version(obj,data.expected_version)
+        if a.role.kind!='school' or obj.state!='DRAFT':raise HTTPException(409,'仅学校可编辑尚未启用的制度草稿')
+        require_open_period(db,obj.period_id);require_open_period(db,data.period_id)
+        if data.period_id!=obj.period_id and any(db.scalar(select(m.id).where(m.policy_id==ident).limit(1)) for m in (SocialClaim,SocialAnnual)):
+            raise HTTPException(409,'草稿已有申报或自评引用，不能更换周期，请复制为新版本')
+        before=serial(obj);obj.name=data.name;obj.period_id=data.period_id;obj.data=serial(data.data.model_dump())
+        return event(db,a,'social_policy',obj,'补齐学校制度草稿',before,data.reason,data.basis)
+    return command(request,data.model_dump(),'rules.manage',apply)
+
+
 @router.put('/policies/{ident}/calendar')
 def policy_calendar(ident:str,data:PolicyCalendarIn,request:Request):
     def apply(db,a,s):
@@ -328,6 +363,7 @@ def policy_action(ident:str,data:SocialAction,request:Request):
             obj.state='VOID'
             return event(db,a,'social_policy',obj,'停用制度口径（历史记录保留）',before,data.reason,data.basis)
         if data.action=='record_basis':
+            require_open_period(db,obj.period_id)
             # 推荐口径草稿：学校书面答复后在草稿上登记依据，再启用（规划第 8 步）
             if obj.state!='DRAFT':raise HTTPException(409,'仅草稿可登记书面依据')
             if a.role.kind!='school':raise HTTPException(403,'规则须由学校维护')
@@ -335,8 +371,10 @@ def policy_action(ident:str,data:SocialAction,request:Request):
             obj.data={**obj.data,'interpretation_reference':data.basis.strip()}
             return event(db,a,'social_policy',obj,'登记学校书面解释依据',before,data.reason,data.basis)
         if data.action!='activate' or obj.state!='DRAFT':raise HTTPException(409,'仅草稿可启用，修改时须新建版本')
+        require_open_period(db,obj.period_id)
         st.duty(db,a,'coordinator',obj.created_by);st.require_evidence(db,'social_policy',ident)
-        if not obj.data.get('interpretation_reference'):raise HTTPException(409,'须记录学校书面解释依据；空缺口径继续阻断正式结果')
+        reference=(obj.data.get('interpretation_reference') or '').strip()
+        if not reference or reference.startswith('系统推荐口径'):raise HTTPException(409,'须记录学校正式书面解释依据；系统推荐说明不能代替学校确认')
         if not all(obj.data.get(k) for k in ('calendar_start','calendar_end','calendar_reference')) or not obj.data['calendar_reference'].strip():
             raise HTTPException(409,'学校工作日历尚未确认，请在草稿详情补充校历开始、结束日期和学校工作日历依据后再启用')
         if db.scalar(select(SocialPolicy.id).where(SocialPolicy.period_id==obj.period_id,SocialPolicy.state=='ACTIVE',SocialPolicy.id!=ident).limit(1)):
@@ -350,9 +388,11 @@ def claim_create(data:ClaimIn,request:Request):
     def apply(db,a,s):
         if not a.user.staff_no:raise HTTPException(403,'积分必须由有工号的本人申报')
         project=db.get(SocialProject,data.project_id);policy=db.get(SocialPolicy,data.policy_id)
-        if not project or not policy or policy.period_id!=data.period_id:raise HTTPException(422,'项目或规则周期无效')
+        if not project or not policy or policy.period_id!=data.period_id or policy.state=='VOID':raise HTTPException(422,'项目或规则周期无效，或口径已停用')
         if not any(t['teacher_id']==a.id for u in st.units(db,project.id) for t in u.data['teachers']):raise HTTPException(403,'没有本人参与明细')
-        require_open_period(db,data.period_id)
+        period=require_open_period(db,data.period_id)
+        if project.closeout.get('closed_on') and not period.start_date<=date_from(project.closeout['closed_on'])<=period.end_date:
+            raise HTTPException(422,'项目结项日期不在所选周期内，请选择包含结项日期的周期')
         if st.duplicate_claim(db,project.id,a.id):raise HTTPException(409,'同一项目已有本人审批中或已归档的积分申报，请使用原申报或追加更正；不能换周期重复认定')
         obj=SocialClaim(project_id=project.id,teacher_id=a.id,period_id=data.period_id,policy_id=policy.id,data={'auxiliary':serial([v.model_dump() for v in data.auxiliary]),'recognition_form_reference':data.recognition_form_reference})
         db.add(obj);db.flush();return event(db,a,'social_claim',obj,'建立本人积分申报',{},data.reason)
@@ -399,9 +439,11 @@ def claim_action(ident:str,data:SocialAction,request:Request):
 @router.post('/annuals')
 def annual_create(data:AnnualIn,request:Request):
     def apply(db,a,s):
-        college(db,a,data.org_id);require_open_period(db,data.period_id);policy=db.get(SocialPolicy,data.policy_id)
-        if not policy or policy.period_id!=data.period_id:raise HTTPException(422,'规则周期不匹配')
-        obj=SocialAnnual(org_id=data.org_id,period_id=data.period_id,policy_id=policy.id,owner_id=a.id,data=serial(data.data.model_dump()))
+        college(db,a,data.org_id);period=require_open_period(db,data.period_id);policy=db.get(SocialPolicy,data.policy_id)
+        if not policy or policy.period_id!=data.period_id or policy.state=='VOID':raise HTTPException(422,'规则周期不匹配或口径已停用')
+        values=serial(data.data.model_dump())
+        if 'achievements' not in data.data.model_fields_set:values['achievements']=st.annual_achievements(db,data.org_id,period)
+        obj=SocialAnnual(org_id=data.org_id,period_id=data.period_id,policy_id=policy.id,owner_id=a.id,data=values)
         db.add(obj);db.flush();return event(db,a,'social_annual',obj,'建立学院年度自评',{},data.reason)
     return command(request,data.model_dump(),'assessment.review',apply)
 
@@ -714,10 +756,13 @@ def claim_edit(ident:str,data:ClaimIn,request:Request):
         obj=st.scoped(db,a,'social_claim',ident,write=True)
         check_version(obj,data.expected_version);require_open_period(db,obj.period_id)
         if obj.teacher_id!=a.id or obj.state not in {'DRAFT','RETURNED'}:raise HTTPException(403,'仅本人可补正待办积分')
-        if (obj.project_id,obj.period_id)!=(data.project_id,data.period_id):raise HTTPException(422,'补正不能更换项目及周期')
+        if obj.project_id!=data.project_id:raise HTTPException(422,'补正不能更换项目')
+        period=require_open_period(db,data.period_id);project=db.get(SocialProject,obj.project_id)
+        if project.closeout.get('closed_on') and not period.start_date<=date_from(project.closeout['closed_on'])<=period.end_date:
+            raise HTTPException(422,'项目结项日期不在所选周期内，请选择正确周期')
         policy=db.get(SocialPolicy,data.policy_id)
-        if not policy or policy.period_id!=obj.period_id:raise HTTPException(422,'规则周期不匹配')
-        before=serial(obj);obj.policy_id=data.policy_id;obj.data={**obj.data,'auxiliary':serial([v.model_dump() for v in data.auxiliary]),'recognition_form_reference':data.recognition_form_reference}
+        if not policy or policy.period_id!=data.period_id or policy.state=='VOID':raise HTTPException(422,'规则周期不匹配或口径已停用')
+        before=serial(obj);obj.period_id=data.period_id;obj.policy_id=data.policy_id;obj.data={**obj.data,'auxiliary':serial([v.model_dump() for v in data.auxiliary]),'recognition_form_reference':data.recognition_form_reference}
         return event(db,a,'social_claim',obj,'补正本人积分申报',before,data.reason)
     return command(request,data.model_dump(),'points.read',apply)
 
@@ -730,8 +775,10 @@ def annual_edit(ident:str,data:AnnualIn,request:Request):
         if obj.state not in {'DRAFT','RETURNED'}:raise HTTPException(409,'请先退回年度考核后补正')
         if (obj.org_id,obj.period_id)!=(data.org_id,data.period_id):raise HTTPException(422,'补正不能更换学院及周期')
         policy=db.get(SocialPolicy,data.policy_id)
-        if not policy or policy.period_id!=obj.period_id:raise HTTPException(422,'规则周期不匹配')
-        before=serial(obj);obj.data=serial(data.data.model_dump());obj.policy_id=data.policy_id
+        if not policy or policy.period_id!=obj.period_id or policy.state=='VOID':raise HTTPException(422,'规则周期不匹配或口径已停用')
+        before=serial(obj);values=serial(data.data.model_dump())
+        if 'achievements' not in data.data.model_fields_set:values['achievements']=obj.data.get('achievements',[])
+        obj.data=values;obj.policy_id=data.policy_id
         return event(db,a,'social_annual',obj,'补正学院自评',before,data.reason)
     return command(request,data.model_dump(),'assessment.review',apply)
 
