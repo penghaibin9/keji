@@ -15,7 +15,7 @@ from ..integrations import (DATA_CATALOG,catalog_for,normalize_mappings,apply_ma
                             SyncItem,SyncCallLog,ADAPTERS,ConnectionCheck,probe_connection,activate_connection,pause_schedules,live_connection,task_sync_items)
 from ..reference_data import InboundBatch,InboundRow,preview_inbound,confirm_inbound,rollback_inbound
 from ..inbound_sync import IntegrationSchedule,create_pull_task
-from ..integration_status import latest_task_status
+from ..integration_status import latest_task_status,latest_task_ids
 router=APIRouter(prefix='/api',tags=['接口同步'])
 
 
@@ -144,12 +144,13 @@ def connection_summary(request:Request):
         data_type=filters.get('data_type')
         if data_type and data_type not in {d[0] for rows in DATA_CATALOG.values() for d in rows}:
             raise HTTPException(422,'数据类型不在接口目录')
+        connections=[c for c in db.scalars(query) if not data_type or data_type in {d[0] for d in DATA_CATALOG.get(c.code,[])}]
+        latest=latest_task_ids(db,[c.id for c in connections],data_type)
         items=[]
-        for connection in db.scalars(query):
-            if data_type and data_type not in {d[0] for d in DATA_CATALOG.get(connection.code,[])}:continue
+        for connection in connections:
             items.append({'code':connection.code,'name':connection.name,
                 'connection_state':'CONNECTED' if live_connection(db,connection) else 'NOT_CONNECTED',
-                'latest_task':latest_task_status(db,connection,data_type)})
+                'latest_task':latest_task_status(db,connection,data_type,latest.get(connection.id))})
         return {'items':items,'all_connected':bool(items) and all(x['connection_state']=='CONNECTED' for x in items)}
     return read_operation(request,'portal.read',load)
 

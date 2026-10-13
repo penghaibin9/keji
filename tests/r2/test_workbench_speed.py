@@ -146,3 +146,61 @@ def test_staff_roster_looks_up_each_hr_unit_once(app2):
             event.remove(app2.state.engine,'before_cursor_execute',tick)
     assert len(roster)>=30
     assert count[0]<15,count[0]     # 以前每位教职工至少查一次单位
+
+
+def test_latest_task_ids_scans_tasks_once_for_all_connections(app2):
+    from app.integration_status import latest_task_ids
+    from app.models import Connection,Task
+    from datetime import timedelta
+    from app.core import utcnow
+    with app2.state.sessions.begin() as db:
+        ids=[c.id for c in db.scalars(sa.select(Connection).order_by(Connection.code))]
+        assert len(ids)>=2
+        for n,cid in enumerate(ids):
+            for k in range(2):
+                db.add(Task(id=f'lt-{n}-{k}',key=f'lt-{n}-{k}',kind='sync' if k else 'inbound_pull',state='DONE',owner_id='schooladmin',
+                            payload={'connection_id':cid,'data_type':'course' if k else 'teacher_hr'},result={},
+                            created_at=utcnow()-timedelta(minutes=10-k-n)))
+        db.flush()
+        count=[0]
+        def tick(*args,**kwargs):count[0]+=1
+        event.listen(db.get_bind(),'before_cursor_execute',tick)
+        try:
+            latest=latest_task_ids(db,ids)
+            only=latest_task_ids(db,ids,'teacher_hr')
+        finally:
+            event.remove(db.get_bind(),'before_cursor_execute',tick)
+    assert count[0]==2
+    assert {latest[c] for c in ids}=={f'lt-{n}-1' for n in range(len(ids))}
+    assert {only[c] for c in ids}=={f'lt-{n}-0' for n in range(len(ids))}
+
+
+def test_inbound_retention_compacts_old_settled_batches_only(app2):
+    from datetime import timedelta
+    from app.core import utcnow
+    from app.inbound_retention import compact
+    from app.models import Connection
+    from app.reference_data import InboundBatch,InboundRow
+    with app2.state.sessions.begin() as db:
+        cid=db.scalar(sa.select(Connection.id).order_by(Connection.code))
+        def batch(name,state,days):
+            db.add(InboundBatch(id=name,connection_id=cid,owner_id='schooladmin',data_type='course',state=state,total=2,errors=0,
+                                created_at=utcnow()-timedelta(days=days)))
+            db.flush()
+            for n in range(2):
+                db.add(InboundRow(batch_id=name,row_no=n,business_key=f'{name}-{n}',raw={'a':1},mapped={'b':2},errors=[]))
+        batch('ret-old1','COMMITTED',200);batch('ret-old2','COMMITTED',150);batch('ret-old3','VOID',120)
+        batch('ret-new','COMMITTED',5);batch('ret-prev','PREVIEW',300)
+        db.flush()
+        dry=compact(db,90,keep_latest=1)
+        assert dry=={'batches':3,'rows':6,'applied':False}  # the newest settled batch (ret-new) is kept; PREVIEW is never touched
+        assert db.scalar(sa.select(InboundRow.raw).where(InboundRow.batch_id=='ret-old1',InboundRow.row_no==0))=={'a':1}
+        done=compact(db,90,keep_latest=1,apply=True)
+        assert done['rows']==6
+        db.flush()
+        row=db.scalars(sa.select(InboundRow).where(InboundRow.batch_id=='ret-old1').order_by(InboundRow.row_no)).first()
+        db.refresh(row)
+        assert row.raw=={'_compacted':True} and row.mapped=={} and row.business_key=='ret-old1-0'
+        assert db.scalar(sa.select(InboundRow.raw).where(InboundRow.batch_id=='ret-new',InboundRow.row_no==0))=={'a':1}
+        assert db.scalar(sa.select(InboundRow.raw).where(InboundRow.batch_id=='ret-prev',InboundRow.row_no==0))=={'a':1}
+        assert compact(db,90,keep_latest=1,apply=True)['rows']==0

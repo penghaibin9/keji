@@ -5,11 +5,33 @@ from .integrations import SyncItem, SyncCallLog, task_sync_items
 from .reference_data import batch_facts
 
 
-def latest_task_status(db, connection, data_type=None):
-    query=select(Task).where(Task.kind.in_(['sync','inbound_pull']),
-        Task.payload['connection_id'].as_string()==connection.id)
-    if data_type:query=query.where(Task.payload['data_type'].as_string()==data_type)
-    task=db.scalar(query.order_by(Task.created_at.desc(),Task.id.desc()).limit(1))
+_UNSET=object()
+
+
+def latest_task_ids(db, connection_ids, data_type=None):
+    """Newest sync/pull task id per connection in ONE pass over the tasks table.
+
+    The tasks table has no index on kind/created_at or on the JSON payload, so asking once per connection scanned and
+    sorted it once per connection (the cold start of the interface summary took several seconds)."""
+    wanted=set(connection_ids);found={}
+    if not wanted:return found
+    query=select(Task.id,Task.payload['connection_id'].as_string(),Task.payload['data_type'].as_string()).where(
+        Task.kind.in_(['sync','inbound_pull'])).order_by(Task.created_at.desc(),Task.id.desc())
+    for task_id,connection_id,task_type in db.execute(query).yield_per(2000):
+        if connection_id in wanted and connection_id not in found and (not data_type or task_type==data_type):
+            found[connection_id]=task_id
+            if len(found)==len(wanted):break
+    return found
+
+
+def latest_task_status(db, connection, data_type=None, task_id=_UNSET):
+    if task_id is _UNSET:
+        query=select(Task).where(Task.kind.in_(['sync','inbound_pull']),
+            Task.payload['connection_id'].as_string()==connection.id)
+        if data_type:query=query.where(Task.payload['data_type'].as_string()==data_type)
+        task=db.scalar(query.order_by(Task.created_at.desc(),Task.id.desc()).limit(1))
+    else:
+        task=db.get(Task,task_id) if task_id else None
     if task is None:return None
     success=failed=pending=0;stage=task.state
     activity=db.scalar(select(func.max(TaskAttempt.created_at)).where(TaskAttempt.task_id==task.id)) or task.created_at
