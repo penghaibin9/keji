@@ -69,6 +69,6 @@ test('actual bindFilters clears period and preserves drill identity',()=>{
 test('HTML controls and handlers are connected in the real app source',()=>{
   assert.ok(source.includes('returned:true'));
   assert.ok(source.includes("'scope-nav':id=>scopeNav(id)"));
-  assert.ok(source.includes('filtersBar({search:false,dates:true,project:true,states:'));
+  assert.ok(source.includes('filtersBar({period:true,organization:true,teacher:true,dates:true,project:true,states:'));
   assert.ok(!source.includes("?.value||periodId"));
 });
