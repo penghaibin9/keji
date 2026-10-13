@@ -69,6 +69,14 @@
       "foreign_keys": [],
       "indexes": [
         [
+          "ix_audit_created_desc_id",
+          [
+            "created_at",
+            "id"
+          ],
+          false
+        ],
+        [
           "ix_audit_events_actor_id",
           [
             "actor_id"
@@ -101,6 +109,133 @@
           "ix_audit_time",
           [
             "created_at"
+          ],
+          false
+        ]
+      ],
+      "primary_key": [
+        "id"
+      ],
+      "unique": []
+    },
+    "inbound_batches": {
+      "checks": [],
+      "columns": {
+        "configuration_hash": {
+          "family": "string",
+          "length": 64,
+          "nullable": false
+        },
+        "connection_id": {
+          "family": "string",
+          "length": 36,
+          "nullable": false
+        },
+        "content_hash": {
+          "family": "string",
+          "length": 64,
+          "nullable": false
+        },
+        "created_at": {
+          "family": "datetime",
+          "nullable": false
+        },
+        "data_type": {
+          "family": "string",
+          "length": 64,
+          "nullable": false
+        },
+        "errors": {
+          "family": "integer",
+          "nullable": false
+        },
+        "id": {
+          "family": "string",
+          "length": 36,
+          "nullable": false
+        },
+        "owner_id": {
+          "family": "string",
+          "length": 36,
+          "nullable": false
+        },
+        "receipt": {
+          "family": "json",
+          "nullable": false
+        },
+        "source_label": {
+          "family": "string",
+          "length": 160,
+          "nullable": false
+        },
+        "state": {
+          "family": "string",
+          "length": 20,
+          "nullable": false
+        },
+        "total": {
+          "family": "integer",
+          "nullable": false
+        },
+        "version": {
+          "family": "integer",
+          "nullable": false
+        }
+      },
+      "foreign_keys": [
+        [
+          [
+            "connection_id"
+          ],
+          "connections",
+          [
+            "id"
+          ]
+        ],
+        [
+          [
+            "owner_id"
+          ],
+          "users",
+          [
+            "id"
+          ]
+        ]
+      ],
+      "indexes": [
+        [
+          "ix_inbound_batches_connection_id",
+          [
+            "connection_id"
+          ],
+          false
+        ],
+        [
+          "ix_inbound_batches_created_desc_id",
+          [
+            "created_at",
+            "id"
+          ],
+          false
+        ],
+        [
+          "ix_inbound_batches_data_type",
+          [
+            "data_type"
+          ],
+          false
+        ],
+        [
+          "ix_inbound_batches_owner_id",
+          [
+            "owner_id"
+          ],
+          false
+        ],
+        [
+          "ix_inbound_batches_state",
+          [
+            "state"
           ],
           false
         ]

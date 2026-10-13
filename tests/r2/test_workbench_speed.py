@@ -43,10 +43,35 @@ def test_index_migration_is_repeatable_and_accepts_hand_built_indexes():
     _run_upgrade(fresh,module);_run_upgrade(fresh,module)
     assert _names(fresh,'audit_events')==['ix_audit_created_desc_id','ix_audit_result_time']
     assert _names(fresh,'inbound_batches')==['ix_inbound_batches_created_desc_id']
-    # 服务器上已经按别的名字手工建过同样的索引：不再重复建。
+    # 服务器上已经按别的名字手工建过同样的索引：改成契约规定的名字，不能跳过（校验按名字比对）。
     manual=sa.create_engine('sqlite://');_tables(manual,'ix_audit_events_result_created')
     _run_upgrade(manual,module)
-    assert _names(manual,'audit_events')==['ix_audit_created_desc_id','ix_audit_events_result_created']
+    assert _names(manual,'audit_events')==['ix_audit_created_desc_id','ix_audit_result_time']
+
+
+def test_mysql_hand_built_index_is_renamed_not_skipped(monkeypatch):
+    module=_migration()
+    statements=[]
+    class Bind:
+        class dialect:name='mysql'
+    class Inspector:
+        def get_indexes(self,table):
+            return [{'name':'ix_audit_events_result_created','column_names':['result','created_at'],'unique':0}] if table=='audit_events' else []
+    monkeypatch.setattr(module.sa,'inspect',lambda bind:Inspector())
+    monkeypatch.setattr(module.op,'execute',lambda statement:statements.append(str(statement)),raising=False)
+    monkeypatch.setattr(module.op,'create_index',lambda *args,**kwargs:statements.append('CREATE '+args[0]),raising=False)
+    monkeypatch.setattr(module.op,'get_bind',lambda:Bind(),raising=False)
+    module.upgrade()
+    assert statements[0]=='ALTER TABLE `audit_events` RENAME INDEX `ix_audit_events_result_created` TO `ix_audit_result_time`'
+    assert statements[1:]==['CREATE ix_audit_created_desc_id','CREATE ix_inbound_batches_created_desc_id']
+
+
+def test_contract_lists_all_three_new_indexes():
+    from app.installation import CONTRACT_PATH
+    import json
+    tables=json.loads(CONTRACT_PATH.with_name('audit_index_schema.json').read_text(encoding='utf-8'))['tables']
+    names={x[0] for t in tables.values() for x in t['indexes']}
+    assert {'ix_audit_result_time','ix_audit_created_desc_id','ix_inbound_batches_created_desc_id'}<=names
 
 
 def test_todo_queries_do_not_grow_with_the_number_of_teachers(client2,app2):
