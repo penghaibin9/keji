@@ -99,3 +99,20 @@ def test_batch_status_reads_three_receipt_values_without_loading_the_receipt(app
         assert facts.receipt=={'written':3,'pull_task_id':'t-1','committed_at':'2026-10-13T08:00:00'}
         assert rd.batch_facts(db,'missing') is None
         assert 'fat-batch' not in [getattr(x,'id',None) for x in db.identity_map.values()]   # 没有把整行读进会话
+
+
+def test_staff_roster_looks_up_each_hr_unit_once(app2):
+    from sqlalchemy import select
+    with Session(app2.state.engine) as db:
+        for i in range(30):
+            db.add(rd.TeacherHrProfile(staff_no=f'RS{i:03d}',name=f'教职工{i}',org_code='dept1',active=True))
+        db.commit()
+        count=[0]
+        def tick(*a,**k):count[0]+=1
+        event.listen(app2.state.engine,'before_cursor_execute',tick)
+        try:
+            roster=rd.staff_roster(db,db.scalars(select(rd.TeacherHrProfile)).all(),school_year='2025-2026',private=False)
+        finally:
+            event.remove(app2.state.engine,'before_cursor_execute',tick)
+    assert len(roster)>=30
+    assert count[0]<15,count[0]     # 以前每位教职工至少查一次单位

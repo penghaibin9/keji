@@ -584,6 +584,15 @@ def _year_terms(db,numbers,school_year):
             TeacherCourseTerm.term_name.contains(school_year,autoescape=True)|TeacherCourseTerm.term_name.startswith(y+'-',autoescape=True))).all()
     return [r for r in rows if school_year_of(r.term_name)==school_year]
 
+def _memo_hr_org(db):
+    """resolve_hr_org remembered per (code, name): 几百位教职工只有几十个单位，不必每人查两次库。"""
+    seen={}
+    def resolve(code,name=None):
+        key=(code,name)
+        if key not in seen:seen[key]=resolve_hr_org(db,code,name)
+        return seen[key]
+    return resolve
+
 def staff_roster(db,profiles,*,school_year,private):
     """One row per 教职工: school fields, the local account it maps to, this year's credits and problems.
 
@@ -597,7 +606,8 @@ def staff_roster(db,profiles,*,school_year,private):
         return seen
     user_ids=[p.user_id for p in profiles if p.user_id]
     users={u.id:u for u in db.scalars(select(User).where(User.id.in_(user_ids)))} if user_ids else {}
-    credits={g['staff_no']:g for g in annual_teaching_credits(db,_year_terms(db,[p.staff_no for p in profiles],school_year))}
+    credits={g['staff_no']:g for g in annual_teaching_credits(db,_year_terms(db,[p.staff_no for p in profiles],school_year),include_details=False)}
+    hr_org_of=_memo_hr_org(db)
     out=[]
     for p in profiles:
         extra=p.extra or {}
@@ -605,7 +615,7 @@ def staff_roster(db,profiles,*,school_year,private):
         chain=ancestors(user.org_id) if user else []
         dept=orgs.get(chain[0]) if chain else None
         college=next((orgs[i] for i in chain if orgs[i].kind=='college'),None)
-        hr_org=resolve_hr_org(db,p.org_code,extra.get('org_name'))
+        hr_org=hr_org_of(p.org_code,extra.get('org_name'))
         c=credits.get(p.staff_no)
         problems=[]
         if not user:problems.append('no_account')
@@ -644,14 +654,15 @@ def credit_summary(db,profiles,*,school_year):
     orgs={o.id:o for o in db.scalars(select(Org))}
     user_ids=[p.user_id for p in profiles if p.user_id]
     users={u.id:u for u in db.scalars(select(User).where(User.id.in_(user_ids)))} if user_ids else {}
-    credits={g['staff_no']:Decimal(g['total_credit']) for g in annual_teaching_credits(db,_year_terms(db,[p.staff_no for p in profiles],school_year))}
+    credits={g['staff_no']:Decimal(g['total_credit']) for g in annual_teaching_credits(db,_year_terms(db,[p.staff_no for p in profiles],school_year),include_details=False)}
+    hr_org_of=_memo_hr_org(db)
     def bucket():return {'staff':0,'teaching_staff':0,'total_credit':Decimal('0')}
     overall=bucket();colleges={}
     for p in profiles:
         user=users.get(p.user_id)
         college=_college_of(orgs,user.org_id) if user else None
         if college is None and not user:
-            hr_org=resolve_hr_org(db,p.org_code,(p.extra or {}).get('org_name'))
+            hr_org=hr_org_of(p.org_code,(p.extra or {}).get('org_name'))
             college=_college_of(orgs,hr_org.id) if hr_org else None
         credit=credits.get(p.staff_no,Decimal('0'))
         targets=[overall]+([colleges.setdefault(college.id,{'id':college.id,'name':college.name,**bucket()})] if college else [])

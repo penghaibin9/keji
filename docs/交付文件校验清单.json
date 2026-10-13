@@ -295,8 +295,8 @@
       "size": 5366
     },
     "backend/app/reference_data.py": {
-      "sha256": "1b84a1d0c8dcd12d08412b7a3d60029d6cdaa6c16a2d971fe74798f9078056d3",
-      "size": 77503
+      "sha256": "8f88ed3a676936decb64ce1dcdc4c799c9a4aec5316801cec785e3819f17c2b8",
+      "size": 77930
     },
     "backend/app/release_contract.py": {
       "sha256": "492a8668ff93bc0d9b7004b192fbb15c280f7e23c9a7fb00f52a07a1e3a2f181",
@@ -1571,8 +1571,8 @@
       "size": 4105
     },
     "tests/r2/test_workbench_speed.py": {
-      "sha256": "4aa16909aeba862b9c296d67e0f461718687d949c30a6e5fc050c26af229f9a8",
-      "size": 5569
+      "sha256": "2959a2ffc5843b23b789c0a72a1e22453b7451fc4d06cb8e8cd2000ce4608e41",
+      "size": 6323
     },
     "tests/requirements-p0.txt": {
       "sha256": "983f0f208bf908c687f82ccdf2e47cdbacd24390872b94c26cccf9de5a202a9e",
