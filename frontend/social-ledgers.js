@@ -1,6 +1,6 @@
 // 学院台账报送与口径检查、首页五项指标、课程视频分钟资源。
 // 推荐值按系统推荐口径计算，学校书面确认前只用于核对。
-import {mineSchoolData} from './school-data.js?v=20261012-credit-review4';
+import {mineSchoolData} from './school-data.js?v=20261013-cx-claim1';
 let year = new Date().getFullYear();
 let openId = null;      // 正在核定的台账；为空时显示各学院列表
 let rowFilter = 'all';  // 详情页行筛选：all / issues / serious
@@ -414,6 +414,6 @@ export async function minePage(c, stats) {
   const allocationHtml = keep(sections.records, !m.allocations.length, '台账分给我的人次', `<div class="mt20">${allocations}</div>`);
   const extraHtml = keep(sections.records, !(r.courses || r.videos || Number(r.minutes) || m.achievements.length), '课程资源与成果', `<div class="mt20">${extra}</div>`);
   const pair = claimHtml && qualHtml ? `<div class="equal2 mt20">${claimHtml}${qualHtml}</div>` : (claimHtml || qualHtml) ? `<div class="mt20">${claimHtml || qualHtml}</div>` : '';
-  const emptyLine = empties.length ? `<p class="mine-empty-line">暂无记录：${e(empties.join('、'))}。</p>` : '';
+  const emptyLine = empties.length ? `<p class="mine-empty-line">暂无记录：${e(empties.join('、'))}。${sd.empty && sd.claim ? sd.claim : ''}</p>` : '';
   return `<div class="mine-page">${head}${todo}<div class="mt20">${indicators}</div>${creditHtml}${projectHtml}${pair}${allocationHtml}${extraHtml}${emptyLine}<div class="mt20">${c.note(m.note, false, '数据与申报说明')}</div></div>`;
 }

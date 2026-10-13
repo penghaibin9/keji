@@ -303,6 +303,17 @@ class IntegrationScheduleUpdate(Reason):
     active: bool=False
     expected_version: int=Field(ge=1)
 
+class CxClaimIn(Input):
+    """老师认领超星登录名：只填超星登录名，不收超星密码；工号取当前登录身份。"""
+    login: str = Field(min_length=1,max_length=64)
+    note: str = Field(default='',max_length=200)
+
+class CxClaimDecisionIn(Input):
+    login: str = Field(min_length=1,max_length=64)
+    staff_no: str = Field(min_length=1,max_length=64)
+    decision: Literal['approve','reject','revoke']
+    reason: str = Field(default='',max_length=200)
+
 class CreditReviewIn(Input):
     """教研室主任认定授课：一次认定或不计一批课程（教务、超星同步来的授课记录）。"""
     ids: list[Ident] = Field(min_length=1,max_length=200)

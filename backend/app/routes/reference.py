@@ -7,7 +7,7 @@ training is never mistaken for teaching that class or credited the class income.
 from fastapi import APIRouter,Request,HTTPException
 from sqlalchemy import select,func
 from ..core import *
-from ..schemas import ParticipationIn,ParticipationUpdate,Reason,CreditReviewIn
+from ..schemas import ParticipationIn,ParticipationUpdate,Reason,CreditReviewIn,CxClaimIn,CxClaimDecisionIn
 from pydantic import Field
 from .. import code_tables as codes
 from ..reference_data import TrainingProjectMaster,TrainingCourseMaster,TrainingClassMaster,TeacherParticipation,TeacherHrProfile,TeacherCourseTerm,SchoolCourse,annual_teaching_credits,UNKNOWN_YEAR,record_reference_errors,staff_roster,school_year_now,school_year_of,ROSTER_PROBLEMS,HR_PRIVATE_KEYS,credit_summary,source_status,CREDIT_REVIEW_KIND,credit_review_code,credit_reviews
@@ -253,6 +253,31 @@ def cx_unmatched_xlsx(request:Request):
         audit(db,a,'teacher_course','cx-unmatched','下载超星未对应工号名单',after={'unmatched':len(unmatched),'aliases':len(checks)},reason='催办超星登录名改工号')
     name=quote('超星未对应工号名单.xlsx')
     return Response(data,media_type='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',headers={'Content-Disposition':f"attachment; filename*=UTF-8''{name}",'X-Content-Type-Options':'nosniff'})
+
+
+@router.get('/reference/cx-claims/mine')
+def cx_claims_mine(request:Request):
+    """本人超星认领：已认领的登录名，和超星姓名与本人一致、还没对上工号的登录名。"""
+    from ..cx_claims import my_claims
+    return read_operation(request,'records.read',lambda db,a,s:my_claims(db,a))
+
+@router.post('/reference/cx-claims')
+def cx_claim_submit(data:CxClaimIn,request:Request):
+    from ..cx_claims import submit_claim
+    return command(request,data.model_dump(),'records.read',lambda db,a,s:submit_claim(db,a,data.login,data.note))
+
+@router.get('/reference/cx-claims')
+def cx_claims_list(request:Request):
+    from ..cx_claims import list_claims
+    f,_,_=filters_from(request,{'state'})
+    if f.get('state') not in (None,'PENDING','APPROVED','REJECTED','REVOKED'):raise HTTPException(422,'state参数无效')
+    return read_operation(request,'records.read',lambda db,a,s:list_claims(db,a,f.get('state')))
+
+@router.post('/reference/cx-claims/decide')
+def cx_claim_decide(data:CxClaimDecisionIn,request:Request):
+    from ..cx_claims import decide_claim
+    if data.decision!='approve' and len(data.reason)<2:raise HTTPException(422,'驳回或撤销请写明原因')
+    return command(request,data.model_dump(),'records.read',lambda db,a,s:decide_claim(db,a,data.login,data.staff_no,data.decision,data.reason or '管理员确认老师认领'))
 
 
 @router.get('/reference/school-courses')

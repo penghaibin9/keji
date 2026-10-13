@@ -70,3 +70,49 @@ def test_teacher_who_fixes_login_is_matched_on_next_full_sync_and_listed_until_t
 def test_cx_unmatched_download_is_school_admin_only(client2):
     c=client2;auth(c,'teacher')
     assert c.get('/api/reference/cx-unmatched.xlsx').status_code==403
+
+
+def seed_unmatched(c,app):
+    with Session(app.state.engine) as db:
+        db.add(TeacherHrProfile(staff_no='J001',user_id='teacher',name='测试教师一',org_code='dept1'));db.commit()
+    others=[course('wp9',f'X{i}','外聘老师') for i in range(2,6)]
+    state,error,_=cx_full_run(app,[course('phone138','X1'),course('phone138','X6'),course('team7','X7','测试教师一 等')]+others)
+    assert state=='DONE',error
+    return others
+
+def test_teacher_claims_login_without_password_name_match_applies_at_once_and_survives_next_sync(client2,app2):
+    c=client2;auth(c,'schooladmin');others=seed_unmatched(c,app2)
+    auth(c,'teacher')
+    mine=c.get('/api/reference/cx-claims/mine').json()
+    assert mine['name']=='测试教师一' and [x['login'] for x in mine['candidates']]==['phone138']
+    r=post(c,'/api/reference/cx-claims',{'login':'phone138'});assert r.status_code==200,r.text
+    assert r.json()['state']=='APPROVED' and r.json()['moved']==2
+    got=cx_rows(app2)
+    assert got[('J001','X1')]==(True,'teacher') and got[('J001','X6')]==(True,'teacher') and ('phone138','X1') not in got
+    assert post(c,'/api/reference/cx-claims',{'login':'phone138'}).status_code==409
+    assert post(c,'/api/reference/cx-claims',{'login':'J001'}).status_code==422
+    assert post(c,'/api/reference/cx-claims',{'login':'nosuch'}).status_code==404
+    # 下一次全量同步超星仍报 phone138：按认领映射到 J001，同一条记录不变，不会重复也不会停用。
+    auth(c,'schooladmin')
+    state,error,result=cx_full_run(app2,[course('phone138','X1'),course('phone138','X6'),course('team7','X7','测试教师一 等')]+others)
+    assert state=='DONE',error
+    assert result['reconcile']['deactivated']==0
+    got=cx_rows(app2);assert got[('J001','X1')]==(True,'teacher') and got[('J001','X6')]==(True,'teacher')
+
+def test_name_mismatch_waits_for_admin_who_can_approve_reject_or_revoke(client2,app2):
+    c=client2;auth(c,'schooladmin');seed_unmatched(c,app2)
+    auth(c,'teacher')
+    r=post(c,'/api/reference/cx-claims',{'login':'team7','note':'团队课我是建课人'});assert r.status_code==200,r.text
+    assert r.json()['state']=='PENDING' and cx_rows(app2)[('team7','X7')]==(True,None)
+    assert c.get('/api/reference/cx-claims').status_code==403
+    assert post(c,'/api/reference/cx-claims/decide',{'login':'team7','staff_no':'J001','decision':'approve'}).status_code==403
+    auth(c,'schooladmin')
+    pending=c.get('/api/reference/cx-claims?state=PENDING').json()['items']
+    assert [(x['login'],x['staff_no']) for x in pending]==[('team7','J001')]
+    assert post(c,'/api/reference/cx-claims/decide',{'login':'team7','staff_no':'J001','decision':'reject'}).status_code==422
+    r=post(c,'/api/reference/cx-claims/decide',{'login':'team7','staff_no':'J001','decision':'approve'});assert r.status_code==200,r.text
+    assert cx_rows(app2)[('J001','X7')]==(True,'teacher')
+    r=post(c,'/api/reference/cx-claims/decide',{'login':'team7','staff_no':'J001','decision':'revoke','reason':'核实不是本人'});assert r.status_code==200,r.text
+    got=cx_rows(app2);assert got[('team7','X7')]==(True,None) and ('J001','X7') not in got
+    # 撤销后登录名可以再被认领（例如真正的建课人）。
+    auth(c,'teacher');assert post(c,'/api/reference/cx-claims',{'login':'team7'}).json()['state']=='PENDING'

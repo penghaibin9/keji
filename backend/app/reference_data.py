@@ -782,9 +782,11 @@ def inbound_content_hash(rows):
 
 CX_LOGIN_ALIAS_KEY='dict:cx_login_alias'
 
-def cx_login_aliases(db):
-    """超星登录名→教职工工号 对照（学校管理员在基础字典“dict:cx_login_alias”维护，每项写“登录名=工号”）。"""
-    obj=db.get(Setting,CX_LOGIN_ALIAS_KEY);out={}
+def cx_login_aliases(db,include_claims=True):
+    """超星登录名→教职工工号 对照（学校管理员在基础字典“dict:cx_login_alias”维护，每项写“登录名=工号”），
+    加上老师认领并已生效的登录名（cx_claims）；同一登录名以管理员字典为准。"""
+    from .cx_claims import approved_claims
+    obj=db.get(Setting,CX_LOGIN_ALIAS_KEY);out=approved_claims(db) if include_claims else {}
     for item in ((obj.value or {}).get('items') or []) if obj and isinstance(obj.value,dict) else []:
         login,sep,staff=str(item).partition('=')
         if sep and login.strip() and staff.strip():out[login.strip()]=staff.strip()

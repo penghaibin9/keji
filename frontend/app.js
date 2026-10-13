@@ -1,8 +1,8 @@
 import {icons} from './icons.js';
 import {socialPage,socialAction} from './social-training.js?v=20261012-streamline1';
 import {nextCode,runBatch,batchStage,batchMode,batchPerformer,BATCH_LABELS} from './approval-flow.js?v=20261012-streamline1';
-import {ledgerPage,resourceStatsPage,homeIndicators,ledgerAction,resetLedgerView,minePage,mineReminders} from './social-ledgers.js?v=20261012-credit-review4';
-import {rosterSection,rosterHandlers,onlineHandlers,showStaffDetail,showCourseDetail,presetRoster,loadCodeTables} from './school-data.js?v=20261012-credit-review4';
+import {ledgerPage,resourceStatsPage,homeIndicators,ledgerAction,resetLedgerView,minePage,mineReminders} from './social-ledgers.js?v=20261013-cx-claim1';
+import {rosterSection,rosterHandlers,onlineHandlers,showStaffDetail,showCourseDetail,presetRoster,loadCodeTables} from './school-data.js?v=20261013-cx-claim1';
 import {renderCenterStatus,renderImplementationWorkspace,handleImplementationAction} from './integration-workspace.js?v=20261011-gap5';
 import {readDraftEntry,saveDraft,previewDraft} from './integration-drafts.js';
 import {renderBusinessHistory} from './business-history.js';
@@ -518,7 +518,7 @@ const pages={
    const [q,p,a,actv,qs]=await Promise.all([can('qualification.read')?api('/qualifications?size=1&state=APPROVED'):null,can('points.read')?api('/points?'+query({size:5,period_id:periodId})):null,can('assessment.read')?api('/assessment-summary/latest?'+query(periodId?{period_id:periodId}:{})):null,can('records.read')?api('/teacher-activity-summary'):null,can('qualification.read')?api('/qualification-summary'):null]);
    const latest=a?.assessment;
    const credits=can('records.read')?await api('/reference/teacher-credits?size=1').catch(()=>null):null,cy=credits?.items?.[0];
-   const creditItem=`<div class="summary-item"><label>授课学分 · ${cy?esc(cy.school_year)+' 学年':'最近学年'}</label><strong>${cy?number(cy.total_credit,2):'—'}<small>学分</small></strong><p class="cell-sub">${cy?`已认定 · 教务 ${number(cy.jw_credit,2)} · 超星 ${number(cy.cx_credit,2)}${cy.pending_courses?` · ${cy.pending_courses} 门课 ${number(cy.pending_credit,2)} 学分待认定`:''}${cy.missing_credit.length?` · ${cy.missing_credit.length} 门缺学分，请联系教务核对`:''} `+link('两学期明细','credit-detail',cy.staff_no+'|'+cy.school_year):'暂无教务或超星授课数据'}</p></div>`;
+   const creditItem=`<div class="summary-item"><label>授课学分 · ${cy?esc(cy.school_year)+' 学年':'最近学年'}</label><strong>${cy?number(cy.total_credit,2):'—'}<small>学分</small></strong><p class="cell-sub">${cy?`已认定 · 教务 ${number(cy.jw_credit,2)} · 超星 ${number(cy.cx_credit,2)}${cy.pending_courses?` · ${cy.pending_courses} 门课 ${number(cy.pending_credit,2)} 学分待认定`:''}${cy.missing_credit.length?` · ${cy.missing_credit.length} 门缺学分，请联系教务核对`:''} `+link('两学期明细','credit-detail',cy.staff_no+'|'+cy.school_year):'暂无教务或超星授课数据'}${me.user.staff_no?' · '+link('超星课没显示？认领','cx-claim',''):''}</p></div>`;
    personal=`<section class="summary-row"><div class="summary-item"><label>本人授课记录 · 全部历史</label><strong>${actv?number(actv.teaching.records):'—'}<small>条</small></strong><p class="cell-sub">${actv?number(actv.teaching.hours,2):'—'} 学时</p></div><div class="summary-item"><label>本人参训记录 · 全部历史</label><strong>${actv?number(actv.participation.records):'—'}<small>条</small></strong><p class="cell-sub">${actv?number(actv.participation.hours,2):'—'} 学时</p></div>${creditItem}<div class="summary-item"><label>审核通过的本人资质 · 当前</label><strong>${q?q.total:'—'}<small>份</small></strong></div><div class="summary-item"><label>${periodId?'所选周期积分':'全部周期积分'}</label><strong>${p?number(p.sum,2):'—'}<small>分</small></strong></div></section><section class="card mb16"><div class="card-head"><div><h2>${periodId?'所选周期考核得分':'最近考核得分'}：${latest?number(latest.score,2):'—'}</h2><p>授课与本人参训分开统计；上方活动记录明确为全部历史，不冒充所选周期数据。</p></div>${latest?badge(latest.state):'<span class="muted small">尚无考核 / 未授权读取</span>'}</div></section>`+teacherHomeDetail(qs,p);
   }
   view={s,w,n,connections};
@@ -1227,8 +1227,41 @@ function problemCell(type,h){
  if(!h)return '—';
  if(!h.problems)return '<span class="badge green-b">无</span>';
  const parts=Object.entries(h.problem_detail||{}).filter(([,n])=>n).map(([k,n])=>`${PROBLEM_NAMES[k]||k} ${number(n)}`);
- const cx=type==='online_course'&&h.problem_detail?.not_in_staff_table&&me.user.is_admin===true?`<div class="cell-sub">${link('下载没对上工号的老师名单','cx-unmatched','')}</div>`:'';
+ const cx=type==='online_course'&&h.problem_detail?.not_in_staff_table&&me.user.is_admin===true?`<div class="cell-sub">${link('下载没对上工号的老师名单','cx-unmatched','')} · ${link('老师认领','cx-claims-admin','')}</div>`:'';
  return `${link(number(h.problems)+' 条','source-problem',type)}<div class="cell-sub" title="${esc(h.problem_note||'')}">${esc(parts.join(' · ')||h.problem_note||'')}</div>${cx}`;
+}
+// 老师认领超星课：只填超星登录名，不要超星密码；超星姓名和本人一致的直接生效，不一致的等学校系统管理员确认。
+const CX_CLAIM_STATE={APPROVED:['green-b','已生效'],PENDING:['orange-b','等管理员确认'],REJECTED:['red-b','已驳回'],REVOKED:['gray-b','已撤销']};
+const cxClaimBadge=s=>{const [cls,label]=CX_CLAIM_STATE[s]||['blue-b',s];return `<span class="badge ${cls}">${esc(label)}</span>`};
+const cxCourses=list=>esc(list.slice(0,5).map(c=>c.course_name+'（'+c.term_name+'）').join('；'))+(list.length>5?` 等 ${list.length} 门`:'');
+async function showCxClaim(){
+ const d=await api('/reference/cx-claims/mine');
+ const found=d.candidates.length?table(['超星登录名','这个账号建的课','操作'],d.candidates.map(x=>[`<span class="mono">${esc(x.login)}</span>`,cxCourses(x.courses),act('是我的，认领','cx-claim-submit',x.login,'primary')])):note('没有找到超星姓名和你一样、又还没对上工号的课。如果你的超星账号用的不是本名，可以在下面直接填超星登录名。',false);
+ const mine=d.claims.length?`<h3 class="mt16">我的认领</h3>`+table(['超星登录名','课程数','状态','说明'],d.claims.map(x=>[`<span class="mono">${esc(x.login)}</span>`,number(x.courses),cxClaimBadge(x.state),esc(x.decision_reason||x.decided_by||'')])):'';
+ formModal('认领我的超星课程','<div class="full">'+note('系统每周从超星读取课程，按“建课人登录名 = 工号”算到老师名下。你的超星登录名不是工号时，在这里认领就行，不需要超星密码。超星里的姓名和你一致的，认领后马上生效；不一致的（比如写成“张三 等”）要等学校系统管理员确认。只算你作为建课人的课。',false)+'</div>'+`<div class="full"><h3>可能是你的超星课</h3>${found}${mine}</div>`+field('login','或者直接填你的超星登录名','text','',{full:true,required:false})+field('note','补充说明（可不填）','text','',{full:true,required:false}),async v=>{
+  if(!v.login)throw Error('请填写超星登录名');
+  await submitCxClaim(v.login,v.note||'');
+ },{submit:'按登录名认领',wide:true});
+}
+async function submitCxClaim(login,note=''){
+ const r=await api('/reference/cx-claims',{method:'POST',body:{login,note}});
+ toast(r.state==='APPROVED'?`已认领，${r.moved} 门超星课已算到你名下`:'已提交，等学校系统管理员确认后生效');
+ if(page==='home')await render();
+ await showCxClaim();
+}
+async function showCxClaimsAdmin(){
+ const d=await api('/reference/cx-claims');
+ const ops=x=>x.state==='PENDING'?act('确认','cx-claim-decide','approve|'+x.login+'|'+x.staff_no,'primary')+act('驳回','cx-claim-decide','reject|'+x.login+'|'+x.staff_no):x.state==='APPROVED'?act('撤销','cx-claim-decide','revoke|'+x.login+'|'+x.staff_no):'';
+ modal('老师认领超星课',note('姓名一致的认领已自动生效；姓名不一致的需要你核对后确认或驳回。确认后这个登录名下的超星课马上算到老师名下，以后每周同步也按这个工号算。认领错了可以撤销，课会退回成“没对上工号”。',false)+table(['超星登录名','认领老师','工号','超星里的姓名','课程数','状态','老师说明','操作'],d.items.map(x=>[`<span class="mono">${esc(x.login)}</span>`,esc(x.claimant||''),esc(x.staff_no),esc((x.cx_names||[]).join('、')),number(x.courses),cxClaimBadge(x.state),esc(x.note||''),ops(x)]),'还没有老师认领'),'',true);
+}
+async function decideCxClaim(id){
+ const [decision,...rest]=id.split('|'),staff=rest.pop(),login=rest.join('|');
+ const title={approve:'确认认领',reject:'驳回认领',revoke:'撤销认领'}[decision];
+ formModal(`${title} · ${login}`,field('reason',decision==='approve'?'意见（可不填）':'原因（老师会看到）','textarea','',{required:decision!=='approve',full:true}),async v=>{
+  const r=await api('/reference/cx-claims/decide',{method:'POST',body:{login,staff_no:staff,decision,reason:v.reason||''}});
+  toast(`已${title}`+(r.moved?`，${r.moved} 门课已改挂`:''));
+  await showCxClaimsAdmin();
+ },{submit:title,returnTo:()=>showCxClaimsAdmin(),returnLabel:'返回列表'});
 }
 function openSourceProblem(type){
  if(type==='teacher_hr'){presetRoster({problem:'true'});return nav('organization')}
@@ -1390,7 +1423,7 @@ const handlers={
  'integration-intake-download':downloadIntegrationIntake,'integration-intake-import':importIntegrationIntake,'integration-intake-confirm':confirmIntegrationIntake,
  'coordination-checklist':downloadCoordinationChecklist,'integration-profile-download':downloadIntegrationProfile,'integration-profile-import':importIntegrationProfile,
  'inbound-page':code=>{const[id,p]=code.split('|');return showInbound(id,Number(p))},
- nav:id=>nav(id),refresh:()=>render(),'code-tables':()=>showCodeTables(),'code-table-import':id=>{closeModal();return importCodeTable(id)},'source-problem':id=>openSourceProblem(id),'cx-unmatched':()=>download('/reference/cx-unmatched.xlsx'),'hr-unmatched':()=>showHrUnmatched(),'user-from-hr':id=>{const [staff,name]=id.split('|');closeModal();userPreset={staff_no:staff,username:staff,name};return userForm(null)},close:()=>closeModal(),prev:()=>{tablePage=Math.max(1,tablePage-1);return render()},next:()=>{tablePage++;return render()},'reset-filters':()=>{filter={};periodId='';tablePage=1;participationPage=1;syncLocation(true);return render()},
+ nav:id=>nav(id),refresh:()=>render(),'code-tables':()=>showCodeTables(),'code-table-import':id=>{closeModal();return importCodeTable(id)},'source-problem':id=>openSourceProblem(id),'cx-unmatched':()=>download('/reference/cx-unmatched.xlsx'),'cx-claim':()=>showCxClaim(),'cx-claim-submit':id=>submitCxClaim(id),'cx-claims-admin':()=>showCxClaimsAdmin(),'cx-claim-decide':id=>decideCxClaim(id),'hr-unmatched':()=>showHrUnmatched(),'user-from-hr':id=>{const [staff,name]=id.split('|');closeModal();userPreset={staff_no:staff,username:staff,name};return userForm(null)},close:()=>closeModal(),prev:()=>{tablePage=Math.max(1,tablePage-1);return render()},next:()=>{tablePage++;return render()},'reset-filters':()=>{filter={};periodId='';tablePage=1;participationPage=1;syncLocation(true);return render()},
  'toggle-menu':()=>setMobileMenu(!$('#sidebar').classList.contains('open')),
  'close-menu':()=>setMobileMenu(false,true),
  'collapse-sidebar':toggleSidebar,
