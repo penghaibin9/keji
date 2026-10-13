@@ -606,15 +606,22 @@ test('global search is explicitly named when its visual text is hidden on mobile
 
 test('selected design keeps all authorized navigation and Chinese group headings',()=>{
  const e=engine();const html=e.t.sidebarNavigation();
- for(const title of ['工作总览','考核（数据与分析）','业务办理','系统管理','表格导入导出','对接与同步','规则与配置','日志与运行','账号与权限'])assert.ok(html.includes(title));
- for(const route of ['home','todos','records','qualifications','points','assessment','rules','permissions','audit','sync','imports'])assert.ok(html.includes('data-id="'+route+'"'));
+ for(const title of ['待办与通知','培训业务','教师与资质','积分与考核','统计分析','系统管理','表格导入导出','对接与同步','规则与配置','日志与运行','账号与权限'])assert.ok(html.includes(title),title);
+ for(const route of ['home','todos','records','qualifications','points','assessment','rules','permissions','audit','sync','imports','organization','cockpit','ledgers'])assert.ok(html.includes('data-id="'+route+'"'),route);
  // 系统管理简化：字典参数、运行备份、导出下载并入合并页的标签，不再单独占菜单。
  for(const route of ['settings','operations','exports'])assert.ok(!html.includes('data-id="'+route+'"'));
- assert.equal((html.match(/aria-expanded="true"/g)||[]).length,4);
+ assert.equal((html.match(/aria-expanded="true"/g)||[]).length,6);
  assert.match(html,/aria-controls="nav-group-0"/);assert.match(html,/title="工作总览" aria-label="工作总览"/);
- const business=html.slice(html.indexOf('>业务办理<'),html.indexOf('>考核（数据与分析）<'));
- for(const title of ['培训项目管理','教师资质管理','培训课程管理','培训基地管理','表格导入导出'])assert.ok(business.includes(title));
+ const business=html.slice(html.indexOf('>培训业务<'),html.indexOf('>教师与资质<'));
+ for(const title of ['培训项目管理','培训课程管理','培训基地管理','培训数据'])assert.ok(business.includes(title),title);
  assert.doesNotMatch(business,/data-id="points"|data-id="assessment"/);
+});
+test('teacher menu keeps only daily items with plain titles',()=>{
+ const e=engine(undefined,'teacher');e.t.setUser({user:{id:'u',name:'教师'},role:{kind:'teacher'},permissions:['portal.read','records.read','qualification.read','qualification.write','points.read','assessment.read','dispute.write','notice.read','export']});
+ const html=e.t.sidebarNavigation(),ids=[...html.matchAll(/data-action="nav" data-id="(\w+)"/g)].map(m=>m[1]);
+ assert.deepEqual(ids,['home','mine','todos','points','assessment','notices']);
+ assert.match(html,/>我的积分</);assert.match(html,/>我的考核</);assert.doesNotMatch(html,/三级考核管理|教师积分激励|培训项目管理/);
+ for(const p of ['projects','qualifications','courses','records','credits','disputes'])assert.ok(e.t.pageAllowed(p),p+' still reachable from links');
 });
 test('navigation does not expose unauthorized items or empty groups',()=>{
  const e=engine();e.t.setUser({user:{id:'u',name:'教师'},role:{kind:'teacher'},permissions:['portal.read']});
