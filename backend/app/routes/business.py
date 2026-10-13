@@ -228,14 +228,17 @@ def _todo_items(db,a):
                         expires=q.expires,days_remaining=(q.expires-school_today()).days)
     if 'assessment.read' in a.permissions:
         # 缺负责人的级别自动上交上一级办理（identities.stage_handler）
-        from ..identities import stage_handler,org_heads,VACANCY_LABEL
-        heads=None;teachers={}
-        for x in db.scalars(select(Assessment).where(a.scope(Assessment.teacher_id))):
+        from ..identities import stage_handler,org_heads,org_map,teacher_orgs,VACANCY_LABEL
+        rows=db.scalars(select(Assessment).where(a.scope(Assessment.teacher_id),Assessment.state.in_(['TEACHER','DEPARTMENT','COLLEGE','SCHOOL','READY']))).all()
+        # 一次取全组织树、负责人和涉及教师的组织，逐条判断时不再查库。
+        heads=orgs=teachers=None
+        if a.role.kind!='teacher' and 'assessment.review' in a.permissions:
+            heads=org_heads(db);orgs=org_map(db)
+            teachers=teacher_orgs(db,[x.teacher_id for x in rows if x.teacher_id!=a.id and x.state in ('DEPARTMENT','COLLEGE','SCHOOL')])
+        for x in rows:
             if x.teacher_id==a.id and x.state=='TEACHER' and 'assessment.confirm' in a.permissions:add('assessment',x,'本人考核确认')
             elif x.teacher_id!=a.id and x.state in ('DEPARTMENT','COLLEGE','SCHOOL') and 'assessment.review' in a.permissions and a.role.kind!='teacher':
-                if heads is None:heads=org_heads(db)
-                if x.teacher_id not in teachers:teachers[x.teacher_id]=db.get(User,x.teacher_id)
-                kind,vacant=stage_handler(db,teachers[x.teacher_id],x.state,heads)
+                kind,vacant=stage_handler(db,teachers.get(x.teacher_id),x.state,heads,orgs)
                 if kind==a.role.kind:add('assessment',x,'本级考核确认'+('（'+VACANCY_LABEL[vacant]+'）' if vacant else ''))
             elif x.state=='READY' and 'assessment.archive' in a.permissions and x.teacher_id!=a.id:add('assessment',x,'考核归档')
     if a.role.kind!='teacher' and 'assessment.read' in a.permissions:
@@ -267,8 +270,8 @@ def _todo_items(db,a):
         for x in db.scalars(select(Dispute).where(a.scope(Dispute.teacher_id),Dispute.state=='OPEN')):
             if x.teacher_id==a.id or 'dispute.resolve' in a.permissions:add('dispute',x,('我提出的异议：' if x.teacher_id==a.id else '数据核对：')+x.reason[:40])
     if 'audit.read' in a.permissions and a.role.kind=='school' and a.user.is_admin:
-        from ..security_alerts import security_summary
-        summary=security_summary(db,a)
+        from ..security_alerts import security_alert
+        summary=security_alert(db,a)
         if summary['alert']:
             from types import SimpleNamespace
             add('security',SimpleNamespace(id='security-alerts'),'安全提示：'+'；'.join(summary['flags']),'OPEN')

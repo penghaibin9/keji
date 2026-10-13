@@ -337,7 +337,7 @@ class Audit(Entity, Base):
     reason: Mapped[str] = mapped_column(Text)
     result: Mapped[str] = mapped_column(String(30))
     request_id: Mapped[str] = mapped_column(String(36))
-    __table_args__ = (Index("ix_audit_time", "created_at"),)
+    __table_args__ = (Index("ix_audit_time", "created_at"), Index("ix_audit_result_time", "result", "created_at"))
 
 class RuntimeState(Base):
     __tablename__ = "runtime_state"

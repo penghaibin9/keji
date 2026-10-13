@@ -9,6 +9,7 @@ from __future__ import annotations
 from datetime import date, datetime, timezone
 from decimal import Decimal,ROUND_HALF_UP
 from collections import Counter
+from functools import lru_cache
 import re
 from sqlalchemy import String,Integer,DateTime,Date,Boolean,JSON,Text,ForeignKey,UniqueConstraint,Index,CheckConstraint,Numeric,select
 from sqlalchemy.orm import Mapped,mapped_column
@@ -269,6 +270,7 @@ _SPAN_YEAR=re.compile(r'(\d{4})\s*[-－—~至到]\s*(\d{4})')
 _START_YEAR_TERM=re.compile(r'^\s*(\d{4})\s*[-－_ ]\s*([1-4])\s*$')
 UNKNOWN_YEAR='未识别学年'
 
+@lru_cache(maxsize=8192)
 def school_year_of(term_name):
     """'2025-2026学年第一学期' / '2025-2026-1' -> '2025-2026'; 超星 '2025-1' (start year + term) -> '2025-2026'."""
     text=str(term_name or '')
@@ -280,6 +282,7 @@ def school_year_of(term_name):
 
 _TERM_WORD=re.compile(r'第\s*([一二12])\s*学期|(?:上|下)学期|[-－_ ]\s*([12])\s*$')
 
+@lru_cache(maxsize=8192)
 def term_no_of(term_name):
     """'…第一学期' / '…-1' / '2025-1' -> 1; second term -> 2; otherwise None."""
     text=str(term_name or '').strip();m=_TERM_WORD.search(text)
@@ -352,7 +355,7 @@ def review_state(review,basis):
     if review is None or review.state not in CREDIT_REVIEW_STATES or review.data.get('basis')!=basis:return 'pending'
     return CREDIT_REVIEW_STATES[review.state]
 
-def annual_teaching_credits(db,rows,*,include_details=True):
+def annual_teaching_credits(db,rows,*,include_details=True,reviews=None):
     """Sum each teacher's course credits over the two terms of a school year.
 
     教务 (JW) rows take credit from 课程总库 by course code unless the row carries its own.
@@ -363,7 +366,7 @@ def annual_teaching_credits(db,rows,*,include_details=True):
     separately (pending_credit) so teachers see what is still waiting.
     """
     rows=list(rows)
-    reviews=credit_reviews(db,[r.id for r in rows])
+    if reviews is None:reviews=credit_reviews(db,[r.id for r in rows])
     def link(r):return str((r.extra or {}).get('jw_course_code') or '').strip()
     catalogue=_catalogue(db,{r.course_code for r in rows if r.origin=='JW'}|{link(r) for r in rows if r.origin=='CX' and link(r)})
     jw_taught={(r.staff_no,school_year_of(r.term_name),r.course_code) for r in rows if r.origin=='JW'}
@@ -428,22 +431,67 @@ def annual_teaching_credits(db,rows,*,include_details=True):
     out.sort(key=lambda g:(g['school_year']!=UNKNOWN_YEAR,g['school_year']),reverse=True)  # newest year first, unknown last
     return out
 
+import threading
+_CREDIT_CACHE={'key':None,'at':0.0,'groups':[]}
+_CREDIT_LOCK=threading.Lock()
+_CREDIT_CACHE_SECONDS=1800
+
+def _credit_fingerprint(db):
+    """Cheap in-database summary of everything the per-teacher credit totals read; changes whenever any of it changes."""
+    from sqlalchemy import func
+    one=lambda stmt:tuple(db.execute(stmt).one())
+    return (one(select(func.count(TeacherCourseTerm.id),func.coalesce(func.sum(TeacherCourseTerm.version),0),func.count(TeacherCourseTerm.user_id))
+                .where(TeacherCourseTerm.active.is_(True))),
+            one(select(func.count(SocialResource.id),func.coalesce(func.sum(SocialResource.version),0)).where(SocialResource.kind==CREDIT_REVIEW_KIND)),
+            one(select(func.count(SchoolCourse.id),func.coalesce(func.sum(SchoolCourse.version),0)).where(SchoolCourse.active.is_(True))),
+            one(select(func.count(TeacherHrProfile.id),func.coalesce(func.sum(TeacherHrProfile.version),0)).where(TeacherHrProfile.active.is_(True))))
+
+def all_credit_groups(db):
+    """Teacher-year credit groups (no per-course details) for every teacher with an account.
+
+    22 万条教师课程表逐条算一遍要几秒，而待办、工作总览每次打开都要用，所以按“数据指纹”缓存：
+    课程表、认定记录、课程总库或教职工表任一变化指纹就变，缓存自动失效；最长也只保留一分钟。
+    只读取算分用到的列，不构造完整对象。
+    """
+    import time
+    key=_credit_fingerprint(db)
+    def fresh():return _CREDIT_CACHE['key']==key and time.monotonic()-_CREDIT_CACHE['at']<_CREDIT_CACHE_SECONDS
+    if fresh():return _CREDIT_CACHE['groups']
+    with _CREDIT_LOCK:  # 同时来几个请求时只算一次，其余等结果
+        if fresh():return _CREDIT_CACHE['groups']
+        from itertools import chain
+        from sqlalchemy import literal
+        from types import SimpleNamespace
+        T=TeacherCourseTerm
+        base=(T.id,T.origin,T.staff_no,T.user_id,T.teacher_name,T.course_code,T.term_name,T.credit,T.hours)
+        keep=(T.active.is_(True),T.user_id.is_not(None))
+        # 教务课程没有关联字段，不必取 extra（JSON 解码是最大的开销之一）；只有超星课程用它指向教务课程。
+        jw=db.execute(select(*base,literal(None).label('extra')).where(*keep,T.origin=='JW').execution_options(yield_per=5000))
+        cx=db.execute(select(*base,T.extra).where(*keep,T.origin!='JW').execution_options(yield_per=5000))
+        # 认定记录一次查出，不再按 500 条一批反复查。
+        reviews={code[3:]:SimpleNamespace(state=state,data=data) for code,state,data in
+                 db.execute(select(SocialResource.code,SocialResource.state,SocialResource.data).where(SocialResource.kind==CREDIT_REVIEW_KIND))}
+        groups=annual_teaching_credits(db,chain(jw,cx),include_details=False,reviews=reviews)
+        _CREDIT_CACHE.update(key=key,at=time.monotonic(),groups=groups)
+        return groups
+
 def pending_credit_reviews(db,actor):
     """Teacher-years with courses waiting for this reviewer: 教研室主任 -> own teachers, 学院负责人 -> 教研室主任 of the college."""
     if actor.role.kind not in ('dept','college','school') or 'assessment.review' not in actor.permissions:return []
     if actor.role.kind=='school' and not actor.user.is_admin:return []
-    q=select(TeacherCourseTerm).where(TeacherCourseTerm.active.is_(True),actor.scope(TeacherCourseTerm.user_id),TeacherCourseTerm.user_id!=actor.id)
+    allowed=set(db.scalars(select(User.id).where(actor.scope(User.id),User.id!=actor.id)))
+    groups=[g for g in all_credit_groups(db) if g['pending_courses'] and g['user_id'] in allowed]
     if actor.role.kind in ('college','school'):
         # 学院：本院教研室主任的课，加上缺教研室主任的老师；学校：学院也缺负责人的老师（缺位上交）
-        from .identities import org_heads,stage_handler,head_user_ids
-        heads=org_heads(db);mine=set()
-        ids={x for x in db.scalars(select(TeacherCourseTerm.user_id).where(TeacherCourseTerm.active.is_(True),TeacherCourseTerm.user_id.is_not(None),
-            actor.scope(TeacherCourseTerm.user_id),TeacherCourseTerm.user_id!=actor.id).distinct())}
+        from .identities import org_heads,stage_handler,head_user_ids,org_map,teacher_orgs
+        heads=org_heads(db);orgs=org_map(db);mine=set()
+        ids={g['user_id'] for g in groups}
         dept_heads=head_user_ids(db,'dept') if actor.role.kind=='college' else set()
+        people=teacher_orgs(db,ids)
         for uid in ids:
-            if uid in dept_heads or stage_handler(db,db.get(User,uid),'DEPARTMENT',heads)[0]==actor.role.kind:mine.add(uid)
-        q=q.where(TeacherCourseTerm.user_id.in_(sorted(mine) or ['']))
-    return [g for g in annual_teaching_credits(db,db.scalars(q),include_details=False) if g['pending_courses']]
+            if uid in dept_heads or stage_handler(db,people.get(uid),'DEPARTMENT',heads,orgs)[0]==actor.role.kind:mine.add(uid)
+        groups=[g for g in groups if g['user_id'] in mine]
+    return groups
 
 def term_anchor(school_year,term_no):
     """Date a term counts on: term 1 of '2025-2026' -> 2025-09-01, term 2 -> 2026-03-01.

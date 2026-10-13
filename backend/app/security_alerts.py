@@ -17,6 +17,28 @@ def _threshold(db, code, default):
     return value if isinstance(value, int) and value > 0 else default
 
 
+def security_alert(db, actor, days=7):
+    """Only what the 待办 and 工作总览 need: whether to raise the alert and why.
+
+    The full summary also lists recent objects, key changes and failed tasks; the home page
+    reads none of that, and on a large audit table those extra queries made every page open slow.
+    """
+    actor.require_admin(); actor.require('audit.read')
+    now = utcnow(); since = now - timedelta(days=days)
+    denied_limit = _threshold(db, 'security_denied_threshold', DENIED_PER_USER)
+    login_limit = _threshold(db, 'security_login_threshold', LOGIN_REFUSALS)
+    flagged = db.scalar(select(func.count()).select_from(
+        select(Audit.actor_id).where(Audit.result == 'DENIED', Audit.created_at >= since, Audit.actor_id.is_not(None))
+        .group_by(Audit.actor_id, Audit.actor_name).having(func.count() >= denied_limit).limit(1).subquery())) or 0
+    refusals = db.scalar(select(func.count()).select_from(Audit).where(Audit.module == 'auth', Audit.action == '登录拒绝', Audit.created_at >= since)) or 0
+    locked = db.scalar(select(func.count()).select_from(User).where(User.locked_until > now)) or 0
+    flags = []
+    if flagged:flags.append(f'有账号 {days} 天内越权或被拦截访问达到 {denied_limit} 次')
+    if refusals >= login_limit:flags.append(f'{days} 天内登录被拒绝 {refusals} 次')
+    if locked:flags.append('有账号因连续登录失败被临时锁定')
+    return {'flags': flags, 'alert': bool(flags)}
+
+
 def security_summary(db, actor, days=7):
     actor.require_admin(); actor.require('audit.read')
     now = utcnow(); since = now - timedelta(days=days)

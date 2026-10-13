@@ -1,0 +1,114 @@
+{
+  "revision": "20261013_0005",
+  "tables": {
+    "audit_events": {
+      "checks": [],
+      "columns": {
+        "action": {
+          "family": "string",
+          "length": 120,
+          "nullable": false
+        },
+        "actor_id": {
+          "family": "string",
+          "length": 36,
+          "nullable": true
+        },
+        "actor_name": {
+          "family": "string",
+          "length": 100,
+          "nullable": false
+        },
+        "after": {
+          "family": "json",
+          "nullable": false
+        },
+        "before": {
+          "family": "json",
+          "nullable": false
+        },
+        "created_at": {
+          "family": "datetime",
+          "nullable": false
+        },
+        "id": {
+          "family": "string",
+          "length": 36,
+          "nullable": false
+        },
+        "module": {
+          "family": "string",
+          "length": 50,
+          "nullable": false
+        },
+        "object_id": {
+          "family": "string",
+          "length": 128,
+          "nullable": false
+        },
+        "org_id": {
+          "family": "string",
+          "length": 36,
+          "nullable": true
+        },
+        "reason": {
+          "family": "text",
+          "nullable": false
+        },
+        "request_id": {
+          "family": "string",
+          "length": 36,
+          "nullable": false
+        },
+        "result": {
+          "family": "string",
+          "length": 30,
+          "nullable": false
+        }
+      },
+      "foreign_keys": [],
+      "indexes": [
+        [
+          "ix_audit_events_actor_id",
+          [
+            "actor_id"
+          ],
+          false
+        ],
+        [
+          "ix_audit_events_module",
+          [
+            "module"
+          ],
+          false
+        ],
+        [
+          "ix_audit_events_org_id",
+          [
+            "org_id"
+          ],
+          false
+        ],
+        [
+          "ix_audit_result_time",
+          [
+            "result",
+            "created_at"
+          ],
+          false
+        ],
+        [
+          "ix_audit_time",
+          [
+            "created_at"
+          ],
+          false
+        ]
+      ],
+      "primary_key": [
+        "id"
+      ],
+      "unique": []
+    }
+  }
+}

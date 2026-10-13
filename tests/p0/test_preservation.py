@@ -22,6 +22,12 @@ def test_existing_models_preserved_except_authorized_security_columns():
             added=[x for x in node.body if isinstance(x,ast.AnnAssign) and isinstance(x.target,ast.Name) and x.target.id in additions[node.name]]
             assert {x.target.id for x in added}==additions[node.name]
             node.body=[x for x in node.body if x not in added]
+    # 20261013_0005: the one authorized index addition (security summary reads the few DENIED rows of a large audit table).
+    for node in after.body:
+        if isinstance(node,ast.ClassDef) and node.name=='Audit':
+            for stmt in node.body:
+                if isinstance(stmt,ast.Assign) and any(getattr(t,'id',None)=='__table_args__' for t in stmt.targets):
+                    stmt.value.elts=[x for x in stmt.value.elts if not (isinstance(x,ast.Call) and x.args and getattr(x.args[0],'value',None)=='ix_audit_result_time')]
     assert ast.dump(before,include_attributes=False)==ast.dump(after,include_attributes=False)
 
 

@@ -199,18 +199,35 @@ def _has_head(heads, org_id, kind, exclude_user):
     return any(h['usable'] and h['role_kind'] == kind and h['user_id'] != exclude_user for h in heads.get(org_id, []))
 
 
-def stage_handler(db, teacher, state, heads=None):
+def org_map(db):
+    """All organizations by id; the tree is small, so one query replaces a lookup per teacher."""
+    return {o.id: o for o in db.scalars(select(Org))}
+
+
+def teacher_orgs(db, user_ids):
+    """{user_id: SimpleNamespace(id, org_id)} in a few batched queries (stage_handler needs nothing else)."""
+    from types import SimpleNamespace
+    ids, out = sorted({i for i in user_ids if i}), {}
+    for i in range(0, len(ids), 500):
+        for uid, org_id in db.execute(select(User.id, User.org_id).where(User.id.in_(ids[i:i + 500]))):
+            out[uid] = SimpleNamespace(id=uid, org_id=org_id)
+    return out
+
+
+def stage_handler(db, teacher, state, heads=None, orgs=None):
     """Which level handles this assessment stage for this teacher, after vacancy fallback.
 
     Returns (kind, acting_for) where acting_for names the vacant level that was handed up, or None.
+    Pass heads/orgs (org_heads, org_map) when handling many teachers so nothing is queried per teacher.
     """
     kind = STAGE_KIND.get(state)
     if kind not in HEAD_KINDS or teacher is None:
         return kind, None
     heads = org_heads(db) if heads is None else heads
-    org = db.get(Org, teacher.org_id)
+    get = orgs.get if orgs is not None else db.get
+    org = get(teacher.org_id) if orgs is not None else db.get(Org, teacher.org_id)
     dept = org if org is not None and org.kind == 'dept' else None
-    college = db.get(Org, dept.parent_id) if dept is not None else (org if org is not None and org.kind == 'college' else None)
+    college = (get(dept.parent_id) if orgs is not None else db.get(Org, dept.parent_id)) if dept is not None else (org if org is not None and org.kind == 'college' else None)
     if kind == 'dept':
         if dept is not None and _has_head(heads, dept.id, 'dept', teacher.id):
             return 'dept', None
