@@ -18,3 +18,12 @@ def configuration_xlsx(request:Request):
         audit(db,a,'delivery','configuration','导出初始化配置与数据字典',after={'bytes':len(data)},reason='采购交付配置清单')
     name=quote('平台初始化配置与数据字典.xlsx')
     return Response(data,media_type='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',headers={'Content-Disposition':f"attachment; filename*=UTF-8''{name}",'X-Content-Type-Options':'nosniff'})
+
+@router.get('/delivery/permission-list.xlsx')
+def permission_list_xlsx(request:Request):
+    from ..permission_list import workbook
+    with request.app.state.sessions.begin() as db:
+        a,s=current_actor(db,request);a.require('data.export');a.require_admin();data=workbook(db)
+        audit(db,a,'delivery','permission-list','导出权限清单',after={'bytes':len(data)},reason='权限复核留档')
+    name=quote('权限清单.xlsx')
+    return Response(data,media_type='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',headers={'Content-Disposition':f"attachment; filename*=UTF-8''{name}",'X-Content-Type-Options':'nosniff'})

@@ -147,3 +147,48 @@ def test_unlock_keeps_password(client2, app2):
     assert r.status_code == 200, r.text
     assert _user(client2, 'teacher')['locked'] is False
     auth(client2, 'teacher')
+
+
+def test_temporary_identity_expires_after_its_last_day(app2,client2):
+    from app.core import school_today
+    from app.identities import KEY,expired,parse_valid_until
+    from app.models import Setting
+    import pytest
+    from fastapi import HTTPException
+    today=school_today()
+    assert not expired({'valid_until':today.isoformat()}) and expired({'valid_until':(today-timedelta(days=1)).isoformat()}) and not expired({})
+    for bad in ((today-timedelta(days=1)).isoformat(),(today+timedelta(days=400)).isoformat(),'2026/1/1','abc'):
+        with pytest.raises(HTTPException):parse_valid_until(bad)
+    auth(client2,'schooladmin')
+    assert _add_extra(client2,'teacher',[{'role_id':'role-dept','org_id':'dept1','valid_until':(today-timedelta(days=1)).isoformat()}]).status_code==422
+    r=_add_extra(client2,'teacher',[{'role_id':'role-dept','org_id':'dept1','valid_until':(today+timedelta(days=3)).isoformat()}])
+    assert r.status_code==200,r.text
+    assert len(auth(client2,'teacher')['identities'])==2
+    # 到期（把到期日改成昨天，模拟时间过去）：不再能切换，也不算负责人；管理员列表仍看得到并标注已到期
+    with app2.state.sessions.begin() as db:
+        row=db.get(Setting,KEY);items=[dict(x) for x in row.value['items']]
+        for x in items:x['valid_until']=(today-timedelta(days=1)).isoformat()
+        row.value={'items':items};row.version+=1
+    assert auth(client2,'teacher').get('identities',[])==[]
+    auth(client2,'schooladmin')
+    extra=_user(client2,'teacher')['extra_identities'][0]
+    assert extra['expired'] is True and extra['valid_until']
+    heads=next(o for o in client2.get('/api/organizations').json()['items'] if o['id']=='dept1')['heads']
+    assert all(h['user_id']!='teacher' for h in heads)
+
+
+def test_permission_list_export_has_one_row_per_identity(client2):
+    from io import BytesIO
+    from openpyxl import load_workbook
+    from datetime import timedelta
+    from app.core import school_today
+    auth(client2,'schooladmin')
+    until=(school_today()+timedelta(days=2)).isoformat()
+    assert _add_extra(client2,'teacher',[{'role_id':'role-dept','org_id':'dept1','valid_until':until},{'role_id':'role-college','org_id':'college1'}]).status_code==200
+    r=client2.get('/api/delivery/permission-list.xlsx');assert r.status_code==200,r.text
+    sheet=load_workbook(BytesIO(r.content)).active
+    rows=[[c.value for c in row] for row in sheet.iter_rows(min_row=2)]
+    mine=[x for x in rows if x[0]=='teacher']
+    assert [x[6] for x in mine]==['主身份','临时兼任','长期兼任'] and mine[1][10]==until and '、' in mine[0][11]
+    auth(client2,'teacher')
+    assert client2.get('/api/delivery/permission-list.xlsx').status_code==403

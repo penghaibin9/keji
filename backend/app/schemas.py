@@ -55,6 +55,8 @@ class UserIn(Reason):
 class IdentityIn(Input):
     role_id: Ident
     org_id: Ident
+    # 临时兼任（例如负责人出差、休假期间由他人代办）：到期日当天仍有效，之后自动失效。不填表示长期。
+    valid_until: str|None=Field(default=None,max_length=10)
 class UserUpdate(Reason):
     name: str = Field(min_length=1,max_length=100)
     title: str = Field(default='',max_length=80)
@@ -67,6 +69,7 @@ class UserUpdate(Reason):
     extra_identities: list[IdentityIn]|None=Field(default=None,max_length=6)
 class OrgHeadIn(Reason):
     user_id: Ident
+    valid_until: str|None=Field(default=None,max_length=10)
 class RoleCopy(Reason):
     code: Ident
     name: str = Field(min_length=1,max_length=100)

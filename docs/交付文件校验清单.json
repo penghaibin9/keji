@@ -4,7 +4,7 @@
   "migration_heads": [
     "20261012_0004"
   ],
-  "file_count": 395,
+  "file_count": 397,
   "files": {
     ".dockerignore": {
       "sha256": "3ce289acb5e52c4133ecaa490b8672406f986f409f7397b8a566db497846caad",
@@ -191,12 +191,16 @@
       "size": 773
     },
     "backend/app/identities.py": {
-      "sha256": "7e35490dc6d43e9dc8f336cea77c3732e6969fdb1b30d48cd70f8e8ada7f5fa3",
-      "size": 11602
+      "sha256": "604e485859c3e4ffb70edd3bcf996518cd71cfcd394755afecaf5e45d46048e4",
+      "size": 12987
     },
     "backend/app/import_access.py": {
       "sha256": "4e1c426028d72f4d9ded023b5e17d78ea0b00b8603141adf3c469d6e7674bfda",
       "size": 4910
+    },
+    "backend/app/inbound_retention.py": {
+      "sha256": "14c27aa71e5d9f7dd30884b24a32a922f872682f35152691e160fbb08ca4c9d7",
+      "size": 3653
     },
     "backend/app/inbound_sync.py": {
       "sha256": "4f2142b6271409521c7cc712228a55afaa9f4771859f2c6b65e368ea16aca61c",
@@ -231,8 +235,8 @@
       "size": 6069
     },
     "backend/app/integration_status.py": {
-      "sha256": "b4a70ff93b069779502a30228fee78defcc7efa1adee21503799d09cd7e5d2b2",
-      "size": 3143
+      "sha256": "76415531d966351a008f2787bb4f72a5fb202fda8a768bac66c14855da16f3d7",
+      "size": 4238
     },
     "backend/app/integrations.py": {
       "sha256": "701f8d64f4d92c61ef3a903016c05c33aa67221dfbee131dcfe8e5fbfc5de6ab",
@@ -278,6 +282,10 @@
       "sha256": "22d9cf32e740cc1f37e92f6b10091053efef9c23a5fbcef9e59d78188394e4a2",
       "size": 945
     },
+    "backend/app/permission_list.py": {
+      "sha256": "b7c0cce33e263f706157dafd33486827139f00034cfcb04c9ed8d1aa19113d62",
+      "size": 2067
+    },
     "backend/app/permissions.py": {
       "sha256": "bb9e26008074254727b06d43777b1a85be0e0b8f018d0a30f8da965a3e753fee",
       "size": 1045
@@ -315,8 +323,8 @@
       "size": 86
     },
     "backend/app/routes/admin.py": {
-      "sha256": "00cc43f38d99df61b4ddceb301d38d708884e12417d8ce93e7a321b794bdb910",
-      "size": 30155
+      "sha256": "7817701f99f55531b171f1ad8160b08c6f060c30ca6804e291c71d1a061bebf4",
+      "size": 30183
     },
     "backend/app/routes/auth.py": {
       "sha256": "b7daa5d700bfe4600d100cf74a42a9b5ce1fc63bd7febc868d5584d89fa4e425",
@@ -331,8 +339,8 @@
       "size": 51726
     },
     "backend/app/routes/delivery.py": {
-      "sha256": "2c3d0cdcef2c954a01c11f6cf4314fa5057cfff9ecd407c6389ab806ea5de45a",
-      "size": 1326
+      "sha256": "bac63207300f75a8fdfe6e4e09966a89dc6dd41f81a05692579fa21ad6dbddc8",
+      "size": 2009
     },
     "backend/app/routes/files.py": {
       "sha256": "044ee90afacb047ac1223d5df8f44c06011e083b4324aadf2d31d2c6b122c743",
@@ -347,8 +355,8 @@
       "size": 14050
     },
     "backend/app/routes/integrations.py": {
-      "sha256": "df8065451621a789a54273761f0ba88d0340c10758f96e20b115d3fa77bf32f3",
-      "size": 32519
+      "sha256": "e62883edcfa415a6c2d4a810e9fc30329a606bea9f21bcd986629e8739c166b4",
+      "size": 32649
     },
     "backend/app/routes/ledgers.py": {
       "sha256": "af168055484f8401a0463463e5dae19118ace03a3a6db89c076a32e6f6ccb358",
@@ -379,8 +387,8 @@
       "size": 3593
     },
     "backend/app/schemas.py": {
-      "sha256": "f13af1a4d179ee7f3341a54fc346a44c0c0d7fc6151af431b368f2ab98860123",
-      "size": 13684
+      "sha256": "6eac52d85a68b26edba9ca8a51a42652975e7e588c7b39348818454671204546",
+      "size": 13645
     },
     "backend/app/scoring_methods.py": {
       "sha256": "5dc284693aacb8d57c1dea6ce7c365756448e9e0b2372c0d77824d591336fd9c",
@@ -719,8 +727,8 @@
       "size": 15161
     },
     "frontend/app.js": {
-      "sha256": "e8d3714140870cfa19d641362b596288cdf5ca2a21e450157efc63211e2d2579",
-      "size": 380208
+      "sha256": "e02b916c69cba4e88ef6d3d6c8dda032ddcc4f12c96ad0705da3d54cddaba47e",
+      "size": 380793
     },
     "frontend/approval-flow.js": {
       "sha256": "f1850f90540d9c25ac35ef217ea27ae672a4b9137a83c00aadcb12df3d564666",
@@ -1291,8 +1299,8 @@
       "size": 3546
     },
     "tests/r2/test_multi_identity.py": {
-      "sha256": "4765641f20924eb9d87db160e3660f4d9e42598081ca5f2d56c53376c7230b08",
-      "size": 8977
+      "sha256": "0c776d66d264e2c51055b97d90c583972871cb1edaa7723df1d8776a229690aa",
+      "size": 11721
     },
     "tests/r2/test_org_rule_targets.py": {
       "sha256": "6f1c7ac75c30f170ada088f228d02791036cc917ff4f375a4beeeecb1d5b5387",
@@ -1571,8 +1579,8 @@
       "size": 4105
     },
     "tests/r2/test_workbench_speed.py": {
-      "sha256": "70e488150b8572cbdaac5ab843f67be642d339478ec07ab68556d78a85d3b470",
-      "size": 8023
+      "sha256": "85362762cc117c9642f6b4d99f8c3eeda19214c78bb51721a976361bb67c85fb",
+      "size": 11285
     },
     "tests/requirements-p0.txt": {
       "sha256": "983f0f208bf908c687f82ccdf2e47cdbacd24390872b94c26cccf9de5a202a9e",

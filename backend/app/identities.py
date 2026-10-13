@@ -27,13 +27,40 @@ def _row(db, lock=False):
     return db.scalar(q.with_for_update() if lock else q)
 
 
-def all_extras(db, lock=False):
+def expired(item, today=None):
+    """A temporary delegation ends after its valid_until day (inclusive); no valid_until means no end."""
+    until = item.get('valid_until')
+    if not until:
+        return False
+    from .core import school_today
+    return str(until) < (today or school_today()).isoformat()
+
+
+def all_extras(db, lock=False, include_expired=False):
+    """Extra identities in force. Writers (lock=True) and the admin list see expired ones too, so nothing is dropped silently."""
     row = _row(db, lock)
-    return list((row.value or {}).get('items', [])) if row else []
+    items = list((row.value or {}).get('items', [])) if row else []
+    return items if (lock or include_expired) else [x for x in items if not expired(x)]
 
 
-def extras_for(db, user_id):
-    return [x for x in all_extras(db) if x.get('user_id') == user_id]
+def extras_for(db, user_id, include_expired=False):
+    return [x for x in all_extras(db, include_expired=include_expired) if x.get('user_id') == user_id]
+
+
+def parse_valid_until(value):
+    """Validate an optional end date (YYYY-MM-DD, today at the earliest, at most one year ahead)."""
+    if not value:
+        return None
+    from datetime import date, timedelta
+    from .core import school_today
+    try:
+        day = date.fromisoformat(str(value))
+    except ValueError:
+        raise HTTPException(422, '到期日期格式应为 年-月-日')
+    today = school_today()
+    if day < today or day > today + timedelta(days=366):
+        raise HTTPException(422, '临时兼任的到期日不能早于今天，也不能超过一年')
+    return day.isoformat()
 
 
 def save_extras(db, items):
@@ -70,8 +97,16 @@ def replace_user_extras(db, actor, user, wanted, reason):
         org, role = validate_extra(db, user, w['role_id'], w['org_id'], user.staff_no)
         if org.id not in actor.org_ids or not set(role.permissions) <= actor.permissions:
             raise HTTPException(403, '不能分配超出本人授权的角色')
-        result.append(keep.get(pair) or {'id': str(uuid.uuid4()), 'user_id': user.id, 'role_id': role.id, 'org_id': org.id,
-                                         'granted_by': actor.id, 'granted_at': utcnow().isoformat(timespec='seconds'), 'reason': reason[:200]})
+        old = keep.get(pair)
+        until = w.get('valid_until') or None
+        # An unchanged end date is kept as it is (an expired one may stay listed until an admin removes it).
+        until = until if old is not None and old.get('valid_until') == until else parse_valid_until(until)
+        item = dict(old) if old else {'id': str(uuid.uuid4()), 'user_id': user.id, 'role_id': role.id, 'org_id': org.id,
+                                      'granted_by': actor.id, 'granted_at': utcnow().isoformat(timespec='seconds'), 'reason': reason[:200]}
+        item.pop('valid_until', None)
+        if until:
+            item['valid_until'] = until
+        result.append(item)
     save_extras(db, [x for x in items if x.get('user_id') != user.id] + result)
     return before, result
 

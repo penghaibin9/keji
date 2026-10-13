@@ -80,10 +80,15 @@ def add_org_head(ident:str,data:OrgHeadIn,request:Request):
         if user is None:raise HTTPException(422,'只能从本组织在职、有工号的老师里选负责人')
         if not set(role.permissions)<=a.permissions:raise HTTPException(403,'不能分配超出本人授权的角色')
         if any(h['user_id']==user.id for h in org_heads(db).get(org.id,[])):raise HTTPException(409,user.name+' 已经是本组织负责人')
-        items=all_extras(db,lock=True)
+        from ..identities import expired
+        # 同一职务以前的临时兼任已到期：换成这次新设的，不留重复。
+        items=[x for x in all_extras(db,lock=True) if not (expired(x) and (x['user_id'],x['role_id'],x['org_id'])==(user.id,role.id,org.id))]
         if sum(1 for x in items if x['user_id']==user.id)>=MAX_EXTRA_PER_USER:raise HTTPException(409,'该老师的兼任身份已达上限')
         extra={'id':str(uuid.uuid4()),'user_id':user.id,'role_id':role.id,'org_id':org.id,'granted_by':a.id,
                'granted_at':utcnow().isoformat(timespec='seconds'),'reason':data.reason[:200]}
+        from ..identities import parse_valid_until
+        until=parse_valid_until(data.valid_until)
+        if until:extra['valid_until']=until
         save_extras(db,items+[extra]);user.version+=1
         after={'user_id':user.id,'name':user.name,'staff_no':user.staff_no,'role':role.name,'org':org.name}
         audit(db,a,'organization',org.id,'设置负责人',after=after,reason=data.reason)
@@ -176,9 +181,10 @@ def users(request:Request):
         elif state=='missing':q=q.where(User.staff_no.is_not(None),User.staff_no.not_in(in_hr))
         elif state:q=q.where(User.staff_no.in_(in_hr.where(TeacherHrProfile.active.is_(state=='active'))))
         out=page_result(db,q.order_by(User.username),p,z)
-        from ..identities import all_extras,describe
+        from ..identities import all_extras,describe,expired
         extras={}
-        for x in all_extras(db):extras.setdefault(x['user_id'],[]).append({'id':x['id'],**describe(db,x['role_id'],x['org_id'])})
+        for x in all_extras(db,include_expired=True):extras.setdefault(x['user_id'],[]).append({'id':x['id'],**describe(db,x['role_id'],x['org_id']),
+            'valid_until':x.get('valid_until') or '','expired':expired(x)})
         locked={u.id for u in db.scalars(select(User).where(User.id.in_([x['id'] for x in out['items']] or ['']),User.locked_until>utcnow()))}
         for x in out['items']:x['extra_identities']=extras.get(x['id'],[]);x['locked']=x['id'] in locked
         numbers=[x['staff_no'] for x in out['items'] if x.get('staff_no')]
