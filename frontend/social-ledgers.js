@@ -420,7 +420,7 @@ export async function minePage(c, stats) {
   const pair = claimHtml && qualHtml ? `<div class="equal2 mt20">${claimHtml}${qualHtml}</div>` : (claimHtml || qualHtml) ? `<div class="mt20">${claimHtml || qualHtml}</div>` : '';
   const emptyLine = empties.length ? `<p class="mine-empty-line">暂无记录：${e(empties.join('、'))}。${sd.empty && sd.claim ? sd.claim : ''}</p>` : '';
   // 老师菜单只留常用几项，其余页面从这里进入。
-  const more = [['projects', '培训项目'], ['courses', '培训课程'], ['credits', '我的授课与学分'], ['records', '我的培训数据'], ['disputes', '我提出的核对'], ['exports', '导出下载']].filter(([p]) => c.pageAllowed(p) && (p !== 'qualifications' || sections.qualifications));
+  const more = [['projects', '培训项目'], ['courses', '培训课程'], ['bases', '培训基地'], ['outcomes', '培训成果'], ['disputes', '我提出的核对'], ['exports', '导出下载']].filter(([p]) => c.pageAllowed(p) && (p !== 'qualifications' || sections.qualifications));
   const moreLinks = more.length ? `<nav class="mine-more" aria-label="更多入口"><span>更多：</span>${more.map(([p, l]) => c.link(l, 'nav', p)).join('')}</nav>` : '';
   return `<div class="mine-page">${head}${todo}<div class="mt20">${indicators}</div>${creditHtml}${projectHtml}${pair}${allocationHtml}${extraHtml}${emptyLine}${moreLinks}<div class="mt20">${c.note(m.note, false, '数据与申报说明')}</div></div>`;
 }

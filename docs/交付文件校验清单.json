@@ -731,8 +731,8 @@
       "size": 14687
     },
     "frontend/app.js": {
-      "sha256": "53db9472236c997e4dddcc8ee6cabdafe65faa035e095674881989588a80ed66",
-      "size": 397235
+      "sha256": "fdae96490ac629c9da572606e46656447ecab1be8c59cca9cdbe169d7307f458",
+      "size": 397229
     },
     "frontend/approval-flow.js": {
       "sha256": "f1850f90540d9c25ac35ef217ea27ae672a4b9137a83c00aadcb12df3d564666",
@@ -767,7 +767,7 @@
       "size": 2302
     },
     "frontend/index.html": {
-      "sha256": "084cd37bde4ab0e8c83f2ac02a22d2315682c7b20236618ebc9e626f8d53ba88",
+      "sha256": "7fa42e11d6286223826a3f2e2e70902a34e874c603595ff5589a5636ac463af3",
       "size": 1311
     },
     "frontend/integration-drafts.js": {
@@ -807,8 +807,8 @@
       "size": 3550
     },
     "frontend/social-ledgers.js": {
-      "sha256": "c0abcae9bb42922986030c07fa2330b27d0993933f01795276e7a0f521417745",
-      "size": 52211
+      "sha256": "d1c818a54fe3c62a45d8c68a69079446d3c08c0d999ce0c41bc4e1f907dc3bee",
+      "size": 52195
     },
     "frontend/social-training.css": {
       "sha256": "ffe43e3e994d4a947037ed3c8c7f3f792d116bb8d391e8e1be3aafe008bef450",
@@ -1063,8 +1063,8 @@
       "size": 9247
     },
     "tests/js/r11_portal.test.mjs": {
-      "sha256": "0f9f9248d816691c276b4ae893497439229ce018ac18c57eb3f74bdc9c23551d",
-      "size": 112406
+      "sha256": "1ddf629723b2c164d2bb9d43de9647fdfee042525ac88afdbdf622b0211ce076",
+      "size": 112416
     },
     "tests/js/r3_org_assessment.test.mjs": {
       "sha256": "c4533a893149ea9d5387b08e40aa924c58657bbc27e2bbcf58798a77eac37ea5",

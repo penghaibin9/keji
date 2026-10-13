@@ -619,9 +619,9 @@ test('selected design keeps all authorized navigation and Chinese group headings
 test('teacher menu keeps only daily items with plain titles',()=>{
  const e=engine(undefined,'teacher');e.t.setUser({user:{id:'u',name:'教师'},role:{kind:'teacher'},permissions:['portal.read','records.read','qualification.read','qualification.write','points.read','assessment.read','dispute.write','notice.read','export']});
  const html=e.t.sidebarNavigation(),ids=[...html.matchAll(/data-action="nav" data-id="(\w+)"/g)].map(m=>m[1]);
- assert.deepEqual(ids,['home','mine','todos','qualifications','points','assessment','notices']);
+ assert.deepEqual(ids,['home','mine','todos','records','credits','qualifications','points','assessment','notices']);
  assert.match(html,/>我的资质</);assert.match(html,/>我的积分</);assert.match(html,/>我的考核</);assert.doesNotMatch(html,/三级考核管理|教师积分激励|培训项目管理/);
- for(const p of ['projects','courses','records','credits','disputes'])assert.ok(e.t.pageAllowed(p),p+' still reachable from links');
+ for(const p of ['projects','courses','disputes','exports'])assert.ok(e.t.pageAllowed(p),p+' still reachable from links');
 });
 test('navigation does not expose unauthorized items or empty groups',()=>{
  const e=engine();e.t.setUser({user:{id:'u',name:'教师'},role:{kind:'teacher'},permissions:['portal.read']});
