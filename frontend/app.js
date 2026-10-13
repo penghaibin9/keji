@@ -1,7 +1,7 @@
 import {icons} from './icons.js';
 import {socialPage,socialAction} from './social-training.js?v=20261014-ui1';
 import {nextCode,runBatch,batchStage,batchMode,batchPerformer,BATCH_LABELS} from './approval-flow.js?v=20261012-streamline1';
-import {ledgerPage,resourceStatsPage,homeIndicators,ledgerAction,resetLedgerView,minePage,mineReminders} from './social-ledgers.js?v=20261014-ui1';
+import {ledgerPage,resourceStatsPage,homeIndicators,ledgerAction,resetLedgerView,minePage,mineReminders} from './social-ledgers.js?v=20261014-ui2';
 import {rosterSection,rosterHandlers,onlineHandlers,showStaffDetail,showCourseDetail,presetRoster,loadCodeTables} from './school-data.js?v=20261013-cx-claim1';
 import {renderCenterStatus,renderImplementationWorkspace,renderSsoMaintenance,handleImplementationAction} from './integration-workspace.js?v=20261013-remediation2';
 import {readDraftEntry,saveDraft,previewDraft} from './integration-drafts.js';
@@ -342,7 +342,7 @@ const navLabel=p=>{const g=pageGroupOf(p);if(g){const own=roleGroupTitles[me?.ro
 function pageGroupTabs(p){const g=pageGroupOf(p);if(!g||(g==='assessment'&&me?.role?.kind==='teacher'))return '';const tabs=pageGroups[g].tabs.filter(([,,perm])=>can(perm));if(tabs.length<2)return '';return `<nav class="section-tabs page-group-tabs" aria-label="${esc(pageGroups[g].title)}">${tabs.map(([k,l])=>`<button type="button" data-action="nav" data-id="${k}" class="${k===p?'active':''}" aria-pressed="${k===p}">${esc(me.role.kind==='teacher'&&k==='points'?'确认本人积分':l)}</button>`).join('')}</nav>`}
 function navItems(){
  // 教师只留日常要用的几项；其余页面（项目、课程、资质等）从“个人培训”里的链接进入，权限不变。
- if(me.role.kind==='teacher')return [['我的工作',[['home','home','portal.read'],['mine','users','portal.read'],['todos','tasks','portal.read'],['points','award','points.read'],['assessment','assess','assessment.read'],['notices','notice','notice.read']]]].map(([group,items])=>[group,items.filter(x=>can(x[2]))]).filter(([,items])=>items.length);
+ if(me.role.kind==='teacher')return [['我的工作',[['home','home','portal.read'],['mine','users','portal.read'],['todos','tasks','portal.read'],['qualifications','cert','qualification.read'],['points','award','points.read'],['assessment','assess','assessment.read'],['notices','notice','notice.read']]]].map(([group,items])=>[group,items.filter(x=>can(x[2]))]).filter(([,items])=>items.length);
  // 管理角色按办事顺序分组。
  return [
  ['待办与通知',[['home','home','portal.read'],['todos','tasks','portal.read'],['notices','notice','notice.read']]],
