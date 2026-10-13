@@ -10,7 +10,7 @@
 .nd-header__school{position:relative;display:block;overflow:hidden;flex:none;width:326px;aspect-ratio:570/98;background:#fff}
 .nd-header__school img{display:block;width:100%;height:auto}
 .nd-header__product{display:flex;flex-direction:column;justify-content:center;gap:2px;min-height:45px;padding-left:24px;border-left:1px solid #b5c7dc;white-space:nowrap}
-.nd-header__product strong{color:#153753;font-size:23px;font-weight:700;line-height:1.35;letter-spacing:.5px}
+.nd-header__product strong{color:#153753;font-size:24px;font-weight:700;line-height:1.35;letter-spacing:.5px}
 .nd-header__product span{color:#647c98;font-size:14px;line-height:1.55;letter-spacing:3px}
 .nd-header__tools{display:flex;align-items:center;justify-content:flex-end;gap:13px;min-width:0;margin-left:auto}
 .nd-header__search{display:flex;align-items:center;gap:12px;flex:none;min-height:42px;width:208px;padding:9px 13px;border:1px solid #e7edf7;border-radius:10px;background:#f4f7fc;text-align:left;white-space:nowrap}
@@ -22,7 +22,7 @@
 .nd-header__icon-button{display:inline-flex;align-items:center;justify-content:center;flex:none;width:40px;height:40px;padding:0;border:0;border-radius:9px;background:transparent}
 .nd-header__icon-button:hover{background:#eef4fb;color:var(--nd-blue)}
 .nd-header__identity{display:flex;align-items:center;gap:11px;flex:none;padding-left:18px;border-left:1px solid var(--nd-line)}
-.nd-header__avatar{display:grid;place-items:center;flex:none;width:40px;height:40px;border-radius:50%;background:#edf3ff;color:#275eb7;font-size:22px;font-weight:700;line-height:1}
+.nd-header__avatar{display:grid;place-items:center;flex:none;width:40px;height:40px;border-radius:50%;background:#edf3ff;color:#275eb7;font-size:24px;font-weight:700;line-height:1}
 .nd-header__person{display:flex;flex-direction:column;gap:2px;white-space:nowrap}
 .nd-header__person strong{font-size:14px;font-weight:700;line-height:1.45}
 .nd-header__person small{color:#71849b;font-size:12px;line-height:1.5}
@@ -52,7 +52,7 @@
  .nd-header__school{width:300px}
  .nd-header__brand{gap:20px}
  .nd-header__product{padding-left:20px}
- .nd-header__product strong{font-size:21px}
+ .nd-header__product strong{font-size:20px}
  .nd-header__product span{font-size:13px;letter-spacing:2px}
  .nd-header__tools{gap:10px}
  .nd-header__search{width:190px}
@@ -64,15 +64,15 @@
  .nd-header__school{width:272px}
  .nd-header__brand{gap:17px}
  .nd-header__product{padding-left:17px;min-height:40px}
- .nd-header__product strong{font-size:19px}
+ .nd-header__product strong{font-size:20px}
  .nd-header__product span{font-size:12px;letter-spacing:1.5px}
  .nd-header__search{width:40px;min-height:40px;padding:0;justify-content:center;background:transparent;border-color:transparent}
  .nd-header__search span,.nd-header__environment{display:none}
  .nd-header__tools{gap:8px}
  .nd-header__identity{gap:8px;padding-left:10px}
  .nd-header__person strong{font-size:13px}
- .nd-header__person small{font-size:11px}
- .nd-header__avatar{width:34px;height:34px;font-size:19px}
+ .nd-header__person small{font-size:12px}
+ .nd-header__avatar{width:34px;height:34px;font-size:20px}
 }
 @media(min-width:761px) and (max-width:900px){.nd-header__person{display:none}.nd-header__exit{padding-left:0;border:0}}
 @media(max-width:760px){
@@ -80,14 +80,14 @@
  .nd-header__brand{justify-content:center;gap:18px;width:100%;min-height:52px}
  .nd-header__school{width:244px}
  .nd-header__product{padding-left:18px;min-height:37px}
- .nd-header__product strong{font-size:19px}
+ .nd-header__product strong{font-size:20px}
  .nd-header__product span{font-size:12px;letter-spacing:1px}
  .nd-header__tools{justify-content:space-between;gap:8px;margin-left:0;min-height:44px;width:100%}
  .nd-header__search{width:auto;min-width:44px;min-height:44px;flex:1;max-width:240px;padding:10px 12px}
  .nd-header__search span{font-size:13px}
  .nd-header__environment,.nd-header__person{display:none}
  .nd-header__identity{padding-left:0;border:0}
- .nd-header__avatar{width:36px;height:36px;font-size:21px}
+ .nd-header__avatar{width:36px;height:36px;font-size:20px}
  .nd-header__icon-button{width:44px;height:44px}
  .nd-header__exit{padding-left:0;border:0}
 }
@@ -97,15 +97,15 @@
  .nd-header__school{width:224px}
  .nd-header__product{padding-left:12px;min-height:34px}
  .nd-header__product strong{font-size:16px}
- .nd-header__product span{font-size:11px;letter-spacing:0}
+ .nd-header__product span{font-size:12px;letter-spacing:0}
  .nd-header__search{flex:0 0 44px;width:44px;padding:0;justify-content:center}
  .nd-header__search span{display:none}
 }
-@media(max-width:370px){.nd-header{padding-inline:10px}.nd-header__tools{gap:4px}.nd-header__school{width:190px}.nd-header__brand{gap:10px}.nd-header__product{padding-left:10px}.nd-header__product strong{font-size:14px}.nd-header__product span{font-size:10px}}
+@media(max-width:370px){.nd-header{padding-inline:10px}.nd-header__tools{gap:4px}.nd-header__school{width:190px}.nd-header__brand{gap:10px}.nd-header__product{padding-left:10px}.nd-header__product strong{font-size:14px}.nd-header__product span{font-size:12px}}
 @media print{.nd-header{display:none!important}}
 
 /* 非本校配置时不用本校标识，只显示学校名称。 */
-.nd-header__school-text{display:block;max-width:360px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:var(--nd-blue);font-size:22px;font-weight:700}
+.nd-header__school-text{display:block;max-width:360px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:var(--nd-blue);font-size:24px;font-weight:700}
 /* 长姓名、长角色名截断，鼠标悬停看全称。 */
 .nd-header__person strong,.nd-header__person small{display:block;max-width:180px;overflow:hidden;text-overflow:ellipsis}
 .nd-header .demo-identity-control{margin-top:2px}

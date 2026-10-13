@@ -5,11 +5,11 @@ body{font-family:"Microsoft YaHei","PingFang SC",sans-serif}
 .school-masthead{display:none}
 .content,.content[data-page]:not([data-page="home"]){background-image:none;padding:24px 28px 20px;min-height:calc(100dvh - 72px)}
 .content .pagehead,.content[data-page]:not([data-page="home"]) .pagehead{margin-bottom:18px;gap:16px;align-items:center}
-.content .pagehead h1,.home-workbench .pagehead h1,.content[data-page]:not([data-page="home"]) .pagehead h1{font-size:27px;line-height:1.35;letter-spacing:0}
+.content .pagehead h1,.home-workbench .pagehead h1,.content[data-page]:not([data-page="home"]) .pagehead h1{font-size:26px;line-height:1.35;letter-spacing:0}
 .content .pagehead p,.content[data-page]:not([data-page="home"]) .pagehead p{font-size:14px;line-height:1.6;margin-top:7px}
 .content .btn{font-size:14px;min-height:38px;padding:8px 14px;border-radius:6px}
 .content .card-head,.home-workbench .card-head{padding:16px 20px}
-.content .card-head h2,.home-workbench .card-head h2{font-size:19px}
+.content .card-head h2,.home-workbench .card-head h2{font-size:20px}
 .content .card-head p{font-size:13px;line-height:1.6}
 .content .card-pad{padding:16px 20px}
 .content .card-foot{padding:10px 20px;font-size:12px}
@@ -54,12 +54,12 @@ body{font-family:"Microsoft YaHei","PingFang SC",sans-serif}
 .social-summary{gap:0;border:1px solid var(--line);border-radius:8px;background:white;margin-bottom:8px}
 .social-stat{padding:14px 20px;border:0;border-radius:0;background:none;gap:12px;border-right:1px solid var(--line)}.social-stat:last-child{border-right:0}
 .social-stat-icon{width:34px;height:34px;border-radius:6px}.social-stat-icon .icon{width:20px;height:20px}
-.social-stat strong{font-size:25px;display:inline-block;margin:3px 10px 0 0}.social-stat span{font-size:13px}.social-stat small{font-size:12px;display:inline}
+.social-stat strong{font-size:26px;display:inline-block;margin:3px 10px 0 0}.social-stat span{font-size:13px}.social-stat small{font-size:12px;display:inline}
 .social-summary-note{margin-bottom:12px;font-size:12px}.social-guide{padding:0;background:white;border-radius:8px}
 .social-guide>p,.social-guide-note{margin:0;padding:0 18px 14px}.social-guide ol{margin:0;padding:4px 18px 18px;display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:18px}.social-guide li{padding-bottom:0}.social-guide li:after{display:none}
 .social-panel-head{padding:14px 20px}.social-panel-head h2{font-size:18px}.social-panel-head p{margin-top:3px;font-size:13px}
 .social-tools{padding:12px 20px}.social-tools input{height:40px;max-width:420px}.social-tools .btn{min-height:40px}
-.social-empty{padding:24px 20px}.social-empty-art{width:44px;height:44px;margin-bottom:12px;border-radius:10px}.social-empty-art .icon{width:24px;height:24px}.social-empty h3{font-size:17px;margin:8px 0}.social-empty p{font-size:13px}.social-empty-action{margin-top:16px}
+.social-empty{padding:24px 20px}.social-empty-art{width:44px;height:44px;margin-bottom:12px;border-radius:10px}.social-empty-art .icon{width:24px;height:24px}.social-empty h3{font-size:16px;margin:8px 0}.social-empty p{font-size:13px}.social-empty-action{margin-top:16px}
 .social-notice{margin:14px 0 0}.social-resource-grid{padding:16px;gap:14px}
 .record-editor:has(#f-published) #edit-form>.form-grid{display:grid;grid-template-columns:1fr 1fr;gap:12px 20px;padding:16px 24px;margin:0}
 .record-editor:has(#f-published) #edit-form>.form-grid>.form-field:has(#f-published){grid-column:1/-1}
@@ -77,14 +77,14 @@ body{font-family:"Microsoft YaHei","PingFang SC",sans-serif}
  .main-shell{padding-top:72px}.topbar{position:fixed;left:52%;right:0;top:0;height:72px;padding:0 20px;z-index:50}.topbar .breadcrumb{display:none}.topbar .header-actions{width:100%;justify-content:flex-end;gap:12px}.topbar .identity{padding-left:14px;gap:10px}.topbar .search-trigger{width:220px;min-width:40px;height:40px}.topbar .current-identity strong{font-size:14px}.topbar .current-identity small{font-size:12px}.topbar .avatar{width:36px;height:36px}
 }
 @media(min-width:901px) and (max-width:1250px){
- .school-masthead{width:48%;gap:16px;padding:0 18px}.school-masthead .brand-logo{width:238px}.school-masthead .school-brand-image{width:238px;top:-3px}.masthead-label{font-size:13px}.masthead-label span{display:none}.topbar{left:48%;padding:0 12px}.topbar .search-trigger{width:40px;padding:8px;justify-content:center}.topbar .search-trigger span{display:none}.topbar .app-flag{display:inline-flex;font-size:11px}.topbar .header-actions{gap:6px}
+ .school-masthead{width:48%;gap:16px;padding:0 18px}.school-masthead .brand-logo{width:238px}.school-masthead .school-brand-image{width:238px;top:-3px}.masthead-label{font-size:13px}.masthead-label span{display:none}.topbar{left:48%;padding:0 12px}.topbar .search-trigger{width:40px;padding:8px;justify-content:center}.topbar .search-trigger span{display:none}.topbar .app-flag{display:inline-flex;font-size:12px}.topbar .header-actions{gap:6px}
  .content,.content[data-page]:not([data-page="home"]){padding:20px}.home-indicators .kpi{padding:14px 10px}.home-indicators .kpi-value{font-size:24px}.workbench-quick-grid{grid-template-columns:repeat(2,minmax(0,1fr))}
 }
 @media(max-width:900px){
  .content,.content[data-page]:not([data-page="home"]){padding:18px 16px 20px}.home-indicators .kpis{grid-template-columns:repeat(3,minmax(0,1fr))}.home-indicators .kpi{border-bottom:1px solid var(--line)}.workbench-bottom{grid-template-columns:1fr}.workbench-quick-grid{grid-template-columns:repeat(4,minmax(0,1fr))}.social-stat{padding:12px}.social-stat small{display:none}
 }
 @media(max-width:600px){
- .content .pagehead,.content[data-page]:not([data-page="home"]) .pagehead{align-items:flex-start}.content .pagehead h1,.home-workbench .pagehead h1,.content[data-page]:not([data-page="home"]) .pagehead h1{font-size:23px}.home-indicators .kpis{grid-template-columns:repeat(2,minmax(0,1fr))}.home-indicators .kpi{min-height:120px}.workbench-scope p span{display:block;margin:4px 0 0}.workbench-quick-grid{grid-template-columns:repeat(2,minmax(0,1fr))}.workbench-bottom{gap:14px}.business-guide>ol,.social-guide ol{grid-template-columns:1fr}.social-summary{grid-template-columns:repeat(3,minmax(0,1fr))}.social-stat{padding:10px 8px;display:block}.social-stat-icon{display:none}.social-stat span{font-size:12px}.social-stat strong{font-size:22px}.record-editor:has(#f-published) #edit-form>.form-grid{grid-template-columns:1fr}.record-editor:has(#f-published) #edit-form>.form-grid>.form-field{grid-column:1}
+ .content .pagehead,.content[data-page]:not([data-page="home"]) .pagehead{align-items:flex-start}.content .pagehead h1,.home-workbench .pagehead h1,.content[data-page]:not([data-page="home"]) .pagehead h1{font-size:24px}.home-indicators .kpis{grid-template-columns:repeat(2,minmax(0,1fr))}.home-indicators .kpi{min-height:120px}.workbench-scope p span{display:block;margin:4px 0 0}.workbench-quick-grid{grid-template-columns:repeat(2,minmax(0,1fr))}.workbench-bottom{gap:14px}.business-guide>ol,.social-guide ol{grid-template-columns:1fr}.social-summary{grid-template-columns:repeat(3,minmax(0,1fr))}.social-stat{padding:10px 8px;display:block}.social-stat-icon{display:none}.social-stat span{font-size:12px}.social-stat strong{font-size:24px}.record-editor:has(#f-published) #edit-form>.form-grid{grid-template-columns:1fr}.record-editor:has(#f-published) #edit-form>.form-grid>.form-field{grid-column:1}
 }
 }
 @media print{.school-masthead{display:none}}
@@ -94,6 +94,8 @@ body{font-family:"Microsoft YaHei","PingFang SC",sans-serif}
  .page-title{position:relative;display:flex;align-items:center;flex-wrap:wrap;gap:12px;min-width:0}
  .page-help{font-size:13px;color:var(--muted);font-weight:400}
  .page-help>summary,.metric-help>summary,.ui-note>summary,.inline-note>summary{cursor:pointer;line-height:1.6}
+ .page-help>.page-help-body{position:absolute;left:0;top:38px;z-index:20;width:min(560px,calc(100vw - 56px));max-height:min(70vh,560px);overflow:auto;padding:16px 18px;background:#fff;border:1px solid var(--line);border-radius:8px;box-shadow:0 10px 30px #173d6214;color:#526780}
+ .page-help-body>p{margin:0 0 10px}.page-help-part{border-top:1px solid var(--line);padding-top:10px;margin-top:10px}.page-help-part h3{margin:0 0 6px;font-size:14px;color:var(--text,#1f2d3d)}.page-help-part p,.page-help-part li{font-size:13px;line-height:1.7}.page-help-part ol,.page-help-part ul{margin:0;padding-left:20px}.page-help-part .guide-body{display:block}
  .page-help>p{position:absolute;left:0;top:38px;z-index:20;width:min(520px,calc(100vw - 56px));margin:0!important;padding:16px 18px;background:#fff;border:1px solid var(--line);border-radius:8px;box-shadow:0 10px 30px #173d6214;color:#526780}
  .content .card,.content .social-panel.card{border-radius:10px;box-shadow:none}
  .content .pagehead h1,.content[data-page]:not([data-page="home"]) .pagehead h1{font-size:26px;letter-spacing:.1px}
@@ -131,10 +133,10 @@ body{font-family:"Microsoft YaHei","PingFang SC",sans-serif}
  .content[data-page="courses"] .social-panel .table th:first-child{width:32%}
  .content[data-page="outcomes"] .social-panel .table th:first-child{width:28%}.content[data-page="outcomes"] .social-panel .table th:nth-child(2){width:18%}
  .content[data-page="cockpit"] .equal2,.content[data-page="organization"] .equal2{align-items:start}
- .two-numbers{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px}.two-numbers>div{padding:14px;background:#f5f8fc;border-radius:7px}.two-numbers .inline-metric{font-size:25px;line-height:1.4;display:block}.two-numbers .metric-label{font-size:13px;color:var(--muted);margin:4px 0 0}
+ .two-numbers{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px}.two-numbers>div{padding:14px;background:#f5f8fc;border-radius:7px}.two-numbers .inline-metric{font-size:26px;line-height:1.4;display:block}.two-numbers .metric-label{font-size:13px;color:var(--muted);margin:4px 0 0}
  .teacher-hero{background:#fff;border:1px solid var(--line);border-radius:10px;box-shadow:none;color:var(--ink);padding:22px 24px}.teacher-hero h1{color:var(--ink);font-size:26px}.teacher-hero-date{color:var(--muted);font-size:13px}.teacher-hero-sub{font-size:14px;color:#526780}.teacher-hero-actions .btn.primary{background:var(--blue);border-color:var(--blue);color:#fff}.teacher-hero-actions .btn:not(.primary){background:#fff;color:var(--ink);border-color:var(--line)}
  .content .footer{color:#8290a2;margin-top:24px}.content .scope-guide{padding:14px 20px}.foot-note:empty{display:none}
- @media(max-width:700px){.page-title{gap:8px}.page-help{font-size:12px}.content .pagehead h1,.content[data-page]:not([data-page="home"]) .pagehead h1{font-size:23px}.home-indicators .kpi{padding:16px 12px;min-height:112px}.home-indicators .kpi-value{font-size:27px}.home-indicators .kpi:last-child:nth-child(odd){grid-column:1/-1}.guide-body{flex-direction:column;align-items:flex-start;gap:12px}.mine-reminder{gap:10px}.metric-help>div{right:0}.social-panel .table{table-layout:auto}.social-panel .responsive-table .table th:last-child{width:auto}.social-panel .responsive-table td:last-child{white-space:normal}.page-guides{gap:12px 20px}.teacher-hero{padding:20px}.teacher-hero h1{font-size:23px}}
+ @media(max-width:700px){.page-title{gap:8px}.page-help{font-size:12px}.content .pagehead h1,.content[data-page]:not([data-page="home"]) .pagehead h1{font-size:24px}.home-indicators .kpi{padding:16px 12px;min-height:112px}.home-indicators .kpi-value{font-size:26px}.home-indicators .kpi:last-child:nth-child(odd){grid-column:1/-1}.guide-body{flex-direction:column;align-items:flex-start;gap:12px}.mine-reminder{gap:10px}.metric-help>div{right:0}.social-panel .table{table-layout:auto}.social-panel .responsive-table .table th:last-child{width:auto}.social-panel .responsive-table td:last-child{white-space:normal}.page-guides{gap:12px 20px}.teacher-hero{padding:20px}.teacher-hero h1{font-size:24px}}
 }
 
 /* College targets keep the existing save contract; disclosures preserve every input. */
@@ -146,7 +148,7 @@ body{font-family:"Microsoft YaHei","PingFang SC",sans-serif}
 .target-college>summary{list-style:none;display:grid;grid-template-columns:minmax(160px,1.3fr) repeat(2,minmax(100px,1fr)) minmax(70px,.6fr) minmax(100px,.7fr) 16px;gap:20px;align-items:center;padding:20px;cursor:pointer}
 .target-college>summary::-webkit-details-marker{display:none}.target-college>summary:hover{background:#f8faff}.target-college>summary:focus-visible{outline:2px solid var(--blue);outline-offset:-3px}
 .target-college-name strong{font-size:16px}.target-college small{display:block;font-size:12px;color:var(--muted);font-weight:400;line-height:1.6}
-.target-college-name small{margin-top:5px}.target-metric strong{display:block;font-size:19px;line-height:1.5;font-variant-numeric:tabular-nums;margin-top:2px}.target-metric .ledger-score{color:#225ac0;font-size:23px}
+.target-college-name small{margin-top:5px}.target-metric strong{display:block;font-size:20px;line-height:1.5;font-variant-numeric:tabular-nums;margin-top:2px}.target-metric .ledger-score{color:#225ac0;font-size:24px}
 .target-chevron{display:flex;color:#6f85a5;transition:transform .15s}.target-chevron .icon{width:16px;height:16px}.target-college[open] .target-chevron{transform:rotate(180deg)}
 .target-collapse,.target-college[open] .target-expand{display:none}.target-college[open] .target-collapse{display:inline}
 .target-college[open]>summary{background:#f5f8ff}.target-missing{margin:0;padding:0 20px 14px;color:#946526;font-size:12px;line-height:1.6}.target-college[open]>.target-missing{background:#f5f8ff}
@@ -157,9 +159,9 @@ body{font-family:"Microsoft YaHei","PingFang SC",sans-serif}
 .content[data-page="records"] .section-tabs{margin-bottom:14px}.content[data-page="records"] .section-tabs button{min-height:40px;padding:8px 16px;font-size:14px}
 .content[data-page="records"] .filterbar{padding:14px 18px}.record-teaching{padding:0;overflow:hidden}.content[data-page="records"] .ledger-table .record-summary>td{padding:12px 16px;font-size:14px}.content[data-page="records"] .ledger-table th{padding:12px 16px;font-size:13px}
 .record-teaching .ledger-table th:nth-child(1){width:15%}.record-teaching .ledger-table th:nth-child(2){width:13%}.record-teaching .ledger-table th:nth-child(3){width:24%}.record-teaching .ledger-table th:nth-child(4){width:11%}.record-teaching .ledger-table th:nth-child(5){width:10%}.record-teaching .ledger-table th:nth-child(6){width:14%}
-.record-teaching .ledger-table td:nth-child(3){font-weight:600;line-height:1.6;overflow-wrap:anywhere}.record-income{font-size:17px}.record-date>.icon{display:none}.record-teaching .pagination{padding:10px 16px;border-top:1px solid var(--line)}.record-scope-note{padding:0 16px 12px}
+.record-teaching .ledger-table td:nth-child(3){font-weight:600;line-height:1.6;overflow-wrap:anywhere}.record-income{font-size:16px}.record-date>.icon{display:none}.record-teaching .pagination{padding:10px 16px;border-top:1px solid var(--line)}.record-scope-note{padding:0 16px 12px}
 @media(max-width:1100px){.target-college>summary{gap:12px;grid-template-columns:minmax(130px,1.3fr) repeat(2,minmax(85px,1fr)) 70px 95px 14px}.target-fields,.target-readonly{gap:12px}.content[data-page="records"] .ledger-table .record-summary>td,.content[data-page="records"] .ledger-table th{padding-left:10px;padding-right:10px}}
-@media(max-width:700px){.target-yearbar{align-items:flex-start;flex-direction:column;gap:8px}.target-college>summary{grid-template-columns:repeat(3,minmax(0,1fr));padding:16px;gap:12px}.target-college-name{grid-column:span 2}.target-grade{grid-row:1;grid-column:3;text-align:right}.target-chevron{display:none}.target-metric{grid-row:2}.target-metric strong{font-size:17px}.target-metric .ledger-score{font-size:19px}.target-body{padding:0 16px 16px}.target-fields,.target-readonly{grid-template-columns:repeat(2,minmax(0,1fr))}.target-calculation h3{align-items:flex-start;flex-direction:column;gap:4px}.target-missing{padding-left:16px;padding-right:16px}.target-workspace .ledger-actions{width:100%;justify-content:flex-end}}
+@media(max-width:700px){.target-yearbar{align-items:flex-start;flex-direction:column;gap:8px}.target-college>summary{grid-template-columns:repeat(3,minmax(0,1fr));padding:16px;gap:12px}.target-college-name{grid-column:span 2}.target-grade{grid-row:1;grid-column:3;text-align:right}.target-chevron{display:none}.target-metric{grid-row:2}.target-metric strong{font-size:16px}.target-metric .ledger-score{font-size:20px}.target-body{padding:0 16px 16px}.target-fields,.target-readonly{grid-template-columns:repeat(2,minmax(0,1fr))}.target-calculation h3{align-items:flex-start;flex-direction:column;gap:4px}.target-missing{padding-left:16px;padding-right:16px}.target-workspace .ledger-actions{width:100%;justify-content:flex-end}}
 @media(max-width:900px){.target-workspace .card-head{top:68px}}
 @media(max-width:700px){.ledger-tabs{display:grid;grid-template-columns:.9fr 1.5fr 1.2fr;gap:0}.ledger-tabs .tab{min-width:0;padding:10px 4px;white-space:normal;font-size:12px}}
 }
@@ -202,7 +204,7 @@ body{font-family:"Microsoft YaHei","PingFang SC",sans-serif}
 /* 一人多身份：右上角切换身份；组织页负责人；办理轨迹的代办、连审标记 */
 .identity-switch-control select{max-width:220px}
 .current-identity small.has-identity-switch{display:none}
-.identity-todo-hint{font-style:normal;font-size:11px;color:#b45309;background:#fff7ed;border-radius:6px;padding:2px 6px;white-space:nowrap}
+.identity-todo-hint{font-style:normal;font-size:12px;color:#b45309;background:#fff7ed;border-radius:6px;padding:2px 6px;white-space:nowrap}
 .org-heads{display:flex;flex-wrap:wrap;align-items:center;gap:6px;margin-top:6px;font-size:12px}
 .org-heads-label{color:var(--muted)}
 .org-head{display:inline-flex;align-items:center;gap:4px;background:#eef4ff;color:#1e3a8a;border-radius:6px;padding:2px 8px}
@@ -215,5 +217,7 @@ body{font-family:"Microsoft YaHei","PingFang SC",sans-serif}
 .head-candidate{display:flex;gap:8px;align-items:flex-start;border:1px solid var(--line);border-radius:8px;padding:8px 10px;cursor:pointer}
 .head-candidate small{display:block;color:var(--muted);font-size:12px;margin-top:2px}
 .handling-tags{display:inline-flex;gap:4px;margin-left:6px}
-.handling-tag{font-size:11px;color:#b45309;background:#fff7ed;border-radius:6px;padding:1px 6px}
+.handling-tag{font-size:12px;color:#b45309;background:#fff7ed;border-radius:6px;padding:1px 6px}
 @media(max-width:620px){.extra-identity-row{grid-template-columns:1fr}}
+.mine-more{display:flex;flex-wrap:wrap;align-items:center;gap:4px 14px;margin-top:16px;font-size:14px;color:var(--muted)}
+.login-sso-first{display:flex;flex-direction:column;gap:12px;margin:8px 0 16px}.login-sso-first .btn{width:100%;justify-content:center}.login-sso-first>span{color:var(--muted);font-size:13px;text-align:center}
