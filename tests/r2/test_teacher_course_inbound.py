@@ -216,3 +216,17 @@ def test_conflicting_repeat_on_a_later_page_is_rejected(app2):
     rows = [slot('J001', 'K1'), slot('J001', 'K2'), {**slot('J001', 'K1'), 'KCMC': '改了名'}]
     state, error, result = full_run(app2, ScheduleHub(rows))
     assert state == 'FAILED' and result['errors'] == 1
+
+
+def test_cx_login_alias_maps_chaoxing_login_to_staff_no(client2,app2):
+    c=client2;auth(c,'schooladmin')
+    r=post(c,'/api/settings',{'key':'dict:cx_login_alias','value':{'name':'超星登录名对照','items':['scode123=T9301','0000625=625']},**REASON})
+    assert r.status_code==200,r.text
+    conn=configure_middle(c,typed('online_course',{'creater_login_name':'staff_no','teachername':'teacher_name','courseid':'course_code','coursename':'course_name','xn':'school_year','xq':'term_no','credit':'credit'},{'staff_no','course_code','course_name'}))
+    inbound(c,conn,'online_course',[
+        {'creater_login_name':'scode123','teachername':'周老师','courseid':'X7','coursename':'线上课七','xn':'2025','xq':'1','credit':'2'},
+        {'creater_login_name':'T9302','teachername':'吴老师','courseid':'X8','coursename':'线上课八','xn':'2025','xq':'1','credit':'1'}])
+    with Session(app2.state.engine) as db:
+        got={x.course_code:(x.staff_no,x.external_key,(x.extra or {}).get('cx_login')) for x in db.scalars(select(TeacherCourseTerm))}
+    assert got['X7']==('T9301','CX|T9301|X7|2025-1','scode123')
+    assert got['X8']==('T9302','CX|T9302|X8|2025-1',None)

@@ -79,8 +79,8 @@
       "size": 3403
     },
     "backend/alembic/versions/20261013_0005_audit_result_index.py": {
-      "sha256": "743114ea885a1bd2a4ac530ede5dcb2743111d5259bf8d5e24e95c7a5fa935df",
-      "size": 790
+      "sha256": "55e685557e49dd585993d73272ad7e9ed3cd6c1235bc53bfdfbe78728416431b",
+      "size": 1514
     },
     "backend/alembic_legacy_unverified/20260917_0002_org_assessment_and_sync.py": {
       "sha256": "4189c4e40192edf320277a76538df6cc3e86e911af1f8a1d02156e95ccf3f938",
@@ -295,8 +295,8 @@
       "size": 5366
     },
     "backend/app/reference_data.py": {
-      "sha256": "8f88ed3a676936decb64ce1dcdc4c799c9a4aec5316801cec785e3819f17c2b8",
-      "size": 77930
+      "sha256": "8162f944645a478795595fbf2406945b7450d7a827297a0c128501df088d0cb8",
+      "size": 78734
     },
     "backend/app/release_contract.py": {
       "sha256": "492a8668ff93bc0d9b7004b192fbb15c280f7e23c9a7fb00f52a07a1e3a2f181",
@@ -347,8 +347,8 @@
       "size": 14050
     },
     "backend/app/routes/integrations.py": {
-      "sha256": "9b8eeb6d58e897ad43e80a441ea37007a68bd903321df36d2d094492e184bee8",
-      "size": 32307
+      "sha256": "df8065451621a789a54273761f0ba88d0340c10758f96e20b115d3fa77bf32f3",
+      "size": 32519
     },
     "backend/app/routes/ledgers.py": {
       "sha256": "af168055484f8401a0463463e5dae19118ace03a3a6db89c076a32e6f6ccb358",
@@ -431,7 +431,7 @@
       "size": 6716
     },
     "backend/audit_index_release.json": {
-      "sha256": "5c092549faf79a005e41c6d56a98c5b1a3644310aa3e40fe17edf58474ecad0c",
+      "sha256": "00796cb244f24a9f9a0b9c5e20349ebff2db03d6a2004b2653f43f980d74083d",
       "size": 324
     },
     "backend/audit_index_schema.json": {
@@ -1555,8 +1555,8 @@
       "size": 6586
     },
     "tests/r2/test_teacher_course_inbound.py": {
-      "sha256": "1326135fd86dd5a390cbfa9dae1bbde48c5ad34e52129ea75836bfb352608044",
-      "size": 16356
+      "sha256": "7b8e86a87be2764c56d61fb0eebe677924bc9d04abe4add979532223a871d556",
+      "size": 17556
     },
     "tests/r2/test_teaching_credit_review.py": {
       "sha256": "d01f5d69a686434245800b2980c68900679ece09b29a74696017f6f76fa29486",
@@ -1571,8 +1571,8 @@
       "size": 4105
     },
     "tests/r2/test_workbench_speed.py": {
-      "sha256": "2959a2ffc5843b23b789c0a72a1e22453b7451fc4d06cb8e8cd2000ce4608e41",
-      "size": 6323
+      "sha256": "5b5edd445fbdf78282db89b2614dfe82d380be9a74ce6f318d2d966b98bfb753",
+      "size": 6583
     },
     "tests/requirements-p0.txt": {
       "sha256": "983f0f208bf908c687f82ccdf2e47cdbacd24390872b94c26cccf9de5a202a9e",

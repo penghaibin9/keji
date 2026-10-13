@@ -24,24 +24,29 @@ def _run_upgrade(engine,module):
             module.upgrade()
 
 
-def _audit_table(engine,extra_index=None):
+def _tables(engine,extra_index=None):
     meta=sa.MetaData()
-    table=sa.Table('audit_events',meta,sa.Column('id',sa.String(36),primary_key=True),sa.Column('result',sa.String(30)),sa.Column('created_at',sa.DateTime))
+    audit=sa.Table('audit_events',meta,sa.Column('id',sa.String(36),primary_key=True),sa.Column('result',sa.String(30)),sa.Column('created_at',sa.DateTime))
+    sa.Table('inbound_batches',meta,sa.Column('id',sa.String(36),primary_key=True),sa.Column('created_at',sa.DateTime))
     meta.create_all(engine)
     if extra_index:
-        sa.Index(extra_index,table.c.result,table.c.created_at).create(engine)
+        sa.Index(extra_index,audit.c.result,audit.c.created_at).create(engine)
 
 
-def test_audit_index_migration_is_repeatable_and_accepts_a_hand_built_index():
+def _names(engine,table):
+    return sorted(x['name'] for x in sa.inspect(engine).get_indexes(table))
+
+
+def test_index_migration_is_repeatable_and_accepts_hand_built_indexes():
     module=_migration()
-    fresh=sa.create_engine('sqlite://');_audit_table(fresh)
+    fresh=sa.create_engine('sqlite://');_tables(fresh)
     _run_upgrade(fresh,module);_run_upgrade(fresh,module)
-    names=[x['name'] for x in sa.inspect(fresh).get_indexes('audit_events')]
-    assert names==['ix_audit_result_time']
+    assert _names(fresh,'audit_events')==['ix_audit_created_desc_id','ix_audit_result_time']
+    assert _names(fresh,'inbound_batches')==['ix_inbound_batches_created_desc_id']
     # 服务器上已经按别的名字手工建过同样的索引：不再重复建。
-    manual=sa.create_engine('sqlite://');_audit_table(manual,'ix_manual_result_created')
+    manual=sa.create_engine('sqlite://');_tables(manual,'ix_audit_events_result_created')
     _run_upgrade(manual,module)
-    assert [x['name'] for x in sa.inspect(manual).get_indexes('audit_events')]==['ix_manual_result_created']
+    assert _names(manual,'audit_events')==['ix_audit_created_desc_id','ix_audit_events_result_created']
 
 
 def test_todo_queries_do_not_grow_with_the_number_of_teachers(client2,app2):

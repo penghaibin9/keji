@@ -14,7 +14,7 @@ import re
 from sqlalchemy import String,Integer,DateTime,Date,Boolean,JSON,Text,ForeignKey,UniqueConstraint,Index,CheckConstraint,Numeric,select
 from sqlalchemy.orm import Mapped,mapped_column
 from fastapi import HTTPException
-from .models import Base,Entity,User,Role,Org,Connection,TrainingRecord,utcnow
+from .models import Base,Entity,User,Role,Org,Connection,TrainingRecord,Setting,utcnow
 from .core import serial,audit,workflow,check_version,digest,org_scope,school_today
 from .integrations import apply_mappings,configuration_hash,mask_raw
 from .code_tables import tables as code_tables,derive_hr_active
@@ -780,6 +780,16 @@ def validate_inbound_relations(db,data_type,normalized,*,lock=False):
 def inbound_content_hash(rows):
     return digest([{'row_no':r.row_no,'business_key':r.business_key,'raw':r.raw,'mapped':r.mapped,'errors':r.errors} for r in rows])
 
+CX_LOGIN_ALIAS_KEY='dict:cx_login_alias'
+
+def cx_login_aliases(db):
+    """超星登录名→教职工工号 对照（学校管理员在基础字典“dict:cx_login_alias”维护，每项写“登录名=工号”）。"""
+    obj=db.get(Setting,CX_LOGIN_ALIAS_KEY);out={}
+    for item in ((obj.value or {}).get('items') or []) if obj and isinstance(obj.value,dict) else []:
+        login,sep,staff=str(item).partition('=')
+        if sep and login.strip() and staff.strip():out[login.strip()]=staff.strip()
+    return out
+
 def preview_inbound(db,actor,connection:Connection,data_type,records,source_label='手工脱敏联调样本'):
     if connection.code!='middle':raise HTTPException(422,'只有学校数据中台使用本入站预览链')
     if data_type not in SUPPORTED_INBOUND:raise HTTPException(422,'该数据类型尚未建立正式入站落库契约')
@@ -787,8 +797,11 @@ def preview_inbound(db,actor,connection:Connection,data_type,records,source_labe
     batch=InboundBatch(connection_id=connection.id,data_type=data_type,owner_id=actor.id,source_label=source_label,total=len(records),errors=0,receipt={},configuration_hash=configuration_hash(connection))
     db.add(batch);db.flush();seen={}
     codes=code_tables(db) if data_type=='teacher_hr' else None
+    aliases=cx_login_aliases(db) if data_type=='online_course' else {}
     for i,raw in enumerate(records,1):
         mapped,mapping_errors=apply_mappings(connection,raw,data_type)
+        if aliases and str(mapped.get('staff_no') or '').strip() in aliases:
+            login=str(mapped['staff_no']).strip();mapped={**mapped,'staff_no':aliases[login],'cx_login':login}
         status_error=derive_hr_active(db,mapped,codes) if data_type=='teacher_hr' else None
         normalized,validation_errors=validate_inbound(data_type,mapped)
         if status_error:validation_errors=[status_error,*validation_errors]

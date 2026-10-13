@@ -349,10 +349,12 @@ def inbound_batches(request:Request):
             if f['state'] not in {'PREVIEW','COMMITTED','FAILED','BLOCKED','VOID'}:raise HTTPException(422,'入站状态筛选无效')
             q=q.where(InboundBatch.state==f['state'])
         total=db.scalar(select(func.count()).select_from(q.subquery()))
-        batches=db.scalars(q.order_by(InboundBatch.created_at.desc(),InboundBatch.id).offset((p-1)*z).limit(z)).all()
         # Summary does not disclose mapped/raw HR, access hashes or internal receipt payloads.
+        # 只取摘要列：receipt 平均约 200KB，整行读出会把大字段从盘上读一遍。
         fields=('id','connection_id','data_type','state','total','errors','created_at','version')
-        return {'items':[{k:serial(x)[k] for k in fields} for x in batches],'total':total,'page':p,'size':z}
+        cols=[getattr(InboundBatch,k) for k in fields]
+        rows=db.execute(q.with_only_columns(*cols,maintain_column_froms=True).order_by(InboundBatch.created_at.desc(),InboundBatch.id).offset((p-1)*z).limit(z)).all()
+        return {'items':[{k:serial(v) for k,v in zip(fields,r)} for r in rows],'total':total,'page':p,'size':z}
     return read_operation(request,'sync.manage',load)
 
 @router.get('/inbound-batches/{ident}')
