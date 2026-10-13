@@ -40,6 +40,17 @@ def test_invalid_audit_bounds_rejected_consistently(client2,f):
     assert post(client2,'/api/exports',{'kind':'audit','filters':f,'confirmed':False}).status_code==422
 
 
+def test_audit_kind_separates_changes_from_query_logging(client2):
+    auth(client2,'schooladmin');client2.get('/api/records?size=5')
+    isread=lambda x:x['module']=='access' or x['action']=='GET'
+    changes=client2.get('/api/audit?kind=change&size=200').json()['items'];reads=client2.get('/api/audit?kind=access&size=200').json()['items']
+    assert reads and all(isread(x) for x in reads)
+    assert changes and not any(isread(x) for x in changes)
+    total=client2.get('/api/audit?size=1').json()['total']
+    assert client2.get('/api/audit?kind=change&size=1').json()['total']+client2.get('/api/audit?kind=access&size=1').json()['total']>=total
+    assert client2.get('/api/audit?kind=other').status_code==422
+
+
 def test_audit_date_max_has_no_overflow(client2):
     auth(client2,'schooladmin');assert client2.get('/api/audit?end=9999-12-31').status_code==200
 

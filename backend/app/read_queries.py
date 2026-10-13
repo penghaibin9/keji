@@ -310,7 +310,7 @@ def comparison(db, actor, filters=None):
             'note': '三个时间窗口均由同一统计口径计算，仅日期窗口不同；上期为0时不计算百分比。考核得分按各自周期归档，不跨期比较。'}
 
 
-AUDIT_FILTERS = frozenset({'q','module','result','start','end','actor','org_id','object_id','request_id'})
+AUDIT_FILTERS = frozenset({'q','module','result','start','end','actor','org_id','object_id','request_id','kind'})
 
 def audit_query(db, actor, filters=None):
     """Identical date and text semantics for the audit screen and XLSX export."""
@@ -326,6 +326,15 @@ def audit_query(db, actor, filters=None):
     for key in ('org_id','object_id','request_id'):
         if key in f:
             q = q.where(getattr(Audit, key) == f[key])
+    # 招标 12.1 要求查询也留痕；日志页默认只看改动类（kind=change），查询浏览单独看（kind=access）。
+    if 'kind' in f:
+        access = (Audit.module == 'access') | (Audit.action == 'GET')
+        if f['kind'] == 'change':
+            q = q.where(~access)
+        elif f['kind'] == 'access':
+            q = q.where(access)
+        else:
+            raise HTTPException(422, '操作类型筛选无效')
     if 'q' in f:
         q = q.where(Audit.action.contains(f['q'], autoescape=True)
             | Audit.actor_name.contains(f['q'], autoescape=True) | (Audit.request_id == f['q']))

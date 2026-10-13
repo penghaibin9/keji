@@ -1077,3 +1077,9 @@ test('teacher list loads every page so schools with more than 200 staff are all 
  assert.equal(out.items.length,450);assert.equal(out.items.at(-1).name,'教师449');assert.equal(e.requests.length,3);
  assert.ok(e.requests.every(r=>/size=200/.test(r.url)));
 });
+test('audit page shows data-changing operations by default and can switch to query logs',async()=>{
+ const e=engine(async()=>({items:[],total:0,page:1,size:20}));e.t.setState('audit',{});
+ let html=await e.t.pages.audit();assert.match(e.requests[0].url,/kind=change/);assert.match(html,/<option value="change" selected>改动数据的操作/);
+ const f=engine(async()=>({items:[],total:0,page:1,size:20}));f.t.setState('audit',{kind:'all'});
+ html=await f.t.pages.audit();assert.doesNotMatch(f.requests[0].url,/kind=/);assert.match(html,/<option value="all" selected>/);
+});
