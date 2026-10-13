@@ -4,7 +4,7 @@
   "migration_heads": [
     "20261012_0004"
   ],
-  "file_count": 397,
+  "file_count": 399,
   "files": {
     ".dockerignore": {
       "sha256": "3ce289acb5e52c4133ecaa490b8672406f986f409f7397b8a566db497846caad",
@@ -166,6 +166,10 @@
       "sha256": "d13ff40552756495fd1592181521cfc47245c1526b25b58454f9154d0aa73852",
       "size": 15564
     },
+    "backend/app/cx_claims.py": {
+      "sha256": "0692a82e98bf7fd8b1c662bb55375fe23a722ec9dd6c7d0b4c09b30bf5c2ac4a",
+      "size": 8248
+    },
     "backend/app/database_snapshot.py": {
       "sha256": "454fe38496fdae9a81b988fca35db5ac7abaff8e3788b70f17198a2d866c747e",
       "size": 6135
@@ -179,8 +183,8 @@
       "size": 3124
     },
     "backend/app/excel_io.py": {
-      "sha256": "b1c513dcd33c88c76899355e3722efa22fee2d2059a668a3d37ce64238fa6ae9",
-      "size": 45827
+      "sha256": "c8f58464590f93d57be977d916efe9fcc998a4f5d1f5bbb9582dbf3c5b35ed28",
+      "size": 46065
     },
     "backend/app/grants.py": {
       "sha256": "0e8078ae9ff9ed7722cdcffe008a30da9b7e0babf5af8bd2ab8188754e97755d",
@@ -303,8 +307,8 @@
       "size": 5366
     },
     "backend/app/reference_data.py": {
-      "sha256": "8162f944645a478795595fbf2406945b7450d7a827297a0c128501df088d0cb8",
-      "size": 78734
+      "sha256": "9d0d71c08f675ecc9f5a25c930ac30395627c881f1f9934a6a728eff4df129eb",
+      "size": 81613
     },
     "backend/app/release_contract.py": {
       "sha256": "492a8668ff93bc0d9b7004b192fbb15c280f7e23c9a7fb00f52a07a1e3a2f181",
@@ -363,8 +367,8 @@
       "size": 64119
     },
     "backend/app/routes/reference.py": {
-      "sha256": "a64806d96a53c397909489b0ee77d43515ada0623620fe4e411e070ca534fb96",
-      "size": 27045
+      "sha256": "90860f54a08b5d17f4454773c649c421462144672fbb53869aa8a98c555fdbd7",
+      "size": 29486
     },
     "backend/app/routes/social.py": {
       "sha256": "d728634121608db87ffb103f975543935911a380e9c73a6de1d2e21d8ad217f2",
@@ -387,8 +391,8 @@
       "size": 3593
     },
     "backend/app/schemas.py": {
-      "sha256": "6eac52d85a68b26edba9ca8a51a42652975e7e588c7b39348818454671204546",
-      "size": 13645
+      "sha256": "1f1b84f59b2616cd878e0d6b12c16a1477e5761395663111d90ef39b9a6a2c9e",
+      "size": 14126
     },
     "backend/app/scoring_methods.py": {
       "sha256": "5dc284693aacb8d57c1dea6ce7c365756448e9e0b2372c0d77824d591336fd9c",
@@ -727,8 +731,8 @@
       "size": 15161
     },
     "frontend/app.js": {
-      "sha256": "e02b916c69cba4e88ef6d3d6c8dda032ddcc4f12c96ad0705da3d54cddaba47e",
-      "size": 380793
+      "sha256": "a98344dcf912ff7f64d7757230d8483ba15dd60378e75b52a351d679efa5c738",
+      "size": 385594
     },
     "frontend/approval-flow.js": {
       "sha256": "f1850f90540d9c25ac35ef217ea27ae672a4b9137a83c00aadcb12df3d564666",
@@ -763,7 +767,7 @@
       "size": 2302
     },
     "frontend/index.html": {
-      "sha256": "e7c44724ddbdca53232fa67473819f681ec93dc75c612fe406404f889b88b89c",
+      "sha256": "54b24d2f696c406b280d94b32b9665326ea3bdd8d25f088ffcfc3453b8c3f6fe",
       "size": 1364
     },
     "frontend/integration-drafts.js": {
@@ -791,8 +795,8 @@
       "size": 46004
     },
     "frontend/school-data.js": {
-      "sha256": "0974fdbd300dc76099a920b0ce96bd0b9a92b38508d9d3b85551d34984d8f95f",
-      "size": 25096
+      "sha256": "a6c99c40bd3b7db1f667c1d9885b58fe595e348735420687bb3f98c6b8b8e59f",
+      "size": 25111
     },
     "frontend/school-header.css": {
       "sha256": "d8ac80b1cdb361569fed5bc8b215cdef27bfefa78645f473e16ea8d5c5fcd574",
@@ -803,8 +807,8 @@
       "size": 3606
     },
     "frontend/social-ledgers.js": {
-      "sha256": "a5f0f6b6ff7a0bfb56ce5de022b18448d2dc900717ff1cb95ddb4a6183ce3a52",
-      "size": 51503
+      "sha256": "12f73208773852f0ec797275badd78cc7184828ee8bb413f8091dc83d7fc504e",
+      "size": 51118
     },
     "frontend/social-training.css": {
       "sha256": "ac1be9a37ee075178ee25fcd7dddde8a67eb42a8cfd969c8936dde206a0f4615",
@@ -1241,6 +1245,10 @@
     "tests/r2/test_codex_worker_nginx_upload.py": {
       "sha256": "415febf431ee864edbc6c2cc509864720265f7c457c3a553111c10d49b22312c",
       "size": 11992
+    },
+    "tests/r2/test_cx_unmatched.py": {
+      "sha256": "0ad25b617766c9f86213c9660c5947662cb3b8c1fc5b5c79257b9f71e4e41f68",
+      "size": 8449
     },
     "tests/r2/test_datahub_token_retry.py": {
       "sha256": "b7e631827cdc10da953dc88dce9a629afe0e8707e8bc86a0291def93d49d2779",
