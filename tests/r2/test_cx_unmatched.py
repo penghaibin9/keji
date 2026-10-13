@@ -89,6 +89,10 @@ def test_teacher_claims_login_without_password_name_match_applies_at_once_and_su
     assert r.json()['state']=='APPROVED' and r.json()['moved']==2
     got=cx_rows(app2)
     assert got[('J001','X1')]==(True,'teacher') and got[('J001','X6')]==(True,'teacher') and ('phone138','X1') not in got
+    # 认领只是把课挂到老师名下，仍要教研室主任认定后才计学分。
+    d=c.get('/api/reference/teacher-credits?staff_no=J001&detail=true').json()['items']
+    cx=[r for g in d for r in g['details'] if r['origin']=='CX']
+    assert len(cx)==2 and {r['review'] for r in cx}=={'pending'} and sum(g['cx_credit'] and float(g['cx_credit']) for g in d)==0
     assert post(c,'/api/reference/cx-claims',{'login':'phone138'}).status_code==409
     assert post(c,'/api/reference/cx-claims',{'login':'J001'}).status_code==422
     assert post(c,'/api/reference/cx-claims',{'login':'nosuch'}).status_code==404
