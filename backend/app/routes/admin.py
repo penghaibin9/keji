@@ -35,8 +35,82 @@ def organizations(request:Request):
         if a.user.is_admin and a.role.kind=='school' and 'organization.manage' in a.permissions:
             # Recovery metadata only; Actor keeps inactive organizations out of business scope.
             visible=visible | (Org.active.is_(False) & Org.parent_id.in_(a.org_ids))
-        return {'items':db.scalars(select(Org).where(visible).order_by(Org.code)).all()}
+        items=serial(db.scalars(select(Org).where(visible).order_by(Org.code)).all())
+        if a.user.is_admin and a.role.kind=='school':
+            # 组织页显示每个学院、教研室的负责人；没有可用负责人的由上一级代办
+            from ..identities import org_heads
+            heads=org_heads(db)
+            for x in items:
+                if x['kind'] in ('dept','college'):x['heads']=heads.get(x['id'],[])
+        return {'items':items}
     return read_operation(request,'portal.read',load)
+
+def head_role(db,org):
+    kind={'dept':'dept','college':'college'}.get(org.kind)
+    if not kind:raise HTTPException(422,'只有二级学院和教研室可以设置负责人')
+    for role in db.scalars(select(Role).where(Role.kind==kind,Role.active.is_(True)).order_by(Role.code)):
+        if validate_permissions(role.kind,role.permissions) and 'assessment.review' in role.permissions:return role
+    raise HTTPException(409,'没有可用的'+('教研室' if kind=='dept' else '学院')+'负责人角色，请先在角色权限里启用')
+
+def org_members(db,org):
+    return select(User).where(User.org_id.in_(org_scope(db,org,org.kind)),User.staff_no.is_not(None),User.active.is_(True))
+
+@router.get('/organizations/{ident}/head-candidates')
+def head_candidates(ident:str,request:Request):
+    f,_,_=filters_from(request,{'q'})
+    def load(db,a,s):
+        need_admin(a);org=db.get(Org,ident)
+        if not org or ident not in a.org_ids or org.kind not in ('dept','college'):raise HTTPException(404,'组织不存在')
+        q=org_members(db,org)
+        if f.get('q'):q=q.where(User.name.contains(f['q'],autoescape=True)|User.staff_no.contains(f['q'],autoescape=True))
+        names={o.id:o.name for o in db.scalars(select(Org))}
+        return {'items':[{'id':u.id,'name':u.name,'staff_no':u.staff_no,'title':u.title,'org_name':names.get(u.org_id,''),
+            'authorization_pending':u.authorization_pending} for u in db.scalars(q.order_by(User.staff_no).limit(30))]}
+    return read_operation(request,'users.manage',load)
+
+@router.post('/organizations/{ident}/heads')
+def add_org_head(ident:str,data:OrgHeadIn,request:Request):
+    """设置负责人：给本组织的一位老师加一个负责人兼任身份，原来的教师身份不变。"""
+    def apply(db,a,s):
+        from ..identities import all_extras,save_extras,org_heads,MAX_EXTRA_PER_USER
+        import uuid
+        need_admin(a);org=db.get(Org,ident)
+        if not org or ident not in a.org_ids or not org.active:raise HTTPException(404,'组织不存在或已停用')
+        role=head_role(db,org);user=db.scalar(org_members(db,org).where(User.id==data.user_id).with_for_update())
+        if user is None:raise HTTPException(422,'只能从本组织在职、有工号的老师里选负责人')
+        if not set(role.permissions)<=a.permissions:raise HTTPException(403,'不能分配超出本人授权的角色')
+        if any(h['user_id']==user.id for h in org_heads(db).get(org.id,[])):raise HTTPException(409,user.name+' 已经是本组织负责人')
+        items=all_extras(db,lock=True)
+        if sum(1 for x in items if x['user_id']==user.id)>=MAX_EXTRA_PER_USER:raise HTTPException(409,'该老师的兼任身份已达上限')
+        extra={'id':str(uuid.uuid4()),'user_id':user.id,'role_id':role.id,'org_id':org.id,'granted_by':a.id,
+               'granted_at':utcnow().isoformat(timespec='seconds'),'reason':data.reason[:200]}
+        save_extras(db,items+[extra]);user.version+=1
+        after={'user_id':user.id,'name':user.name,'staff_no':user.staff_no,'role':role.name,'org':org.name}
+        audit(db,a,'organization',org.id,'设置负责人',after=after,reason=data.reason)
+        return {'added':True,**after}
+    return command(request,data.model_dump(),'users.manage',apply)
+
+@router.post('/organizations/{ident}/heads/remove')
+def remove_org_head(ident:str,data:OrgHeadIn,request:Request):
+    def apply(db,a,s):
+        from ..identities import all_extras,save_extras
+        need_admin(a);org=db.get(Org,ident)
+        if not org or ident not in a.org_ids:raise HTTPException(404,'组织不存在')
+        user=db.scalar(select(User).where(User.id==data.user_id).with_for_update())
+        if user is None:raise HTTPException(404,'账号不存在')
+        roles={r.id:r for r in db.scalars(select(Role))}
+        if user.org_id==org.id and roles.get(user.role_id) and roles[user.role_id].kind==org.kind:
+            raise HTTPException(409,'这是该账号的主身份，请到“账号管理”里调整角色')
+        items=all_extras(db,lock=True)
+        mine=[x for x in items if x['user_id']==user.id and x['org_id']==org.id and roles.get(x['role_id']) and roles[x['role_id']].kind==org.kind]
+        if not mine:raise HTTPException(404,user.name+' 不是本组织负责人')
+        save_extras(db,[x for x in items if x not in mine])
+        # 正在用这个身份的会话随之失效，避免继续以负责人身份办理
+        user.version+=1;user.auth_version+=1;db.execute(delete(AuthSession).where(AuthSession.user_id==user.id))
+        after={'user_id':user.id,'name':user.name,'staff_no':user.staff_no,'org':org.name}
+        audit(db,a,'organization',org.id,'移除负责人',before={'role':roles[mine[0]['role_id']].name},after=after,reason=data.reason)
+        return {'removed':True,**after}
+    return command(request,data.model_dump(),'users.manage',apply)
 
 @router.post('/organizations')
 def create_org(data:OrgIn,request:Request):
@@ -102,6 +176,11 @@ def users(request:Request):
         elif state=='missing':q=q.where(User.staff_no.is_not(None),User.staff_no.not_in(in_hr))
         elif state:q=q.where(User.staff_no.in_(in_hr.where(TeacherHrProfile.active.is_(state=='active'))))
         out=page_result(db,q.order_by(User.username),p,z)
+        from ..identities import all_extras,describe
+        extras={}
+        for x in all_extras(db):extras.setdefault(x['user_id'],[]).append({'id':x['id'],**describe(db,x['role_id'],x['org_id'])})
+        locked={u.id for u in db.scalars(select(User).where(User.id.in_([x['id'] for x in out['items']] or ['']),User.locked_until>utcnow()))}
+        for x in out['items']:x['extra_identities']=extras.get(x['id'],[]);x['locked']=x['id'] in locked
         numbers=[x['staff_no'] for x in out['items'] if x.get('staff_no')]
         hr=dict(db.execute(select(TeacherHrProfile.staff_no,TeacherHrProfile.active).where(TeacherHrProfile.staff_no.in_(numbers))).all()) if numbers else {}
         for x in out['items']:
@@ -145,9 +224,16 @@ def update_user(ident:str,data:UserUpdate,request:Request):
         if data.is_admin and role.kind!='school': raise HTTPException(422,'学校管理员必须绑定学校角色')
         before=serial(obj)
         obj.authorization_pending=False
-        for key,value in data.model_dump(exclude={'reason','basis','expected_version'}).items():setattr(obj,key,value)
+        for key,value in data.model_dump(exclude={'reason','basis','expected_version','extra_identities'}).items():setattr(obj,key,value)
+        after=serial(obj)
+        if data.extra_identities is not None:
+            from ..identities import replace_user_extras,describe
+            old_extras,new_extras=replace_user_extras(db,a,obj,[x.model_dump() for x in data.extra_identities],data.reason)
+            before['extra_identities']=[describe(db,x['role_id'],x['org_id']) for x in old_extras]
+            after['extra_identities']=[describe(db,x['role_id'],x['org_id']) for x in new_extras]
         obj.version+=1;obj.auth_version+=1;db.execute(delete(AuthSession).where(AuthSession.user_id==ident))
-        admin_survives(db);audit(db,a,'users',ident,'调整账号权限',before,serial(obj),data.reason);return obj
+        after['version']=obj.version
+        admin_survives(db);audit(db,a,'users',ident,'调整账号权限',before,after,data.reason);return obj
     return command(request,data.model_dump(),'users.manage',apply)
 
 @router.post('/users/{ident}/reset-password')
@@ -159,6 +245,19 @@ def reset_user(ident:str,data:ResetPassword,request:Request):
         obj.password_hash=hash_password(data.password);obj.must_change_password=True;obj.failures=0;obj.locked_until=None
         obj.version+=1;obj.auth_version+=1;db.execute(delete(AuthSession).where(AuthSession.user_id==ident))
         audit(db,a,'users',ident,'重置临时密码',after={'must_change_password':True,'sessions_revoked':True},reason=data.reason)
+        return serial(obj)
+    return command(request,data.model_dump(),'users.manage',apply)
+
+@router.post('/users/{ident}/unlock')
+def unlock_user(ident:str,data:VersionedReason,request:Request):
+    """输错密码被锁定时解锁，不改密码。"""
+    def apply(db,a,s):
+        need_admin(a);obj=db.get(User,ident)
+        if not obj or obj.org_id not in a.org_ids: raise HTTPException(404,'账号不存在')
+        check_version(obj,data.expected_version)
+        before={'failures':obj.failures,'locked':bool(obj.locked_until and obj.locked_until>utcnow())}
+        obj.failures=0;obj.locked_until=None;obj.version+=1
+        audit(db,a,'users',ident,'解除登录锁定',before=before,after={'locked':False},reason=data.reason)
         return serial(obj)
     return command(request,data.model_dump(),'users.manage',apply)
 
@@ -226,7 +325,7 @@ def close_period(ident:str,data:VersionedReason,request:Request):
 
 @router.get('/settings')
 def settings(request:Request):
-    return read_operation(request,'settings.manage',lambda db,a,s:{'items':db.scalars(select(Setting).where(~Setting.key.like('ssoid:%'),~Setting.key.like('ssostate:%'),Setting.key!='code_tables').order_by(Setting.key)).all()})
+    return read_operation(request,'settings.manage',lambda db,a,s:{'items':db.scalars(select(Setting).where(~Setting.key.like('ssoid:%'),~Setting.key.like('ssostate:%'),Setting.key!='code_tables',Setting.key!='account_identities').order_by(Setting.key)).all()})
 
 @router.get('/settings/{key}/history')
 def setting_history(key:str,request:Request):

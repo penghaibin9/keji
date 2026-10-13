@@ -201,3 +201,22 @@ body{font-family:"Microsoft YaHei","PingFang SC",sans-serif}
 @media(max-width:700px){.rule-row,.org-rule-row{grid-template-columns:1fr!important}.rule-method{grid-template-columns:1fr}.rule-control>input,.rule-control>select{width:100%}}
 .credit-kpi{grid-template-columns:1fr!important;margin-top:16px}.credit-kpi .kpi{display:grid;grid-template-columns:220px 180px minmax(0,1fr);align-items:center;gap:18px;min-height:0;padding:18px 22px}.credit-kpi .kpi-label{grid-column:1;grid-row:1;min-height:0}.credit-kpi .kpi-icon{display:none}.credit-kpi .kpi-value{grid-column:2;grid-row:1;margin:0;font-size:27px}.credit-kpi .kpi-foot{grid-column:3;grid-row:1;margin:0;padding:0;border:0}
 @media(max-width:800px){.credit-kpi .kpi{grid-template-columns:1fr auto;gap:10px}.credit-kpi .kpi-value{grid-column:2}.credit-kpi .kpi-foot{grid-column:1/-1;grid-row:2}}
+
+/* 一人多身份：右上角切换身份；组织页负责人；办理轨迹的代办、连审标记 */
+.identity-switch-control select{max-width:220px}
+.current-identity small.has-identity-switch{display:none}
+.identity-todo-hint{font-style:normal;font-size:11px;color:#b45309;background:#fff7ed;border-radius:6px;padding:2px 6px;white-space:nowrap}
+.org-heads{display:flex;flex-wrap:wrap;align-items:center;gap:6px;margin-top:6px;font-size:12px}
+.org-heads-label{color:var(--muted)}
+.org-head{display:inline-flex;align-items:center;gap:4px;background:#eef4ff;color:#1e3a8a;border-radius:6px;padding:2px 8px}
+.org-head.is-unusable{background:#f1f5f9;color:#64748b}
+.org-head-remove{border:0;background:transparent;color:#b91c1c;font-size:12px;cursor:pointer;padding:0 0 0 4px}
+.org-head-missing{color:#b91c1c;background:#fef2f2;border-radius:6px;padding:2px 8px}
+.extra-identities h3{margin:0 0 4px}
+.extra-identity-row{display:grid;grid-template-columns:1fr 1fr auto;gap:8px;margin-top:8px}
+.head-results{max-height:320px;overflow:auto;display:grid;gap:6px}
+.head-candidate{display:flex;gap:8px;align-items:flex-start;border:1px solid var(--line);border-radius:8px;padding:8px 10px;cursor:pointer}
+.head-candidate small{display:block;color:var(--muted);font-size:12px;margin-top:2px}
+.handling-tags{display:inline-flex;gap:4px;margin-left:6px}
+.handling-tag{font-size:11px;color:#b45309;background:#fff7ed;border-radius:6px;padding:1px 6px}
+@media(max-width:620px){.extra-identity-row{grid-template-columns:1fr}}

@@ -295,6 +295,8 @@ def teacher_credits(request:Request):
     return read_operation(request,'records.read',load)
 
 
+from ..identities import stage_handler
+
 CREDIT_DECISIONS={'approve':('APPROVED','认定计分'),'exclude':('EXCLUDED','认定不计分'),'reset':('PENDING','改回待认定')}
 
 @router.post('/reference/teacher-credits/review')
@@ -316,7 +318,8 @@ def teacher_credit_review(data:CreditReviewIn,request:Request):
             if r.user_id is None:
                 if not admin:raise HTTPException(403,'工号 '+r.staff_no+' 还没有对应教师账号，由学校系统管理员认定')
             else:
-                if a.role.kind not in ('dept','college'):raise HTTPException(403,'授课由教研室主任认定；教研室主任本人的课由学院负责人认定')
+                if a.role.kind not in ('dept','college') and not (admin and stage_handler(db,db.get(User,r.user_id),'DEPARTMENT')[0]=='school'):
+                    raise HTTPException(403,'授课由教研室主任认定；教研室主任本人的课由学院负责人认定；学院和教研室都缺负责人时由学校系统管理员认定')
                 a.check_teacher(db,r.user_id);check_conflicts(db,a,r.user_id)
         # 用和计分同一套口径算出每门课的学分学时（含课程总库补学分、同年重复只算一次）。
         staff={r.staff_no for r in rows.values()}

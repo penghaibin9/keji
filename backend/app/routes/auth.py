@@ -71,6 +71,7 @@ def login(data:Login,request:Request):
     response.set_cookie(cfg.cookie_name,token,httponly=True,secure=cfg.secure_cookie,samesite='strict',path='/',max_age=cfg.session_hours*3600)
     response.delete_cookie('nd_sso_session',path='/',secure=cfg.secure_cookie,httponly=True,samesite='strict')
     response.delete_cookie(cfg.demo_cookie_name,path='/',secure=cfg.secure_cookie,httponly=True,samesite='strict')
+    response.delete_cookie(cfg.identity_cookie_name,path='/',secure=cfg.secure_cookie,httponly=True,samesite='strict')
     return response
 
 @router.get('/me')
@@ -81,7 +82,8 @@ def me(request:Request):
         return {'user':{**serial(a.user),**({'must_change_password':False} if sso else {})},'role':serial(a.role),'org':serial(a.org),'permissions':sorted(a.permissions),
                 'csrf':s.csrf,'school_name':(branding.value if branding else {}).get('school_name',''),
                 'environment':request.app.state.settings.env,'demo_switch':demo_options(a),
-                'sso_session':sso}
+                'sso_session':sso,'identities':identity_choices(db,a,request),
+                'primary_role':serial(a.primary_role),'primary_org':serial(a.primary_org)}
     # csrf deliberately returned only here; generic business serial redacts it.
     with request.app.state.sessions.begin() as db:
         a,s=current_actor(db,request,allow_password=True)
@@ -102,6 +104,7 @@ def change_password(data:Password,request:Request):
     result=command(request,data.model_dump(),None,apply,allow_password=True)
     response=JSONResponse(result);response.delete_cookie(request.app.state.settings.cookie_name,path='/',secure=request.app.state.settings.secure_cookie,httponly=True,samesite='strict')
     response.delete_cookie(request.app.state.settings.demo_cookie_name,path='/',secure=request.app.state.settings.secure_cookie,httponly=True,samesite='strict')
+    response.delete_cookie(request.app.state.settings.identity_cookie_name,path='/',secure=request.app.state.settings.secure_cookie,httponly=True,samesite='strict')
     return response
 
 @router.post('/logout')
@@ -114,6 +117,7 @@ def logout(request:Request):
     result=command(request,{},None,apply,allow_password=True)
     response=JSONResponse(result);response.delete_cookie(request.app.state.settings.cookie_name,path='/',secure=request.app.state.settings.secure_cookie,httponly=True,samesite='strict')
     response.delete_cookie(request.app.state.settings.demo_cookie_name,path='/',secure=request.app.state.settings.secure_cookie,httponly=True,samesite='strict')
+    response.delete_cookie(request.app.state.settings.identity_cookie_name,path='/',secure=request.app.state.settings.secure_cookie,httponly=True,samesite='strict')
     response.delete_cookie(_state_cookie(request.app.state.settings),path='/',secure=request.app.state.settings.secure_cookie,httponly=True,samesite='lax')
     response.delete_cookie('nd_sso_session',path='/',secure=request.app.state.settings.secure_cookie,httponly=True,samesite='strict')
     return response
@@ -149,4 +153,49 @@ def switch_demo_identity(data:DemoSwitch,request:Request):
                             samesite='strict',path='/',max_age=cfg.session_hours*3600)
     else:
         response.delete_cookie(cfg.demo_cookie_name,path='/',secure=cfg.secure_cookie,httponly=True,samesite='strict')
+    return response
+
+
+def identity_choices(db,a,request):
+    """一人多身份：可切换的身份和各身份待办数，只有一个身份时为空列表。"""
+    from ..identities import options,identity_actor
+    from .business import _todo_items
+    if getattr(a,'demo_controller',None) and a.demo_controller.id!=a.id:return []
+    items=options(db,a)
+    for x in items:
+        try:x['todo_count']=len(_todo_items(db,a if x['current'] else identity_actor(db,a.user,x['id'],request)))
+        except HTTPException:x['todo_count']=None;x['unavailable']=True
+    return items
+
+
+class IdentitySwitch(Input):
+    identity_id: str = Field(default='',max_length=64)
+
+
+@router.post('/identity')
+def switch_identity(data:IdentitySwitch,request:Request):
+    """切换当前身份：同一个人的主身份和兼任身份之间切换，权限按切换后的身份判断。"""
+    from ..identities import identity_actor,signed_selection as identity_selection
+    cookie_value=None
+    def apply(db,a,s):
+        nonlocal cookie_value
+        if getattr(a,'demo_controller',None) and a.demo_controller.id!=a.id:
+            raise HTTPException(403,'演示身份下不能切换兼任身份，请先切回管理员')
+        target=identity_actor(db,a.user,data.identity_id,request)
+        audit(db,a,'auth',a.id,'切换身份',before={'role':a.role.name,'org':a.org.name},
+              after={'role':target.role.name,'role_kind':target.role.kind,'org':target.org.name},reason='本人切换当前办理身份')
+        # Invalidates old-page writes made under the previous identity.
+        s.csrf=secrets.token_urlsafe(32)
+        cookie_value=identity_selection(s,a.user,target.identity_id) if target.identity_id else ''
+        return {'switched':True,'role':target.role.name,'org':target.org.name,'reload_required':True}
+    result=command(request,data.model_dump(),None,apply)
+    if cookie_value is None:
+        raise HTTPException(409,'该切换已处理，请刷新页面核对当前身份')
+    cfg=request.app.state.settings
+    response=JSONResponse(result)
+    if cookie_value:
+        response.set_cookie(cfg.identity_cookie_name,cookie_value,httponly=True,secure=cfg.secure_cookie,
+                            samesite='strict',path='/',max_age=cfg.session_hours*3600)
+    else:
+        response.delete_cookie(cfg.identity_cookie_name,path='/',secure=cfg.secure_cookie,httponly=True,samesite='strict')
     return response

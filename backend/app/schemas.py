@@ -52,6 +52,9 @@ class UserIn(Reason):
     org_id: Ident
     role_id: Ident
     password: PasswordText = Field(repr=False)
+class IdentityIn(Input):
+    role_id: Ident
+    org_id: Ident
 class UserUpdate(Reason):
     name: str = Field(min_length=1,max_length=100)
     title: str = Field(default='',max_length=80)
@@ -60,6 +63,10 @@ class UserUpdate(Reason):
     active: bool
     is_admin: bool=False
     expected_version: int=Field(ge=1)
+    # 兼任身份；不传表示不改。主身份仍是 org_id + role_id。
+    extra_identities: list[IdentityIn]|None=Field(default=None,max_length=6)
+class OrgHeadIn(Reason):
+    user_id: Ident
 class RoleCopy(Reason):
     code: Ident
     name: str = Field(min_length=1,max_length=100)

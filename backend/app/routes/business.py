@@ -227,10 +227,16 @@ def _todo_items(db,a):
                     add('qualification',q,'资质有效期核对：'+q.name,'EXPIRING',
                         expires=q.expires,days_remaining=(q.expires-school_today()).days)
     if 'assessment.read' in a.permissions:
-        stage={'dept':'DEPARTMENT','college':'COLLEGE','school':'SCHOOL'}.get(a.role.kind)
+        # 缺负责人的级别自动上交上一级办理（identities.stage_handler）
+        from ..identities import stage_handler,org_heads,VACANCY_LABEL
+        heads=None;teachers={}
         for x in db.scalars(select(Assessment).where(a.scope(Assessment.teacher_id))):
             if x.teacher_id==a.id and x.state=='TEACHER' and 'assessment.confirm' in a.permissions:add('assessment',x,'本人考核确认')
-            elif x.teacher_id!=a.id and x.state==stage and 'assessment.review' in a.permissions:add('assessment',x,'本级考核确认')
+            elif x.teacher_id!=a.id and x.state in ('DEPARTMENT','COLLEGE','SCHOOL') and 'assessment.review' in a.permissions and a.role.kind!='teacher':
+                if heads is None:heads=org_heads(db)
+                if x.teacher_id not in teachers:teachers[x.teacher_id]=db.get(User,x.teacher_id)
+                kind,vacant=stage_handler(db,teachers[x.teacher_id],x.state,heads)
+                if kind==a.role.kind:add('assessment',x,'本级考核确认'+('（'+VACANCY_LABEL[vacant]+'）' if vacant else ''))
             elif x.state=='READY' and 'assessment.archive' in a.permissions and x.teacher_id!=a.id:add('assessment',x,'考核归档')
     if a.role.kind!='teacher' and 'assessment.read' in a.permissions:
         if a.role.kind in {'dept','college'} and 'assessment.review' in a.permissions:
@@ -249,7 +255,7 @@ def _todo_items(db,a):
                     target=db.get(Org,x.target_id);name=target.name if target else x.target_id
                     if x.state=='REVIEWED' and x.reviewed_by!=a.id:add('organization_assessment',x,'学校审核组织考核：'+name,target_id=x.target_id)
                     elif x.state=='SCHOOL_APPROVED':add('organization_assessment',x,'归档组织考核：'+name,target_id=x.target_id)
-    if a.role.kind in {'dept','college'} and 'assessment.review' in a.permissions:
+    if (a.role.kind in {'dept','college'} or (a.role.kind=='school' and a.user.is_admin)) and 'assessment.review' in a.permissions:
         from types import SimpleNamespace
         from ..reference_data import pending_credit_reviews
         groups=pending_credit_reviews(db,a)

@@ -430,10 +430,19 @@ def annual_teaching_credits(db,rows,*,include_details=True):
 
 def pending_credit_reviews(db,actor):
     """Teacher-years with courses waiting for this reviewer: 教研室主任 -> own teachers, 学院负责人 -> 教研室主任 of the college."""
-    if actor.role.kind not in ('dept','college') or 'assessment.review' not in actor.permissions:return []
+    if actor.role.kind not in ('dept','college','school') or 'assessment.review' not in actor.permissions:return []
+    if actor.role.kind=='school' and not actor.user.is_admin:return []
     q=select(TeacherCourseTerm).where(TeacherCourseTerm.active.is_(True),actor.scope(TeacherCourseTerm.user_id),TeacherCourseTerm.user_id!=actor.id)
-    if actor.role.kind=='college':
-        q=q.where(TeacherCourseTerm.user_id.in_(select(User.id).join(Role,Role.id==User.role_id).where(Role.kind=='dept')))
+    if actor.role.kind in ('college','school'):
+        # 学院：本院教研室主任的课，加上缺教研室主任的老师；学校：学院也缺负责人的老师（缺位上交）
+        from .identities import org_heads,stage_handler,head_user_ids
+        heads=org_heads(db);mine=set()
+        ids={x for x in db.scalars(select(TeacherCourseTerm.user_id).where(TeacherCourseTerm.active.is_(True),TeacherCourseTerm.user_id.is_not(None),
+            actor.scope(TeacherCourseTerm.user_id),TeacherCourseTerm.user_id!=actor.id).distinct())}
+        dept_heads=head_user_ids(db,'dept') if actor.role.kind=='college' else set()
+        for uid in ids:
+            if uid in dept_heads or stage_handler(db,db.get(User,uid),'DEPARTMENT',heads)[0]==actor.role.kind:mine.add(uid)
+        q=q.where(TeacherCourseTerm.user_id.in_(sorted(mine) or ['']))
     return [g for g in annual_teaching_credits(db,db.scalars(q),include_details=False) if g['pending_courses']]
 
 def term_anchor(school_year,term_no):

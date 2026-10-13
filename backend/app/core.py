@@ -83,6 +83,8 @@ class Actor:
             raise HTTPException(403,'账号或角色已停用，或授权配置无效')
         self.user,self.role,self.org=user,role,org
         self.id,self.name=user.id,user.name
+        # 一人多身份：identity_id 为空表示主身份（users.role_id/org_id），见 identities.py
+        self.identity_id=None;self.primary_role,self.primary_org=role,org
         self.org_ids=org_scope(db,org,role.kind)
         self.permissions=frozenset(role.permissions)
         self.request_id=getattr(getattr(request,'state',None),'request_id','')
@@ -149,6 +151,8 @@ def current_actor(db,request,*,allow_password=False,write=False):
     role,org=db.get(Role,user.role_id),db.get(Org,user.org_id)
     if not role or not org: raise HTTPException(403,'账号组织权限不完整')
     actor=Actor(db,user,role,org,request)
+    from .identities import apply_selection
+    actor=apply_selection(db,request,actor,session)
     from .demo_identity import resolve
     actor=resolve(db,request,actor,session,write=write)
     request.state.actor_id,request.state.actor_name,request.state.org_id=actor.id,actor.name,actor.org.id
@@ -166,6 +170,9 @@ def audit(db,actor,module,object_id,action,before=None,after=None,reason='',resu
     controller=getattr(actor,'demo_controller',None)
     if controller and controller.id!=actor.id:
         after=dict(after or {},demo_operator={'id':controller.id,'username':controller.user.username})
+    if getattr(actor,'identity_id',None):
+        from .identities import audit_tag
+        after=dict(after or {},acting_identity=audit_tag(actor))
     obj=Audit(actor_id=actor.id,actor_name=actor.name,org_id=actor.org.id,module=module,
       object_id=str(object_id)[:128],action=action,before=serial(before or {}),after=serial(after or {}),
       reason=reason,result=result,request_id=actor.request_id)

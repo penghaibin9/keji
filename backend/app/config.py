@@ -40,6 +40,10 @@ class Settings(BaseSettings):
         return '__Host-nd_demo_identity' if self.secure_cookie else 'nd_test_demo_identity'
 
     @property
+    def identity_cookie_name(self):
+        return '__Host-nd_identity' if self.secure_cookie else 'nd_test_identity'
+
+    @property
     def cookie_name(self):
         return '__Host-nd_session' if self.secure_cookie else 'nd_test_session'
 

@@ -281,6 +281,7 @@ def sso_callback(request: Request):
     response.set_cookie(cfg.cookie_name, token, httponly=True, secure=cfg.secure_cookie, samesite='strict', path='/', max_age=cfg.session_hours * 3600)
     response.delete_cookie('nd_sso_session',path='/',secure=cfg.secure_cookie,httponly=True,samesite='strict')
     response.delete_cookie(cfg.demo_cookie_name,path='/',secure=cfg.secure_cookie,httponly=True,samesite='strict')
+    response.delete_cookie(cfg.identity_cookie_name,path='/',secure=cfg.secure_cookie,httponly=True,samesite='strict')
     response.delete_cookie(_state_cookie(cfg), path='/', secure=cfg.secure_cookie, httponly=True, samesite='lax')
     return response
 
@@ -313,4 +314,5 @@ def sso_logout(request: Request):
     response.delete_cookie('nd_sso_session',path='/',secure=cfg.secure_cookie,httponly=True,samesite='strict')
     response.delete_cookie(cfg.cookie_name, path='/', secure=cfg.secure_cookie, httponly=True, samesite='strict')
     response.delete_cookie(cfg.demo_cookie_name,path='/',secure=cfg.secure_cookie,httponly=True,samesite='strict')
+    response.delete_cookie(cfg.identity_cookie_name,path='/',secure=cfg.secure_cookie,httponly=True,samesite='strict')
     return response

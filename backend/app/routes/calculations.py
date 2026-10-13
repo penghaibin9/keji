@@ -20,6 +20,7 @@ from ..scoring_methods import clean_teacher_config
 from ..read_queries import assessment_query,ASSESSMENT_FILTERS,authorized_org_descendants
 from ..social_training import point_entry_read_item
 from .business import owned_object,events
+from ..identities import stage_handler,VACANCY_LABEL
 from ..org_assessment import (OrganizationAssessmentRule,OrganizationRuleTrial,OrganizationAssessment,OrganizationAssessmentMetricEvidence,
     validate_org_rule_config,organization_facts,evaluate_org_rule,archive_payload,ORG_TARGET_KINDS,organization_source_changes,org_rule_warnings)
 router=APIRouter(prefix='/api',tags=['积分与教师考核'])
@@ -294,6 +295,8 @@ def assessment_details(db,a,ident,permission='assessment.read'):
     result['source_changes']=assessment_source_changes(db,obj)
     can_view='dispute.write' in a.permissions
     result['open_point_reviews']=len(st_reviews(db,obj.teacher_id)) if obj.state!='ARCHIVED' else 0
+    handler,vacant=stage_handler(db,db.get(User,obj.teacher_id),obj.state)
+    result['handler']={'kind':handler,'acting_for':VACANCY_LABEL.get(vacant)}
     result['confirmation_blockers']={'count':len(pending),'can_view':can_view,
         'can_resolve':can_view and 'dispute.resolve' in a.permissions and obj.teacher_id!=a.id,
         'items':[{'id':d.id,'object_type':d.object_type,'reason':d.reason,'created_at':serial(d)['created_at']} for d in pending] if can_view else []}
@@ -353,7 +356,7 @@ def assessment_action(ident:str,data:Action,request:Request):
         obj=owned_object(db,a,Assessment,ident,'assessment.read');check_version(obj,data.expected_version)
         require_open_period(db,obj.period_id)
         if obj.state=='ARCHIVED':raise HTTPException(409,'已归档考核不可修改')
-        before=serial(obj)
+        before=serial(obj);handling={}
         if data.action=='confirm':
             if db.scalar(assessment_open_disputes(db,obj).limit(1)):
                 raise HTTPException(409,'存在未解决数据核对，请先处理')
@@ -365,13 +368,20 @@ def assessment_action(ident:str,data:Action,request:Request):
             else:
                 a.require('assessment.review')
                 expected={'DEPARTMENT':('dept','COLLEGE'),'COLLEGE':('college','SCHOOL'),'SCHOOL':('school','READY')}.get(obj.state)
-                if not expected or expected[0]!=a.role.kind or obj.teacher_id==a.id:raise HTTPException(403,'不能越级审核或审核本人考核')
+                handler,vacant=stage_handler(db,db.get(User,obj.teacher_id),obj.state)
+                if not expected or handler!=a.role.kind or obj.teacher_id==a.id:raise HTTPException(403,'不能越级审核或审核本人考核')
+                handling={'stage':obj.state,'acting_for':VACANCY_LABEL.get(vacant)}
+                previous=db.scalar(select(WorkflowEvent).where(WorkflowEvent.object_type=='assessment',WorkflowEvent.object_id==ident,
+                    WorkflowEvent.action=='考核确认').order_by(WorkflowEvent.created_at.desc(),WorkflowEvent.id.desc()).limit(1))
+                if obj.state in ('COLLEGE','SCHOOL') and previous is not None and previous.actor_id==a.id and (previous.before or {}).get('state')!='TEACHER':
+                    handling['same_person']='同一人连审'
                 obj.state=expected[1]
             obj.returned=False
         elif data.action=='return':
             a.require('assessment.review')
-            expected={'DEPARTMENT':'dept','COLLEGE':'college','SCHOOL':'school','READY':'school'}.get(obj.state)
-            if expected!=a.role.kind or obj.teacher_id==a.id:raise HTTPException(403,'不能越级退回或复核本人考核')
+            expected,vacant=stage_handler(db,db.get(User,obj.teacher_id),obj.state)
+            if expected is None or obj.state=='TEACHER' or expected!=a.role.kind or obj.teacher_id==a.id:raise HTTPException(403,'不能越级退回或复核本人考核')
+            handling={'stage':obj.state,'acting_for':VACANCY_LABEL.get(vacant)}
             obj.state='TEACHER';obj.returned=True
             from ..message_push import queue
             queue(db,[obj.teacher_id],'年度考核被退回，请重新核对','请登录非学历教育智慧前台，查看退回原因后重新确认本人考核。')
@@ -388,7 +398,10 @@ def assessment_action(ident:str,data:Action,request:Request):
         else:raise HTTPException(422,'考核操作无效')
         if data.action=='confirm':require_current_sources(assessment_source_changes(db,obj))
         obj.version+=1
-        workflow(db,a,'assessment',ident,{'confirm':'考核确认','return':'退回教师核对','archive':'考核归档'}[data.action],before,serial(obj),data.reason,data.basis)
+        after=serial(obj)
+        handling={k:v for k,v in handling.items() if v}
+        if len(handling)>1:after['handling']=handling
+        workflow(db,a,'assessment',ident,{'confirm':'考核确认','return':'退回教师核对','archive':'考核归档'}[data.action],before,after,data.reason,data.basis)
         return obj
     return command(request,data.model_dump(),'assessment.read',apply)
 
