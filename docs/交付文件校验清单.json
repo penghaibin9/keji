@@ -731,8 +731,8 @@
       "size": 14687
     },
     "frontend/app.js": {
-      "sha256": "201012672eb5eb97dc7457fdd4ad906238fd0eada42924d33f708ceb8c6623b2",
-      "size": 397384
+      "sha256": "27fdeef1d27179b08dc71d6cc7c42af2ee690d32e7634dfda71392f6bd9b7803",
+      "size": 398961
     },
     "frontend/approval-flow.js": {
       "sha256": "f1850f90540d9c25ac35ef217ea27ae672a4b9137a83c00aadcb12df3d564666",
@@ -767,7 +767,7 @@
       "size": 2302
     },
     "frontend/index.html": {
-      "sha256": "62ddbb61e8f8a794ac18dd18e0aefd14b80b11d5008e0e08e7ca98bdeb2a6a33",
+      "sha256": "1ebcee40c299ae846ef241b2663165f790cc51bbed2b03168e2216bbff6d607e",
       "size": 1311
     },
     "frontend/integration-drafts.js": {
@@ -791,8 +791,8 @@
       "size": 47694
     },
     "frontend/professional.css": {
-      "sha256": "0520a9b78a86d0804c182116e7b7a2d6098ac7f07fad793cda62881e6f6413ed",
-      "size": 45856
+      "sha256": "8b9df169942c2e96c480cde2e9fbefbd8b979fa6b2a0de7abe4b38ac2924e773",
+      "size": 46894
     },
     "frontend/school-data.js": {
       "sha256": "a6c99c40bd3b7db1f667c1d9885b58fe595e348735420687bb3f98c6b8b8e59f",
