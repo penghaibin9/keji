@@ -363,8 +363,8 @@
       "size": 32649
     },
     "backend/app/routes/ledgers.py": {
-      "sha256": "7638e7f48bbaea3829a011a0d60c89ded46f2bc298d8d4b4c22d338e7696b04b",
-      "size": 63239
+      "sha256": "3304c277d73cda54c1d1ca6b50eccea31b1d9dbc0671d17f681c0a1dd97fb96f",
+      "size": 63453
     },
     "backend/app/routes/reference.py": {
       "sha256": "90860f54a08b5d17f4454773c649c421462144672fbb53869aa8a98c555fdbd7",
@@ -731,8 +731,8 @@
       "size": 14687
     },
     "frontend/app.js": {
-      "sha256": "937333d65f913b06d6930bb70365e75daca520d8c581e092c3f7a1430a350462",
-      "size": 397363
+      "sha256": "201012672eb5eb97dc7457fdd4ad906238fd0eada42924d33f708ceb8c6623b2",
+      "size": 397384
     },
     "frontend/approval-flow.js": {
       "sha256": "f1850f90540d9c25ac35ef217ea27ae672a4b9137a83c00aadcb12df3d564666",
@@ -751,8 +751,8 @@
       "size": 36386
     },
     "frontend/business-focus.css": {
-      "sha256": "27b134dc5dec2bc91fbf6202a4aea7b1d9d4b28078e4a43177e7f0ea19497640",
-      "size": 29196
+      "sha256": "0ea5d62729baa919b1914202d6ccfefcd61b2873ffba7ab85ee8d81c967a19a1",
+      "size": 29250
     },
     "frontend/business-history.js": {
       "sha256": "2981780f594304e68ce4f9539fe76094a47050cd8b17eb047e85cc38bef112c5",
@@ -767,7 +767,7 @@
       "size": 2302
     },
     "frontend/index.html": {
-      "sha256": "87a4228784a6abe542ed73aa769c95f92f999c4a39b4921b0c28cb1c93c29aee",
+      "sha256": "62ddbb61e8f8a794ac18dd18e0aefd14b80b11d5008e0e08e7ca98bdeb2a6a33",
       "size": 1311
     },
     "frontend/integration-drafts.js": {
