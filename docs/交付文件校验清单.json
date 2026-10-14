@@ -731,8 +731,8 @@
       "size": 14687
     },
     "frontend/app.js": {
-      "sha256": "27fdeef1d27179b08dc71d6cc7c42af2ee690d32e7634dfda71392f6bd9b7803",
-      "size": 398961
+      "sha256": "dc5c63733b88f175bd33d1eb63078f4a6d99e3a2bf91a5ea77c8dac7e1ef1742",
+      "size": 399611
     },
     "frontend/approval-flow.js": {
       "sha256": "f1850f90540d9c25ac35ef217ea27ae672a4b9137a83c00aadcb12df3d564666",
@@ -751,8 +751,8 @@
       "size": 36386
     },
     "frontend/business-focus.css": {
-      "sha256": "1a39c54795f9d9e3d1a3264940e9ef968c0484fe98cc3cb9b1f070509613556f",
-      "size": 30149
+      "sha256": "fcc5e3eabb14e2d66551b34c5dd9730e483c1ea3487c36b19119325ced3f8bd5",
+      "size": 31420
     },
     "frontend/business-history.js": {
       "sha256": "2981780f594304e68ce4f9539fe76094a47050cd8b17eb047e85cc38bef112c5",
@@ -767,7 +767,7 @@
       "size": 2302
     },
     "frontend/index.html": {
-      "sha256": "d67bccbad27b69745c8ea194872ed71f4682449b2f9368cb918f39b17cc9b34c",
+      "sha256": "70dda6a27a34a488841f9d2096310fa81d6b9bc9a8f10f7b8bdfde55207ab798",
       "size": 1311
     },
     "frontend/integration-drafts.js": {
