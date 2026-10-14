@@ -231,3 +231,28 @@ def test_admin_designates_teacher_as_reviewer_without_changing_role(client2,app2
     k2=course(credits(c,'J001')['2026-2027'],'K2')
     auth(c,'otherteacher');assert review(c,[k2['id']],'approve').status_code==403
     auth(c,'teacher');assert credits(c,'J001')['2025-2026']['total_credit']=='4.00'
+
+
+def test_course_level_tags_follow_the_course(client2,app2):
+    """授课认定菜单里给课打国家级、省级、校级标签：跟着课程走，同一门课所有老师一起显示。"""
+    c=client2;setup(c,app2)
+    auth(c,'teacher')
+    k1=course(credits(c,'J001')['2025-2026'],'K1')
+    assert k1['level'] is None
+    r=post(c,URL+'/level',{'ids':[k1['id']],'level':'province'});assert r.status_code==403   # 老师不能打标签
+    auth(c,'depthead');assert post(c,URL+'/level',{'ids':[k1['id']],'level':'province'}).status_code==403
+    auth(c,'jwc')
+    r=post(c,URL+'/level',{'ids':[k1['id']],'level':'province'});assert r.status_code==200,r.text
+    assert r.json()=={'updated':1,'level':'province'}
+    assert post(c,URL+'/level',{'ids':[k1['id']],'level':'province'}).json()['updated']==0   # 重复设置不重复记
+    assert post(c,URL+'/level',{'ids':[k1['id']],'level':'bogus'}).status_code==422
+    # 同一门教务课 K1，另一位老师那里也显示省级；超星课 X1 不受影响。
+    assert course(credits(c,'J002')['2025-2026'],'K1')['level']=='province'
+    assert course(credits(c,'J001')['2025-2026'],'X1','CX')['level'] is None
+    auth(c,'teacher');assert course(credits(c,'J001')['2025-2026'],'K1')['level']=='province'
+    auth(c,'jwc')
+    assert post(c,URL+'/level',{'ids':[k1['id']],'level':''}).json()['updated']==1
+    assert course(credits(c,'J001')['2025-2026'],'K1')['level'] is None
+    with Session(app2.state.engine) as db:
+        actions=[a.action for a in db.scalars(select(Audit).where(Audit.module=='teacher_course',Audit.action.startswith('课程级别')).order_by(Audit.created_at))]
+    assert actions==['课程级别：省级','课程级别：清除级别']

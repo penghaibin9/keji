@@ -8,7 +8,7 @@ from types import SimpleNamespace
 from fastapi import APIRouter,Request,HTTPException
 from sqlalchemy import select,func
 from ..core import *
-from ..schemas import ParticipationIn,ParticipationUpdate,Reason,CreditReviewIn,CxClaimIn,CxClaimDecisionIn
+from ..schemas import ParticipationIn,ParticipationUpdate,Reason,CreditReviewIn,CreditLevelIn,CxClaimIn,CxClaimDecisionIn
 from pydantic import Field
 from .. import code_tables as codes
 from ..reference_data import TrainingProjectMaster,TrainingCourseMaster,TrainingClassMaster,TeacherParticipation,TeacherHrProfile,TeacherCourseTerm,SchoolCourse,annual_teaching_credits,UNKNOWN_YEAR,record_reference_errors,staff_roster,school_year_now,school_year_of,ROSTER_PROBLEMS,HR_PRIVATE_KEYS,credit_summary,source_status,CREDIT_REVIEW_KIND,credit_review_code,credit_reviews,can_review_credits
@@ -392,6 +392,30 @@ def teacher_credit_review(data:CreditReviewIn,request:Request):
             done+=1
         return {'updated':done,'unchanged':len(ids)-done,'decision':data.decision}
     # 授课认定人可能是普通教师身份，权限在 apply 里按“是否授课认定人”判断。
+    return command(request,data.model_dump(),None,apply)
+
+
+@router.post('/reference/teacher-credits/level')
+def teacher_credit_level(data:CreditLevelIn,request:Request):
+    """给课程打国家级、省级、校级标签。标签跟着课程（来源 + 课程号）走，同一门课所有老师一起生效。"""
+    def apply(db,a,s):
+        from ..reference_data import course_levels,save_course_levels,course_level_key,COURSE_LEVELS
+        if not can_review_credits(db,a):raise HTTPException(403,'课程级别由授课认定人设置')
+        ids=list(dict.fromkeys(data.ids))
+        rows=list(db.scalars(select(TeacherCourseTerm).where(TeacherCourseTerm.id.in_(ids),TeacherCourseTerm.active.is_(True))))
+        if len(rows)!=len(ids):raise HTTPException(409,'有课程已不在当前授课数据里，请刷新后重试')
+        items=course_levels(db,lock=True);changed=[]
+        for key in dict.fromkeys(course_level_key(r.origin,r.course_code) for r in rows):
+            old=items.get(key)
+            if (old or '')==data.level:continue
+            if data.level:items[key]=data.level
+            else:items.pop(key,None)
+            changed.append({'course':key,'before':COURSE_LEVELS.get(old,''),'after':COURSE_LEVELS.get(data.level,'')})
+        if changed:
+            save_course_levels(db,items)
+            label=COURSE_LEVELS.get(data.level,'清除级别')
+            audit(db,a,'teacher_course','course-level','课程级别：'+label,after={'courses':changed[:200]},reason=data.reason or label)
+        return {'updated':len(changed),'level':data.level}
     return command(request,data.model_dump(),None,apply)
 
 

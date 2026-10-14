@@ -30,3 +30,18 @@
 @media(max-width:900px){.rule-row,.rule-row.org-rule-row{grid-template-columns:repeat(2,minmax(0,1fr))!important}.rule-labels{display:none}}
 .search-results button[hidden]{display:none}
 .inline-check{display:inline-flex;align-items:center;gap:6px;font-size:12px;white-space:nowrap;color:#486589}.filterbar .inline-check input{height:auto;min-height:0;margin:0}
+
+/* 授课认定菜单：左边选老师，右边分开看教务课、超星课 */
+.cr-layout{display:grid;grid-template-columns:minmax(240px,320px) minmax(0,1fr);gap:16px;align-items:start;margin-top:16px}
+.cr-teachers{display:flex;flex-direction:column;max-height:70vh;overflow:auto}
+.cr-teacher{display:flex;flex-direction:column;align-items:flex-start;gap:4px;padding:12px 16px;border:0;border-bottom:1px solid var(--line,#e5e9f2);background:none;text-align:left;cursor:pointer;font:inherit;color:inherit}
+.cr-teacher:hover{background:var(--bg,#f4f7fd)}
+.cr-teacher.active{background:var(--blue-pale,#eaf1ff);box-shadow:inset 3px 0 0 var(--blue,#1f5eff)}
+.cr-empty{padding:16px}
+.cr-actions{display:flex;flex-wrap:wrap;align-items:center;gap:8px;padding:12px 16px;border-top:1px solid var(--line,#e5e9f2);border-bottom:1px solid var(--line,#e5e9f2);position:sticky;top:0;background:#fff;z-index:2}
+.cr-sep{width:1px;height:24px;background:var(--line,#e5e9f2);margin:0 4px}
+.cr-origins{padding:0 16px 16px}
+.cr-origin h3{display:flex;align-items:center;gap:8px;margin:20px 0 8px}
+.cr-placeholder{padding:48px 24px;text-align:center}
+@media (max-width:900px){.cr-layout{grid-template-columns:1fr}.cr-teachers{max-height:none}}
+.cr-all{margin-left:auto;font-weight:400;font-size:12px}

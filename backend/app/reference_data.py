@@ -388,6 +388,7 @@ def annual_teaching_credits(db,rows,*,include_details=True,reviews=None):
     for i in range(0,len(numbers),500):
         staff.update(db.scalars(select(TeacherHrProfile.staff_no).where(TeacherHrProfile.active.is_(True),TeacherHrProfile.staff_no.in_(numbers[i:i+500]))))
     groups={};seen={}
+    levels=course_levels(db) if include_details else {}
     repeats=Counter((r.staff_no,r.origin,r.course_code,school_year_of(r.term_name)) for r in rows)
     for r in sorted(rows,key=lambda r:(r.staff_no,r.term_name,r.origin,r.course_code)):
         year=school_year_of(r.term_name)
@@ -402,7 +403,8 @@ def annual_teaching_credits(db,rows,*,include_details=True,reviews=None):
         # 无明细汇总只需为同年重复课程解析学期。
         term_no=term_no_of(r.term_name) if include_details or repeats[key]>1 else None
         if include_details:
-            detail={'term_name':r.term_name,'term_no':term_no,'origin':r.origin,'course_code':r.course_code,'course_name':r.course_name,'credit':None,'hours':None,'credit_from':None,'counted':True,'id':r.id,'review':None}
+            detail={'term_name':r.term_name,'term_no':term_no,'origin':r.origin,'course_code':r.course_code,'course_name':r.course_name,'credit':None,'hours':None,'credit_from':None,'counted':True,'id':r.id,'review':None,
+                    'level':levels.get(course_level_key(r.origin,r.course_code))}
             g.setdefault('details',[]).append(detail)
         if term_no is not None:
             key=(*key,term_no)
@@ -487,6 +489,25 @@ def all_credit_groups(db):
         groups=annual_teaching_credits(db,chain(jw,cx),include_details=False,reviews=reviews)
         _CREDIT_CACHE.update(key=key,at=time.monotonic(),groups=groups)
         return groups
+
+# 课程级别标签：国家级、省级、校级。跟着课程走（来源 + 课程号），不跟着老师走；
+# 认定人在“授课认定”里给课打标签，同一门课所有老师都看到同一个级别。存在 settings 的一行里。
+COURSE_LEVELS_KEY='course_levels'
+COURSE_LEVELS={'national':'国家级','province':'省级','school':'校级'}
+
+def course_level_key(origin,course_code):
+    return f'{origin}|{course_code}'
+
+def course_levels(db,lock=False):
+    q=select(Setting).where(Setting.key==COURSE_LEVELS_KEY)
+    row=db.scalar(q.with_for_update() if lock else q)
+    return dict((row.value or {}).get('items',{})) if row else {}
+
+def save_course_levels(db,items):
+    row=db.scalar(select(Setting).where(Setting.key==COURSE_LEVELS_KEY).with_for_update())
+    if row is None:db.add(Setting(key=COURSE_LEVELS_KEY,value={'items':items},version=1))
+    else:row.value={'items':items};row.version+=1
+    db.flush()
 
 # 授课认定人：系统管理员在组织页学校那一行指定的人（如皮老师、教务处的人）。
 # 存在 settings 的一行里，不改数据库结构。跟着人走，不管当前切到哪个身份都能认定。

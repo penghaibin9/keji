@@ -316,6 +316,11 @@ class CxClaimDecisionIn(Input):
     decision: Literal['approve','reject','revoke']
     reason: str = Field(default='',max_length=200)
 
+class CreditLevelIn(Input):
+    """给授课课程打级别标签（空字符串表示清除）。"""
+    ids: list[Ident] = Field(min_length=1,max_length=200)
+    level: Literal['national','province','school','']
+    reason: str = Field(default='',max_length=500)
 class CreditReviewIn(Input):
     """学校认定授课：一次认定或不计一批课程（教务、超星同步来的授课记录）。"""
     ids: list[Ident] = Field(min_length=1,max_length=200)
