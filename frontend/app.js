@@ -66,7 +66,7 @@ const json=o=>`<pre class="data-json">${esc(JSON.stringify(o,null,2))}</pre>`;
 const ts=v=>v?new Date(/(?:Z|[+-]\d{2}:\d{2})$/.test(v)?v:v+'Z').toLocaleString('zh-CN',{hour12:false}):'—';
 const titles={mine:'个人培训',ledgers:'学院台账与口径检查',resources:'培训课程视频分钟资源',projects:'培训项目管理',courses:'培训课程管理',bases:'培训基地管理',outcomes:'培训成果',recognition:'社会培训积分认定',annual:'学院年度考核',policy:'学校制度执行口径',home:'工作总览',todos:'统一待办',cockpit:'学校管理驾驶舱',records:'培训数据',credits:'授课与学分',qualifications:'教师资质管理',points:'教师积分激励',assessment:'三级考核管理',disputes:'数据核对与复核',organization:'教研室与二级学院管理',rules:'规则与周期',imports:'表格导入中心',exports:'导出与任务中心',permissions:'账号与权限',settings:'字典与参数',audit:'操作日志与安全审计',sync:'对接与同步',implementation:'接口实施工具',sso:'学校统一认证',hub:'学校数据中台',province:'湘培直通车',guide:'对接怎么开始',operations:'运行与备份',notices:'政策通知',help:'操作指引'};
 // 同一页面对不同角色的叫法：教研室负责人在台账页只看本教研室平均积分。
-const roleTitles={dept:{ledgers:'教研室平均积分',organization:'本教研室管理'},college:{organization:'本学院与教研室管理'},teacher:{assessment:'我的考核',points:'我的积分',recognition:'积分申报',projects:'培训项目',courses:'培训课程',bases:'培训基地',qualifications:'我的资质',records:'我的培训数据',credits:'我的授课与学分',disputes:'我提出的核对',exports:'导出下载'}};
+const roleTitles={dept:{ledgers:'教研室平均积分',organization:'本教研室管理'},college:{organization:'本学院与教研室管理'},teacher:{todos:'我的待办',assessment:'我的考核',points:'我的积分',recognition:'积分申报',projects:'培训项目',courses:'培训课程',bases:'培训基地',qualifications:'我的资质',records:'我的培训数据',credits:'我的授课与学分',disputes:'我提出的核对',exports:'导出下载'}};
 // 教师看到的合并页名称（菜单和页签标题）。
 const roleGroupTitles={teacher:{assessment:'我的考核',points:'我的积分'}};
 const pageTitle=p=>roleTitles[me?.role?.kind]?.[p]||titles[p];

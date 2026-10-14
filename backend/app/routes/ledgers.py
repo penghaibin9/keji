@@ -749,8 +749,9 @@ def mine(request: Request, year: int = Query(..., ge=2020, le=2100)):
                                'total': trial.get('total'), 'blockers': len(trial.get('blockers') or []), 'deadline': trial.get('deadline'),
                                'steps': [{'label': label, 'done': i < at or c.state == 'ARCHIVED', 'current': i == at and c.state != 'ARCHIVED'} for i, (_, label) in enumerate(CLAIM_STEPS)]})
             waiting = c.state == 'DRAFT' and any('尚未正式启用' in x for x in trial.get('blockers') or [])
+            expired = c.state == 'DRAFT' and any('超过结项后15个工作日' in x for x in trial.get('blockers') or [])
             if c.state in ('DRAFT', 'RETURNED'):
-                text = '被退回，请补正' if c.state == 'RETURNED' else '已填好，等学校正式启用积分口径后再提交' if waiting else '还是草稿，请提交'
+                text = '被退回，请补正' if c.state == 'RETURNED' else '已填好，等学校正式启用积分口径后再提交' if waiting else '已超过结项后15个工作日的申报期限，请联系学院处理' if expired else '还是草稿，请提交'
                 reminders.append({'level': 'info' if waiting else 'warn', 'text': f'积分申报“{claim_rows[-1]["project"]}”' + text, 'action': 'social-detail', 'id': 'social_claim|' + c.id})
         allocations = []
         colleges = college_scope(db, a)
