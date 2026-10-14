@@ -71,7 +71,7 @@ def facts(db,teacher_id,period):
               "values":serial(raw),"qualification_basis":"审核通过、取得日期不晚于周期结束、有效期覆盖周期结束日；无有效期视为长期有效",
               "assessment_score_basis":"本周期开始日前最近一个已归档考核结果，不引用当期未完成考核",
               "teaching_credits":credit_basis,
-              "credits_basis":"只算教研室主任已认定的课；教务授课按课程号取课程总库学分，超星课程用自带学分（只算创建人）；第一学期按 9月1日、第二学期按次年 3月1日 落入考核周期"}
+              "credits_basis":"只算学校已认定的课；教务授课按课程号取课程总库学分，超星课程用自带学分（只算创建人）；第一学期按 9月1日、第二学期按次年 3月1日 落入考核周期"}
     return raw,snapshot
 
 
@@ -83,7 +83,7 @@ def credit_gaps(snapshot):
 
 
 def pending_credit_reviews_in(snapshot):
-    """Courses in the period still waiting for the 教研室主任 (认定不计分 ones are settled, not pending)."""
+    """Courses in the period still waiting for the school reviewer (认定不计分 ones are settled, not pending)."""
     return [c for c in (snapshot.get("teaching_credits") or {}).get("unapproved",[]) if c.get("review")=="pending"]
 
 
@@ -96,7 +96,7 @@ def require_complete_credits(rule,snapshot,item_keys=None):
         raise HTTPException(409,f"有 {len(gaps)} 门授课课程缺学分或学期名称识别不出（{names(gaps)}），请先在“授课与学分”补齐后再正式计算")
     pending=pending_credit_reviews_in(snapshot)
     if pending:
-        raise HTTPException(409,f"有 {len(pending)} 门授课课程还待教研室主任认定（{names(pending)}），请先在“授课与学分”认定后再正式计算")
+        raise HTTPException(409,f"有 {len(pending)} 门授课课程还待学校认定（{names(pending)}），请先在“授课与学分”认定后再正式计算")
 
 
 def evaluate(rule,raw):

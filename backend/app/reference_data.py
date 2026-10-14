@@ -342,7 +342,7 @@ def _catalogue(db,codes):
         if c.code not in best or version(c)>version(best[c.code]):best[c.code]=c
     return best
 
-# 授课认定：教务、超星拉来的课先“待认定”，教研室主任认定后才计学分学时。
+# 授课认定：教务、超星拉来的课先“待认定”，学校（教务处等学校层面账号）认定后才计学分学时。
 # 认定结论按课存一条 SocialResource(kind='teach_credit')，不改数据库结构；
 # 认定时记下学分学时依据，重新拉取后依据变了就回到待认定。
 CREDIT_REVIEW_KIND='teach_credit'
@@ -488,23 +488,15 @@ def all_credit_groups(db):
         _CREDIT_CACHE.update(key=key,at=time.monotonic(),groups=groups)
         return groups
 
+def can_review_credits(actor):
+    """授课认定由学校层面办理（教务处、分管领导等学校层面账号），教研室、学院不认定。"""
+    return actor.role.kind=='school' and 'assessment.review' in actor.permissions
+
 def pending_credit_reviews(db,actor):
-    """Teacher-years with courses waiting for this reviewer: 教研室主任 -> own teachers, 学院负责人 -> 教研室主任 of the college."""
-    if actor.role.kind not in ('dept','college','school') or 'assessment.review' not in actor.permissions:return []
-    if actor.role.kind=='school' and not actor.user.is_admin:return []
+    """Teacher-years with courses waiting for a school-level reviewer (own courses excluded: 须回避本人)."""
+    if not can_review_credits(actor):return []
     allowed=set(db.scalars(select(User.id).where(actor.scope(User.id),User.id!=actor.id)))
-    groups=[g for g in all_credit_groups(db) if g['pending_courses'] and g['user_id'] in allowed]
-    if actor.role.kind in ('college','school'):
-        # 学院：本院教研室主任的课，加上缺教研室主任的老师；学校：学院也缺负责人的老师（缺位上交）
-        from .identities import org_heads,stage_handler,head_user_ids,org_map,teacher_orgs
-        heads=org_heads(db);orgs=org_map(db);mine=set()
-        ids={g['user_id'] for g in groups}
-        dept_heads=head_user_ids(db,'dept') if actor.role.kind=='college' else set()
-        people=teacher_orgs(db,ids)
-        for uid in ids:
-            if uid in dept_heads or stage_handler(db,people.get(uid),'DEPARTMENT',heads,orgs)[0]==actor.role.kind:mine.add(uid)
-        groups=[g for g in groups if g['user_id'] in mine]
-    return groups
+    return [g for g in all_credit_groups(db) if g['pending_courses'] and g['user_id'] in allowed]
 
 def term_anchor(school_year,term_no):
     """Date a term counts on: term 1 of '2025-2026' -> 2025-09-01, term 2 -> 2026-03-01.

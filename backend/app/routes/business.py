@@ -258,7 +258,8 @@ def _todo_items(db,a):
                     target=db.get(Org,x.target_id);name=target.name if target else x.target_id
                     if x.state=='REVIEWED' and x.reviewed_by!=a.id:add('organization_assessment',x,'学校审核组织考核：'+name,target_id=x.target_id)
                     elif x.state=='SCHOOL_APPROVED':add('organization_assessment',x,'归档组织考核：'+name,target_id=x.target_id)
-    if (a.role.kind in {'dept','college'} or (a.role.kind=='school' and a.user.is_admin)) and 'assessment.review' in a.permissions:
+    from ..reference_data import can_review_credits
+    if can_review_credits(a):
         from types import SimpleNamespace
         from ..reference_data import pending_credit_reviews
         groups=pending_credit_reviews(db,a)

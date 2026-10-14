@@ -10,7 +10,7 @@ from ..core import *
 from ..schemas import ParticipationIn,ParticipationUpdate,Reason,CreditReviewIn,CxClaimIn,CxClaimDecisionIn
 from pydantic import Field
 from .. import code_tables as codes
-from ..reference_data import TrainingProjectMaster,TrainingCourseMaster,TrainingClassMaster,TeacherParticipation,TeacherHrProfile,TeacherCourseTerm,SchoolCourse,annual_teaching_credits,UNKNOWN_YEAR,record_reference_errors,staff_roster,school_year_now,school_year_of,ROSTER_PROBLEMS,HR_PRIVATE_KEYS,credit_summary,source_status,CREDIT_REVIEW_KIND,credit_review_code,credit_reviews
+from ..reference_data import TrainingProjectMaster,TrainingCourseMaster,TrainingClassMaster,TeacherParticipation,TeacherHrProfile,TeacherCourseTerm,SchoolCourse,annual_teaching_credits,UNKNOWN_YEAR,record_reference_errors,staff_roster,school_year_now,school_year_of,ROSTER_PROBLEMS,HR_PRIVATE_KEYS,credit_summary,source_status,CREDIT_REVIEW_KIND,credit_review_code,credit_reviews,can_review_credits
 from ..social_models import SocialResource
 from ..social_training import check_conflicts
 from ..read_queries import authorized_org_descendants
@@ -303,7 +303,7 @@ def teacher_credits(request:Request):
     if f.get('review') not in (None,'pending'):raise HTTPException(422,'review参数无效')
     def load(db,a,s):
         q=select(TeacherCourseTerm).where(TeacherCourseTerm.active.is_(True))
-        admin=a.role.kind=='school' and a.user.is_admin
+        admin=(a.role.kind=='school' and a.user.is_admin) or can_review_credits(a)
         q=q.where(a.scope(TeacherCourseTerm.user_id)|TeacherCourseTerm.user_id.is_(None)) if admin else q.where(a.scope(TeacherCourseTerm.user_id))
         if f.get('staff_no'):q=q.where(TeacherCourseTerm.staff_no==f['staff_no'])
         if f.get('org_id'):
@@ -344,10 +344,10 @@ CREDIT_DECISIONS={'approve':('APPROVED','认定计分'),'exclude':('EXCLUDED','�
 
 @router.post('/reference/teacher-credits/review')
 def teacher_credit_review(data:CreditReviewIn,request:Request):
-    """教研室主任认定本教研室教师的授课：认定后才计学分学时。
+    """学校认定教务、超星同步来的授课：认定后才计学分学时和积分。
 
-    教研室主任本人的课由学院负责人认定；还没有对应账号的工号由学校系统管理员认定。
-    认定时记下当时的学分学时，重新拉取后有变化会自动回到待认定。
+    认定人是学校层面账号（教务处、分管领导等，角色层级为学校且有“考核审核”权限）；
+    教研室、学院不认定。本人的课须回避。认定时记下当时的学分学时，重新拉取后有变化会自动回到待认定。
     """
     def apply(db,a,s):
         state,label=CREDIT_DECISIONS[data.decision]
@@ -356,14 +356,10 @@ def teacher_credit_review(data:CreditReviewIn,request:Request):
         rows={r.id:r for r in db.scalars(select(TeacherCourseTerm).where(TeacherCourseTerm.id.in_(ids)).with_for_update())}
         missing=[i for i in ids if i not in rows or not rows[i].active]
         if missing:raise HTTPException(409,'有 %d 门课已不在当前授课数据里，请刷新后重试'%len(missing))
-        admin=a.role.kind=='school' and a.user.is_admin
+        if not can_review_credits(a):raise HTTPException(403,'授课由学校（教务处等学校层面账号）认定，教研室、学院不办理认定')
         for r in rows.values():
-            if r.user_id is None:
-                if not admin:raise HTTPException(403,'工号 '+r.staff_no+' 还没有对应教师账号，由学校系统管理员认定')
-            else:
-                if a.role.kind not in ('dept','college') and not (admin and stage_handler(db,db.get(User,r.user_id),'DEPARTMENT')[0]=='school'):
-                    raise HTTPException(403,'授课由教研室主任认定；教研室主任本人的课由学院负责人认定；学院和教研室都缺负责人时由学校系统管理员认定')
-                a.check_teacher(db,r.user_id);check_conflicts(db,a,r.user_id)
+            if a.user.staff_no and r.staff_no==a.user.staff_no:raise HTTPException(403,'须回避本人的课，请由其他学校层面账号认定')
+            if r.user_id is not None:a.check_teacher(db,r.user_id);check_conflicts(db,a,r.user_id)
         # 用和计分同一套口径算出每门课的学分学时（含课程总库补学分、同年重复只算一次）。
         staff={r.staff_no for r in rows.values()}
         peers=db.scalars(select(TeacherCourseTerm).where(TeacherCourseTerm.active.is_(True),TeacherCourseTerm.staff_no.in_(staff)))

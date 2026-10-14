@@ -82,7 +82,8 @@ def test_pages_match_full_aggregation(client2,credit_data,detail,problem):
 @pytest.mark.parametrize('viewer,admin,users',[
     ('teacher',False,['teacher']),('depthead',False,['teacher','creditteacher']),
     ('collegehead',False,['teacher','creditteacher']),('otherteacher',False,['otherteacher']),
-    ('schooladmin',False,['teacher','otherteacher','creditteacher'])])
+    # 学校层级且有考核审核权限的账号（教务处等）负责授课认定，也要看到还没建账号的工号，和系统管理员一样看全部。
+    ('schooladmin',False,None)])
 def test_page_queries_keep_row_scope(client2,credit_data,viewer,admin,users):
     if viewer=='schooladmin':
         with Session(credit_data.state.engine) as db:

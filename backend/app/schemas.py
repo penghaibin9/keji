@@ -315,7 +315,7 @@ class CxClaimDecisionIn(Input):
     reason: str = Field(default='',max_length=200)
 
 class CreditReviewIn(Input):
-    """教研室主任认定授课：一次认定或不计一批课程（教务、超星同步来的授课记录）。"""
+    """学校认定授课：一次认定或不计一批课程（教务、超星同步来的授课记录）。"""
     ids: list[Ident] = Field(min_length=1,max_length=200)
     decision: Literal['approve','exclude','reset']
     reason: str = Field(default='',max_length=500)

@@ -1,8 +1,8 @@
 import {icons} from './icons.js';
 import {socialPage,socialAction} from './social-training.js?v=20261014-ui1';
 import {nextCode,runBatch,batchStage,batchMode,batchPerformer,BATCH_LABELS} from './approval-flow.js?v=20261012-streamline1';
-import {ledgerPage,resourceStatsPage,homeIndicators,ledgerAction,resetLedgerView,minePage,mineReminders} from './social-ledgers.js?v=20261014-ui3';
-import {rosterSection,rosterHandlers,onlineHandlers,showStaffDetail,showCourseDetail,presetRoster,loadCodeTables} from './school-data.js?v=20261013-cx-claim1';
+import {ledgerPage,resourceStatsPage,homeIndicators,ledgerAction,resetLedgerView,minePage,mineReminders} from './social-ledgers.js?v=20261014-school-review1';
+import {rosterSection,rosterHandlers,onlineHandlers,showStaffDetail,showCourseDetail,presetRoster,loadCodeTables} from './school-data.js?v=20261014-school-review1';
 import {renderCenterStatus,renderImplementationWorkspace,renderSsoMaintenance,handleImplementationAction} from './integration-workspace.js?v=20261013-remediation2';
 import {readDraftEntry,saveDraft,previewDraft} from './integration-drafts.js';
 import {renderBusinessHistory} from './business-history.js';
@@ -239,13 +239,12 @@ async function showCreditDetail(code){
  const reviewer=canReviewCredits(x),pickCell=r=>r.counted&&r.review?`<input type="checkbox" name="credit-pick" value="${esc(r.id)}" aria-label="选择 ${esc(r.course_name)}" ${r.review==='pending'?'checked':''}>`:'';
  const block=t=>{const rows=x.details.filter(r=>termKey(r)===t),sum=rows.filter(r=>r.counted&&r.review==='approved'&&r.credit!=null).reduce((a,r)=>a+Number(r.credit),0);
   return `<h3 class="mt16">${esc(termLabel(t))} · 已认定 ${number(sum,2)} 学分</h3>`+table([...(reviewer?['选择']:[]),'来源','课程','学期名称','学分','学时','认定','说明'],rows.map(r=>[...(reviewer?[pickCell(r)]:[]),originBadge(r.origin),`${esc(r.course_name)}<p class="cell-sub mono">${r.origin==='JW'?link(r.course_code,'course-detail',encodeURIComponent(r.course_code)+'|'+code):esc(r.course_code)}</p>`,`<span class="small muted">${esc(r.term_name)}</span>`,!r.counted?'<span class="muted small">不计</span>':r.credit==null?'<span class="badge red-b">缺学分</span>':number(r.credit,2),r.hours==null?'—':number(r.hours,2),creditReviewCell(r),!r.counted?(r.linked_course_code?`与教务课 ${esc(r.linked_course_code)} 重复，不重复计分`:'同一学期重复记录，只算一次'):r.credit==null?'课程总库中没有该课程或学分为空，请联系教务核对':'学分来自'+from[r.credit_from]]))};
- modal(`${x.teacher_name||x.staff_no} · ${x.school_year} 学年授课学分`,`<div class="summary-row"><div class="summary-item"><label>已认定学分</label><strong>${number(x.total_credit,2)}</strong></div><div class="summary-item"><label>其中 教务 / 超星</label><strong>${number(x.jw_credit,2)}<small>/ ${number(x.cx_credit,2)}</small></strong></div><div class="summary-item"><label>已认定学时</label><strong>${number(x.hours,2)}</strong></div><div class="summary-item"><label>待认定</label><strong>${number(x.pending_credit,2)}<small>学分 · ${number(x.pending_courses)} 门</small></strong></div></div>`+(x.pending_courses?note(reviewer?'勾选课程后点“认定计分”或“不计分”（待认定的课已默认勾选）。认定后才计学分学时和积分；以后重新拉取时学分学时有变化的课会自动回到待认定。':'标“待认定”的课要等教研室主任认定后才计学分和积分。',!reviewer):'')+(x.excluded_courses?note(`有 ${x.excluded_courses} 门课认定为不计分，原因见“认定”一列。`,false):'')+(x.in_staff_table?'':note('该工号不在学校教职工表里，按学校规定这些学分不计入积分和考核。',true))+(x.user_id?'':note('该工号还没有对应的本地教师账号，学分已统计，但不会出现在该教师本人页面。',true))+terms.map(block).join('')+note('学分有误怎么办：数据来自教务系统和超星，本系统不能直接修改。教务课程请联系教务处、线上课程请联系超星管理员在源头更正，下一次数据同步后这里会自动更新。如果已经影响到积分或考核结果，可以在“数据核对与复核”里对那条积分或考核发起核对，复核通过后重新计算。',false,'学分有误怎么办'),(returnToStaff?act('返回教师信息','staff-detail',staff):'')+(reviewer?act('改回待认定','credit-review','reset|'+code,'text')+act('不计分','credit-review','exclude|'+code)+act('认定计分','credit-review','approve|'+code,'primary'):''),true);
+ modal(`${x.teacher_name||x.staff_no} · ${x.school_year} 学年授课学分`,`<div class="summary-row"><div class="summary-item"><label>已认定学分</label><strong>${number(x.total_credit,2)}</strong></div><div class="summary-item"><label>其中 教务 / 超星</label><strong>${number(x.jw_credit,2)}<small>/ ${number(x.cx_credit,2)}</small></strong></div><div class="summary-item"><label>已认定学时</label><strong>${number(x.hours,2)}</strong></div><div class="summary-item"><label>待认定</label><strong>${number(x.pending_credit,2)}<small>学分 · ${number(x.pending_courses)} 门</small></strong></div></div>`+(x.pending_courses?note(reviewer?'勾选课程后点“认定计分”或“不计分”（待认定的课已默认勾选）。认定后才计学分学时和积分；以后重新拉取时学分学时有变化的课会自动回到待认定。':'标“待认定”的课要等学校（教务处）认定后才计学分和积分。',!reviewer):'')+(x.excluded_courses?note(`有 ${x.excluded_courses} 门课认定为不计分，原因见“认定”一列。`,false):'')+(x.in_staff_table?'':note('该工号不在学校教职工表里，按学校规定这些学分不计入积分和考核。',true))+(x.user_id?'':note('该工号还没有对应的本地教师账号，学分已统计，但不会出现在该教师本人页面。',true))+terms.map(block).join('')+note('学分有误怎么办：数据来自教务系统和超星，本系统不能直接修改。教务课程请联系教务处、线上课程请联系超星管理员在源头更正，下一次数据同步后这里会自动更新。如果已经影响到积分或考核结果，可以在“数据核对与复核”里对那条积分或考核发起核对，复核通过后重新计算。',false,'学分有误怎么办'),(returnToStaff?act('返回教师信息','staff-detail',staff):'')+(reviewer?act('改回待认定','credit-review','reset|'+code,'text')+act('不计分','credit-review','exclude|'+code)+act('认定计分','credit-review','approve|'+code,'primary'):''),true);
 }
-// 授课认定：教研室主任认定本教研室老师的课，学院负责人认定教研室主任本人的课；没有账号的工号由学校系统管理员认定。
+// 授课认定：由学校层面账号（教务处、分管领导等，角色层级为学校且有考核审核权限）认定；教研室、学院不认定；本人的课须回避。
 function canReviewCredits(x){
- if(!can('assessment.review')||!me)return false;
- if(!x.user_id)return me.role.kind==='school'&&me.user.is_admin===true;
- return (me.role.kind==='dept'||me.role.kind==='college')&&x.user_id!==me.user.id;
+ if(!can('assessment.review')||!me||me.role.kind!=='school')return false;
+ return !x.user_id||x.user_id!==me.user.id;
 }
 const CREDIT_REVIEW={approved:['green-b','已认定'],pending:['orange-b','待认定'],excluded:['gray-b','不计分']};
 function creditReviewCell(r){
@@ -604,7 +603,7 @@ const pages={
   const keep=`<input type="hidden" name="tab" value="${esc(tab)}">`;
   const bar=(fields,hint)=>`<form id="filters" class="filterbar">${keep}${fields}<button class="btn primary" type="submit">筛选</button>${act('重置','reset-filters','','text')}</form>${hint?`<p class="small muted" style="padding:0 16px 12px">${esc(hint)}</p>`:''}`;
   const qBox=ph=>`<input name="q" placeholder="${esc(ph)}" aria-label="关键词" value="${esc(filter.q||'')}">`;
-  const desc='教务授课按课程号到课程总库取学分，超星课程用自带学分（只算创建人）；同一学年两个学期合计。拉取来的课先“待认定”，教研室主任认定后才计学分学时和积分。';
+  const desc='教务授课按课程号到课程总库取学分，超星课程用自带学分（只算创建人）；同一学年两个学期合计。拉取来的课先“待认定”，学校（教务处）认定后才计学分学时和积分。';
   if(tab==='summary'){
    const d=await api('/reference/teacher-credits?'+query({...pick(filter,['q','school_year','problem','org_id','review']),page:tablePage,size:20}));view=d;
    const orgPick=me.role.kind==='college'||me.role.kind==='school'?`<select name="org_id" aria-label="教研室"><option value="">${me.role.kind==='school'?'全部学院和教研室':'全部教研室'}</option>${orgs.filter(o=>o.active!==false&&o.kind!=='school').map(o=>`<option value="${esc(o.id)}" ${filter.org_id===o.id?'selected':''}>${o.kind==='dept'?'　':''}${esc(o.name)}</option>`).join('')}</select>`:'';
