@@ -96,7 +96,7 @@ def require_complete_credits(rule,snapshot,item_keys=None):
         raise HTTPException(409,f"有 {len(gaps)} 门授课课程缺学分或学期名称识别不出（{names(gaps)}），请先在“授课与学分”补齐后再正式计算")
     pending=pending_credit_reviews_in(snapshot)
     if pending:
-        raise HTTPException(409,f"有 {len(pending)} 门授课课程还待学校认定（{names(pending)}），请先在“授课与学分”认定后再正式计算")
+        raise HTTPException(409,f"有 {len(pending)} 门授课课程还待学校认定（{names(pending)}），请授课认定人先在“授课认定”里认定后再正式计算")
 
 
 def evaluate(rule,raw):
