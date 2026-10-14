@@ -731,8 +731,8 @@
       "size": 14687
     },
     "frontend/app.js": {
-      "sha256": "fdae96490ac629c9da572606e46656447ecab1be8c59cca9cdbe169d7307f458",
-      "size": 397229
+      "sha256": "937333d65f913b06d6930bb70365e75daca520d8c581e092c3f7a1430a350462",
+      "size": 397363
     },
     "frontend/approval-flow.js": {
       "sha256": "f1850f90540d9c25ac35ef217ea27ae672a4b9137a83c00aadcb12df3d564666",
@@ -767,7 +767,7 @@
       "size": 2302
     },
     "frontend/index.html": {
-      "sha256": "7fa42e11d6286223826a3f2e2e70902a34e874c603595ff5589a5636ac463af3",
+      "sha256": "87a4228784a6abe542ed73aa769c95f92f999c4a39b4921b0c28cb1c93c29aee",
       "size": 1311
     },
     "frontend/integration-drafts.js": {
