@@ -232,3 +232,6 @@ body{font-family:"Microsoft YaHei","PingFang SC",sans-serif}
 @keyframes toast-in{from{opacity:0;transform:translateX(12px)}to{opacity:1;transform:none}}
 @media(prefers-reduced-motion:reduce){.toast{animation:none}}
 @media(max-width:740px){.toast-stack{top:76px;right:16px;left:16px;width:auto}}
+
+.notice-scope-all{display:inline-flex;align-items:center;gap:6px;font-size:13px;color:#2457ce;margin-bottom:6px;cursor:pointer}.notice-scope-list{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:6px 12px;max-height:180px;overflow:auto;padding:10px 12px;border:1px solid #dce5f2;border-radius:8px;background:#fff}.notice-scope-item{display:flex;align-items:center;gap:8px;font-size:14px;min-width:0;cursor:pointer}.notice-scope-item span{overflow-wrap:anywhere}.notice-scope-item small{margin-left:auto;color:#7a8ba6;font-size:12px}@media(max-width:600px){.notice-scope-list{grid-template-columns:1fr}}
+.form-field .notice-scope-item,.form-field .notice-scope-all{display:flex;align-items:center;gap:8px;margin:0;font-weight:400;font-size:14px}.form-field .notice-scope-all{display:inline-flex;margin-bottom:8px;color:#2457ce;font-size:13px}.notice-scope-item input,.notice-scope-all input{width:auto;flex:0 0 auto;margin:0}.notice-scope-item small{margin-left:auto;padding-left:8px;white-space:nowrap}
