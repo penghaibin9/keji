@@ -488,15 +488,35 @@ def all_credit_groups(db):
         _CREDIT_CACHE.update(key=key,at=time.monotonic(),groups=groups)
         return groups
 
-def can_review_credits(actor):
-    """授课认定由学校层面办理（教务处、分管领导等学校层面账号），教研室、学院不认定。"""
-    return actor.role.kind=='school' and 'assessment.review' in actor.permissions
+# 授课认定人：系统管理员在组织页学校那一行指定的人（如皮老师、教务处的人）。
+# 存在 settings 的一行里，不改数据库结构。跟着人走，不管当前切到哪个身份都能认定。
+CREDIT_REVIEWERS_KEY='credit_reviewers'
+
+def credit_reviewer_items(db,lock=False):
+    q=select(Setting).where(Setting.key==CREDIT_REVIEWERS_KEY)
+    row=db.scalar(q.with_for_update() if lock else q)
+    return list((row.value or {}).get('items',[])) if row else []
+
+def save_credit_reviewers(db,items):
+    row=db.scalar(select(Setting).where(Setting.key==CREDIT_REVIEWERS_KEY).with_for_update())
+    if row is None:db.add(Setting(key=CREDIT_REVIEWERS_KEY,value={'items':items},version=1))
+    else:row.value={'items':items};row.version+=1
+    db.flush()
+
+def is_credit_reviewer(db,actor):
+    """被指定为授课认定人的人（账号停用后自然登录不了）。"""
+    return any(x.get('user_id')==actor.id for x in credit_reviewer_items(db))
+
+def can_review_credits(db,actor):
+    """授课认定由学校办理：指定的授课认定人，或学校层面且有考核审核权限的账号（系统管理员等）。教研室、学院不认定。"""
+    if actor.role.kind=='school' and 'assessment.review' in actor.permissions:return True
+    return is_credit_reviewer(db,actor)
 
 def pending_credit_reviews(db,actor):
-    """Teacher-years with courses waiting for a school-level reviewer (own courses excluded: 须回避本人)."""
-    if not can_review_credits(actor):return []
-    allowed=set(db.scalars(select(User.id).where(actor.scope(User.id),User.id!=actor.id)))
-    return [g for g in all_credit_groups(db) if g['pending_courses'] and g['user_id'] in allowed]
+    """Teacher-years with courses waiting for a school reviewer (own courses excluded: 须回避本人)."""
+    if not can_review_credits(db,actor):return []
+    return [g for g in all_credit_groups(db) if g['pending_courses'] and g['user_id'] and g['user_id']!=actor.id
+            and not (actor.user.staff_no and g['staff_no']==actor.user.staff_no)]
 
 def term_anchor(school_year,term_no):
     """Date a term counts on: term 1 of '2025-2026' -> 2025-09-01, term 2 -> 2026-03-01.

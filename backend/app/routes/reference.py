@@ -4,6 +4,7 @@ The existing training_records table remains the authoritative teaching/income
 ledger.  teacher_participations is deliberately separate so a teacher attending
 training is never mistaken for teaching that class or credited the class income.
 """
+from types import SimpleNamespace
 from fastapi import APIRouter,Request,HTTPException
 from sqlalchemy import select,func
 from ..core import *
@@ -303,11 +304,17 @@ def teacher_credits(request:Request):
     if f.get('review') not in (None,'pending'):raise HTTPException(422,'review参数无效')
     def load(db,a,s):
         q=select(TeacherCourseTerm).where(TeacherCourseTerm.active.is_(True))
-        admin=(a.role.kind=='school' and a.user.is_admin) or can_review_credits(a)
-        q=q.where(a.scope(TeacherCourseTerm.user_id)|TeacherCourseTerm.user_id.is_(None)) if admin else q.where(a.scope(TeacherCourseTerm.user_id))
+        # 授课认定人要认定全校的课（包括工号还没对应账号的），不受本人身份的数据范围限制。
+        reviewer=can_review_credits(db,a)
+        if not reviewer:
+            admin=a.role.kind=='school' and a.user.is_admin
+            q=q.where(a.scope(TeacherCourseTerm.user_id)|TeacherCourseTerm.user_id.is_(None)) if admin else q.where(a.scope(TeacherCourseTerm.user_id))
         if f.get('staff_no'):q=q.where(TeacherCourseTerm.staff_no==f['staff_no'])
         if f.get('org_id'):
-            ids=authorized_org_descendants(db,a,f['org_id']);q=q.where(TeacherCourseTerm.user_id.in_(select(User.id).where(User.org_id.in_(ids))))
+            # 认定人按全校组织筛选；其他人只能筛本人授权范围内的组织。
+            scope_of=SimpleNamespace(org_ids=set(db.scalars(select(Org.id)))) if reviewer else a
+            ids=authorized_org_descendants(db,scope_of,f['org_id'])
+            q=q.where(TeacherCourseTerm.user_id.in_(select(User.id).where(User.org_id.in_(ids))))
         if f.get('q'):q=q.where(TeacherCourseTerm.teacher_name.contains(f['q'],autoescape=True)|TeacherCourseTerm.staff_no.contains(f['q'],autoescape=True))
         problem=f.get('problem')=='true';detail=f.get('detail')=='true';pending=f.get('review')=='pending'
         def wanted(x):
@@ -346,7 +353,7 @@ CREDIT_DECISIONS={'approve':('APPROVED','认定计分'),'exclude':('EXCLUDED','�
 def teacher_credit_review(data:CreditReviewIn,request:Request):
     """学校认定教务、超星同步来的授课：认定后才计学分学时和积分。
 
-    认定人是学校层面账号（教务处、分管领导等，角色层级为学校且有“考核审核”权限）；
+    认定人是系统管理员在组织页指定的“授课认定人”（皮老师、教务处等），以及学校层面有考核审核权限的账号；
     教研室、学院不认定。本人的课须回避。认定时记下当时的学分学时，重新拉取后有变化会自动回到待认定。
     """
     def apply(db,a,s):
@@ -356,10 +363,10 @@ def teacher_credit_review(data:CreditReviewIn,request:Request):
         rows={r.id:r for r in db.scalars(select(TeacherCourseTerm).where(TeacherCourseTerm.id.in_(ids)).with_for_update())}
         missing=[i for i in ids if i not in rows or not rows[i].active]
         if missing:raise HTTPException(409,'有 %d 门课已不在当前授课数据里，请刷新后重试'%len(missing))
-        if not can_review_credits(a):raise HTTPException(403,'授课由学校（教务处等学校层面账号）认定，教研室、学院不办理认定')
+        if not can_review_credits(db,a):raise HTTPException(403,'授课由学校指定的授课认定人认定，教研室、学院不办理认定')
         for r in rows.values():
-            if a.user.staff_no and r.staff_no==a.user.staff_no:raise HTTPException(403,'须回避本人的课，请由其他学校层面账号认定')
-            if r.user_id is not None:a.check_teacher(db,r.user_id);check_conflicts(db,a,r.user_id)
+            if a.user.staff_no and r.staff_no==a.user.staff_no:raise HTTPException(403,'须回避本人的课，请由其他授课认定人认定')
+            if r.user_id is not None:check_conflicts(db,a,r.user_id)
         # 用和计分同一套口径算出每门课的学分学时（含课程总库补学分、同年重复只算一次）。
         staff={r.staff_no for r in rows.values()}
         peers=db.scalars(select(TeacherCourseTerm).where(TeacherCourseTerm.active.is_(True),TeacherCourseTerm.staff_no.in_(staff)))
@@ -384,7 +391,8 @@ def teacher_credit_review(data:CreditReviewIn,request:Request):
             db.flush();audit(db,a,'teacher_course',i,'授课认定：'+label,before=before,after=serial(obj),reason=data.reason or label)
             done+=1
         return {'updated':done,'unchanged':len(ids)-done,'decision':data.decision}
-    return command(request,data.model_dump(),'assessment.review',apply)
+    # 授课认定人可能是普通教师身份，权限在 apply 里按“是否授课认定人”判断。
+    return command(request,data.model_dump(),None,apply)
 
 
 @router.get('/reference/classes')

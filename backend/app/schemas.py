@@ -70,6 +70,8 @@ class UserUpdate(Reason):
 class OrgHeadIn(Reason):
     user_id: Ident
     valid_until: str|None=Field(default=None,max_length=10)
+class CreditReviewerIn(Reason):
+    user_id: Ident
 class RoleCopy(Reason):
     code: Ident
     name: str = Field(min_length=1,max_length=100)

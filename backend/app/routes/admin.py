@@ -40,8 +40,10 @@ def organizations(request:Request):
             # 组织页显示每个学院、教研室的负责人；没有可用负责人的由上一级代办
             from ..identities import org_heads
             heads=org_heads(db)
+            reviewers=credit_reviewer_list(db)
             for x in items:
                 if x['kind'] in ('dept','college'):x['heads']=heads.get(x['id'],[])
+                elif x['kind']=='school':x['credit_reviewers']=reviewers
         return {'items':items}
     return read_operation(request,'portal.read',load)
 
@@ -114,6 +116,69 @@ def remove_org_head(ident:str,data:OrgHeadIn,request:Request):
         user.version+=1;user.auth_version+=1;db.execute(delete(AuthSession).where(AuthSession.user_id==user.id))
         after={'user_id':user.id,'name':user.name,'staff_no':user.staff_no,'org':org.name}
         audit(db,a,'organization',org.id,'移除负责人',before={'role':roles[mine[0]['role_id']].name},after=after,reason=data.reason)
+        return {'removed':True,**after}
+    return command(request,data.model_dump(),'users.manage',apply)
+
+# ---- 授课认定人 -------------------------------------------------------------
+# 皮老师、教务处等由系统管理员在组织页学校那一行指定。跟着人走：被指定的人
+# 不管是普通教师还是兼任负责人，登录后都能在统一待办、授课与学分里认定全校的课。
+
+def credit_reviewer_list(db):
+    from ..reference_data import credit_reviewer_items
+    items=credit_reviewer_items(db)
+    users={u.id:u for u in db.scalars(select(User).where(User.id.in_([x['user_id'] for x in items])))} if items else {}
+    names={o.id:o.name for o in db.scalars(select(Org))} if items else {}
+    out=[]
+    for x in items:
+        u=users.get(x['user_id'])
+        if u is None:continue
+        out.append({'user_id':u.id,'name':u.name,'staff_no':u.staff_no,'username':u.username,'org_name':names.get(u.org_id,''),
+                    'usable':bool(u.active and not u.authorization_pending),'granted_at':x.get('granted_at')})
+    return out
+
+@router.get('/credit-reviewers/candidates')
+def credit_reviewer_candidates(request:Request):
+    f,_,_=filters_from(request,{'q'})
+    def load(db,a,s):
+        need_admin(a)
+        q=select(User).where(User.active.is_(True))
+        if f.get('q'):q=q.where(User.name.contains(f['q'],autoescape=True)|User.staff_no.contains(f['q'],autoescape=True)|User.username.contains(f['q'],autoescape=True))
+        names={o.id:o.name for o in db.scalars(select(Org))}
+        return {'items':[{'id':u.id,'name':u.name,'staff_no':u.staff_no,'username':u.username,'title':u.title,'org_name':names.get(u.org_id,''),
+            'authorization_pending':u.authorization_pending} for u in db.scalars(q.order_by(User.staff_no,User.username).limit(30))]}
+    return read_operation(request,'users.manage',load)
+
+@router.post('/credit-reviewers')
+def add_credit_reviewer(data:CreditReviewerIn,request:Request):
+    """设置授课认定人：不改这个人的角色和身份，只是允许他认定全校老师的授课（本人的课须回避）。"""
+    def apply(db,a,s):
+        from ..reference_data import credit_reviewer_items,save_credit_reviewers
+        need_admin(a)
+        user=db.scalar(select(User).where(User.id==data.user_id,User.active.is_(True)).with_for_update())
+        if user is None:raise HTTPException(422,'只能从启用中的账号里选授课认定人')
+        items=credit_reviewer_items(db,lock=True)
+        if any(x.get('user_id')==user.id for x in items):raise HTTPException(409,user.name+' 已经是授课认定人')
+        if len(items)>=50:raise HTTPException(409,'授课认定人最多 50 位')
+        items.append({'user_id':user.id,'granted_by':a.id,'granted_at':utcnow().isoformat(timespec='seconds'),'reason':data.reason[:200]})
+        save_credit_reviewers(db,items);user.version+=1
+        after={'user_id':user.id,'name':user.name,'staff_no':user.staff_no}
+        audit(db,a,'credit_reviewer',user.id,'设置授课认定人',after=after,reason=data.reason)
+        return {'added':True,**after}
+    return command(request,data.model_dump(),'users.manage',apply)
+
+@router.post('/credit-reviewers/remove')
+def remove_credit_reviewer(data:CreditReviewerIn,request:Request):
+    def apply(db,a,s):
+        from ..reference_data import credit_reviewer_items,save_credit_reviewers
+        need_admin(a)
+        items=credit_reviewer_items(db,lock=True)
+        mine=[x for x in items if x.get('user_id')==data.user_id]
+        if not mine:raise HTTPException(404,'该账号不是授课认定人')
+        save_credit_reviewers(db,[x for x in items if x not in mine])
+        user=db.get(User,data.user_id)
+        if user is not None:user.version+=1
+        after={'user_id':data.user_id,'name':user.name if user else '','staff_no':user.staff_no if user else None}
+        audit(db,a,'credit_reviewer',data.user_id,'移除授课认定人',after=after,reason=data.reason)
         return {'removed':True,**after}
     return command(request,data.model_dump(),'users.manage',apply)
 

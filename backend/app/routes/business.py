@@ -259,7 +259,7 @@ def _todo_items(db,a):
                     if x.state=='REVIEWED' and x.reviewed_by!=a.id:add('organization_assessment',x,'学校审核组织考核：'+name,target_id=x.target_id)
                     elif x.state=='SCHOOL_APPROVED':add('organization_assessment',x,'归档组织考核：'+name,target_id=x.target_id)
     from ..reference_data import can_review_credits
-    if can_review_credits(a):
+    if can_review_credits(db,a):
         from types import SimpleNamespace
         from ..reference_data import pending_credit_reviews
         groups=pending_credit_reviews(db,a)

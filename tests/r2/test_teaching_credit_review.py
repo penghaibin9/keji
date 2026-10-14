@@ -181,3 +181,53 @@ def test_pending_courses_show_in_school_reviewer_todos(client2,app2):
     y=credits(c,'J001');ids=[d['id'] for g in y.values() for d in g['details'] if d['review']=='pending']
     assert review(c,ids,'approve').status_code==200
     assert {x['id'] for x in c.get('/api/todos',params={'type':'credit_review'}).json()['items']}=={'J002~2025-2026'}
+
+
+def test_admin_designates_teacher_as_reviewer_without_changing_role(client2,app2):
+    """组织页学校那一行设“授课认定人”：普通教师（如皮老师）不用改角色、不用切身份，就能认定全校的课。"""
+    c=client2;setup(c,app2)
+    # 只有学校系统管理员能设，教务处审核账号也不行。
+    auth(c,'jwc');assert post(c,'/api/credit-reviewers',{'user_id':'otherteacher',**REASON}).status_code==403
+    auth(c,'schooladmin')
+    school=next(o for o in c.get('/api/organizations').json()['items'] if o['kind']=='school')
+    assert school['credit_reviewers']==[]
+    found=c.get('/api/credit-reviewers/candidates',params={'q':'J002'}).json()['items']
+    assert [u['id'] for u in found]==['otherteacher']
+    r=post(c,'/api/credit-reviewers',{'user_id':'otherteacher',**REASON});assert r.status_code==200,r.text
+    assert post(c,'/api/credit-reviewers',{'user_id':'otherteacher',**REASON}).status_code==409
+    school=next(o for o in c.get('/api/organizations').json()['items'] if o['kind']=='school')
+    assert [(x['name'],x['usable']) for x in school['credit_reviewers']]==[('测试教师二',True)]
+    with Session(app2.state.engine) as db:
+        assert db.get(User,'otherteacher').role_id=='role-teacher'
+        assert db.scalar(select(Audit).where(Audit.module=='credit_reviewer',Audit.action=='设置授课认定人')) is not None
+    # 认定人用原来的教师账号登录：/me 标出认定人，待办里有全校的授课认定（自己的课须回避）。
+    auth(c,'otherteacher')
+    me=c.get('/api/auth/me').json();assert me['credit_reviewer'] is True and me['role']['kind']=='teacher'
+    todos=c.get('/api/todos',params={'type':'credit_review'}).json()
+    assert {x['id'] for x in todos['items']}=={'J001~2025-2026','J001~2026-2027'}
+    # 授课与学分里能看到全校待认定的老师，含还没建账号的工号。
+    listed=c.get(URL,params={'review':'pending'}).json()
+    assert {x['staff_no'] for x in listed['items']}=={'J001','J002','T9001','J900'}
+    assert c.get(URL,params={'review':'pending','org_id':'dept1'}).status_code==200
+    y=credits(c,'J001');k1=course(y['2025-2026'],'K1')
+    assert review(c,[k1['id']],'approve','已核对排课').status_code==200
+    row=course(credits(c,'T9001')['2025-2026'],'K1')
+    assert review(c,[row['id']],'approve','人事核对后认定').status_code==200
+    own=course(credits(c,'J002')['2025-2026'],'K1')
+    r=review(c,[own['id']],'approve');assert r.status_code==403 and '回避' in r.json()['detail'],r.text
+    # 别的普通老师还是只能看本人的。
+    auth(c,'teacher')
+    assert c.get('/api/auth/me').json()['credit_reviewer'] is False
+    assert {x['staff_no'] for x in c.get(URL).json()['items']}=={'J001'}
+    # 移除后马上不能再认定，已认定的课不受影响。
+    auth(c,'schooladmin')
+    assert post(c,'/api/credit-reviewers/remove',{'user_id':'otherteacher',**REASON}).status_code==200
+    assert post(c,'/api/credit-reviewers/remove',{'user_id':'otherteacher',**REASON}).status_code==404
+    auth(c,'otherteacher')
+    assert c.get('/api/auth/me').json()['credit_reviewer'] is False
+    assert c.get('/api/todos',params={'type':'credit_review'}).json()['total']==0
+    assert {x['staff_no'] for x in c.get(URL).json()['items']}=={'J002'}
+    auth(c,'schooladmin')
+    k2=course(credits(c,'J001')['2026-2027'],'K2')
+    auth(c,'otherteacher');assert review(c,[k2['id']],'approve').status_code==403
+    auth(c,'teacher');assert credits(c,'J001')['2025-2026']['total_credit']=='4.00'

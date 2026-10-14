@@ -51,6 +51,7 @@ class MaskPolicy:
     def __init__(self, db, actor):
         self.db, self.actor, self._orgs = db, actor, {}
         self.masked = 0
+        self._credit_reviewer = None
 
     def _in_scope(self, owner):
         if owner is None:return True  # rows already limited by the query scope (e.g. admin-only staging)
@@ -58,8 +59,16 @@ class MaskPolicy:
             self._orgs[owner] = self.db.scalar(select(User.org_id).where(User.id == owner,True if self.actor.role.kind=='school' else User.authorization_pending.is_(False)))
         return self._orgs[owner] in set(self.actor.org_ids) and self.actor.role.kind != 'teacher'
 
+    def credit_reviewer(self):
+        # 授课认定人要按工号核对全校老师的课，工号对他不打码（能看到哪些行仍由查询范围决定）。
+        if self._credit_reviewer is None:
+            from .reference_data import is_credit_reviewer
+            self._credit_reviewer = is_credit_reviewer(self.db, self.actor)
+        return self._credit_reviewer
+
     def full(self, key, owner):
         if owner is not None and owner == self.actor.id:return True
+        if SENSITIVE_FIELDS[key] is REVIEW_STAFF and self.credit_reviewer():return True
         return bool(SENSITIVE_FIELDS[key] & self.actor.permissions) and self._in_scope(owner)
 
     def value(self, key, value, owner):
