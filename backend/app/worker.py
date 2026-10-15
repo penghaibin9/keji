@@ -115,8 +115,10 @@ class StopSignal:
     def __init__(self,grace=STOP_GRACE_SECONDS):
         self.grace=grace;self.event=threading.Event();self.busy=False
     def install(self):
+        previous={s:signal.getsignal(s) for s in (signal.SIGTERM,signal.SIGINT,signal.SIGALRM)}
         signal.signal(signal.SIGTERM,self.request);signal.signal(signal.SIGINT,self.request)
         signal.signal(signal.SIGALRM,self.abandon)
+        return previous
     def request(self,signum=None,frame=None):
         first=not self.event.is_set();self.event.set()
         if self.busy and first:signal.alarm(max(1,int(self.grace)))
@@ -125,7 +127,7 @@ class StopSignal:
 
 
 def main(cfg=None,*,stop=None,poll_seconds=2):
-    cfg=cfg or Settings();stop=stop or StopSignal();stop.install()
+    cfg=cfg or Settings();stop=stop or StopSignal();previous=stop.install()
     engine=make_engine(cfg.database_url);sessions=sessionmaker(bind=engine,expire_on_commit=False);next_schema_check=0
     try:
         while not stop.event.is_set():
@@ -143,9 +145,13 @@ def main(cfg=None,*,stop=None,poll_seconds=2):
                 log.error('worker iteration failed: %s',type(exc).__name__)
             finally:
                 stop.busy=False;signal.alarm(0)
-            stop.event.wait(poll_seconds)
+            # time.sleep resumes after a signal handler returns, so a stop waits at most one poll.
+            if not stop.event.is_set():time.sleep(poll_seconds)
         log.info('worker stopped')
         return 0
-    finally:engine.dispose()
+    finally:
+        signal.alarm(0)
+        for s,h in previous.items():signal.signal(s,h)
+        engine.dispose()
 
 if __name__=='__main__':raise SystemExit(main())
