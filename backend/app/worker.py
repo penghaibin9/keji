@@ -5,7 +5,7 @@ maintenance, or current business authorization. Remote retries still depend on
 stable business idempotency keys; MySQL concurrency is a separate release gate.
 """
 from __future__ import annotations
-import logging,os,secrets,time
+import logging,os,secrets,signal,threading,time
 from datetime import timedelta
 from sqlalchemy import select,text
 from sqlalchemy.orm import sessionmaker
@@ -100,20 +100,52 @@ def run_once(cfg=None,registry=ADAPTERS,*,engine=None,sessions=None,check_schema
         if owns_engine:engine.dispose()
 
 
-def main():
-    cfg=Settings();engine=make_engine(cfg.database_url);sessions=sessionmaker(bind=engine,expire_on_commit=False);next_schema_check=0
+# Compose sends SIGTERM and kills after stop_grace_period (45s). As PID 1 in its container
+# the worker gets no default SIGTERM handling, so it must stop on its own: an idle worker exits
+# at once; a busy one gets STOP_GRACE_SECONDS to finish, then abandons the task. Abandoning
+# rolls back the transaction and leaves the lease to expire, so the task is retried later.
+STOP_GRACE_SECONDS=30
+
+
+class WorkerStopped(BaseException):
+    """Raised to abandon the current task; BaseException so executors cannot swallow it."""
+
+
+class StopSignal:
+    def __init__(self,grace=STOP_GRACE_SECONDS):
+        self.grace=grace;self.event=threading.Event();self.busy=False
+    def install(self):
+        signal.signal(signal.SIGTERM,self.request);signal.signal(signal.SIGINT,self.request)
+        signal.signal(signal.SIGALRM,self.abandon)
+    def request(self,signum=None,frame=None):
+        first=not self.event.is_set();self.event.set()
+        if self.busy and first:signal.alarm(max(1,int(self.grace)))
+    def abandon(self,signum=None,frame=None):
+        if self.busy:raise WorkerStopped()
+
+
+def main(cfg=None,*,stop=None,poll_seconds=2):
+    cfg=cfg or Settings();stop=stop or StopSignal();stop.install()
+    engine=make_engine(cfg.database_url);sessions=sessionmaker(bind=engine,expire_on_commit=False);next_schema_check=0
     try:
-        while True:
+        while not stop.event.is_set():
+            stop.busy=True
             try:
                 if cfg.env=='production' and time.monotonic()>=next_schema_check:
                     with engine.connect() as connection:installation.require_canonical(connection,require_mysql=True)
                     next_schema_check=time.monotonic()+600
                 run_once(cfg,engine=engine,sessions=sessions,check_schema=False)
+            except WorkerStopped:
+                log.warning('worker stopped before the current task finished; its lease will expire and it will be retried')
             except Exception as exc:
                 # Database/preflight failures must not reveal DSNs or interrupt all
                 # future polling. Missing heartbeats remain unhealthy to the monitor.
                 log.error('worker iteration failed: %s',type(exc).__name__)
-            time.sleep(2)
+            finally:
+                stop.busy=False;signal.alarm(0)
+            stop.event.wait(poll_seconds)
+        log.info('worker stopped')
+        return 0
     finally:engine.dispose()
 
-if __name__=='__main__':main()
+if __name__=='__main__':raise SystemExit(main())
