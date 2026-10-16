@@ -4,7 +4,7 @@
   "migration_heads": [
     "20261012_0004"
   ],
-  "file_count": 417,
+  "file_count": 419,
   "files": {
     ".dockerignore": {
       "sha256": "3ce289acb5e52c4133ecaa490b8672406f986f409f7397b8a566db497846caad",
@@ -139,12 +139,12 @@
       "size": 20137
     },
     "backend/app/applications.py": {
-      "sha256": "9d515c8d7c3523daa2891a851ea4dba7407d97e20c6865a1deb3b774e058ccc4",
-      "size": 29577
+      "sha256": "c20eac46f4ed6b64ed9a7b35e507d337e8c5eece99aaaf6a3dbb27492cf78ebb",
+      "size": 32624
     },
     "backend/app/approvals.py": {
-      "sha256": "1c52ee24daa9a6847c077145bfa7dfdd3d10ee1b507dbabef08c2e17f9236383",
-      "size": 12528
+      "sha256": "f7297af4ce5a278fa8b77ad5439c1efcfb86c0d45317a7a6006de6483b44d3ec",
+      "size": 13769
     },
     "backend/app/assessment_evidence.py": {
       "sha256": "d513bf688edb566dc691ba2cf52a82e7d0c5964d169965af7323c920fd23294f",
@@ -339,8 +339,8 @@
       "size": 34291
     },
     "backend/app/routes/applications.py": {
-      "sha256": "760ec49979040fb698d48be92f8e2bac657e1c14620064adc2eb0c6a1d40d35d",
-      "size": 16937
+      "sha256": "5dbe7fbccbcdb8af8c0e8faf31e4c84bbc7fce2b6a3f81a100998463e0539bd0",
+      "size": 22177
     },
     "backend/app/routes/auth.py": {
       "sha256": "e88edafd69c8fe8d9646b250fec4303421d16775221ab32e28316a35b0e285f7",
@@ -383,8 +383,8 @@
       "size": 32061
     },
     "backend/app/routes/social.py": {
-      "sha256": "83eb97da4097e8e06a628fa1583d5cf0bf6d2463da0788b3e1fe6ba2fafd5594",
-      "size": 80111
+      "sha256": "670621321d94bb4059ac899fa3c4afffd91c090bbba7875d76cf31a058e7e2ed",
+      "size": 81279
     },
     "backend/app/routes/sso.py": {
       "sha256": "b217f88cdb2ddcf3c95a39bb7836702a7f84c68d913f0b12d7b3a07bd601a68d",
@@ -439,12 +439,12 @@
       "size": 11605
     },
     "backend/app/social_schemas.py": {
-      "sha256": "cf70ccf3c2b0f60c03a360ef5dcc9919744268cdf0ef146a13eba2971cca3ab0",
-      "size": 24774
+      "sha256": "66495f5ef28bb8250bc6b22a0b6227e9915a570492dc5657dbd421cd3fc11cc9",
+      "size": 28414
     },
     "backend/app/social_training.py": {
-      "sha256": "a722fe18b45885ecb771b1b198d3872bb3421dbd59bd3ab031f679150951250c",
-      "size": 67724
+      "sha256": "99e7218c17e37d0d9a24cc3873df9824e1b5c681da14d3915cb41e93a984def7",
+      "size": 67879
     },
     "backend/app/sso_identity.py": {
       "sha256": "75a02d9db38d36a48142afa2d65bdcb7ab1aa7ec88ba529ed035ebdf531c031c",
@@ -686,6 +686,10 @@
       "sha256": "b4d73c8d70512bb9151e16a95103aa409cb95e435de87f69cd57c260041cb32e",
       "size": 242094
     },
+    "docs/升级说明_培训师资与课程基地_20261016.md": {
+      "sha256": "a862422f14a619fb3543e37cbafc62a14fb351a851bae02f3f03fc9b205281e9",
+      "size": 2518
+    },
     "docs/升级说明_申报与审批改造_20261016.md": {
       "sha256": "efdcff5db8fbe98b5fef7307190d930b93bc7eaf3b60e9b7b1b3ea05af389dc8",
       "size": 10098
@@ -751,12 +755,12 @@
       "size": 14687
     },
     "frontend/app.js": {
-      "sha256": "82c84f01f5e3ca0f2b172d39b2a35fbe008d0b720651efb73f00d1ec13e22a2f",
-      "size": 420830
+      "sha256": "45e1d8e5cff66eb1f893e3c619b565d3a884fe3f80a14ab9c6242be008cf8c3e",
+      "size": 421346
     },
     "frontend/applications.js": {
-      "sha256": "304f85f26329d1893ce648a9aaac626566986beb41d094299d5f613169dc15c8",
-      "size": 35250
+      "sha256": "62ac510adc814848f226d313f1a4679c59efefe750db0b11d1328c9e7aeac7e5",
+      "size": 42600
     },
     "frontend/approval-flow.js": {
       "sha256": "f1850f90540d9c25ac35ef217ea27ae672a4b9137a83c00aadcb12df3d564666",
@@ -795,7 +799,7 @@
       "size": 2302
     },
     "frontend/index.html": {
-      "sha256": "6538189661e021c32f6f499b4b843c1342c5e0325c27a6e06b1ebe47bb65280d",
+      "sha256": "73f1817efef065d0bd79a0341377233347904fb9fb5b9fbecdff39a6b0271681",
       "size": 1394
     },
     "frontend/integration-drafts.js": {
@@ -843,12 +847,12 @@
       "size": 52325
     },
     "frontend/social-training.css": {
-      "sha256": "bfd1edbcc3661b8d7ad04794c9c0fe2a889a66e43dd34f2d956b5dfd14bfb124",
-      "size": 53126
+      "sha256": "1809556f7d632988b3ce425e734170a2c25fbc0b61abdf9a939f7c498578d00b",
+      "size": 53330
     },
     "frontend/social-training.js": {
-      "sha256": "3e4d50c8a1c74f4b9c5aa9c84fe4422ce9747761055b5c26e9410c0dcb90448b",
-      "size": 142884
+      "sha256": "c6c0c2bc2266425c9f5647e4e03849327f231216bbe386f244496d6c0e7194f6",
+      "size": 147268
     },
     "frontend/styles.css": {
       "sha256": "764753e07c0ad1094bd60ac3b28afe66d13a2554b6d73657198387807ef5a625",
@@ -1287,8 +1291,8 @@
       "size": 11992
     },
     "tests/r2/test_course_base_apply.py": {
-      "sha256": "62518b484b807b010207fc592af519e610deef10ea613a86a1a057b26b39a597",
-      "size": 7572
+      "sha256": "3b450621eca4fdc6b47c0d3df20e4889780c1fa0595de8c21ed76779d6218101",
+      "size": 9726
     },
     "tests/r2/test_course_deadline.py": {
       "sha256": "4ba9a180b90100c51d0995231f499d8482572c3f0687bc8c6a39da25deda94e2",
@@ -1611,8 +1615,8 @@
       "size": 32653
     },
     "tests/r2/test_social_browser.py": {
-      "sha256": "c90e2a7b3e6a5e9a8fe5a77027c30c64efe405a7341dfeb671adc796afd8486b",
-      "size": 9458
+      "sha256": "ed042fcd15ec468e29fdb277575b5def7ff39bc1a4bff17aa73a64ea25772405",
+      "size": 9582
     },
     "tests/r2/test_social_migration.py": {
       "sha256": "78ce282e6a4790090db391808137ccd699edc2c60a6c7c2ac3dabfb6bb396b7b",
@@ -1627,8 +1631,8 @@
       "size": 4690
     },
     "tests/r2/test_social_training.py": {
-      "sha256": "1a26019a2894e5e920f9be55e662f70e3fb5ffd43501ecb424a688e0aa5c529b",
-      "size": 36913
+      "sha256": "a3397e26c9cdb858317efb0c34429255bf04b340314135bad348af5d740d3361",
+      "size": 38418
     },
     "tests/r2/test_sso_logout_pending_callback.py": {
       "sha256": "4679eb8136c142d266f74bb57c0dbada56c24b5c5232b8355734132bd4860c14",
@@ -1649,6 +1653,10 @@
     "tests/r2/test_tender_five_fixes.py": {
       "sha256": "365266393f66361840a3320873c333faa274d823a8acc779d560f445b8e20a66",
       "size": 14949
+    },
+    "tests/r2/test_trainers.py": {
+      "sha256": "541bfc456a1c845c32f25accea322a67cce1a8b6612f83c6bac64974b43a8d99",
+      "size": 7115
     },
     "tests/r2/test_trusted_proxy.py": {
       "sha256": "0d6f3ee9eda91a2f925b753201b65f3bbf7d2cfe2f537c845c5935d483f2039a",
