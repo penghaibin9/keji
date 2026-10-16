@@ -492,3 +492,96 @@ html body .mine-more .btn:hover,html body .mine-more button:hover{background:#e5
 /* 老师的筛选只有一两个下拉框时，不拉满整行 */
 body[data-role="teacher"] .filterbar select{max-width:280px}
 body[data-role="teacher"] .content .filterbar .field-search{max-width:420px}
+
+/* ===== 2026-10-16 教师端视觉升级（只作用于老师账号） ===== */
+body[data-role="teacher"]{--t-blue:#1d5cf5;--t-deep:#0b3aa8;--t-ink:#14213d;--t-soft:#f3f6fd;--t-card-shadow:0 1px 2px rgba(15,35,80,.04),0 10px 28px rgba(15,35,80,.06)}
+body[data-role="teacher"] .main-shell{background:radial-gradient(1200px 420px at 70% -120px,#e4ecff 0,rgba(228,236,255,0) 70%),#f5f7fc}
+/* 侧栏：当前页用渐变胶囊 */
+body[data-role="teacher"] .sidebar .nav-item{border-radius:10px;transition:background .15s,color .15s}
+body[data-role="teacher"] .sidebar .nav-item:hover{background:#eef3ff;color:var(--t-blue)}
+body[data-role="teacher"] .sidebar .nav-item.active{background:linear-gradient(100deg,#1d5cf5,#4c7dff);color:#fff;box-shadow:0 6px 16px rgba(29,92,245,.28)}
+body[data-role="teacher"] .sidebar .nav-item.active .icon,body[data-role="teacher"] .sidebar .nav-item.active svg{color:#fff;stroke:#fff}
+/* 卡片：更圆、更轻的阴影，标题前一道色条 */
+body[data-role="teacher"] .content .card{border:1px solid #e6ecf6;border-radius:16px;box-shadow:var(--t-card-shadow);overflow:hidden}
+body[data-role="teacher"] .content .card-head{border-bottom-color:#eef2f8}
+body[data-role="teacher"] .content .card-head h2{position:relative;padding-left:12px;color:var(--t-ink)}
+body[data-role="teacher"] .content .card-head h2::before{content:"";position:absolute;left:0;top:50%;width:4px;height:16px;margin-top:-8px;border-radius:4px;background:linear-gradient(180deg,#4c7dff,#1d5cf5)}
+body[data-role="teacher"] .content .pagehead h1{color:var(--t-ink)}
+
+/* 首页欢迎区：深蓝渐变 + 光斑 + 常用入口 */
+body[data-role="teacher"] .teacher-hero{position:relative;overflow:hidden;display:flex;align-items:flex-end;justify-content:space-between;gap:24px;padding:30px 32px;border:0;border-radius:20px;color:#fff;
+  background:radial-gradient(260px 260px at 88% 18%,rgba(255,255,255,.16),rgba(255,255,255,0) 70%),radial-gradient(420px 260px at 105% 120%,rgba(110,200,255,.45),rgba(110,200,255,0) 70%),linear-gradient(125deg,#0a2f8f 0%,#1d5cf5 58%,#5a6dff 100%);
+  box-shadow:0 18px 40px rgba(29,92,245,.28)}
+body[data-role="teacher"] .teacher-hero::after{content:"";position:absolute;right:-60px;top:-80px;width:280px;height:280px;border-radius:50%;border:38px solid rgba(255,255,255,.07);pointer-events:none}
+body[data-role="teacher"] .teacher-hero>*{position:relative;z-index:1}
+body[data-role="teacher"] .teacher-hero-date{display:inline-block;margin:0;padding:3px 10px;border-radius:999px;background:rgba(255,255,255,.16);color:#e8efff;font-size:13px;letter-spacing:.04em}
+body[data-role="teacher"] .teacher-hero h1{margin:12px 0 6px;color:#fff;font-size:30px;font-weight:700;letter-spacing:.01em}
+body[data-role="teacher"] .teacher-hero-sub{color:#dbe6ff;font-size:15px}
+body[data-role="teacher"] .teacher-hero-sub b{color:#fff;font-size:26px}
+body[data-role="teacher"] .teacher-hero-links{display:flex;flex-wrap:wrap;gap:10px;margin-top:20px}
+body[data-role="teacher"] .teacher-hero-link{display:flex;align-items:center;gap:10px;min-width:176px;padding:10px 14px;border:1px solid rgba(255,255,255,.22);border-radius:12px;background:rgba(255,255,255,.12);color:#fff;text-align:left;cursor:pointer;backdrop-filter:blur(6px);transition:background .15s,transform .15s}
+body[data-role="teacher"] .teacher-hero-link:hover{background:rgba(255,255,255,.22);transform:translateY(-1px)}
+body[data-role="teacher"] .teacher-hero-link .icon{flex:none;width:34px;height:34px;padding:8px;border-radius:10px;background:rgba(255,255,255,.95);color:var(--t-blue)}
+body[data-role="teacher"] .teacher-hero-link b{display:block;font-size:14px;font-weight:600}
+body[data-role="teacher"] .teacher-hero-link small{display:block;margin-top:2px;font-size:12px;color:#cfdcff}
+body[data-role="teacher"] .content .teacher-hero-actions .btn,body[data-role="teacher"] .content .teacher-hero-actions .btn.primary{min-height:44px;padding:10px 20px;border:0;border-radius:12px;background:#fff;color:var(--t-blue);font-weight:650;box-shadow:0 8px 20px rgba(6,24,80,.25)}
+body[data-role="teacher"] .content .teacher-hero-actions .btn:not(.primary){background:rgba(255,255,255,.14);color:#fff;box-shadow:none;border:1px solid rgba(255,255,255,.5)}
+
+/* 待办：清空时一条柔和的绿色提示 */
+body[data-role="teacher"] .teacher-todo-clear{margin:4px 20px 20px;padding:14px 16px;border-radius:12px;background:linear-gradient(90deg,#ecfbf1,#f6fdf8);color:#2f6b47}
+body[data-role="teacher"] .teacher-todo-clear span{background:#22c55e;color:#fff;box-shadow:0 4px 10px rgba(34,197,94,.3)}
+body[data-role="teacher"] .workbench-count{display:inline-grid;place-items:center;min-width:24px;height:24px;padding:0 7px;border-radius:999px;background:#eef3ff;color:var(--t-blue);font-size:13px}
+
+/* 积分卡：渐变大数字 + 加粗进度条 */
+body[data-role="teacher"] .teacher-points-now strong{font-size:46px;font-weight:750;background:linear-gradient(90deg,#1d5cf5,#7c4dff);-webkit-background-clip:text;background-clip:text;color:transparent}
+body[data-role="teacher"] .teacher-points-bar{height:12px;background:#edf2fb;box-shadow:inset 0 1px 2px rgba(15,35,80,.08)}
+body[data-role="teacher"] .teacher-points-bar span{min-width:12px;background:linear-gradient(90deg,#38bdf8,#1d5cf5 60%,#7c4dff)}
+body[data-role="teacher"] .my-assess-empty,body[data-role="teacher"] .teacher-empty-line{color:#64748b}
+body[data-role="teacher"] .my-assess-empty p::before,body[data-role="teacher"] .teacher-empty-line::before{content:"";display:inline-block;width:8px;height:8px;margin-right:8px;border-radius:50%;background:#cbd5e1;vertical-align:middle}
+
+/* 统计卡（个人培训等）：每格一个主题色，悬停轻抬 */
+body[data-role="teacher"] .content .kpis{gap:14px;background:transparent!important;border:0!important;box-shadow:none!important;overflow:visible}
+body[data-role="teacher"] .content .kpi{border:1px solid #e6ecf6;border-radius:16px;background:#fff;box-shadow:var(--t-card-shadow);transition:transform .15s,box-shadow .15s}
+body[data-role="teacher"] .content .kpi:not([disabled]):hover{transform:translateY(-2px);box-shadow:0 14px 30px rgba(15,35,80,.10)}
+body[data-role="teacher"] .content .kpi .kpi-icon{width:38px;height:38px;border-radius:12px;display:grid;place-items:center}
+body[data-role="teacher"] .content .kpi:nth-child(5n+1) .kpi-icon{background:#e8efff;color:#1d5cf5}
+body[data-role="teacher"] .content .kpi:nth-child(5n+2) .kpi-icon{background:#e6f8ef;color:#16a34a}
+body[data-role="teacher"] .content .kpi:nth-child(5n+3) .kpi-icon{background:#fff3e0;color:#ea8a00}
+body[data-role="teacher"] .content .kpi:nth-child(5n+4) .kpi-icon{background:#f1eaff;color:#7c3aed}
+body[data-role="teacher"] .content .kpi:nth-child(5n+5) .kpi-icon{background:#ffe9f1;color:#db2777}
+body[data-role="teacher"] .content .kpi-value{color:var(--t-ink)}
+body[data-role="teacher"] .content .summary-row{gap:14px;background:transparent;border:0;overflow:visible}
+body[data-role="teacher"] .content .summary-item{border:1px solid #e6ecf6;border-radius:16px;box-shadow:var(--t-card-shadow)}
+body[data-role="teacher"] .content .summary-item:first-child strong{color:var(--t-blue)}
+
+/* 按钮：主按钮带一点渐变和阴影 */
+body[data-role="teacher"] .content .btn.primary,body[data-role="teacher"] .modal .btn.primary{background:linear-gradient(100deg,#1d5cf5,#4c7dff);border-color:transparent;box-shadow:0 6px 14px rgba(29,92,245,.22)}
+body[data-role="teacher"] .content .btn.primary:hover,body[data-role="teacher"] .modal .btn.primary:hover{filter:brightness(1.05)}
+/* 我的课程卡片：悬停轻抬 */
+body[data-role="teacher"] .mc-card{border-radius:14px;box-shadow:var(--t-card-shadow);transition:transform .15s,box-shadow .15s}
+body[data-role="teacher"] .mc-card:hover{transform:translateY(-2px);box-shadow:0 14px 30px rgba(15,35,80,.10)}
+/* 空状态：图标放进淡蓝圆底 */
+body[data-role="teacher"] .content .empty .icon{width:56px;height:56px;padding:14px;border-radius:50%;background:#eef3ff;color:#6b8fe6}
+@media(max-width:740px){
+  body[data-role="teacher"] .teacher-hero{flex-direction:column;align-items:stretch;padding:22px 18px;border-radius:16px}
+  body[data-role="teacher"] .teacher-hero h1{font-size:24px}
+  body[data-role="teacher"] .teacher-hero-links{display:grid;grid-template-columns:1fr;gap:8px}
+  body[data-role="teacher"] .teacher-hero-link{min-width:0}
+  body[data-role="teacher"] .teacher-points-now strong{font-size:38px}
+}
+body[data-role="teacher"] .content .teacher-hero-actions .btn .icon{color:currentColor}
+body[data-role="teacher"] .apply-counts span{border:0}
+body[data-role="teacher"] .apply-counts span:nth-child(1){background:#eaf1ff;color:#1d5cf5}
+body[data-role="teacher"] .apply-counts span:nth-child(2){background:#fff4e5;color:#b45309}
+body[data-role="teacher"] .apply-counts span:nth-child(3){background:#e9f9ef;color:#15803d}
+@media(max-width:740px){
+  body[data-role="teacher"] .teacher-hero-links{grid-template-columns:repeat(3,minmax(0,1fr))}
+  body[data-role="teacher"] .teacher-hero-link{flex-direction:column;align-items:center;gap:6px;padding:12px 6px;text-align:center}
+  body[data-role="teacher"] .teacher-hero-link small{display:none}
+  body[data-role="teacher"] .teacher-hero-link b{font-size:13px}
+  /* 紧凑进度条在手机上保持一行：只显示当前这一步的文字 */
+  .apply-progress.compact .apply-steps{flex-wrap:nowrap!important}
+  .apply-progress.compact .apply-steps li{flex:1 1 0!important;min-width:0!important}
+  .apply-progress.compact .apply-steps li:not(.current):not(.returned)>span{visibility:hidden;height:0}
+  .apply-progress.compact .apply-steps li>span{white-space:nowrap;font-size:12px}
+}
