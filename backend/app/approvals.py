@@ -220,7 +220,7 @@ def progress(db, flow, obj, applicant, *, returned_level=None):
         nodes.append(node)
     nodes.append({'key': 'done', 'label': f['final'], 'state': 'done' if finished else 'todo',
                   'at': _iso(evs[-1].created_at) if finished and evs else None})
-    total = len(chain) + 1
+    total = len(chain) + 2  # 提交 + 各级审批 + 办结，与进度条节点数一致
     if finished:
         step = total
         text = f['final']

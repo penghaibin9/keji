@@ -450,3 +450,16 @@
 .report-range input,.report-range select{min-height:36px}
 .report-result{margin-top:8px;min-width:0}
 .report-issues{color:var(--amber);font-size:13px}
+
+/* 2026-10-16 流程走查后的前端改进 */
+/* 弹窗打开时，提示条放到右下角，不盖住弹窗右上角的关闭按钮 */
+body:has(#modal-root:not(.hidden)) .toast-stack{top:auto;bottom:24px;right:24px;left:auto}
+@media(max-width:740px){body:has(#modal-root:not(.hidden)) .toast-stack{left:16px;right:16px;bottom:16px}}
+/* 申请表单：说明条、课程摘要占满整行，不挤在左半边 */
+.apply-source,.modal .info-banner,.modal .note{grid-column:1/-1}
+/* 我的课程：学年按钮和卡片左边对齐，不再多缩进一截 */
+.card-pad>.todo-chips{padding:0 0 12px}
+/* 页头按钮多到换行时，标题顶对齐，不再被挤到中间 */
+.social-workspace .pagehead:has(.page-actions){align-items:flex-start!important}
+/* 申请详情：宽屏两列，少滚动，办理按钮和关键信息同屏 */
+@media(min-width:1000px){.modal .apply-progress+dl.kv{grid-template-columns:110px minmax(0,1fr) 110px minmax(0,1fr);gap:12px 20px}}

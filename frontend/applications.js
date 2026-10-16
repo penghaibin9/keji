@@ -99,11 +99,12 @@ export function teachingCourseForm(course, existing = null) {
   const e = c.esc, d = existing?.item?.data || {};
   const facts = `<div class="apply-source"><span class="badge ${course.origin === 'CX' ? 'green-b' : 'blue-b'}">${course.origin === 'CX' ? '超星' : '教务'}</span><strong>${e(course.course_name)}</strong><span>${e(course.course_code)} · ${e(course.term_name)}${course.credit != null ? ' · ' + e(course.credit) + ' 学分' : ''}${course.hours != null ? ' · ' + e(course.hours) + ' 学时' : ''}</span></div>`;
   const body = facts + c.note('把这门课申报为社会培训课：教研室审核 → 学院审批 → 学校（继续教育学院）审批，通过后进入培训课程库，按学校设置给你记积分。同一门课只申报一次。') +
-    c.field('hours', '培训学时', 'number', d.hours ?? course.hours ?? '', {required: false, min: 0, step: '0.5', hint: '默认用这门课的学时，按社会培训实际安排可调整。'}) +
     c.field('teaching_mode', '教学方式', 'select', d.teaching_mode || 'lecture', {options: TEACHING_MODES}) +
     c.field('ideology', '思政属性', 'select', d.ideology || 'course_ideology', {options: IDEOLOGY}) +
+    c.field('hours', '培训学时', 'number', d.hours ?? course.hours ?? '', {required: false, min: 0, step: '0.5', hint: '默认用这门课的学时，按社会培训实际安排可调整。'}) +
+    c.field('reason', '申报说明', 'text', existing ? '按意见补正' : '申报为社会培训课') +
     audienceFields(d.audience) + c.field('intro', '课程简介', 'textarea', d.intro || course.description || '', {required: false, full: true, hint: '面向社会学员怎么上、学完能做什么。'}) +
-    coursewareFields(d.courseware) + c.field('reason', '申报说明', 'text', existing ? '按意见补正' : '申报为社会培训课', {full: true});
+    coursewareFields(d.courseware);
   return c.formModal(existing ? '补正社会培训课申报' : '申报为社会培训课', body, async v => {
     const data = {source: 'teaching', course_term_id: course.id, hours: v.hours, teaching_mode: v.teaching_mode, ideology: v.ideology, audience: audienceValue(v), intro: v.intro || '', courseware: coursewareValue(v)};
     if (!data.audience) throw Error('请至少选择一类面向对象');

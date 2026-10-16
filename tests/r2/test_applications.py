@@ -54,7 +54,7 @@ def test_teaching_course_goes_dept_college_school_and_resumes_at_returned_level(
     d = r.json()
     ident = d['item']['id']
     assert d['item']['state'] == 'DEPT' and d['flow'] == 'teaching_course'
-    assert d['progress']['text'] == '教研室审核中 · 第 2 步 / 共 4 步' and '测试教研室负责人' in d['progress']['headline']
+    assert d['progress']['text'] == '教研室审核中 · 第 2 步 / 共 5 步' and '测试教研室负责人' in d['progress']['headline']
     # 同一门课只申报一次：挂了 K1 的超星课算同一门。
     assert apply_course(c, ids['X1']).status_code == 409
     assert apply_course(c, ids['K0']).status_code == 422
