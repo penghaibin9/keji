@@ -1,11 +1,13 @@
-"""老师发起的申请：培训课程申报（可从我的课程带出）、培训基地申请。审批规则见 approvals.py，业务口径见 applications.py。"""
+"""老师发起的申请：培训课程申报（可从我的课程带出）、培训基地申请、培训师申报。审批规则见 approvals.py，业务口径见 applications.py。"""
+import hashlib
 from fastapi import APIRouter, Request, HTTPException, Query
 from ..schemas import Reason
 from sqlalchemy import select
 from ..core import command, read_operation, serial, workflow, check_version
 from ..reference_data import TeacherCourseTerm, TrainingCourseMaster, term_in_scope
+from ..models import Qualification
 from ..social_models import SocialResource, SocialProject
-from ..social_schemas import CourseApplyIn, BaseApplyIn, ApplicationAction, DeadlineIn, ReopenIn
+from ..social_schemas import CourseApplyIn, BaseApplyIn, TrainerApplyIn, ApplicationAction, DeadlineIn, ReopenIn
 from .. import approvals as ap
 from .. import applications as apps
 from .. import message_push
@@ -81,6 +83,8 @@ def registrar_start(db, a, flow, applicant, org_id):
 
 def create(db, a, kind, flow, code, name, values, applicant, college, reason):
     values.update(application=True, teacher_id=applicant.id, teacher_name=applicant.name, created_by=a.id, returned_level=None)
+    if values.get('source') == 'external':
+        values.update(teacher_id=None, teacher_name=values.get('name', ''))
     state, confirmed = registrar_start(db, a, flow, applicant, college.id) if a.id != applicant.id else (ap.first_state(flow), None)
     obj = SocialResource(kind=kind, org_id=college.id, code=code, name=name, state=state, data=values)
     db.add(obj)
@@ -185,6 +189,11 @@ def deadline_reopen(data: ReopenIn, request: Request):
     return command(request, data.model_dump(mode='json'), 'records.write', apply)
 
 
+@router.get('/trainers')
+def trainer_list(request: Request):
+    return read_operation(request, 'portal.read', lambda db, a, s: apps.trainer_library(db, a))
+
+
 @router.get('/{ident}')
 def get_one(ident: str, request: Request):
     return read_operation(request, 'portal.read', lambda db, a, s: apps.detail(db, a, load(db, ident)))
@@ -224,6 +233,83 @@ def course_edit(ident: str, data: CourseApplyIn, request: Request):
         obj.name = name
         obj.data = {**values, **keep}
         return record(db, a, obj, '补正申请资料', before, data.reason, {'flow': apps.flow_of(obj), 'decision': 'edit'})
+    return command(request, data.model_dump(mode='json'), 'portal.read', apply)
+
+
+def trainer_values(db, a, applicant, data, current=None):
+    """培训师申报单：校内一人一单（已申报过的不能重复），外聘按姓名和工作单位去重；资质只引用本人已审核通过的，当时的内容存一份快照。"""
+    values = serial(data.model_dump())
+    if data.source == 'internal':
+        key, name = 'TR-' + hashlib.sha256(applicant.id.encode()).hexdigest()[:20].upper(), applicant.name
+        quals = []
+        for ident in data.qualification_ids:
+            q = db.get(Qualification, ident)
+            if q is None or q.teacher_id != applicant.id or q.state != 'APPROVED':
+                raise HTTPException(422, '只能引用本人已审核通过的资质')
+            quals.append({'id': q.id, 'category': q.category, 'name': q.name, 'certificate_no': q.certificate_no, 'issuer': q.issuer,
+                          'expires': q.expires.isoformat() if q.expires else None})
+        values['qualifications'] = quals
+    else:
+        if a.role.kind != 'college':
+            raise HTTPException(403, '外聘培训师由学院负责人登记')
+        key = 'TX-' + hashlib.sha256((data.name.strip() + '|' + data.unit.strip()).encode()).hexdigest()[:20].upper()
+        name = data.name.strip()
+        values['qualifications'] = []
+    if current is not None and current.code != key:
+        raise HTTPException(422, '退回补正时不能换成另一位培训师，请撤回后另行申报')
+    if current is None and (old := db.scalar(select(SocialResource).where(SocialResource.code == key))) is not None:
+        raise HTTPException(409, '这位培训师已经申报过（' + apps.state_label(old) + '），不能重复申报' +
+                            ('；被退回或撤回的请在“我的申请”里补正后重新提交' if old.state in ('RETURNED', 'WITHDRAWN') else ''))
+    return key, name, values
+
+
+@router.post('/trainers')
+def trainer_create(data: TrainerApplyIn, request: Request):
+    def apply(db, a, s):
+        if data.data.source == 'internal':
+            applicant = apps.resolve_applicant(db, a, data.data.teacher_id)
+            flow = 'trainer'
+        else:
+            if a.role.kind != 'college':
+                raise HTTPException(403, '外聘培训师由学院负责人登记')
+            applicant, flow = a.user, 'trainer_external'
+        college = apps.college_for(db, applicant)
+        code, name, values = trainer_values(db, a, applicant, data.data)
+        return create(db, a, 'trainer', flow, code, name, values, applicant, college, data.reason)
+    return command(request, data.model_dump(mode='json'), 'portal.read', apply)
+
+
+@router.put('/trainers/{ident}')
+def trainer_edit(ident: str, data: TrainerApplyIn, request: Request):
+    def apply(db, a, s):
+        obj = load(db, ident)
+        if obj.kind != 'trainer' or not apps.can_edit(a, obj):
+            raise HTTPException(409, '只有被退回或已撤回的申请可以由申请人补正')
+        check_version(obj, data.expected_version or 0)
+        if data.data.source != obj.data.get('source'):
+            raise HTTPException(422, '申报类型不能更改')
+        applicant = apps.applicant_of(db, obj)
+        before = serial(obj)
+        _, name, values = trainer_values(db, a, applicant, data.data, obj)
+        keep = {k: obj.data.get(k) for k in ('application', 'teacher_id', 'teacher_name', 'created_by', 'returned_level', 'returned_flow')}
+        obj.name = name
+        obj.data = {**values, **keep}
+        return record(db, a, obj, '补正申请资料', before, data.reason, {'flow': apps.flow_of(obj), 'decision': 'edit'})
+    return command(request, data.model_dump(mode='json'), 'portal.read', apply)
+
+
+@router.post('/trainers/{ident}/recommend')
+def trainer_recommend(ident: str, data: Reason, request: Request):
+    """管理办法第十五条“择优推荐进入省级师资库”：学校给在库培训师记一笔推荐，实际报送仍走省平台接口。"""
+    def apply(db, a, s):
+        from .. import social_training as st
+        obj = load(db, ident)
+        if obj.kind != 'trainer' or obj.state != 'ACTIVE':
+            raise HTTPException(409, '只有已入师资库的培训师可以推荐')
+        st.duty(db, a, 'coordinator', obj.data.get('teacher_id'), obj.org_id)
+        before = serial(obj)
+        obj.data = {**obj.data, 'recommended_province_on': apps.school_today().isoformat()}
+        return record(db, a, obj, '推荐进入省级师资库', before, data.reason, {'flow': apps.flow_of(obj), 'decision': 'recommend'})
     return command(request, data.model_dump(mode='json'), 'portal.read', apply)
 
 
@@ -295,6 +381,8 @@ def action(ident: str, data: ApplicationAction, request: Request):
         level = ap.level_of(flow, obj.state)
         if not level:
             raise HTTPException(409, '申请不在审批中')
+        if data.action == 'approve' and level in ('hr', 'jwc') and not (data.basis or '').strip():
+            raise HTTPException(422, '请填写' + ('资格认定文号和日期' if level == 'hr' else '备案依据'))
         handling = ap.check_handler(db, a, applicant, level, obj.org_id)
         handling.update(flow=flow, decision=data.action)
         if data.action == 'return':
@@ -307,7 +395,7 @@ def action(ident: str, data: ApplicationAction, request: Request):
             handling['same_person'] = ap.SAME_PERSON
         obj.state = ap.next_state(flow, level)
         if obj.state == f['done']:
-            apps.complete(db, a, obj, flow)
+            apps.complete(db, a, obj, flow, (data.basis or '').strip())
         result = record(db, a, obj, ap.LEVEL_LABEL[level] + '通过' + f['label'], before, data.reason, handling, data.basis)
         if obj.state == f['done']:
             notify(db, obj, f['label'] + '已通过', obj.name + '：' + f['final'] + '。')

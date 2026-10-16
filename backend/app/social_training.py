@@ -17,7 +17,8 @@ STATES = {'DRAFT':'草稿', 'SUBMITTED':'待院长初审', 'DEAN':'待归口复�
           'DEPT':'待教研室审核', 'COLLEGE':'待学院审批', 'SCHOOL':'待学校审批', 'CLOSE_COLLEGE':'待学院结项核验', 'WITHDRAWN':'已撤回'}
 REVIEW_STATES = {'DRAFT':'待发送教师','TEACHER':'待教师回应','COLLEGE':'待学院裁定','CLOSED':'已办结'}
 DUTIES = {'dean':'二级学院院长','coordinator':'归口学院复审','vice_president':'分管副校长','secretary':'教学秘书',
-          'finance':'财务核验','academic':'成果核验','discipline':'纪检核验','committee':'委员会评审'}
+          'finance':'财务核验','academic':'成果核验','discipline':'纪检核验','committee':'委员会评审',
+          'trainer_hr':'培训师资格认定（组织人事部）','trainer_filing':'外聘培训师备案（教务处）'}
 KINDS = {'social_project':SocialProject, 'social_claim':SocialClaim, 'social_annual':SocialAnnual,
          'social_policy':SocialPolicy, 'social_resource':SocialResource}
 DECISIONS = {'cap_mode':'单次基数封顶', 'person_day_unit':'人天式核算单元', 'precision':'单元积分及汇总小数位',
@@ -131,7 +132,7 @@ def active_identities(db,user):
 
 
 def duty_eligible(db,user,admin,code):
-    school=code in {'vice_president','coordinator','committee','finance','academic','discipline'}
+    school=code in {'vice_president','coordinator','committee','finance','academic','discipline','trainer_hr','trainer_filing'}
     return any(a.org.id in admin.org_ids and 'assessment.review' in a.permissions
                and (not school or a.role.kind=='school') for a in active_identities(db,user))
 

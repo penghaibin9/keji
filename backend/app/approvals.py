@@ -19,8 +19,12 @@ from .core import school_today
 from .models import User, Org, WorkflowEvent
 from .identities import stage_handler, org_heads, VACANCY_LABEL
 
-LEVEL_LABEL = {'dept': '教研室', 'college': '学院', 'school': '学校'}
+LEVEL_LABEL = {'dept': '教研室', 'college': '学院', 'school': '学校', 'hr': '组织人事部', 'jwc': '教务处'}
 LEVEL_STAGE = {'dept': 'DEPARTMENT', 'college': 'COLLEGE'}
+# 全校一级由“社会培训职责设置”里指定的人办：学校（继续教育学院）是归口学院复审；
+# 培训师资格由组织人事部认定、外聘培训师由教务处审核备案（管理办法第八条、第十五条）。
+LEVEL_DUTY = {'school': 'coordinator', 'hr': 'trainer_hr', 'jwc': 'trainer_filing'}
+LEVEL_VERB = {'dept': '审核', 'college': '审批', 'school': '审批', 'hr': '认定', 'jwc': '备案审核'}
 SAME_PERSON = '同一人连审'
 
 # 每类申请：审批链、每一级对应的 state、生效后的 state、名称。
@@ -34,10 +38,16 @@ FLOWS = {
                'done': 'ACTIVE', 'final': '进入培训课程库', 'object_type': 'social_resource'},
     'teaching_course': {'label': '培训课程申报', 'chain': ('dept', 'college', 'school'), 'states': {'dept': 'DEPT', 'college': 'COLLEGE', 'school': 'SCHOOL'},
                         'done': 'ACTIVE', 'final': '进入培训课程库', 'object_type': 'social_resource'},
+    # 培训师遴选（管理办法第十五条）：校内老师本人申报，组织人事部认定资格；外聘培训师由学院登记，教务处审核备案。
+    'trainer': {'label': '培训师申报', 'chain': ('dept', 'college', 'school', 'hr'), 'states': {'dept': 'DEPT', 'college': 'COLLEGE', 'school': 'SCHOOL', 'hr': 'HR'},
+                'done': 'ACTIVE', 'final': '进入培训师资库', 'object_type': 'social_resource'},
+    'trainer_external': {'label': '外聘培训师备案', 'chain': ('jwc',), 'states': {'jwc': 'JWC'},
+                         'done': 'ACTIVE', 'final': '进入培训师资库', 'object_type': 'social_resource'},
     'base': {'label': '培训基地申请', 'chain': ('college', 'school'), 'states': {'college': 'COLLEGE', 'school': 'SCHOOL'},
              'done': 'DRAFT', 'final': '进入基地清单', 'object_type': 'social_resource'},
 }
-LEVEL_STATES = {'DEPT': '待教研室审核', 'COLLEGE': '待学院审批', 'SCHOOL': '待学校审批', 'CLOSE_COLLEGE': '待学院结项核验'}
+LEVEL_STATES = {'DEPT': '待教研室审核', 'COLLEGE': '待学院审批', 'SCHOOL': '待学校审批', 'HR': '待组织人事部认定', 'JWC': '待教务处备案审核',
+                'CLOSE_COLLEGE': '待学院结项核验'}
 
 
 def level_of(flow, state):
@@ -67,8 +77,8 @@ def resume_state(flow, returned_level):
 
 def level_handler(db, applicant, level, heads=None, orgs=None):
     """这一级实际由谁办：('dept'|'college'|'school', 代办说明或 None)。申请人本人是负责人时自动交上一级。"""
-    if level == 'school':
-        return 'school', None
+    if level in LEVEL_DUTY:
+        return level, None
     kind, vacant = stage_handler(db, applicant, LEVEL_STAGE[level], heads, orgs)
     return kind, VACANCY_LABEL.get(vacant)
 
@@ -88,9 +98,9 @@ def check_handler(db, actor, applicant, level, org_id):
     if actor.id == applicant.id:
         raise HTTPException(403, '须回避本人的申请，由上一级或其他负责人办理')
     kind, acting = level_handler(db, applicant, level)
-    if kind == 'school':
-        st.duty(db, actor, 'coordinator', applicant.id, org_id)
-        if level != 'school' and actor.role.kind != 'school':
+    if kind in LEVEL_DUTY:
+        st.duty(db, actor, LEVEL_DUTY[kind], applicant.id, org_id)
+        if level not in LEVEL_DUTY and actor.role.kind != 'school':
             raise HTTPException(403, LEVEL_LABEL[level] + '没有可办理的负责人，由学校（继续教育学院）代办')
     else:
         actor.require('assessment.review')
@@ -145,9 +155,9 @@ def handler_names(db, applicant, level):
     """当前这一级应由谁办（给老师看的名字）。"""
     from . import social_training as st
     kind, acting = level_handler(db, applicant, level)
-    if kind == 'school':
-        ids = [i for i in st.assignments(db).get('coordinator', []) if i != applicant.id]
-        return [n for n in _names(db, ids).values()], '学校（继续教育学院）', acting
+    if kind in LEVEL_DUTY:
+        ids = [i for i in st.assignments(db).get(LEVEL_DUTY[kind], []) if i != applicant.id]
+        return [n for n in _names(db, ids).values()], '学校（继续教育学院）' if kind == 'school' else LEVEL_LABEL[kind], acting
     heads = org_heads(db, (kind,))
     org = db.get(Org, applicant.org_id)
     target = org if kind == 'dept' else college_of(db, applicant)
@@ -192,7 +202,7 @@ def progress(db, flow, obj, applicant, *, returned_level=None):
     headline = ''
     step = 1
     for i, level in enumerate(chain):
-        node = {'key': level, 'label': LEVEL_LABEL[level] + ('审核' if level == 'dept' else '审批'), 'state': 'todo'}
+        node = {'key': level, 'label': LEVEL_LABEL[level] + LEVEL_VERB[level], 'state': 'todo'}
         ev = done_by.get(level)
         before_current = current in chain and chain.index(level) < chain.index(current)
         if finished or (ev is not None and current != level) or before_current:
@@ -232,7 +242,7 @@ def progress(db, flow, obj, applicant, *, returned_level=None):
         text = who + '退回，待你补正'
         headline = who + '退回' + ('：' + back['reason'] if back and back.get('reason') else '') + '。请补正后重新提交，会从' + who + '这一级接着审。'
     elif current:
-        text = LEVEL_LABEL[current] + ('审核中' if current == 'dept' else '审批中') + ' · 第 %d 步 / 共 %d 步' % (step, total)
+        text = LEVEL_LABEL[current] + LEVEL_VERB[current] + '中 · 第 %d 步 / 共 %d 步' % (step, total)
     else:
         text = '草稿，尚未提交'
         headline = '还没有提交。填好后点“提交”，会先到' + LEVEL_LABEL[chain[0]] + '。'

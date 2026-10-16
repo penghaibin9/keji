@@ -340,7 +340,7 @@ class DutiesIn(Reason):
     assignments: dict[str, list[Ident]]
     @model_validator(mode='after')
     def known_duties(self):
-        allowed = {'dean', 'coordinator', 'vice_president', 'secretary', 'finance', 'academic', 'discipline', 'committee'}
+        allowed = {'dean', 'coordinator', 'vice_president', 'secretary', 'finance', 'academic', 'discipline', 'committee', 'trainer_hr', 'trainer_filing'}
         if set(self.assignments) - allowed or any(len(v) > 100 or len(v) != len(set(v)) for v in self.assignments.values()): raise ValueError('职责名称或人员列表无效')
         return self
 
@@ -506,6 +506,32 @@ class BaseApplyData(Input):
 
 class BaseApplyIn(Reason):
     data: BaseApplyData
+    expected_version: int | None = Field(default=None, ge=1)
+
+
+TRAINER_DIRECTIONS = {'subsidy': '补贴性培训', 'enterprise': '社会化自主培训', 'community': '社区公益培训', 'rural': '对口帮扶培训', 'other': '其他非学历培训', 'one_skill': '“一人一技”专项'}
+
+
+class TrainerApplyData(Input):
+    # 管理办法第十五条培训师遴选：internal 校内老师申报；external 外聘培训师由学院登记、教务处审核备案。
+    source: Literal['internal', 'external']
+    teacher_id: Ident | None = None
+    name: str = Field(default='', max_length=80)
+    unit: str = Field(default='', max_length=160)
+    title: str = Field(default='', max_length=100)
+    directions: list[Literal['subsidy', 'enterprise', 'community', 'rural', 'other', 'one_skill']] = Field(min_length=1, max_length=6)
+    qualification_ids: list[Ident] = Field(default_factory=list, max_length=10)
+    qualification_basis: str = Field(min_length=1, max_length=2000)
+    experience: str = Field(default='', max_length=2000)
+    @model_validator(mode='after')
+    def required(self):
+        if len(set(self.directions)) != len(self.directions): raise ValueError('培训方向不能重复')
+        if self.source == 'external' and not (self.name.strip() and self.unit.strip()): raise ValueError('外聘培训师请填写姓名和工作单位')
+        return self
+
+
+class TrainerApplyIn(Reason):
+    data: TrainerApplyData
     expected_version: int | None = Field(default=None, ge=1)
 
 

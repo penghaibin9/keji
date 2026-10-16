@@ -14,11 +14,11 @@ from .core import serial, school_today, workflow
 from .models import User, Org, Setting
 from .reference_data import TeacherCourseTerm, TrainingCourseMaster, annual_teaching_credits, school_year_of, school_year_now, term_in_scope, UNKNOWN_YEAR
 from .social_models import SocialResource, SocialProject
-from .social_schemas import TEACHING_MODES, IDEOLOGY, BASE_USAGES
+from .social_schemas import TEACHING_MODES, IDEOLOGY, BASE_USAGES, TRAINER_DIRECTIONS
 from . import approvals as ap
 
-APP_KINDS = ('course_apply', 'base')
-PENDING_STATES = ('DEPT', 'COLLEGE', 'SCHOOL')
+APP_KINDS = ('course_apply', 'base', 'trainer')
+PENDING_STATES = ('DEPT', 'COLLEGE', 'SCHOOL', 'HR', 'JWC')
 CX_KEYS = ('course_url', 'cover_url', 'chapters', 'team_names', 'group_name', 'course_type', 'jw_course_code')
 
 
@@ -27,11 +27,15 @@ def flow_of(obj):
         return 'project_close' if obj.state in ('CLOSE_COLLEGE', 'CLOSE_REVIEW', 'CLOSED') or obj.data.get('returned_flow') == 'project_close' and obj.state == 'RETURNED' else 'project'
     if obj.kind == 'base':
         return 'base'
+    if obj.kind == 'trainer':
+        return 'trainer_external' if obj.data.get('source') == 'external' else 'trainer'
     return 'teaching_course' if obj.data.get('source') == 'teaching' else 'course'
 
 
 def applicant_of(db, obj):
-    ident = obj.owner_id if isinstance(obj, SocialProject) else (obj.data or {}).get('teacher_id')
+    d = obj.data or {}
+    # 外聘培训师没有账号，申请人就是登记的学院负责人。
+    ident = obj.owner_id if isinstance(obj, SocialProject) else d.get('teacher_id') or (d.get('created_by') if d.get('source') == 'external' else None)
     return db.get(User, ident) if ident else None
 
 
@@ -359,9 +363,14 @@ def state_label(obj):
     if isinstance(obj, SocialResource) and obj.kind in APP_KINDS:
         if obj.state in ap.LEVEL_STATES:
             return ap.LEVEL_STATES[obj.state]
-        return {'RETURNED': '退回补正', 'WITHDRAWN': '已撤回', 'ACTIVE': '已入培训课程库', 'DRAFT': '已生效'}.get(obj.state, obj.state)
+        return {'RETURNED': '退回补正', 'WITHDRAWN': '已撤回', 'ACTIVE': '已入师资库' if obj.kind == 'trainer' else '已入培训课程库', 'DRAFT': '已生效'}.get(obj.state, obj.state)
     from .social_training import state_label as social_label
     return social_label(obj)
+
+
+def _mask(number):
+    number = str(number or '')
+    return number[:1] + '***' + number[-1:] if len(number) > 2 else '***'
 
 
 def fields(db, obj):
@@ -375,6 +384,15 @@ def fields(db, obj):
             p = db.get(SocialProject, d['project_id'])
             rows.append(('来源项目', p.data['name'] if p else d['project_id']))
         return rows
+    if obj.kind == 'trainer':
+        rows = [('姓名', obj.name), ('来源', '外聘培训师' if d.get('source') == 'external' else '校内教师'), ('工作单位', d.get('unit') or ''),
+                ('职称或职务', d.get('title') or ''), ('培训方向', '、'.join(TRAINER_DIRECTIONS.get(x, x) for x in d.get('directions', []))),
+                ('资格依据', d.get('qualification_basis') or ''), ('授课经历', d.get('experience') or '')]
+        for q in d.get('qualifications') or []:
+            rows.append(('资质', q['name'] + ' · 证书编号 ' + _mask(q['certificate_no']) + ' · ' + q['issuer'] + (' · 有效期至 ' + q['expires'] if q.get('expires') else '')))
+        if d.get('filing_basis'):
+            rows.append(('认定或备案依据', d['filing_basis']))
+        return [(k, v) for k, v in rows if v]
     c = d.get('course') or {}
     review = d.get('courseware') or {}
     rows = [('课程名称', obj.name), ('学时', d.get('hours') or '待补充'),
@@ -444,9 +462,12 @@ def last_event_at(db, obj):
 
 # ---- 生效 ----
 
-def complete(db, a, obj, flow):
+def complete(db, a, obj, flow, basis=''):
     today = school_today().isoformat()
-    if flow in ('course', 'teaching_course'):
+    if flow in ('trainer', 'trainer_external'):
+        # 培训师资格认定或备案的依据（文号、日期）随办理记录一起存进申请单，入库后可查。
+        obj.data = {**obj.data, 'effective_on': today, 'filing_basis': basis}
+    elif flow in ('course', 'teaching_course'):
         code = obj.data.get('code') if flow == 'course' else obj.code
         existing = db.scalar(select(TrainingCourseMaster).where(TrainingCourseMaster.code == code))
         if existing is not None and existing.active:
@@ -479,7 +500,7 @@ def todo_items(db, a):
                               'state': 'RETURNED', 'teacher_id': obj.data.get('teacher_id'), 'target_id': None})
             continue
         level = ap.level_of(flow, obj.state)
-        if not level or a.role.kind == 'teacher' and level != 'school':
+        if not level or a.role.kind == 'teacher' and level not in ap.LEVEL_DUTY:
             continue
         try:
             handling = ap.check_handler(db, a, applicant, level, obj.org_id)
@@ -526,3 +547,19 @@ def mine(db, a):
     counts = {'pending': sum(x['progress']['tone'] == 'blue' for x in out), 'returned': sum(x['state'] == 'RETURNED' for x in out),
               'done': sum(x['progress']['tone'] == 'green' for x in out), 'draft': sum(x['state'] in ('DRAFT', 'WITHDRAWN') and x['progress']['tone'] == 'gray' for x in out)}
     return {'items': out, 'counts': counts}
+
+
+# ---- 培训师资库（管理办法第十五条）----
+
+def trainer_library(db, a):
+    """师资库：学校看全部，学院看本院，教研室看本院（申请中的单子只给申请人和办理人，不在库里露出）。"""
+    q = select(SocialResource).where(SocialResource.kind == 'trainer', SocialResource.state == 'ACTIVE').order_by(SocialResource.code)
+    rows = db.scalars(q).all()
+    if a.role.kind != 'school':
+        scope = {a.org.parent_id} if a.role.kind == 'dept' else set(a.org_ids)
+        rows = [r for r in rows if r.org_id in scope]
+    orgs = dict(db.execute(select(Org.id, Org.name)).all())
+    return {'items': [{'id': r.id, 'code': r.code, 'name': r.name, 'source': r.data.get('source'), 'unit': r.data.get('unit') or '',
+                       'title': r.data.get('title') or '', 'directions': [TRAINER_DIRECTIONS.get(x, x) for x in r.data.get('directions', [])],
+                       'org_name': orgs.get(r.org_id, ''), 'effective_on': r.data.get('effective_on'), 'filing_basis': r.data.get('filing_basis') or '',
+                       'recommended_province_on': r.data.get('recommended_province_on')} for r in rows], 'total': len(rows)}
