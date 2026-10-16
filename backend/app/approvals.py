@@ -193,11 +193,14 @@ def progress(db, flow, obj, applicant, *, returned_level=None):
     for i, level in enumerate(chain):
         node = {'key': level, 'label': LEVEL_LABEL[level] + ('审核' if level == 'dept' else '审批'), 'state': 'todo'}
         ev = done_by.get(level)
-        if finished or (ev is not None and current != level):
+        before_current = current in chain and chain.index(level) < chain.index(current)
+        if finished or (ev is not None and current != level) or before_current:
             node.update(state='done')
             if ev is not None:
                 h = _handling(ev)
                 node.update(who=ev.actor_name, at=_iso(ev.created_at), acting_for=h.get('acting_for'), same_person=h.get('same_person'))
+            elif last_submit is not None and _handling(last_submit).get('college_by_registrant'):
+                node.update(who=last_submit.actor_name, acting_for=_handling(last_submit)['college_by_registrant'])
         elif returned and returned_level == level:
             node.update(state='returned')
             back = next((e for e in reversed(evs) if _handling(e).get('decision') == 'return'), None)

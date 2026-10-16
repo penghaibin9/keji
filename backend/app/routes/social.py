@@ -8,7 +8,7 @@ from ..core import command, read_operation, serial, audit, workflow, check_versi
 from ..models import Org, User, Role, Setting, Period, PointEntry, Notice, WorkflowEvent
 from ..reference_data import TrainingProjectMaster, TrainingCourseMaster, TrainingClassMaster
 from ..social_models import SocialProject, SocialUnit, SocialPolicy, SocialClaim, SocialAnnual, SocialResource
-from ..social_schemas import ProjectIn, UnitsIn, SocialAction, PolicyIn, PolicyUpdate, RecommendedPolicyIn, PolicyCalendarIn, PolicyData, ClaimIn, AnnualIn, ResourceIn, ResourceUpdate, DutiesIn, CourseIn, CourseBatchIn, CaseNoteIn, CorrectionIn, ReportIn, PointReviewIn
+from ..social_schemas import ReportInfoIn,ProjectIn, UnitsIn, SocialAction, PolicyIn, PolicyUpdate, RecommendedPolicyIn, PolicyCalendarIn, PolicyData, ClaimIn, AnnualIn, ResourceIn, ResourceUpdate, DutiesIn, CourseIn, CourseBatchIn, CaseNoteIn, CorrectionIn, ReportIn, PointReviewIn
 from .. import social_training as st
 
 router=APIRouter(prefix='/api/social',tags=['社会培训项目与制度'])
@@ -26,9 +26,28 @@ def project_owner(db,ident,org_id):
     if not user or not user.active or user.authorization_pending or not org or (org.id!=org_id and org.parent_id!=org_id):raise HTTPException(422,'项目负责人须为承办学院的有效人员')
 
 
-def event(db,a,kind,obj,action,before,reason,basis=''):
-    obj.version+=1;db.flush();workflow(db,a,kind,obj.id,action,before,serial(obj),reason,basis)
+def event(db,a,kind,obj,action,before,reason,basis='',handling=None):
+    obj.version+=1;db.flush()
+    after=serial(obj)
+    if handling:
+        from ..approvals import handling_after
+        after=handling_after(after,handling)
+    workflow(db,a,kind,obj.id,action,before,after,reason,basis)
     return st.detail(db,a,kind,obj)
+
+
+# 老师可以发起本人负责的培训项目；学院、学校有登记权限的账号可以代登记。
+TEACHER_PROJECT_ACTIONS={'submit','close_submit','refile'}
+
+
+def project_applicant(db,a,p):
+    if a.role.kind=='teacher':
+        from ..applications import college_for
+        if p.owner_id!=a.id:raise HTTPException(403,'老师只能申报本人负责的项目')
+        if p.org_id!=college_for(db,a.user).id:raise HTTPException(422,'承办学院须为本人所在学院')
+        return
+    a.require('records.write');college(db,a,p.org_id)
+
 
 
 def visible_projects(db,a):
@@ -90,7 +109,8 @@ def workspace(request:Request,section:str=Query('projects',pattern='^(projects|c
             if r.data['resource_type']=='video':stats['videos']+=st.resource_video_count(r.data);stats['minutes']+=st.D(r.data['duration_minutes'])
         resource_orgs=dict(db.execute(select(Org.id,Org.name).where(Org.id.in_({r.org_id for r in resources}|{r.org_id for r in annuals}))).all()) if resources or annuals else {}
         display=lambda rows:[{**serial(row),'state_label':st.state_label(row)} for row in rows]
-        project_items=[{**st.project_read_item(a,p),'state_label':st.state_label(p)} for p in projects]
+        from ..social_schemas import quality_blockers
+        project_items=[{**st.project_read_item(a,p),'state_label':st.state_label(p),'report_issues':quality_blockers(p.data)} for p in projects]
         claim_items=[st.claim_read_item(db,a,c) for c in claims]
         return {'projects':project_items,'claims':claim_items,'annuals':[{**st.annual_read_item(a,row),'org_name':resource_orgs.get(row.org_id,'—')} for row in annuals],'resources':[{**row,'org_name':resource_orgs[row['org_id']]} for row in display(resources)],
                 'policies':display(policies),'courses':serial(courses),'course_stats':serial(course_stats),'states':st.STATES,'decisions':st.DECISIONS,
@@ -156,14 +176,14 @@ def set_duties(data:DutiesIn,request:Request):
 @router.post('/projects')
 def project_create(data:ProjectIn,request:Request):
     def apply(db,a,s):
-        p=data.data;college(db,a,p.org_id);project_owner(db,p.owner_id,p.org_id)
+        p=data.data;project_applicant(db,a,p);project_owner(db,p.owner_id,p.org_id)
         master=db.scalar(select(TrainingProjectMaster).where(TrainingProjectMaster.code==p.code))
         if master and master.name!=p.name:raise HTTPException(409,'项目编码已存在，请使用现有项目名称')
         if not master:
             master=TrainingProjectMaster(code=p.code,name=p.name,start_date=p.start_date,end_date=p.end_date,source='学校项目申报');db.add(master);db.flush()
         obj=SocialProject(master_id=master.id,org_id=p.org_id,owner_id=p.owner_id,cohort=p.cohort,data=serial(p.model_dump()))
         db.add(obj);db.flush();return event(db,a,'social_project',obj,'建立项目申报',{},data.reason)
-    return command(request,data.model_dump(),'records.write',apply)
+    return command(request,data.model_dump(),'portal.read',apply)
 
 
 @router.put('/projects/{ident}')
@@ -173,6 +193,7 @@ def project_edit(ident:str,data:ProjectIn,request:Request):
         if obj.state not in {'DRAFT','RETURNED'}:raise HTTPException(409,'核心事项变更须先办理重新备案')
         check_version(obj,data.expected_version);before=serial(obj)
         if any(getattr(data.data,k)!=obj.data[k] for k in ('code','cohort','org_id')):raise HTTPException(422,'项目编号、期次及承办学院不能直接替换')
+        if a.role.kind=='teacher' and data.data.owner_id!=a.id:raise HTTPException(403,'老师不能把项目负责人改成别人')
         project_owner(db,data.data.owner_id,obj.org_id)
         if st.units(db,obj.id) and data.data.mode!=obj.data['mode']:raise HTTPException(409,'已有培训明细，不能更换核算方式')
         outside=[u.external_key for u in st.units(db,obj.id) if not data.data.start_date.isoformat()<=u.data['event_date']<=data.data.end_date.isoformat()]
@@ -183,9 +204,10 @@ def project_edit(ident:str,data:ProjectIn,request:Request):
             if data.data.mode_confirmed:source.pop('mode_pending',None)
             source['policy_pending']=[key for key in source.get('policy_pending',['level','scene'] if source.get('ledger_id') else []) if not values.get(key+'_confirmed')]
             values['source']=source
+        values={**values,**{k:obj.data[k] for k in ('returned_level',) if k in obj.data}}
         obj.data=values;obj.owner_id=data.data.owner_id
         return event(db,a,'social_project',obj,'修改申报草稿',before,data.reason)
-    return command(request,data.model_dump(),'records.write',apply)
+    return command(request,data.model_dump(),'portal.read',apply)
 
 
 def validate_units(db,a,project,rows):
@@ -237,12 +259,39 @@ def import_units(ident:str,operation:str,data:UnitsIn,request:Request):
 @router.post('/projects/{ident}/actions')
 def project_action(ident:str,data:SocialAction,request:Request):
     def apply(db,a,s):
+        from .. import approvals as ap
+        from ..social_schemas import quality_blockers
         obj=st.scoped(db,a,'social_project',ident,write=True);check_version(obj,data.expected_version);before=serial(obj)
-        if data.action in {'file','return','close'}:st.check_project_conflicts(db,a,obj)
+        if a.role.kind=='teacher' and data.action not in TEACHER_PROJECT_ACTIONS:raise HTTPException(403,'老师只能提交、结项提交或申请重新备案本人负责的项目')
+        if data.action in {'file','return','close'} and obj.state in {'SUBMITTED','CLOSE_REVIEW'}:st.check_project_conflicts(db,a,obj)
+        owner=db.get(User,obj.owner_id)
+        # 老师、教研室提交的项目先到学院审批；学院、学校账号登记提交的，学院这一级视为登记时已确认。
+        via_college=a.role.kind in {'teacher','dept'}
+        handling=None
         if data.action=='submit':
             if obj.state not in {'DRAFT','RETURNED'}:raise HTTPException(409,'当前项目不能提交')
             st.require_project_confirmed(obj)
-            st.require_evidence(db,'social_project',ident);obj.state='SUBMITTED'
+            if via_college and (issues:=quality_blockers(obj.data)):raise HTTPException(409,'“立德树人与质量”等上报信息还没填完：'+'；'.join(issues))
+            st.require_evidence(db,'social_project',ident)
+            level=obj.data.get('returned_level') if obj.state=='RETURNED' else None
+            obj.state='SUBMITTED' if level=='school' or not via_college else 'COLLEGE'
+            obj.data={**obj.data,'returned_level':None}
+            handling={'flow':'project','decision':'submit','resumed_from':level,'college_by_registrant':None if via_college else '学院、学校登记时已确认'}
+        elif data.action in {'approve','college_return'} and obj.state in {'COLLEGE','CLOSE_COLLEGE'}:
+            flow='project' if obj.state=='COLLEGE' else 'project_close'
+            handling={**ap.check_handler(db,a,owner,'college',obj.org_id),'flow':flow,'decision':'approve' if data.action=='approve' else 'return'}
+            if data.action=='approve':
+                if ap.same_person(db,'social_project',obj.id,a):handling['same_person']=ap.SAME_PERSON
+                if flow=='project':st.require_project_confirmed(obj)
+                elif obj.data.get('quality'):
+                    # 学院结项核验即核对了主讲教师资格审查表和课件内容审查记录（两项审查都由学院做）。
+                    q=obj.data['quality']
+                    if not (q.get('teacher_review') or {}).get('checked') or not (q.get('courseware_review') or {}).get('checked'):raise HTTPException(409,'主讲教师资格审查表或课件内容审查记录还没有学院签字')
+                    obj.closeout={**obj.closeout,'materials_checked':sorted(set(obj.closeout.get('materials_checked',[]))|{'teacher_review','courseware_review'}),'college_checked_by':a.id}
+                obj.state='SUBMITTED' if flow=='project' else 'CLOSE_REVIEW'
+            else:
+                obj.state='RETURNED' if flow=='project' else 'FILED'
+                if flow=='project':obj.data={**obj.data,'returned_level':'college'}
         elif data.action=='file':
             st.duty(db,a,'coordinator',obj.owner_id,obj.org_id)
             if obj.state!='SUBMITTED':raise HTTPException(409,'项目不在审核备案阶段')
@@ -252,13 +301,17 @@ def project_action(ident:str,data:SocialAction,request:Request):
                 if data.prior_review_on.isoformat()>obj.data['start_date'] or data.prior_review_on>st.today():raise HTTPException(422,'前置审核须在培训开始前完成，日期不得晚于今天')
             obj.data={**obj.data,'filed_on':st.today().isoformat(),'filed_by':a.id,'prior_review_on':serial(data.prior_review_on),'filing_basis':data.basis}
             obj.state='FILED'
+            project_bases(db,obj)
+            handling={'flow':'project','decision':'approve','level':'school'}
         elif data.action=='return':
             st.duty(db,a,'coordinator',obj.owner_id,obj.org_id)
             if obj.state not in {'SUBMITTED','CLOSE_REVIEW'}:raise HTTPException(409,'当前项目不能退回')
+            handling={'flow':'project_close' if obj.state=='CLOSE_REVIEW' else 'project','decision':'return','level':'school'}
+            if obj.state=='SUBMITTED':obj.data={**obj.data,'returned_level':'school'}
             obj.state='FILED' if obj.state=='CLOSE_REVIEW' else 'RETURNED'
         elif data.action=='refile':
             if obj.state!='FILED':raise HTTPException(409,'仅已备案项目可申请重新备案')
-            obj.state='RETURNED'
+            obj.state='RETURNED';obj.data={**obj.data,'returned_level':None}
         elif data.action=='close_submit':
             if obj.state!='FILED' or not data.closeout:raise HTTPException(409,'请提交已备案项目的完整结项材料')
             st.require_project_confirmed(obj)
@@ -269,7 +322,8 @@ def project_action(ident:str,data:SocialAction,request:Request):
             if c.closed_on.isoformat()<obj.data['end_date'] or c.closed_on>st.today():raise HTTPException(422,'结项日期应在培训结束后且不晚于今天')
             if obj.data['category']=='subsidy' and not (c.province_receipt.strip() and c.special_evidence.strip()):raise HTTPException(422,'补贴项目须提交报送凭证及专项材料')
             if c.satisfaction<85 and not c.rectification.strip():raise HTTPException(422,'满意度低于85%，须提交整改报告及期限')
-            obj.closeout=serial(c.model_dump());obj.state='CLOSE_REVIEW'
+            obj.closeout=serial(c.model_dump());obj.state='CLOSE_COLLEGE' if via_college else 'CLOSE_REVIEW'
+            handling={'flow':'project_close','decision':'submit','college_by_registrant':None if via_college else '学院、学校登记时已确认'}
         elif data.action=='close':
             st.duty(db,a,'coordinator',obj.owner_id,obj.org_id)
             if obj.state!='CLOSE_REVIEW':raise HTTPException(409,'项目不在结项核验阶段')
@@ -277,16 +331,50 @@ def project_action(ident:str,data:SocialAction,request:Request):
             if issues:=st.person_day_blockers([u.data for u in st.units(db,ident)]):raise HTTPException(409,'；'.join(issues))
             st.require_closeout_distribution(obj.closeout)
             required={'plan','filing_form','roster','attendance','hours','process','assessment','outcomes'}
-            if set(obj.closeout.get('materials_checked',[]))!=required:raise HTTPException(409,'培训方案、备案表、名册、签到、学时、过程、结业考核及成果材料尚未逐项核验')
+            # 有“立德树人与质量”的项目，结项还要核对主讲教师资格审查表和课件内容审查记录。
+            if obj.data.get('quality'):required|={'teacher_review','courseware_review'}
+            if not required<=set(obj.closeout.get('materials_checked',[])):raise HTTPException(409,'培训方案、备案表、名册、签到、学时、过程、结业考核及成果材料'+('，主讲教师资格审查表、课件内容审查记录' if obj.data.get('quality') else '')+'尚未逐项核验')
             if st.D(obj.closeout['satisfaction'])<85 and not obj.closeout.get('rectification_due'):raise HTTPException(409,'满意度低于85%，须明确整改办理日期')
             from .files import verify_file
             for file in st.attachments(db,'social_project',ident):verify_file(request.app.state.settings.storage_dir,file)
             obj.closeout={**obj.closeout,'reviewed_by':a.id,'review_basis':data.basis,'retention_years':10 if obj.data['category']=='subsidy' else 5};obj.state='CLOSED'
+            handling={'flow':'project_close','decision':'approve','level':'school'}
         else:raise HTTPException(422,'项目操作无效')
-        result=event(db,a,'social_project',obj,'项目办理：'+st.state_label(obj),before,data.reason,data.basis)
+        result=event(db,a,'social_project',obj,'项目办理：'+st.state_label(obj),before,data.reason,data.basis,handling)
         if obj.state=='CLOSED':satisfaction_achievement(db,a,obj,data.reason)
+        if handling and handling.get('decision')=='return':
+            from .. import message_push
+            message_push.queue(db,[obj.owner_id],'培训项目被退回',obj.data['name']+'：'+data.reason)
         return result
-    return command(request,data.model_dump(),'records.write',apply)
+    return command(request,data.model_dump(),'portal.read',apply)
+
+
+def project_bases(db,project):
+    """本项目设立的思政实践教学基地随项目备案一并进入基地清单，不另走基地申请。"""
+    for i,b in enumerate(((project.data.get('quality') or {}).get('bases') or []),1):
+        code=('PB-'+project.data['code']+'-'+project.cohort+'-'+str(i))[:64]
+        if db.scalar(select(SocialResource.id).where(SocialResource.code==code)):continue
+        db.add(SocialResource(kind='base',org_id=project.org_id,code=code,name=b['name'],state='DRAFT',
+            data={**b,'usages':['ideology'],'recognition':'随培训项目备案设立：'+project.data['name'],'project_id':project.id,'auto':True,'effective_on':st.today().isoformat()}))
+    db.flush()
+
+
+@router.put('/projects/{ident}/report-info')
+def project_report_info(ident:str,data:ReportInfoIn,request:Request):
+    """学院给已结项（或已备案）的历史项目补填上报信息：不重新走审批，留修改痕迹。"""
+    def apply(db,a,s):
+        obj=db.get(SocialProject,ident)
+        if obj is None:raise HTTPException(404,'项目不存在')
+        if a.role.kind not in {'college','school'} or obj.org_id not in a.org_ids:raise HTTPException(403,'上报信息由承办学院或学校补填')
+        a.require('records.write');check_version(obj,data.expected_version)
+        if obj.state not in {'FILED','CLOSE_COLLEGE','CLOSE_REVIEW','CLOSED'}:raise HTTPException(409,'还没备案的项目请在申报里填写')
+        before=serial(obj)
+        values={k:v for k,v in serial(data.model_dump()).items() if k in {'total_hours','audiences','audience_other','quality'}}
+        obj.data={**obj.data,**values,'report_info_by':a.id,'report_info_on':st.today().isoformat()}
+        result=event(db,a,'social_project',obj,'补填上报信息',before,data.reason,data.basis)
+        project_bases(db,obj)
+        return result
+    return command(request,data.model_dump(mode='json'),'portal.read',apply)
 
 
 def satisfaction_achievement(db,a,project,reason):

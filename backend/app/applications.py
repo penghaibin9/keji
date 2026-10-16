@@ -451,6 +451,27 @@ def todo_items(db, a):
         items.append({'type': 'application', 'id': obj.id, 'title': ap.FLOWS[flow]['label'] + '：' + obj.name + hint,
                       'state': state_label(obj), 'teacher_id': obj.data.get('teacher_id'), 'target_id': None,
                       'same_person': ap.SAME_PERSON if ap.same_person(db, 'social_resource', obj.id, a) else None})
+    return items + project_todos(db, a)
+
+
+def project_todos(db, a):
+    """培训项目：学院这一级可办的申请和结项核验；老师本人被退回待补正的项目。"""
+    items = []
+    for p in db.scalars(select(SocialProject).where(SocialProject.state.in_(['COLLEGE', 'CLOSE_COLLEGE', 'RETURNED']))):
+        if p.state == 'RETURNED':
+            if a.role.kind == 'teacher' and p.owner_id == a.id:
+                items.append({'type': 'social_project', 'id': p.id, 'title': '补正后重新提交：' + p.data['name'], 'state': '退回补正', 'teacher_id': a.id, 'target_id': None})
+            continue
+        if a.role.kind != 'college' or p.org_id not in a.org_ids:
+            continue
+        owner = db.get(User, p.owner_id)
+        try:
+            handling = ap.check_handler(db, a, owner, 'college', p.org_id)
+        except HTTPException:
+            continue
+        hint = '（' + handling['acting_for'] + '）' if handling.get('acting_for') else ''
+        items.append({'type': 'social_project', 'id': p.id, 'title': ('项目学院审批：' if p.state == 'COLLEGE' else '项目学院结项核验：') + p.data['name'] + hint,
+                      'state': state_label(p), 'teacher_id': p.owner_id, 'target_id': None})
     return items
 
 

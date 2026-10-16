@@ -198,7 +198,8 @@ def scoped(db, actor, kind, ident, write=False, allow_participant=False):
         elif org_id not in actor.org_ids: raise HTTPException(403, '业务超出组织授权范围')
     if write:
         if obj.state in {'ARCHIVED', 'ACTIVE', 'CLOSED', 'VOID'}: raise HTTPException(409, '已生效、已归档或已作废依据不可覆盖')
-        if kind not in {'social_claim', 'social_policy'} and not (kind=='social_resource' and obj.kind in ('correction','point_review')):
+        own_project=kind=='social_project' and actor.role.kind=='teacher' and obj.owner_id==actor.id
+        if kind not in {'social_claim', 'social_policy'} and not (kind=='social_resource' and obj.kind in ('correction','point_review')) and not own_project:
             actor.require('records.write')
     return obj
 
@@ -724,6 +725,16 @@ def detail(db,actor,kind,obj):
         for row in result['events']:
             if row['action']=='积分汇总：待院长初审' and row['after'].get('state')=='SUBMITTED':row['action']='积分汇总：待归口复核'
     if isinstance(obj,SocialProject):result['item']=project_read_item(actor,obj);result['facts']=project_facts(db,obj)
+    if isinstance(obj,SocialProject):
+        # 进度（学院 → 学校）、学院这一级能否由我办、上报信息缺项，给详情弹窗用。
+        from . import approvals as ap
+        from .applications import flow_of
+        from .social_schemas import quality_blockers
+        owner=db.get(User,obj.owner_id);flow=flow_of(obj)
+        level=ap.level_of(flow,obj.state)
+        result['progress']=ap.progress(db,flow,obj,owner,returned_level=obj.data.get('returned_level'))
+        result['college_handle']=level=='college' and ap.can_handle(db,actor,owner,'college',obj.org_id)
+        result['report_issues']=quality_blockers(obj.data)
     if isinstance(obj,(SocialProject,SocialResource)):
         org=db.get(Org,obj.org_id);result['org_name']=org.name if org else ''  # 教师、教研室的组织列表不含所属学院，名称由服务端给出
     if isinstance(obj,SocialResource) and obj.kind in ('correction','point_review'):
