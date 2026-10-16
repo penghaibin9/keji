@@ -587,7 +587,7 @@ body[data-role="teacher"] .apply-counts span:nth-child(3){background:#e9f9ef;col
 }
 /* 老师“业务办理”：四类申请一处进入 */
 .teacher-apply .card-head p{margin-top:4px}
-.teacher-apply-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px;padding:4px 20px 20px}
+.teacher-apply-grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:12px;padding:4px 20px 20px}
 .modal .teacher-apply-grid.one{grid-template-columns:1fr;padding:12px 0 0}
 .teacher-apply-item{display:flex;align-items:center;gap:12px;min-width:0;padding:16px;border:1px solid #e6ecf6;border-radius:14px;background:#fff;text-align:left;cursor:pointer;transition:transform .15s,box-shadow .15s,border-color .15s}
 .teacher-apply-item:hover{transform:translateY(-2px);border-color:#c9d8ff;box-shadow:0 12px 26px rgba(15,35,80,.08)}

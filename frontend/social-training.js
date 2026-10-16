@@ -1,6 +1,6 @@
 // School business pages reuse the portal's forms, permissions, navigation and attachments.
 import {checkUploadFiles,uploadEntries,uploadSequential,uploadStatusHtml,failedEntries,MAX_ATTACHMENTS} from './approval-flow.js?v=20261012-streamline1';
-import {progressHtml,AUDIENCE,TEACHING_MODES,IDEOLOGY} from './applications.js?v=20261016-apply14';
+import {progressHtml,AUDIENCE,TEACHING_MODES,IDEOLOGY} from './applications.js?v=20261016-apply15';
 const names={module:'模块式',person_day:'人天式',technical:'技术类',lecture:'讲座类',province:'省级',city:'市级或企业定制',school:'校级',dispatched:'统一委派异地送教',full_day:'全天实操或脱产',ordinary:'常规',subsidy:'补贴性培训',enterprise:'企业定制培训',community:'社区公益培训',rural:'乡村帮扶培训',other:'其他非学历培训',national:'国家级'};
 let workspace,context,opened,workspaceUser;
 let listSection='',listPage=1,listSearch='',resourcePage=1;

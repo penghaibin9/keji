@@ -54,7 +54,9 @@ function decide(id, action) {
   const level = (d.progress.nodes.find(n => n.state === 'current') || {}).label || '';
   const hint = action === 'return' ? '写清楚要补什么。老师补正后从这一级接着审，不从头走。' : action === 'approve' ? (level ? '本次办理：' + level + '。' : '') + '通过后自动转到下一级，最后一级通过即生效。' : action === 'withdraw' ? '撤回后可修改再提交，会从第一级重新审。' : '会从退回的那一级接着审。';
   const value = {approve: '材料齐全，同意', return: '', submit: '已按意见补正，重新提交', withdraw: '撤回修改'}[action];
-  return c.formModal(label + '：' + d.item.name, c.note(hint) + c.reasonFields(value, action === 'return' ? '退回原因' : '办理意见'), async v => {
+  const needBasis = action === 'approve' && ['组织人事部认定', '教务处备案审核'].includes(level);
+  return c.formModal(label + '：' + d.item.name, c.note(needBasis ? hint + '请在“依据说明”里写' + (level === '组织人事部认定' ? '资格认定文号和日期。' : '备案依据。') : hint) + c.reasonFields(value, action === 'return' ? '退回原因' : '办理意见'), async v => {
+    if (needBasis && !(v.basis || '').trim()) throw Error('请填写依据说明：' + (level === '组织人事部认定' ? '资格认定文号和日期' : '备案依据'));
     await c.api('/applications/' + id + '/actions', {method: 'POST', body: {action, expected_version: d.item.version, reason: v.reason, basis: v.basis}});
     c.closeModal(); c.toast(label + '完成'); await c.renderKeep(); await showApplication(id);
   }, {submit: '确认' + label, returnTo: () => showApplication(id)});
@@ -158,8 +160,51 @@ export function baseForm(existing = null) {
   }, {wide: true, submit: existing ? '保存补正' : '提交申报', returnTo: existing ? () => showApplication(existing.item.id) : null});
 }
 
+// 培训师申报（管理办法第十五条）：校内老师本人申报，外聘培训师由学院负责人登记。
+const TRAINER_DIRECTIONS = [['subsidy', '补贴性培训'], ['enterprise', '社会化自主培训'], ['community', '社区公益培训'], ['rural', '对口帮扶培训'], ['other', '其他非学历培训'], ['one_skill', '“一人一技”专项']];
+
+export async function trainerForm(existing = null, source = '') {
+  const d = existing?.item?.data || {}, e = c.esc;
+  const external = (existing ? d.source : source) === 'external';
+  const picked = new Set(d.directions || []);
+  let quals = '';
+  if (!external) {
+    const mineQuals = (await c.api('/qualifications?size=100&state=APPROVED').catch(() => ({items: []}))).items || [];
+    const chosen = new Set(d.qualification_ids || (d.qualifications || []).map(q => q.id));
+    quals = mineQuals.length ? `<fieldset class="form-field full apply-tags"><legend>引用我的资质（只列已审核通过的）</legend><div class="apply-tag-row">${mineQuals.map(q => `<label><input type="checkbox" name="qual_${e(q.id)}" ${chosen.has(q.id) ? 'checked' : ''}>${e(q.name)}</label>`).join('')}</div><p class="hint">引用的资质会随申报留一份快照，审批人能看到名称、发证机构和有效期。</p></fieldset>` : '';
+  }
+  const body = c.note(external ? '外聘培训师由学院负责人登记，教务处审核备案，通过后进入培训师资库。' : '教研室审核 → 学院审批 → 学校（继续教育学院）审批 → 组织人事部认定，通过后进入培训师资库。') +
+    (external ? c.field('name', '姓名', 'text', existing?.item?.name || '') + c.field('unit', '工作单位', 'text', d.unit || '') : '') +
+    c.field('title', '职称或职务', 'text', d.title || '', {required: false}) +
+    `<fieldset class="form-field full apply-tags"><legend>培训方向 <b>*</b></legend><div class="apply-tag-row">${TRAINER_DIRECTIONS.map(([k, l]) => `<label><input type="checkbox" name="dir_${k}" ${picked.has(k) ? 'checked' : ''}>${e(l)}</label>`).join('')}</div></fieldset>` + quals +
+    c.field('qualification_basis', '资格依据', 'textarea', d.qualification_basis || '', {full: true, hint: '职称、职业资格、行业经历等，写清楚能证明什么。'}) +
+    c.field('experience', '授课经历', 'textarea', d.experience || '', {required: false, full: true}) +
+    c.field('reason', '申报说明', 'text', existing ? '按意见补正' : external ? '登记外聘培训师' : '申报培训师', {full: true});
+  return c.formModal(existing ? '补正培训师申报' : external ? '登记外聘培训师' : '申报培训师', body, async (v, f) => {
+    const data = {source: external ? 'external' : 'internal', name: v.name || '', unit: v.unit || '', title: v.title || '', directions: TRAINER_DIRECTIONS.map(([k]) => k).filter(k => v['dir_' + k]),
+      qualification_ids: [...f.querySelectorAll('input[name^="qual_"]:checked')].map(i => i.name.slice(5)), qualification_basis: v.qualification_basis, experience: v.experience || ''};
+    if (!data.directions.length) throw Error('请至少选择一个培训方向');
+    const r = existing ? await c.api('/applications/trainers/' + existing.item.id, {method: 'PUT', body: {data, reason: v.reason, expected_version: existing.item.version}})
+      : await c.api('/applications/trainers', {method: 'POST', body: {data, reason: v.reason}});
+    c.closeModal(); c.toast(existing ? '已保存，请点“重新提交”' : external ? '已提交，等待教务处备案审核' : '已提交，等待教研室审核'); await c.renderKeep(); await showApplication(r.item.id);
+  }, {wide: true, submit: existing ? '保存补正' : '提交申报', returnTo: existing ? () => showApplication(existing.item.id) : null});
+}
+
+// 培训师资库：学校看全校，学院和教研室看本院；学校可以给在库培训师记“推荐进入省级师资库”。
+export async function trainersHtml(ctx) {
+  c = ctx;
+  const e = c.esc;
+  const d = await c.api('/applications/trainers');
+  const school = c.me.role.kind === 'school';
+  return `<div class="card"><div class="card-head"><div><h2>培训师资库（${d.total}）</h2><p>按管理办法第十五条遴选入库的培训师；申请中的在“统一待办”里办理。</p></div>${c.me.role.kind === 'college' ? c.act('登记外聘培训师', 'app-trainer-new', 'external', 'primary') : ''}</div>` +
+    c.table(['姓名', '来源', '培训方向', '所属', '认定或备案依据', '省级推荐', ...(school ? ['操作'] : [])], d.items.map(x => [`<strong>${e(x.name)}</strong><p class="cell-sub">${e(x.unit || x.title || '')}</p>`,
+      x.source === 'external' ? '外聘' : '校内', e(x.directions.join('、')), e(x.org_name), e(x.filing_basis || '—'), x.recommended_province_on ? '已推荐 ' + e(x.recommended_province_on) : '—',
+      ...(school ? [x.recommended_province_on ? '' : c.act('推荐省级', 'trainer-recommend', x.id, 'sm')] : [])]), '师资库里还没有培训师', '校内老师在首页“业务办理”里申报，外聘培训师由学院负责人登记。') + '</div>';
+}
+
 async function edit(id) {
   const d = opened?.item?.id === id ? opened : await load(id);
+  if (d.flow === 'trainer' || d.flow === 'trainer_external') return trainerForm(d);
   if (d.flow === 'base') return baseForm(d);
   if (d.flow === 'course') return manualCourseForm(d);
   const course = d.item.data.course || {};
@@ -177,9 +222,9 @@ export async function myApplicationsHtml(ctx) {
   const n = m.counts;
   const chips = `<div class="apply-counts"><span>审批中 <b>${n.pending}</b></span><span class="${n.returned ? 'warn' : ''}">待我补正 <b>${n.returned}</b></span><span>已办结 <b>${n.done}</b></span></div>`;
   const open = x => x.type === 'social_project' ? c.act('查看', 'social-detail', 'social_project|' + x.id, 'sm') : c.act(x.state === 'RETURNED' ? '去补正' : '查看', 'app-detail', x.id, x.state === 'RETURNED' ? 'sm primary' : 'sm');
-  return `<div class="card"><div class="card-head"><div><h2>我的申请</h2><p>我提交的培训课程、培训基地和培训项目申请，走到哪一级、谁在办，都在这里。</p></div>${chips}</div>` +
+  return `<div class="card"><div class="card-head"><div><h2>我的申请</h2><p>我提交的培训课程、培训基地、培训师和培训项目申请，走到哪一级、谁在办，都在这里。</p></div>${chips}</div>` +
     c.table(['申请', '进度', '操作'], m.items.map(x => [`<strong>${e(x.name)}</strong><p class="cell-sub">${e(x.label)} · ${e(x.state_label)}</p>`,
-      progressHtml({...x.progress, nodes: x.nodes, label: x.label}, e, {compact: true}), open(x)]), '还没有申请', '在首页“业务办理”里申报培训课程、培训项目或培训基地。') + `</div>`;
+      progressHtml({...x.progress, nodes: x.nodes, label: x.label}, e, {compact: true}), open(x)]), '还没有申请', '在首页“业务办理”里申报培训课程、培训项目、培训基地或培训师。') + `</div>`;
 }
 
 // 首页卡片：只列还没办结的申请（最多 3 条），没有就不显示。
@@ -329,6 +374,11 @@ export async function applicationAction(action, id, ctx) {
   if (action === 'app-upload') return upload(id);
   if (action === 'app-course-new') return manualCourseForm(null, id || '');
   if (action === 'app-base-new') return baseForm();
+  if (action === 'app-trainer-new') return trainerForm(null, id || 'internal');
+  if (action === 'trainer-recommend') return c.formModal('推荐进入省级师资库', c.note('只在系统里记一笔推荐，实际报送仍走湘培直通车接口。') + c.reasonFields('择优推荐进入省级师资库', '推荐说明'), async v => {
+    await c.api('/applications/trainers/' + id + '/recommend', {method: 'POST', body: {reason: v.reason, basis: v.basis}});
+    c.closeModal(); c.toast('已记录推荐'); await c.render();
+  }, {submit: '确认推荐'});
   const map = {'app-approve': 'approve', 'app-return': 'return', 'app-submit': 'submit', 'app-withdraw': 'withdraw'};
   if (map[action]) {
     if (opened?.item?.id !== id) await load(id);
