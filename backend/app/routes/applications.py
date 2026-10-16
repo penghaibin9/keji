@@ -1,10 +1,11 @@
 """老师发起的申请：社会培训课申报、培训课程申请、培训基地申请。审批规则见 approvals.py，业务口径见 applications.py。"""
 from fastapi import APIRouter, Request, HTTPException, Query
+from ..schemas import Reason
 from sqlalchemy import select
 from ..core import command, read_operation, serial, workflow, check_version
 from ..reference_data import TeacherCourseTerm, TrainingCourseMaster, term_in_scope
 from ..social_models import SocialResource, SocialProject
-from ..social_schemas import CourseApplyIn, BaseApplyIn, ApplicationAction
+from ..social_schemas import CourseApplyIn, BaseApplyIn, ApplicationAction, DeadlineIn, ReopenIn
 from .. import approvals as ap
 from .. import applications as apps
 from .. import message_push
@@ -40,6 +41,9 @@ def teaching_values(db, a, applicant, data, current=None):
         raise HTTPException(409, '这门课已经申报过（' + apps.state_label(old) + '），同一门课只申报一次' +
                             ('；被退回或撤回的请在“我的申请”里补正后重新提交' if old.state in ('RETURNED', 'WITHDRAWN') else ''))
     course = apps.source_course(db, row)
+    if current is None:
+        college = ap.college_of(db, applicant)
+        apps.check_window(db, course.get('school_year') or '', college.id if college else '')
     values = serial(data.model_dump())
     values.update(course=course, identity=identity, code='', name=row.course_name,
                   hours=str(data.hours) if data.hours is not None else (str(course['hours']) if course.get('hours') is not None else None))
@@ -108,6 +112,90 @@ def online_library(request: Request, school_year: str = Query('', max_length=20)
             raise HTTPException(403, '组织超出授权范围')
         return apps.online_library(db, a, school_year, org_id, source, state, q.strip(), page)
     return read_operation(request, 'records.read', load)
+
+
+@router.get('/deadlines')
+def deadlines(request: Request):
+    """社会培训课申报期限：各学年截止日；学院看本院补报开放情况。"""
+    def load(db, a, s):
+        if a.role.kind not in ('school', 'college'):
+            raise HTTPException(403, '申报期限由学校设置、学院开放补报')
+        return apps.deadline_overview(db, a)
+    return read_operation(request, 'records.read', load)
+
+
+def save_deadlines(db, a, setting, row, expected, action, before, reason):
+    from ..models import Setting
+    from ..core import audit
+    if (row.version if row else 0) != expected:
+        raise HTTPException(409, '申报期限已被别人修改，请刷新后重试')
+    if row is None:
+        row = Setting(key=apps.DEADLINE_KEY, value=setting, version=1)
+        db.add(row)
+    else:
+        row.value = setting
+        row.version += 1
+    db.flush()
+    audit(db, a, 'settings', apps.DEADLINE_KEY, action, before=before, after=setting, reason=reason)
+    return apps.deadline_overview(db, a)
+
+
+@router.put('/deadlines')
+def deadline_set(data: DeadlineIn, request: Request):
+    def apply(db, a, s):
+        if a.role.kind != 'school':
+            raise HTTPException(403, '社会培训课申报截止日由学校设置')
+        setting, row = apps.deadline_setting(db)
+        before = {k: dict(v) for k, v in setting.items()}
+        from datetime import date
+        if data.deadline < date(int(data.school_year[:4]), 9, 1):
+            raise HTTPException(422, '截止日不能早于学年开始（' + data.school_year[:4] + '-09-01）')
+        if data.deadline == apps.default_deadline(data.school_year):
+            setting['deadlines'].pop(data.school_year, None)
+        else:
+            setting['deadlines'][data.school_year] = data.deadline.isoformat()
+        return save_deadlines(db, a, setting, row, data.expected_version, '设置社会培训课申报截止日', before, data.reason)
+    return command(request, data.model_dump(mode='json'), 'records.write', apply)
+
+
+@router.put('/deadlines/reopen')
+def deadline_reopen(data: ReopenIn, request: Request):
+    def apply(db, a, s):
+        from datetime import timedelta
+        if a.role.kind != 'college':
+            raise HTTPException(403, '截止后的补报由学院负责人为本院开放')
+        a.require('assessment.review')
+        college = ap.college_of(db, a.user)
+        if college is None or college.kind != 'college':
+            raise HTTPException(403, '账号不属于某个二级学院')
+        setting, row = apps.deadline_setting(db)
+        before = {k: dict(v) for k, v in setting.items()}
+        due, today = apps.deadline_of(db, data.school_year, setting), apps.school_today()
+        mine = setting['reopen'].setdefault(college.id, {})
+        if data.until is None:
+            mine.pop(data.school_year, None)
+            action = '关闭社会培训课补报'
+        else:
+            if today <= due:
+                raise HTTPException(409, data.school_year + ' 学年还没到截止日（' + due.isoformat() + '），不用开放补报')
+            if data.until < today or data.until > today + timedelta(days=apps.REOPEN_MAX_DAYS):
+                raise HTTPException(422, '补报截止日须在今天到 %d 天以内' % apps.REOPEN_MAX_DAYS)
+            mine[data.school_year] = data.until.isoformat()
+            action = '开放社会培训课补报'
+        if not mine:
+            setting['reopen'].pop(college.id, None)
+        return save_deadlines(db, a, setting, row, data.expected_version, action + '：' + college.name + ' ' + data.school_year, before, data.reason)
+    return command(request, data.model_dump(mode='json'), 'records.write', apply)
+
+
+@router.post('/points/rebook')
+def points_rebook(data: Reason, request: Request):
+    """学校设置每门社会培训课分值后，把之前没记上的积分补记上。"""
+    def apply(db, a, s):
+        if a.role.kind != 'school':
+            raise HTTPException(403, '社会培训课积分由学校补记')
+        return apps.rebook_points(db, a)
+    return command(request, data.model_dump(mode='json'), 'points.adjust', apply)
 
 
 @router.get('/{ident}')

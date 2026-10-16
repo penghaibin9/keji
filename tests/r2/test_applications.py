@@ -12,8 +12,10 @@ from test_social_training import HASH
 REASON = {'reason': '提交申请'}
 
 
-def setup(app2, *, coordinator='reviewer'):
+def setup(app2, *, coordinator='reviewer', open_years=True):
     with app2.state.sessions.begin() as db:
+        if open_years:  # 测试数据里的学年都还在申报期内（截止日另见 test_course_deadline.py）
+            db.add(Setting(key='social_course_deadlines', value={'deadlines': {'2024-2025': '2099-09-30', '2025-2026': '2099-09-30'}}))
         db.add(User(id='reviewer', username='reviewer', name='继续教育学院审核人', org_id='school', role_id='role-school',
                     password_hash=HASH, must_change_password=False, active=True))
         db.add(Setting(key='social_training_duties', value={'coordinator': [coordinator]}))

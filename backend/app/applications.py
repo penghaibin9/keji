@@ -8,7 +8,7 @@ import hashlib
 from decimal import Decimal
 from fastapi import HTTPException
 from sqlalchemy import select
-from .core import serial, school_today
+from .core import serial, school_today, workflow
 from .models import User, Org, Setting, Period, PointBalance, PointEntry
 from .reference_data import TeacherCourseTerm, TrainingCourseMaster, annual_teaching_credits, school_year_of, school_year_now, term_in_scope, UNKNOWN_YEAR
 from .social_models import SocialResource, SocialProject
@@ -194,7 +194,89 @@ def my_courses(db, user):
     apps = applications_by_code(db, [application_code(user.id, course_identity(db, r, jw)) for r in rows])
     years = [{k: g[k] for k in ('school_year', 'jw_credit', 'cx_credit', 'total_credit', 'hours', 'courses', 'pending_courses', 'pending_credit', 'missing_credit')} for g in groups]
     years.sort(key=lambda y: (y['school_year'] != UNKNOWN_YEAR, y['school_year']), reverse=True)
-    return {'years': years, 'courses': cards_for(db, rows, details, apps, user.id), 'school_year_now': school_year_now()}
+    college = ap.college_of(db, user)
+    setting = deadline_setting(db)[0]
+    windows = {y['school_year']: window(db, y['school_year'], college.id if college else '', setting) for y in years}
+    for y in years:
+        y['window'] = windows[y['school_year']]
+    cards = cards_for(db, rows, details, apps, user.id)
+    for card in cards:
+        # 一门课按最近一个学期所在学年判断能不能申报（申报时选的就是最近这个学期）。
+        year = card['terms'][0]['school_year'] if card['terms'] else UNKNOWN_YEAR
+        card['window'] = windows.get(year) or window(db, year, college.id if college else '', setting)
+    pending_years = {c['window']['school_year'] for c in cards if not c['application'] and c['window'].get('remind') and c['window']['open']}
+    reminders = [windows[y] for y in sorted(pending_years, reverse=True) if y in windows]
+    return {'years': years, 'courses': cards, 'school_year_now': school_year_now(), 'windows': windows, 'deadline_reminders': reminders}
+
+
+# ---- 社会培训课申报期限 ----
+# 每学年一个截止日，默认学年结束后的 9 月 30 日，学校可以改；截止后由学院负责人为本院开放补报。
+# 存在 settings 表的 social_course_deadlines 里：{'deadlines': {'2025-2026': '2026-09-30'}, 'reopen': {学院ID: {'2024-2025': '2026-11-15'}}}
+DEADLINE_KEY = 'social_course_deadlines'
+REMIND_DAYS = 7
+REOPEN_MAX_DAYS = 90
+
+
+def deadline_setting(db):
+    row = db.get(Setting, DEADLINE_KEY)
+    value = dict(row.value) if row and isinstance(row.value, dict) else {}
+    return {'deadlines': dict(value.get('deadlines') or {}), 'reopen': {k: dict(v) for k, v in (value.get('reopen') or {}).items()}}, row
+
+
+def default_deadline(school_year):
+    from datetime import date
+    return date(int(school_year[5:9]), 9, 30)
+
+
+def deadline_of(db, school_year, setting=None):
+    from datetime import date
+    if not school_year or school_year == UNKNOWN_YEAR:
+        return None
+    value = (setting or deadline_setting(db)[0])['deadlines'].get(school_year)
+    return date.fromisoformat(value) if value else default_deadline(school_year)
+
+
+def window(db, school_year, college_id, setting=None, today=None):
+    """这个学年还能不能申报：开放中 / 补报中 / 已截止，带截止日、补报截止日和剩余天数。"""
+    from datetime import date
+    setting = setting or deadline_setting(db)[0]
+    today = today or school_today()
+    due = deadline_of(db, school_year, setting)
+    if due is None:
+        return {'school_year': school_year, 'deadline': None, 'open': True, 'state': 'open', 'days_left': None, 'reopen_until': None}
+    reopen = (setting['reopen'].get(college_id) or {}).get(school_year)
+    reopen = date.fromisoformat(reopen) if reopen else None
+    if today <= due:
+        state, left = 'open', (due - today).days
+    elif reopen and today <= reopen:
+        state, left = 'reopened', (reopen - today).days
+    else:
+        state, left = 'closed', None
+    return {'school_year': school_year, 'deadline': due.isoformat(), 'open': state != 'closed', 'state': state, 'days_left': left,
+            'reopen_until': reopen.isoformat() if reopen else None, 'remind': left is not None and left <= REMIND_DAYS}
+
+
+def check_window(db, school_year, college_id):
+    w = window(db, school_year, college_id)
+    if not w['open']:
+        raise HTTPException(409, school_year + ' 学年的社会培训课申报已于 ' + w['deadline'] + ' 截止' +
+                            ('（学院补报已于 ' + w['reopen_until'] + ' 结束）' if w['reopen_until'] else '') + '；需要补报请联系学院负责人开放补报')
+    return w
+
+
+def deadline_overview(db, a):
+    """学校看各学年截止日，学院另外看本院补报开放情况。"""
+    setting, row = deadline_setting(db)
+    now = int(school_year_now()[:4])
+    years = sorted({f'{y}-{y + 1}' for y in range(2020, now + 1)} | set(setting['deadlines']), reverse=True)
+    college = ap.college_of(db, a.user) if a.role.kind == 'college' else None
+    items = []
+    for y in years:
+        w = window(db, y, college.id if college else '', setting)
+        items.append({**w, 'custom': y in setting['deadlines'], 'default_deadline': default_deadline(y).isoformat()})
+    pending = len(pending_points(db)) if a.role.kind == 'school' else 0
+    return {'items': items, 'version': row.version if row else 0, 'college': college.name if college else None, 'pending_points': pending,
+            'can_set': a.role.kind == 'school', 'can_reopen': college is not None, 'remind_days': REMIND_DAYS, 'reopen_max_days': REOPEN_MAX_DAYS}
 
 
 LIBRARY_STATES = {'missing_credit': '缺学分', 'unapplied': '未申报', 'pending': '审批中', 'active': '已入库'}
@@ -403,6 +485,27 @@ def book_points(db, a, obj):
     balance.version += 1
     obj.data = {**obj.data, 'points': {'state': 'booked', 'amount': str(value), 'period_id': period.id, 'period_name': period.name}}
     return value
+
+
+def pending_points(db):
+    """已入库、但当时学校还没设分值（或没有进行中的周期、周期已确认）而没记上积分的社会培训课。"""
+    rows = db.scalars(select(SocialResource).where(SocialResource.kind == 'course_apply', SocialResource.state == 'ACTIVE')).all()
+    return [r for r in rows if is_application(r) and r.data.get('source') == 'teaching' and (r.data.get('points') or {}).get('state') == 'pending']
+
+
+def rebook_points(db, a):
+    """学校设好分值后补记：逐门再记一次，仍记不上的保留原因。同一门课只记一次。"""
+    booked, left = 0, []
+    for obj in pending_points(db):
+        before = obj.data.get('points')
+        if book_points(db, a, obj):
+            booked += 1
+            obj.version += 1
+            db.flush()
+            workflow(db, a, 'social_resource', obj.id, '补记社会培训课积分', {'points': before}, {'points': obj.data['points']}, '学校设置分值后补记', '')
+        else:
+            left.append({'id': obj.id, 'name': obj.name, 'note': (obj.data.get('points') or {}).get('note', '')})
+    return {'booked': booked, 'left': left}
 
 
 def complete(db, a, obj, flow):

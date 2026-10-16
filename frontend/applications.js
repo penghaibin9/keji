@@ -203,10 +203,21 @@ const cover = u => { const v = safeUrl(u); try { return v && /(^|\.)chaoxing\.co
 const num = v => v == null || v === '' ? '—' : String(Number(v));
 const SOURCE = {1: '自建', 2: '克隆', 3: '映射'};
 
+// 申报期限：每学年一个截止日；截止后学院开放补报才能申报。
+function applyButton(x, index, cls) {
+  const w = x.window || {};
+  if (w.state === 'closed') return `<span class="muted small" title="截止后需要补报请联系学院负责人">已于 ${c.esc(w.deadline)} 截止</span>`;
+  return c.act(w.state === 'reopened' ? '补报为社会培训课' : '申报为社会培训课', 'mc-apply', String(index), cls);
+}
+
+function deadlineNotes(d) {
+  return (d.deadline_reminders || []).map(w => c.note(`${w.school_year} 学年的社会培训课申报${w.state === 'reopened' ? '补报' : ''}将于 ${w.state === 'reopened' ? w.reopen_until : w.deadline} 截止，还剩 ${w.days_left} 天，你还有这个学年的课没申报。`, true, '申报截止提醒')).join('');
+}
+
 function statusStrip(x, index, scope) {
   const e = c.esc, a = x.application;
   if (a) return `<div class="mc-status ${a.state === 'ACTIVE' ? 'ok' : a.state === 'RETURNED' ? 'warn' : ''}"><span>社会培训课：${e(a.state_label)}</span>${c.act(a.state === 'RETURNED' ? '去补正' : '看进度', 'app-detail', a.id, 'sm text')}</div>`;
-  return scope === 'mine' ? `<div class="mc-status"><span>还没申报为社会培训课</span>${c.act('申报为社会培训课', 'mc-apply', String(index), 'sm primary')}</div>` : `<div class="mc-status muted"><span>未申报</span></div>`;
+  return scope === 'mine' ? `<div class="mc-status"><span>还没申报为社会培训课</span>${applyButton(x, index, 'sm primary')}</div>` : `<div class="mc-status muted"><span>未申报</span></div>`;
 }
 
 function courseCard(x, index, scope) {
@@ -226,13 +237,13 @@ export async function myCoursesHtml(ctx, tab, year) {
   const list = mine.courses.map((x, i) => [x, i]).filter(([x]) => x.origin === (tab === 'cx' ? 'CX' : 'JW') && pick(x));
   const years = [...new Set(mine.courses.flatMap(x => x.years))].sort().reverse();
   const chips = `<div class="todo-chips" role="group" aria-label="学年">${[['', '全部学年（2020-2021 起）'], ...years.map(y => [y, y + ' 学年'])].map(([v, l]) => `<button type="button" class="btn sm ${(year || '') === v ? 'primary' : 'light'}" data-action="mc-year" data-id="${e(v)}">${e(l)}</button>`).join('')}</div>`;
-  const tip = c.note('哪门课适合面向社会学员开设，你就选哪门申报为社会培训课：教研室审核 → 学院审批 → 学校审批，通过后进入培训课程库并给你记积分。同一门课只申报一次。常规学历课堂本身不算积分（积分办法第六条）。', false, '申报说明');
+  const tip = c.note('哪门课适合面向社会学员开设，你就选哪门申报为社会培训课：教研室审核 → 学院审批 → 学校审批，通过后进入培训课程库并给你记积分。同一门课只申报一次。常规学历课堂本身不算积分（积分办法第六条）。每学年的课在学年结束后的 9 月 30 日前申报（学校可调整），截止后需要补报请联系学院负责人。', false, '申报说明') + deadlineNotes(mine);
   if (tab === 'cx') return `<div class="card"><div class="card-head"><div><h2>我的超星课（${list.length}）</h2><p>只列你作为建课人的课；同一门课每学期一张卡合成一张。教学团队成员能看到课，积分只算给申报的主讲教师。</p></div></div><div class="card-pad">${chips}${tip}${list.length ? `<div class="mc-cards">${list.map(([x, i]) => courseCard(x, i, 'mine')).join('')}</div>` : '<p class="muted">这个学年没有作为建课人的超星课。</p>'}</div></div>`;
   return `<div class="card"><div class="card-head"><div><h2>我的教务课（${list.length}）</h2><p>按课程号合并，多个学期列在一起。</p></div></div><div class="card-pad">${chips}${tip}</div>` +
     c.table(['课程', '学期', '学分', '学时', '社会培训课', '操作'], list.map(([x, i]) => [`<strong>${e(x.course_name)}</strong><p class="cell-sub mono">${e(x.course_code)}</p>${x.problems.length ? `<p class="mc-problem">${e(x.problems[0])}</p>` : ''}`,
       e(x.terms.map(t => t.term_name).join('、')), x.credit == null ? '<span class="badge orange-b">缺学分</span>' : num(x.credit), num(x.hours),
       x.application ? e(x.application.state_label) : '<span class="muted">未申报</span>',
-      x.application ? c.act(x.application.state === 'RETURNED' ? '去补正' : '看进度', 'app-detail', x.application.id, 'sm') : c.act('申报为社会培训课', 'mc-apply', String(i), 'sm primary')]), '这个学年没有教务授课', '教务系统同步后显示。') + `</div>`;
+      x.application ? c.act(x.application.state === 'RETURNED' ? '去补正' : '看进度', 'app-detail', x.application.id, 'sm') : applyButton(x, i, 'sm primary')]), '这个学年没有教务授课', '教务系统同步后显示。') + `</div>`;
 }
 
 async function courseDetail(x, scope) {
@@ -249,7 +260,7 @@ async function courseDetail(x, scope) {
   const problems = x.problems.map(p => c.note(p, true)).join('');
   const index = (scope === 'mine' ? mine.courses : library.items).indexOf(x);
   const foot = [url ? `<a class="btn" href="${e(url)}" target="_blank" rel="noopener noreferrer">去超星看课 ↗</a>` : '',
-    scope === 'mine' && !x.application ? c.act('申报为社会培训课', 'mc-apply', String(index), 'primary') : '',
+    scope === 'mine' && !x.application ? applyButton(x, index, 'primary') : '',
     x.application ? c.act('查看申报', 'app-detail', x.application.id) : '', c.act('关闭', 'close')].join('');
   c.modal(x.course_name, problems + `<dl class="kv">${rows.map(([k, v]) => `<dt>${k}</dt><dd>${v}</dd>`).join('')}</dl><h3 class="mt16">开课学期</h3>${terms}${intro}${progress}<p class="small muted mt16">计分按学期逐条算：同一学年教务已有这门课时超星课只算一次。申报为社会培训课后，同一门课只记一次积分，不在别的学年重复记。</p>`, foot, true);
 }
@@ -286,12 +297,13 @@ export async function homeCoursesHtml(ctx) {
   if (!Array.isArray(d?.courses)) return '';
   mine = d;
   const cx = d.courses.filter(x => x.origin === 'CX');
-  if (!cx.length) return '';
+  const notes = deadlineNotes(d);
+  if (!cx.length) return notes ? `<section class="card"><div class="card-head"><div><h2>社会培训课申报</h2></div>${c.act('去我的课程', 'nav-mycourses', 'jw', 'text')}</div><div class="card-pad">${notes}</div></section>` : '';
   const now = cx.filter(x => x.years.includes(d.school_year_now));
   const credit = now.reduce((s, x) => s + (x.credit == null ? 0 : Number(x.credit)), 0);
   const todo = cx.map(x => [x, d.courses.indexOf(x)]).filter(([x]) => x.problems.length || x.application?.state === 'RETURNED').slice(0, 3);
   const row = ([x, i]) => `<div class="apply-home-row"><div><strong>${e(x.course_name)}</strong></div><span class="${x.application?.state === 'RETURNED' ? 'red' : 'mc-problem'}">${e(x.application?.state === 'RETURNED' ? '社会培训课申报被退回' : x.problems[0].split('：')[0])}</span>${c.act('查看', 'mc-detail', String(i), 'sm')}</div>`;
-  return `<section class="card"><div class="card-head"><div><h2>我的超星课</h2><p>作为建课人 · ${e(d.school_year_now)} 学年</p></div>${c.act('全部 ' + cx.length + ' 门', 'nav-mycourses', 'cx', 'text')}</div><div class="card-pad"><div class="mc-home-stats"><span><b>${now.length}</b>本学年在用</span><span><b>${credit.toFixed(1)}</b>可计学分</span><span><b>${todo.length}</b>需要处理</span></div>${todo.map(row).join('')}</div></section>`;
+  return `<section class="card"><div class="card-head"><div><h2>我的超星课</h2><p>作为建课人 · ${e(d.school_year_now)} 学年</p></div>${c.act('全部 ' + cx.length + ' 门', 'nav-mycourses', 'cx', 'text')}</div><div class="card-pad">${notes}<div class="mc-home-stats"><span><b>${now.length}</b>本学年在用</span><span><b>${credit.toFixed(1)}</b>可计学分</span><span><b>${todo.length}</b>需要处理</span></div>${todo.map(row).join('')}</div></section>`;
 }
 
 export async function courseAction(action, id, ctx) {

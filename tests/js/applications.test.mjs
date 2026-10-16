@@ -54,3 +54,16 @@ test('按学年筛选：只列这个学年开过的课；教务课在教务课�
   assert.match(jw, /高等数学/);
   assert.doesNotMatch(jw, /二维绘图/);
 });
+
+test('申报期限：截止的课不出申报按钮，补报中改成补报，到期前提醒', async () => {
+  const data = {courses: [card({window: {state: 'closed', deadline: '2025-09-30'}}),
+    card({identity: 'CX|茶艺', course_name: '茶艺', window: {state: 'reopened', deadline: '2025-09-30', reopen_until: '2025-10-20'}}),
+    card({identity: 'CX|焊接', course_name: '焊接', window: {state: 'open', deadline: '2026-09-30'}})],
+    deadline_reminders: [{school_year: '2025-2026', state: 'open', deadline: '2026-09-30', days_left: 5}]};
+  const html = await myCoursesHtml(ctx(data), 'cx', '');
+  assert.match(html, /已于 2025-09-30 截止/);
+  assert.doesNotMatch(html, /data-id="0">申报为社会培训课/);
+  assert.match(html, /data-id="1">补报为社会培训课/);
+  assert.match(html, /data-id="2">申报为社会培训课/);
+  assert.match(html, /2025-2026 学年的社会培训课申报将于 2026-09-30 截止，还剩 5 天/);
+});

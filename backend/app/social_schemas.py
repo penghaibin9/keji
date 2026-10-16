@@ -521,3 +521,21 @@ class ReportInfoIn(Reason):
     audiences: list[str] = Field(default_factory=list, max_length=12)
     audience_other: str = Field(default='', max_length=200)
     quality: ProjectQuality
+
+
+class DeadlineIn(Reason):
+    # 社会培训课每学年的申报截止日（默认学年结束后的 9 月 30 日）。
+    school_year: str = Field(pattern=r'^20\d{2}-20\d{2}$')
+    deadline: date
+    expected_version: int = Field(ge=0)
+    @model_validator(mode='after')
+    def consecutive(self):
+        if int(self.school_year[5:9]) != int(self.school_year[:4]) + 1: raise ValueError('学年写成 2025-2026 这样相邻的两年')
+        return self
+
+
+class ReopenIn(Reason):
+    # 学院为本院开放截止后的补报；until 为空表示关闭补报。
+    school_year: str = Field(pattern=r'^20\d{2}-20\d{2}$')
+    until: date | None = None
+    expected_version: int = Field(ge=0)
