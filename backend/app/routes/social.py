@@ -283,6 +283,7 @@ def project_action(ident:str,data:SocialAction,request:Request):
         if data.action=='submit':
             if obj.state not in {'DRAFT','RETURNED'}:raise HTTPException(409,'当前项目不能提交')
             st.require_project_confirmed(obj)
+            if not obj.data.get('venue'):raise HTTPException(409,'请先在“修改项目资料”里填写培训场地（新申报和重新备案必填）')
             if via_college and (issues:=quality_blockers(obj.data)):raise HTTPException(409,'“立德树人与质量”等上报信息还没填完：'+'；'.join(issues))
             st.require_evidence(db,'social_project',ident)
             level=obj.data.get('returned_level') if obj.state=='RETURNED' else None

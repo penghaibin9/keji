@@ -120,3 +120,17 @@ def test_return_resumes_at_hr_and_province_recommendation_is_logged(app2, client
     r = post(c, '/api/applications/trainers/' + ident + '/recommend', {'reason': '择优推荐进入省级师资库'})
     assert r.status_code == 200 and r.json()['item']['data']['recommended_province_on'], r.text
     assert c.get('/api/applications/trainers').json()['items'][0]['recommended_province_on']
+
+
+def test_new_duties_configurable_and_library_closed_to_teachers(app2, client2):
+    from conftest import put
+    auth(client2, 'schooladmin')
+    labels = client2.get('/api/social/duties').json()
+    assert {'trainer_hr', 'trainer_filing'} <= set(labels['labels'])
+    with app2.state.sessions.begin() as db:
+        db.add(User(id='hr2', username='hr2', name='组织人事部二', org_id='school', role_id='role-school', password_hash=HASH, must_change_password=False, active=True))
+    r = put(client2, '/api/social/duties', {'expected_version': labels['version'], 'assignments': {'trainer_hr': ['hr2']}, 'reason': '指定组织人事部认定人'})
+    assert r.status_code == 200, r.text
+    # 老师不能读师资库（含认定依据），也不能配置职责
+    auth(client2, 'teacher')
+    assert client2.get('/api/applications/trainers').status_code == 403

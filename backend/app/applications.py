@@ -509,7 +509,7 @@ def todo_items(db, a):
             continue
         hint = '（' + handling['acting_for'] + '）' if handling.get('acting_for') else ''
         items.append({'type': 'application', 'id': obj.id, 'title': ap.FLOWS[flow]['label'] + '：' + obj.name + hint,
-                      'state': state_label(obj), 'teacher_id': obj.data.get('teacher_id'), 'target_id': obj.org_id,
+                      'state': state_label(obj), 'teacher_id': obj.data.get('teacher_id'), 'target_id': None if obj.data.get('teacher_id') else obj.org_id,
                       'same_person': ap.SAME_PERSON if ap.same_person(db, 'social_resource', obj.id, a) else None})
     return items + project_todos(db, a)
 
@@ -553,7 +553,9 @@ def mine(db, a):
 # ---- 培训师资库（管理办法第十五条）----
 
 def trainer_library(db, a):
-    """师资库：学校看全部，学院看本院，教研室看本院（申请中的单子只给申请人和办理人，不在库里露出）。"""
+    """师资库：学校看全部，学院看本院，教研室看本院（申请中的单子只给申请人和办理人，不在库里露出）。老师不开放。"""
+    if a.role.kind == 'teacher':
+        raise HTTPException(403, '培训师资库不对老师开放，本人的申报在“我的申请”里查看')
     q = select(SocialResource).where(SocialResource.kind == 'trainer', SocialResource.state == 'ACTIVE').order_by(SocialResource.code)
     rows = db.scalars(q).all()
     if a.role.kind != 'school':

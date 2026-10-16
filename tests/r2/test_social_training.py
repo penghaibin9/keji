@@ -495,3 +495,13 @@ def test_project_venue_required_offsite_needs_record_and_prep_checklist(client2,
     r=put(client2,'/api/social/projects/'+p['id'],edit);assert r.status_code==200,r.text
     assert r.json()['item']['data']['prep']=={'plan':True,'notice':True}
     assert put(client2,'/api/social/projects/'+p['id']+'/prep',{'reason':'x','items':{'bogus':True}}).status_code==422
+
+
+def test_project_submit_requires_venue_for_legacy_or_refiled_project(setup_social,client2,app2):
+    pid=setup_social
+    auth(client2,'schooladmin')
+    # 没有场地的旧项目被退回后直接重新提交：被拦下，提示先补培训场地
+    with app2.state.sessions.begin() as db:
+        p=db.get(SocialProject,pid);data=dict(p.data);data.pop('venue',None);p.data=data;p.state='RETURNED'
+    r=action(client2,'projects','social_project',pid,'submit')
+    assert r.status_code==409 and '培训场地' in r.text,r.text
