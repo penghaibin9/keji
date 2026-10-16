@@ -1,5 +1,5 @@
 """老师发起的申请：社会培训课申报、培训课程申请、培训基地申请。审批规则见 approvals.py，业务口径见 applications.py。"""
-from fastapi import APIRouter, Request, HTTPException
+from fastapi import APIRouter, Request, HTTPException, Query
 from sqlalchemy import select
 from ..core import command, read_operation, serial, workflow, check_version
 from ..reference_data import TeacherCourseTerm, TrainingCourseMaster, term_in_scope
@@ -81,7 +81,19 @@ def mine(request: Request):
 @router.get('/teaching-courses')
 def teaching_courses(request: Request):
     """我的课程：本人 2020-2021 学年以后的教务、超星课，每门课带社会培训课申报状态。"""
-    return read_operation(request, 'portal.read', lambda db, a, s: {'years': apps.my_teaching_courses(db, a.user)})
+    return read_operation(request, 'portal.read', lambda db, a, s: apps.my_courses(db, a.user))
+
+
+@router.get('/online-library')
+def online_library(request: Request, school_year: str = Query('', max_length=20), org_id: str = Query('', max_length=36),
+                   source: str = Query('', pattern='^[0-9]?$'), state: str = Query('', pattern='^(|missing_credit|unapplied|pending|active|stale|unmatched)$'),
+                   q: str = Query('', max_length=100), page: int = Query(1, ge=1)):
+    """在线课程库：教研室看本教研室、学院看本院、学校看全校的超星课。"""
+    def load(db, a, s):
+        if org_id and org_id not in a.org_ids and a.role.kind != 'school':
+            raise HTTPException(403, '组织超出授权范围')
+        return apps.online_library(db, a, school_year, org_id, source, state, q.strip(), page)
+    return read_operation(request, 'records.read', load)
 
 
 @router.get('/{ident}')

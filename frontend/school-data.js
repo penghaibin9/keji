@@ -149,8 +149,8 @@ const cxSplit = v => (Array.isArray(v) ? v : String(v || '').split(/[,，、;；
 const cxTeam = o => { const n = cxSplit(o.team_names), s = cxSplit(o.team_staff_nos); return n.length && n.length === s.length ? [n.map((x, i) => `${x}（${s[i]}）`).join('、')] : [n.join('、'), s.join('、')].filter(Boolean); };
 
 function onlineCards(c, all) {
-  const list = all ? cxOpen.items : cxOpen.items.slice(0, 6);
-  const more = cxOpen.items.length > 6 ? `<p class="small muted mt8">共 ${cxOpen.items.length} 门 · ${all ? c.link('收起', 'online-all', '0') : c.link('显示全部', 'online-all', '1')}</p>` : '';
+  const list = all ? cxOpen.items : cxOpen.items.slice(0, 3);
+  const more = cxOpen.items.length > 3 ? `<p class="small muted mt8">共 ${cxOpen.items.length} 门 · ${all ? c.link('收起', 'online-all', '0') : c.link('显示全部', 'online-all', '1')}</p>` : '';
   return `<div class="online-cards">${list.map((o, i) => onlineCard(c, o, i)).join('')}</div>${more}`;
 }
 

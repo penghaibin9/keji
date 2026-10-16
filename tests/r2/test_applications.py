@@ -94,9 +94,11 @@ def test_teaching_course_goes_dept_college_school_and_resumes_at_returned_level(
         master = db.scalar(select(TrainingCourseMaster).where(TrainingCourseMaster.code == d['item']['code']))
         assert master and master.name == '高等数学' and master.source == '学历课申报为社会培训课'
     auth(c, 'teacher')
-    years = c.get('/api/applications/teaching-courses').json()['years']
-    k1 = next(i for y in years for i in y['items'] if i['course_code'] == 'K1')
+    courses = c.get('/api/applications/teaching-courses').json()['courses']
+    k1 = next(i for i in courses if i['course_code'] == 'K1')
     assert k1['application']['state'] == 'ACTIVE'
+    # 挂了 K1 的超星课是同一门课，也显示已入库。
+    assert next(i for i in courses if i['course_code'] == 'X1')['application']['state'] == 'ACTIVE'
 
 
 def test_vacant_dept_is_handled_by_college_marked_and_same_person_flagged(app2, client2):
@@ -156,3 +158,27 @@ def test_base_application_college_then_school_and_withdraw(app2, client2):
     # 已办结的申请不能再补传附件或修改。
     auth(c, 'teacher')
     assert c.get('/api/social/objects/social_resource/' + ident).status_code == 200
+
+
+def test_online_library_scope_cards_and_quality(app2, client2):
+    c = client2
+    setup(app2)
+    with app2.state.sessions.begin() as db:
+        db.add(TeacherCourseTerm(external_key='CX|J001|X3|2025-2026-2', origin='CX', staff_no='J001', teacher_name='测试教师一', course_code='X3',
+                                 course_name='茶艺入门', term_name='2025-2026-2', credit=None, hours=16, source='测试', extra={'course_source': '2', 'edited_at_source': '2020-01-01'}))
+        db.add(TeacherCourseTerm(external_key='CX|Z999|X9|2025-2026-1', origin='CX', staff_no='Z999', teacher_name='外聘', course_code='X9',
+                                 course_name='无账号课', term_name='2025-2026-1', credit=1, hours=8, source='测试', extra={}))
+    auth(c, 'teacher')
+    assert c.get('/api/applications/online-library').status_code == 403
+    mine = c.get('/api/applications/teaching-courses').json()['courses']
+    tea = next(x for x in mine if x['course_name'] == '茶艺入门')
+    assert len(tea['terms']) == 2 and tea['credit'] is None and tea['problems']  # 两个学期合成一张卡，最新学期缺学分
+    auth(c, 'collegehead')
+    d = c.get('/api/applications/online-library').json()
+    assert {x['course_name'] for x in d['items']} == {'高数线上版', '茶艺入门'}
+    assert d['quality']['linked_jw'] == 1 and d['quality']['missing_credit'] == 1 and d['quality']['stale'] == 1 and d['quality']['unmatched'] == 0
+    assert c.get('/api/applications/online-library', params={'state': 'missing_credit'}).json()['total'] == 1
+    auth(c, 'otherdept')
+    assert c.get('/api/applications/online-library').json()['total'] == 0
+    auth(c, 'schooladmin')
+    assert c.get('/api/applications/online-library').json()['quality']['unmatched'] == 1

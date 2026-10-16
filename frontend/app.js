@@ -1,6 +1,6 @@
 import {icons} from './icons.js';
 import {socialPage,socialAction} from './social-training.js?v=20261014-ui1';
-import {applicationAction,myApplicationsHtml,homeApplicationsHtml} from './applications.js?v=20261016-apply1';
+import {applicationAction,myApplicationsHtml,homeApplicationsHtml,myCoursesHtml,libraryHtml,libraryFilterSubmit,homeCoursesHtml,courseAction} from './applications.js?v=20261016-apply1';
 import {nextCode,runBatch,batchStage,batchMode,batchPerformer,BATCH_LABELS} from './approval-flow.js?v=20261012-streamline1';
 import {ledgerPage,resourceStatsPage,homeIndicators,ledgerAction,resetLedgerView,minePage,mineReminders} from './social-ledgers.js?v=20261014-school-review1';
 import {rosterSection,rosterHandlers,onlineHandlers,showStaffDetail,showCourseDetail,presetRoster,loadCodeTables} from './school-data.js?v=20261014-school-review1';
@@ -498,7 +498,7 @@ async function boot(){
  periods=loaded[0].items;teachers=loaded[1].items;orgs=loaded[2].items;businessConfig=loaded[3];Object.assign(labels,businessConfig.status_labels||{});
  let restored;try{restored=restoreNavigation(location.hash,titles)}catch{location.hash='';restored=restoreNavigation('',titles)}/* 地址栏筛选参数写坏时回到首页，不让登录后白屏 */
  page=restored.page;filter=restored.filter;periodId=restored.periodId;
- if(!location.hash.replace('#','')&&me.role.kind==='teacher'&&pageAllowed('mine'))page='mine';
+ // 老师登录后落在菜单第一项“工作总览”（要处理的事、我的申请、我的超星课都在这里）。
  shell();mountDemoSwitcher();mountIdentitySwitcher();await render();
 }
 // 一人多身份：右上角切换当前办理身份，旁边提示其他身份的待办数
@@ -678,13 +678,16 @@ const pages={
  async creditreview(){return creditReviewPage()},
  async credits(){
   const admin=me.role.kind==='school'&&me.user.is_admin===true;
-  const options=[['summary','学年学分汇总'],['detail','授课明细'],...(admin?[['catalogue','课程总库']]:[])];
+  // 老师：“我的课程”分学分汇总、教务课、超星课；教研室、学院、学校另有“在线课程库”。
+  const options=me.role.kind==='teacher'?[['summary','学分汇总'],['jw','教务课'],['cx','超星课']]:[['summary','学年学分汇总'],['detail','授课明细'],['library','在线课程库'],...(admin?[['catalogue','课程总库']]:[])];
   const tab=options.some(([k])=>k===filter.tab)?filter.tab:'summary';
   const tabbar=`<div class="subtabs">${options.map(([k,l])=>`<button class="${tab===k?'active':''}" data-action="credits-tab" data-id="${k}">${l}</button>`).join('')}</div>`;
   const keep=`<input type="hidden" name="tab" value="${esc(tab)}">`;
   const bar=(fields,hint)=>`<form id="filters" class="filterbar">${keep}${fields}<button class="btn primary" type="submit">筛选</button>${act('重置','reset-filters','','text')}</form>${hint?`<p class="small muted" style="padding:0 16px 12px">${esc(hint)}</p>`:''}`;
   const qBox=ph=>`<input name="q" placeholder="${esc(ph)}" aria-label="关键词" value="${esc(filter.q||'')}">`;
   const desc='教务授课按课程号到课程总库取学分，超星课程用自带学分（只算创建人）；同一学年两个学期合计，只统计 2020-2021 学年及以后。拉取来的课先“待认定”，学校（教务处）认定后才计学分学时和积分。';
+  if(tab==='jw'||tab==='cx')return pageHead(desc)+tabbar+await myCoursesHtml(socialContext(),tab,filter.school_year||'');
+  if(tab==='library')return pageHead(desc)+tabbar+await libraryHtml(socialContext());
   if(tab==='summary'){
    const d=await api('/reference/teacher-credits?'+query({...pick(filter,['q','school_year','problem','org_id','review']),page:tablePage,size:20}));view=d;
    const orgPick=me.role.kind==='college'||me.role.kind==='school'?`<select name="org_id" aria-label="教研室"><option value="">${me.role.kind==='school'?'全部学院和教研室':'全部教研室'}</option>${orgs.filter(o=>o.active!==false&&o.kind!=='school').map(o=>`<option value="${esc(o.id)}" ${filter.org_id===o.id?'selected':''}>${o.kind==='dept'?'　':''}${esc(o.name)}</option>`).join('')}</select>`:'';
@@ -850,8 +853,8 @@ async function teacherHome(){
  const todo=`<section class="card teacher-todo"><div class="card-head"><div><h2>需要我处理 <span class="workbench-count">${todos.length}</span></h2></div>${link('全部待办','nav','todos')}</div>${todos.length?mineReminders(ledgerContext(),m,4)+(todos.length>4?`<p class="small muted card-pad">另有 ${todos.length-4} 项提醒</p>`:''):m?`<div class="teacher-todo-clear"><span>✓</span><p>都处理完了。有新的待办会在这里提醒你。</p></div>`:`<p class="card-pad muted">待办暂时没有加载出来，请稍后刷新或打开“个人培训”查看。</p>`}</section>`;
  const points=pts?`<section class="card teacher-points"><div class="card-head"><div><h2>我的社会培训积分</h2></div>${pageAllowed('points')?link('积分明细','nav','points'):''}</div><div class="card-pad"><div class="teacher-points-now"><strong>${number(pts.year,2)}</strong><small>分 · ${year} 年已认定</small></div><div class="teacher-points-bar" role="img" aria-label="近五年累计 ${number(five,2)} 分，目标 ${number(target)} 分"><span style="width:${pct.toFixed(1)}%"></span></div><p class="teacher-points-meta">近五年累计 <b>${number(five,2)}</b> / ${number(target)} 分 · 职称折算 ${pts.title_points==null?'待核定':esc(pts.title_points)+' 分（按归档口径试算）'}</p>${pts.trial!=null?`<p class="teacher-points-meta">另有 ${number(pts.trial,2)} 分还在审批中</p>`:''}</div></section>`:'';
  const notices=`<section class="card"><div class="card-head"><h2>政策通知</h2>${can('notice.read')?link('查看全部','nav','notices'):''}</div><div class="card-pad">${(n?.items||[]).map(x=>`<button class="notice-row" data-action="notice" data-id="${esc(x.id)}"><span>${esc(x.title)}</span><time>${esc(x.created_at?.slice(0,10))}</time></button>`).join('')||'<p class="muted teacher-empty-line">暂无政策通知。</p>'}</div></section>`;
- const applications=await homeApplicationsHtml(socialContext());
- return `<div class="teacher-home">${hero}${todo}${applications}<div class="teacher-home-grid">${points}${a?myAssessmentCard(a.assessment,a.period,{link:true}):''}</div>${notices}</div>`;
+ const [applications,courses]=await Promise.all([homeApplicationsHtml(socialContext()),homeCoursesHtml(socialContext())]);
+ return `<div class="teacher-home">${hero}${todo}${applications}${courses}<div class="teacher-home-grid">${points}${a?myAssessmentCard(a.assessment,a.period,{link:true}):''}</div>${notices}</div>`;
 }
 async function qualificationForm(id){const cats=await api('/qualification-categories');let x=id?(await api('/qualifications/'+id)).qualification:{};
  const info=field('category','资质类别','select',x.category||cats.categories[0],{options:[...new Set([...(x.category?[x.category]:[]),...cats.categories])]})+field('name','证书名称','text',x.name||'')+field('certificate_no','证书编号','text',x.certificate_no||'')+field('issuer','发证机构','text',x.issuer||'')+field('obtained','取得日期','date',x.obtained||'')+field('expires','有效期至','date',x.expires||'',{required:false,hint:'长期有效可留空；判定考核资质以周期结束日是否有效为准。'});
@@ -1634,9 +1637,13 @@ const handlers={
 };
 for(const action of ['tz-year','tz-upload','tz-preview','tz-submit','tz-detail','tz-back','tz-filter','tz-fill','tz-review-save','tz-tab','tz-drafts','tz-figure','tz-targets-save','tz-suggest','tz-conflicts','tz-conflict-save','tz-conflict-withdraw','tz-bind-person','tz-bind-project','tz-bind-owner'])handlers[action]=id=>ledgerAction(action,id,ledgerContext());
 for(const action of ['social-detail','social-project-new','social-project-edit','social-course-new','social-resource-new','social-resource-edit','social-claim-new','social-annual-new','social-policy-new','social-duties','social-transition','social-upload','social-export','social-close','social-unit-import','social-course-for-project','social-review-new','social-note','social-claim-edit','social-annual-edit','social-course-resources','social-course-import','social-correction-new','social-correction-edit','social-report-new','social-print','social-list-page','social-list-search','social-list-reset','social-resource-page','social-project-lookup','social-course-chaoxing','social-policy-recommended','social-policy-calendar','social-policy-edit','social-policy-copy','social-upload-retry','social-handle','social-next','social-materials'])handlers[action]=id=>socialAction(action,id,socialContext());
+for(const action of ['mc-detail','lib-detail','mc-apply','lib-state','lib-reset','lib-page'])handlers[action]=id=>courseAction(action,id,socialContext());
+handlers['mc-year']=id=>{filter={tab:filter.tab,...(id?{school_year:id}:{})};return render()};
+handlers['nav-mycourses']=id=>nav('credits',{tab:id});
 for(const action of ['app-detail','app-edit','app-upload','app-approve','app-return','app-submit','app-withdraw','app-course-new','app-base-new'])handlers[action]=id=>applicationAction(action,id,socialContext());
 handlers['todos-tab']=id=>{todoTab=id==='mine'?'mine':'handle';closeModal();return page==='todos'?render():nav('todos')};
 for(const action of ['impl-draft-diff','impl-quick-trial','impl-quick-publish','impl-quick-disable','impl-step','impl-handover','impl-copy','impl-materials','impl-credential-meta','impl-acceptance','impl-probe','impl-publish','impl-health','impl-reset','impl-login-test'])handlers[action]=id=>handleImplementationAction(action,id,implementationContext());
+document.addEventListener('submit',async e=>{if(e.target.id!=='lib-filters')return;e.preventDefault();libraryFilterSubmit(e.target);try{await render()}catch(err){toast(err.message,true)}});
 document.addEventListener('submit',async e=>{if(e.target.id!=='social-search-form')return;e.preventDefault();try{await socialAction('social-list-apply','',socialContext())}catch(err){toast(err.message,true)}});
 document.addEventListener('click',async e=>{const target=e.target.closest('[data-action]');if(!target||target.disabled)return;const fn=handlers[target.dataset.action];if(!fn){toast('此操作入口暂不可用',true);return}actionTrigger=target;captureQueue(target);target.disabled=true;try{await fn(target.dataset.id,target)}catch(err){toast(err.message,true)}finally{if(target.isConnected)target.disabled=false;actionTrigger=null}});
 let lookupTimer;document.addEventListener('input',e=>{const input=e.target;if(!input.matches('.teacher-lookup,.filter-teacher'))return;clearTimeout(lookupTimer);lookupTimer=setTimeout(async()=>{try{const d=await api('/teachers?'+query({q:input.value,size:50}));for(const t of d.items)if(!teachers.find(x=>x.id===t.id))teachers.push(t);const list=document.getElementById(input.getAttribute('list'));if(list)list.innerHTML=d.items.map(t=>`<option value="${esc(t.staff_no)}">${esc(t.name)}</option>`).join('');const chosen=teachers.find(t=>t.staff_no===input.value);if(input.matches('.teacher-lookup')){const hidden=input.parentElement.querySelector('input[type=hidden]');if(hidden)hidden.value=chosen?.id||''}}catch(err){toast(err.message,true)}},280)});

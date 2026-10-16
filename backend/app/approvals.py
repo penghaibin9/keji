@@ -211,7 +211,7 @@ def progress(db, flow, obj, applicant, *, returned_level=None):
                         since=_iso(arrived), waiting_days=max(waited, 0))
             step = i + 2
             headline = title + (('（' + '、'.join(names) + '）') if names else '') + '正在' + node['label'][-2:] + \
-                ('，已等 %d 天' % waited if waited > 0 else '') + '。无需你操作。'
+                ('，已等 %d 天' % waited if waited > 0 else '') + '。'
             if acting:
                 headline += '本级' + acting + '。'
         nodes.append(node)

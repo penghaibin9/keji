@@ -413,3 +413,28 @@
 .apply-home-row{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,2fr) auto;gap:14px;align-items:center;padding:10px 0;border-bottom:1px solid var(--line)}
 .apply-home-row:last-child{border-bottom:0}
 @media(max-width:640px){.apply-home-row{grid-template-columns:1fr}}
+
+/* 我的课程、在线课程库：同一门课一张卡，中间三格数字，底部社会培训课申报状态 */
+.mc-cards{display:grid;grid-template-columns:repeat(auto-fill,minmax(250px,1fr));gap:14px;margin-top:12px}
+.mc-card{display:flex;flex-direction:column;border:1px solid var(--line);border-radius:12px;overflow:hidden;background:#fff;min-width:0}
+.mc-cover{position:relative;height:110px;border:0;padding:0;cursor:pointer;background:linear-gradient(140deg,#7a4fd6,#195bfa);color:#fff;overflow:hidden}
+.mc-cover img{position:absolute;inset:0;width:100%;height:100%;object-fit:cover}
+.mc-origin,.mc-terms{position:absolute;top:8px;padding:2px 8px;border-radius:999px;background:#0f172acc;font-size:12px;font-weight:600}
+.mc-origin{left:8px}.mc-terms{right:8px}
+.mc-body{display:flex;flex-direction:column;gap:4px;padding:10px 12px 12px;font-size:13px;flex:1;min-width:0}
+.mc-body strong{font-size:15px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.mc-body p{margin:0}
+.mc-stats{display:grid;grid-template-columns:repeat(3,1fr);margin:6px 0;border:1px solid var(--line);border-radius:8px;text-align:center}
+.mc-stats span{display:flex;flex-direction:column;padding:6px 0;font-size:12px;color:var(--muted)}
+.mc-stats span+span{border-left:1px solid var(--line)}
+.mc-stats b{font-size:16px;color:var(--ink)}
+.mc-problem{color:var(--amber);font-size:12px;line-height:1.5}
+.mc-status{display:flex;align-items:center;justify-content:space-between;gap:8px;margin-top:auto;padding-top:8px;border-top:1px dashed var(--line);font-size:12px;color:#1245c7}
+.mc-status.ok{color:#15803d}.mc-status.warn{color:var(--red)}.mc-status.muted{color:var(--muted)}
+.mc-home-stats{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-bottom:8px}
+.mc-home-stats span{display:flex;flex-direction:column;padding:10px;border-radius:10px;background:var(--blue-pale);font-size:12px;color:var(--muted)}
+.mc-home-stats b{font-size:20px;color:var(--ink)}
+.lib-tiles{display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:10px}
+.lib-tile{display:flex;flex-direction:column;align-items:flex-start;gap:2px;padding:12px;border:1px solid var(--line);border-radius:10px;background:#fff;text-align:left;cursor:pointer}
+.lib-tile b{font-size:22px}.lib-tile small{color:var(--muted);font-size:12px}
+.lib-tile.active{border-color:var(--blue);box-shadow:0 0 0 2px #dbe7ff}

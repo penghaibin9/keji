@@ -10,7 +10,7 @@ from fastapi import HTTPException
 from sqlalchemy import select
 from .core import serial, school_today
 from .models import User, Org, Setting, Period, PointBalance, PointEntry
-from .reference_data import TeacherCourseTerm, TrainingCourseMaster, annual_teaching_credits, school_year_of, term_in_scope, UNKNOWN_YEAR
+from .reference_data import TeacherCourseTerm, TrainingCourseMaster, annual_teaching_credits, school_year_of, school_year_now, term_in_scope, UNKNOWN_YEAR
 from .social_models import SocialResource, SocialProject
 from .social_schemas import TEACHING_MODES, IDEOLOGY, BASE_USAGES
 from . import approvals as ap
@@ -81,14 +81,27 @@ def read_check(db, a, obj):
 
 # ---- 社会培训课：老师本人的教务、超星课 ----
 
-def course_identity(db, row):
-    """同一门课只申报一次：超星课关联了本人同学年教过的教务课时，按那门教务课算。"""
+def _norm(name):
+    return ' '.join(str(name or '').split())
+
+
+def jw_codes(db, staff_nos=None):
+    """{(工号, 教务课号)}：判断超星课是否挂到本人教过的教务课。"""
+    q = select(TeacherCourseTerm.staff_no, TeacherCourseTerm.course_code).where(TeacherCourseTerm.origin == 'JW', TeacherCourseTerm.active.is_(True))
+    if staff_nos is not None:
+        q = q.where(TeacherCourseTerm.staff_no.in_(sorted(staff_nos) or ['']))
+    return set(db.execute(q).all())
+
+
+def course_identity(db, row, jw=None):
+    """同一门课只申报一次、只算一次分：教务课按课程号；超星课按课程名（每学期一个超星课号也算同一门），
+    挂了本人教过的教务课时按那门教务课算。"""
     link = str((row.extra or {}).get('jw_course_code') or '').strip()
-    if row.origin == 'CX' and link and db.scalar(select(TeacherCourseTerm.id).where(
-            TeacherCourseTerm.staff_no == row.staff_no, TeacherCourseTerm.origin == 'JW', TeacherCourseTerm.course_code == link,
-            TeacherCourseTerm.active.is_(True)).limit(1)):
-        return 'JW|' + link
-    return row.origin + '|' + row.course_code
+    if row.origin == 'CX':
+        if link and (row.staff_no, link) in (jw if jw is not None else jw_codes(db, [row.staff_no])):
+            return 'JW|' + link
+        return 'CX|' + _norm(row.course_name)
+    return 'JW|' + row.course_code
 
 
 def application_code(teacher_id, identity):
@@ -131,31 +144,131 @@ def applications_by_code(db, codes):
     return out
 
 
-def my_teaching_courses(db, user):
-    """“我的课程”：本人 2020-2021 学年以后的教务、超星课，按学年分组，每门课带社会培训课申报状态。"""
+ONLINE_KEYS = ('cover_url', 'course_url', 'group_name', 'chapters', 'course_type', 'course_source', 'archived', 'team_names', 'team_staff_nos',
+               'jw_course_code', 'nature', 'course_owner', 'major', 'period_text', 'created_at_source', 'edited_at_source')
+
+
+def course_problems(origin, credit):
+    if credit is not None:
+        return []
+    if origin == 'CX':
+        return ['超星没填学分：这门课暂不计授课学分。请在超星平台补上，下周同步后自动更新；不影响申报为社会培训课。']
+    return ['课程总库里这门课没有学分：暂不计授课学分，请联系教务处核对；不影响申报为社会培训课。']
+
+
+def app_brief(app):
+    return {'id': app.id, 'state': app.state, 'state_label': state_label(app), 'version': app.version} if app else None
+
+
+def cards_for(db, rows, details, apps_by_code, owner_id):
+    """按“同一门课”合成一张卡：教务课按课程号，超星课按课程名；卡里按学期列出。计分仍按学期逐条算。"""
+    jw = jw_codes(db, {r.staff_no for r in rows})
+    cards = {}
+    for r in sorted(rows, key=lambda r: r.term_name, reverse=True):
+        ident = course_identity(db, r, jw)
+        key = (r.origin, ident)
+        d = details.get(r.id, {})
+        card = cards.get(key)
+        if card is None:
+            extra = r.extra or {}
+            card = cards[key] = {'identity': ident, 'origin': r.origin, 'id': r.id, 'course_code': r.course_code, 'course_name': r.course_name,
+                                 'credit': d.get('credit', r.credit), 'hours': d.get('hours', r.hours), 'description': str(extra.get('description') or '')[:2000],
+                                 **{k: extra.get(k) for k in ONLINE_KEYS if extra.get(k) not in (None, '')}, 'terms': [],
+                                 'application': app_brief(apps_by_code.get(application_code(owner_id, ident))) if owner_id else None}
+        card['terms'].append({'id': r.id, 'term_name': r.term_name, 'school_year': d.get('school_year') or school_year_of(r.term_name) or UNKNOWN_YEAR,
+                              'course_code': r.course_code, 'credit': d.get('credit', r.credit), 'hours': d.get('hours', r.hours),
+                              'counted': d.get('counted'), 'review': d.get('review')})
+    out = list(cards.values())
+    for card in out:
+        card['problems'] = course_problems(card['origin'], card['credit'])
+        card['years'] = sorted({t['school_year'] for t in card['terms']}, reverse=True)
+    return out
+
+
+def my_courses(db, user):
+    """“我的课程”：本人 2020-2021 学年以后的教务、超星课。years 是学年学分汇总，courses 是合并后的课程卡，每张带社会培训课申报状态。"""
     rows = teaching_rows(db, user)
-    groups = {g['school_year']: g for g in annual_teaching_credits(db, rows)} if rows else {}
-    by_id = {r.id: r for r in rows}
-    idents = {r.id: course_identity(db, r) for r in rows}
-    apps = applications_by_code(db, [application_code(user.id, i) for i in idents.values()])
-    years = []
-    for year, g in groups.items():
-        items = []
-        for d in g['details']:
-            row = by_id.get(d['id'])
-            if row is None:
-                continue
-            app = apps.get(application_code(user.id, idents[row.id]))
-            extra = row.extra or {}
-            items.append({**{k: d.get(k) for k in ('id', 'term_name', 'term_no', 'origin', 'course_code', 'course_name', 'credit', 'hours', 'counted', 'review', 'level')},
-                          'cover_url': extra.get('cover_url'), 'course_url': extra.get('course_url'), 'chapters': extra.get('chapters'),
-                          'team_names': extra.get('team_names'), 'jw_course_code': extra.get('jw_course_code'),
-                          'description': str(extra.get('description') or '')[:300],
-                          'identity': idents[row.id],
-                          'application': {'id': app.id, 'state': app.state, 'state_label': state_label(app), 'version': app.version} if app else None})
-        years.append({k: g[k] for k in ('school_year', 'jw_credit', 'cx_credit', 'total_credit', 'hours', 'courses', 'pending_courses', 'pending_credit', 'missing_credit')} | {'items': items})
+    groups = annual_teaching_credits(db, rows) if rows else []
+    details = {d['id']: {**d, 'school_year': g['school_year']} for g in groups for d in g['details']}
+    jw = jw_codes(db, {user.staff_no}) if rows else set()
+    apps = applications_by_code(db, [application_code(user.id, course_identity(db, r, jw)) for r in rows])
+    years = [{k: g[k] for k in ('school_year', 'jw_credit', 'cx_credit', 'total_credit', 'hours', 'courses', 'pending_courses', 'pending_credit', 'missing_credit')} for g in groups]
     years.sort(key=lambda y: (y['school_year'] != UNKNOWN_YEAR, y['school_year']), reverse=True)
-    return years
+    return {'years': years, 'courses': cards_for(db, rows, details, apps, user.id), 'school_year_now': school_year_now()}
+
+
+LIBRARY_STATES = {'missing_credit': '缺学分', 'unapplied': '未申报', 'pending': '审批中', 'active': '已入库'}
+STALE_DAYS = 365
+
+
+def online_library(db, a, school_year='', org_id='', source='', state='', q='', page=1, size=24):
+    """在线课程库：教研室看本教研室、学院看本院、学校看全校的超星课。统计、数据质量和课程卡。"""
+    from datetime import timedelta
+    if a.role.kind == 'teacher':
+        raise HTTPException(403, '在线课程库给教研室、学院和学校使用；老师请在“我的课程”查看本人的超星课')
+    rows = [r for r in db.scalars(select(TeacherCourseTerm).where(TeacherCourseTerm.origin == 'CX', TeacherCourseTerm.active.is_(True))) if term_in_scope(r.term_name)]
+    users = {u.staff_no: u for u in db.scalars(select(User).where(User.staff_no.in_(sorted({r.staff_no for r in rows}) or [''])))}
+    orgs = {o.id: o for o in db.scalars(select(Org))}
+
+    def college_of_user(u):
+        o = orgs.get(u.org_id) if u else None
+        while o is not None and o.kind not in ('college', 'school'):
+            o = orgs.get(o.parent_id)
+        return o
+
+    def visible(r):
+        u = users.get(r.staff_no)
+        if a.role.kind == 'school':
+            return True
+        return u is not None and u.org_id in a.org_ids
+    rows = [r for r in rows if visible(r)]
+    if school_year:
+        rows = [r for r in rows if (school_year_of(r.term_name) or UNKNOWN_YEAR) == school_year]
+    if org_id:
+        rows = [r for r in rows if (u := users.get(r.staff_no)) is not None and (u.org_id == org_id or (orgs.get(u.org_id) and orgs[u.org_id].parent_id == org_id))]
+    by_teacher = {}
+    for r in rows:
+        by_teacher.setdefault(r.staff_no, []).append(r)
+    jw = jw_codes(db, set(by_teacher))
+    codes = []
+    for staff, items in by_teacher.items():
+        u = users.get(staff)
+        if u:
+            codes += [application_code(u.id, course_identity(db, r, jw)) for r in items]
+    apps = applications_by_code(db, codes)
+    cards = []
+    for staff, items in by_teacher.items():
+        u = users.get(staff)
+        for card in cards_for(db, items, {}, apps, u.id if u else None):
+            college = college_of_user(u)
+            card.update(staff_no=staff, teacher_name=u.name if u else (items[0].teacher_name or staff), matched=u is not None,
+                        org_name=(orgs[u.org_id].name if u and u.org_id in orgs else ''), college_id=college.id if college else None,
+                        college_name=college.name if college else '未对上老师')
+            cards.append(card)
+    stale_before = (school_today() - timedelta(days=STALE_DAYS)).isoformat()
+    for card in cards:
+        app = card.get('application')
+        card['stale'] = bool(card.get('edited_at_source')) and str(card['edited_at_source'])[:10] < stale_before
+        card['library_state'] = 'active' if app and app['state'] == 'ACTIVE' else 'pending' if app and app['state'] in PENDING_STATES else 'missing_credit' if card['credit'] is None else 'unapplied'
+    colleges = {}
+    for card in cards:
+        x = colleges.setdefault(card['college_name'], {'name': card['college_name'], 'self': 0, 'clone': 0, 'other': 0, 'total': 0})
+        x['total'] += 1
+        x[{'1': 'self', '2': 'clone'}.get(str(card.get('course_source')), 'other')] += 1
+    quality = {'missing_credit': sum(c['credit'] is None for c in cards), 'linked_jw': sum(c['identity'].startswith('JW|') for c in cards),
+               'stale': sum(c['stale'] for c in cards), 'unmatched': sum(not c['matched'] for c in cards)}
+    states = {k: sum(c['library_state'] == k for c in cards) for k in LIBRARY_STATES}
+    if source:
+        cards = [c for c in cards if str(c.get('course_source')) == source]
+    if state:
+        cards = [c for c in cards if c['library_state'] == state or (state == 'stale' and c['stale']) or (state == 'unmatched' and not c['matched'])]
+    if q:
+        cards = [c for c in cards if q in c['course_name'] or q in c['teacher_name'] or q in c['staff_no']]
+    cards.sort(key=lambda c: (str(c.get('edited_at_source') or ''), c['course_name']), reverse=True)
+    total = len(cards)
+    years = sorted({school_year_of(r.term_name) or UNKNOWN_YEAR for r in rows}, reverse=True)
+    return {'items': cards[(page - 1) * size: page * size], 'total': total, 'page': page, 'size': size, 'colleges': sorted(colleges.values(), key=lambda x: -x['total']),
+            'quality': quality, 'states': states, 'state_labels': LIBRARY_STATES, 'years': years, 'stale_days': STALE_DAYS}
 
 
 # ---- 状态与详情 ----

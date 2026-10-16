@@ -15,10 +15,10 @@ function context(online){
  return c;
 }
 
-test('超星课程卡片：标签、缺学分不拿 score 顶替、学时原样、只放前 6 门',async()=>{
+test('超星课程卡片：标签、缺学分不拿 score 顶替、学时原样、只放前 3 门',async()=>{
  await loadCodeTables(async()=>({tables:{}}));
  const c=context(Array.from({length:8},(_,i)=>course(i)));await showStaffDetail(c,'J001');
- assert.equal((c.html.match(/class="online-card[ "]/g)||[]).length,6);
+ assert.equal((c.html.match(/class="online-card[ "]/g)||[]).length,3);
  assert.match(c.html,/共 8 门/);assert.match(c.html,/尔雅课/);assert.match(c.html,/来源：克隆/);
  assert.match(c.html,/缺学分<\/span> · 64\/32 学时 · 12 章/);assert.doesNotMatch(c.html,/2\.50/);
  assert.match(c.html,/学分只算给建课人/);assert.match(c.html,/data-action="online-all" data-id="1">显示全部/);
