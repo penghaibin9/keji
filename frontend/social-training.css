@@ -463,3 +463,32 @@ body:has(#modal-root:not(.hidden)) .toast-stack{top:auto;bottom:24px;right:24px;
 .social-workspace .pagehead:has(.page-actions){align-items:flex-start!important}
 /* 申请详情：宽屏两列，少滚动，办理按钮和关键信息同屏 */
 @media(min-width:1000px){.modal .apply-progress+dl.kv{grid-template-columns:110px minmax(0,1fr) 110px minmax(0,1fr);gap:12px 20px}}
+
+/* 2026-10-16 教师端界面审计：页签统一、空状态、筛选与统计卡 */
+/* 页签：全站统一为下划线页签（原来有带框按钮、左侧蓝条、卡片内方框三种样式） */
+html body .content .section-tabs,html body .content .subtabs{display:flex;flex-wrap:nowrap;gap:4px;overflow-x:auto;margin:0 0 16px;padding:0 2px;background:transparent;border:0;border-bottom:1px solid var(--line);border-radius:0;box-shadow:none;scrollbar-width:none}
+html body .content .section-tabs::-webkit-scrollbar,html body .content .subtabs::-webkit-scrollbar{display:none}
+html body .content .section-tabs button,html body .content .subtabs button{flex:none;display:inline-flex;align-items:center;gap:6px;min-height:44px;margin:0 0 -1px;padding:10px 16px;border:0;border-bottom:2px solid transparent;border-radius:0;background:transparent;box-shadow:none;color:#5b6b82;font-size:14px;font-weight:500;white-space:nowrap}
+html body .content .section-tabs button:hover,html body .content .subtabs button:hover{color:var(--blue);background:transparent}
+html body .content .section-tabs button.active,html body .content .subtabs button.active{color:var(--blue);border-bottom-color:var(--blue);background:transparent;font-weight:650}
+html body .content .section-tabs button span{display:inline-block;min-width:20px;padding:0 6px;border-radius:999px;background:#eef3fb;color:#5b6b82;font-size:12px;line-height:20px;text-align:center}
+html body .content .section-tabs button.active span{background:#e5edff;color:var(--blue)}
+@media(max-width:740px){html body .content .section-tabs button,html body .content .subtabs button{padding:10px 12px}}
+/* 统计卡里放文字（周期名、“未认定”）时不用数字的超大字号 */
+.summary-item strong.summary-text{font-size:16px;font-weight:600;margin-top:12px;letter-spacing:0}
+html body .kpi .kpi-value.kpi-text{font-size:20px;line-height:1.6}
+/* 个人培训：空待办改成一行提示；“更多”入口收紧 */
+.mine-todo-empty{display:flex;align-items:center;gap:8px;padding-top:4px!important;font-size:14px}
+.mine-todo-empty .icon{width:18px;height:18px;color:#16a34a}
+.mine-todo .card-head{border-bottom:0}
+html body .mine-more{gap:4px 6px}
+html body .mine-more .btn,html body .mine-more button{padding:4px 10px;border-radius:999px;background:#f1f5fb}
+html body .mine-more .btn:hover,html body .mine-more button:hover{background:#e5edff}
+/* 我的考核：“历年考核记录”折叠标题不再像大标题 */
+.teacher-assess-list>summary{font-size:14px;font-weight:600;color:var(--blue);padding:10px 2px}
+/* 表单里的勾选项：横排对齐、正常字重 */
+.form-field label.flex{display:inline-flex;align-items:center;gap:8px;font-weight:400;color:var(--ink,#1e293b);font-size:14px;margin:4px 0 0;cursor:pointer}
+.form-field label.flex input[type=checkbox]{width:16px;height:16px;margin:0;flex:none;accent-color:var(--blue)}
+/* 老师的筛选只有一两个下拉框时，不拉满整行 */
+body[data-role="teacher"] .filterbar select{max-width:280px}
+body[data-role="teacher"] .content .filterbar .field-search{max-width:420px}

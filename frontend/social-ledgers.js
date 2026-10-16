@@ -288,7 +288,7 @@ export async function homeIndicators(c, stats, extra = '', more = '') {
     const permission = {qualifications: 'qualification.read', points: 'points.read', records: 'records.read'}[key];
     if (o.sections?.[key] === false || !c.can(permission)) return '';
     explanations.push(`<li><strong>${c.esc(label)}</strong><span>${c.esc(foot)}</span></li>`);
-    return `<button type="button" class="kpi" data-action="nav" data-id="${target}" ${c.pageAllowed(target) ? '' : 'disabled'}><span class="kpi-label">${c.esc(label)}</span><span class="kpi-icon">${c.icon(ico)}</span><div class="kpi-value">${value}<small>${c.esc(unit)}</small></div>${brief ? `<div class="kpi-foot">${c.esc(brief)}</div>` : ''}</button>`;
+    return `<button type="button" class="kpi" data-action="nav" data-id="${target}" ${c.pageAllowed(target) ? '' : 'disabled'}><span class="kpi-label">${c.esc(label)}</span><span class="kpi-icon">${c.icon(ico)}</span><div class="kpi-value${/^[\d.,\-]+$/.test(String(value)) ? '' : ' kpi-text'}">${value}<small>${c.esc(unit)}</small></div>${brief ? `<div class="kpi-foot">${c.esc(brief)}</div>` : ''}</button>`;
   };
   const achievements = card(teacher || dept ? '所属学院培训成果' : '培训成果', c.number(o.achievements?.total), '项', `${teacher ? '你所在学院今年登记的成果：' : ''}国家级 ${al.national ?? 0} · 省级 ${al.province ?? 0} · 校级 ${al.school ?? 0}`, 'outcomes', 'award', teacher ? '' : o.achievements?.total ? `国家级 ${al.national ?? 0} · 省级 ${al.province ?? 0} · 校级 ${al.school ?? 0}` : `${o.year} 年还没有登记成果`);
   // 双师型合成一格：人数是主数，初/中/高级放在格子下方，不再单独占一格。
@@ -389,7 +389,7 @@ export async function minePage(c, stats) {
   const indicators = await homeIndicators(c, stats);
   // 老师打开先看“要我做什么”：待办放最上面，有事时加醒目边框；暂时不能申报积分的原因也写在这里。
   const todo = `<section class="card mine-todo${m.reminders.length ? ' has-items' : ''}"><div class="card-head"><div><h2>需要我处理 <span class="workbench-count">${m.reminders.length}</span></h2></div></div>` +
-    (m.reminders.length ? mineReminders(c, m) : `<p class="card-pad muted">暂无待办</p>`) +
+    (m.reminders.length ? mineReminders(c, m) : `<p class="card-pad muted mine-todo-empty">${c.icon('check')}暂无待办，有新事项会显示在这里。</p>`) +
     (blocked ? `<details class="mine-claim-blocked"><summary>积分申报暂未开放</summary><p>${e(ready.reason)}</p></details>` : '') + `</section>`;
   const claimCell = p => {
     if (p.claim) return e(p.claim.state_label);
