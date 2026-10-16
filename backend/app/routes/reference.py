@@ -11,7 +11,7 @@ from ..core import *
 from ..schemas import ParticipationIn,ParticipationUpdate,Reason,CreditReviewIn,CreditLevelIn,CxClaimIn,CxClaimDecisionIn
 from pydantic import Field
 from .. import code_tables as codes
-from ..reference_data import TrainingProjectMaster,TrainingCourseMaster,TrainingClassMaster,TeacherParticipation,TeacherHrProfile,TeacherCourseTerm,SchoolCourse,annual_teaching_credits,UNKNOWN_YEAR,record_reference_errors,staff_roster,school_year_now,school_year_of,ROSTER_PROBLEMS,HR_PRIVATE_KEYS,credit_summary,source_status,CREDIT_REVIEW_KIND,credit_review_code,credit_reviews,can_review_credits
+from ..reference_data import TrainingProjectMaster,TrainingCourseMaster,TrainingClassMaster,TeacherParticipation,TeacherHrProfile,TeacherCourseTerm,SchoolCourse,annual_teaching_credits,UNKNOWN_YEAR,record_reference_errors,staff_roster,school_year_now,school_year_of,ROSTER_PROBLEMS,HR_PRIVATE_KEYS,credit_summary,source_status,CREDIT_REVIEW_KIND,credit_review_code,credit_reviews,can_review_credits,term_in_scope,year_in_scope,MIN_SCHOOL_YEAR
 from ..social_models import SocialResource
 from ..social_training import check_conflicts
 from ..read_queries import authorized_org_descendants
@@ -157,6 +157,7 @@ def _private_ok(db,a):
 def _school_year(f):
     year=f.get('school_year') or school_year_now()
     if school_year_of(year)!=year:raise HTTPException(422,'学年格式应为 2025-2026')
+    if not year_in_scope(year):raise HTTPException(422,'只统计 '+MIN_SCHOOL_YEAR+' 学年及以后')
     return year
 
 @router.get('/reference/staff-roster')
@@ -190,6 +191,7 @@ def staff_roster_detail(staff_no:str,request:Request):
         row=staff_roster(db,[profile],school_year=school_year_now(),private=_private_ok(db,a))[0]
         terms=db.scalars(select(TeacherCourseTerm).where(TeacherCourseTerm.staff_no==staff_no,TeacherCourseTerm.active.is_(True))).all()
         years=[{k:g[k] for k in ('school_year','jw_credit','cx_credit','total_credit','courses','missing_credit','pending_credit','pending_courses','excluded_courses')} for g in annual_teaching_credits(db,terms)]
+        terms=[t for t in terms if term_in_scope(t.term_name)]
         online=[{'course_code':t.course_code,'course_name':t.course_name,'term_name':t.term_name,'credit':t.credit,'hours':t.hours,
                  **{k:(t.extra or {}).get(k) for k in ONLINE_EXTRA_KEYS},
                  'description':str((t.extra or {}).get('description') or '')[:2000]}
@@ -218,6 +220,10 @@ def source_status_view(request:Request):
         return {'school_year':year,'items':source_status(db,school_year=year)}
     return read_operation(request,'portal.read',load)
 
+def old_terms(db):
+    """Term names of active teaching rows before the first counted school year (hidden, not deleted)."""
+    return sorted(t for t in db.scalars(select(TeacherCourseTerm.term_name).where(TeacherCourseTerm.active.is_(True)).distinct()) if not term_in_scope(t))
+
 @router.get('/reference/teacher-courses')
 def teacher_courses(request:Request):
     """Teacher-course-term rows from the 教务 schedule (JW) and 超星 course library (CX)."""
@@ -234,6 +240,7 @@ def teacher_courses(request:Request):
             if f.get(key):q=q.where(getattr(TeacherCourseTerm,key)==f[key])
         if f.get('q'):
             word=f['q'];q=q.where(TeacherCourseTerm.course_name.contains(word,autoescape=True)|TeacherCourseTerm.course_code.contains(word,autoescape=True)|TeacherCourseTerm.teacher_name.contains(word,autoescape=True)|TeacherCourseTerm.staff_no.contains(word,autoescape=True))
+        q=q.where(TeacherCourseTerm.term_name.not_in(old_terms(db) or ['']))
         return page_result(db,q.order_by(TeacherCourseTerm.term_name.desc(),TeacherCourseTerm.staff_no,TeacherCourseTerm.course_code),p,z)
     return read_operation(request,'records.read',load)
 
@@ -320,7 +327,7 @@ def teacher_credits(request:Request):
         def wanted(x):
             # “需核对”和“待认定”两个筛选同时勾选时取交集。
             return (not problem or bool(x['missing_credit'] or not x['user_id'] or not x['in_staff_table'])) and (not pending or x['pending_courses']>0)
-        pairs=list(db.execute(q.with_only_columns(TeacherCourseTerm.staff_no,TeacherCourseTerm.term_name).distinct()))
+        pairs=[(staff,term) for staff,term in db.execute(q.with_only_columns(TeacherCourseTerm.staff_no,TeacherCourseTerm.term_name).distinct()) if term_in_scope(term)]
         groups={(staff,school_year_of(term) or UNKNOWN_YEAR) for staff,term in pairs}
         years=sorted({year for staff,year in groups},key=lambda y:(y!=UNKNOWN_YEAR,y),reverse=True)
         selected={key for key in groups if not f.get('school_year') or key[1]==f['school_year']}

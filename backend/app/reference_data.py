@@ -293,6 +293,16 @@ def school_year_of(term_name):
     if m:return f'{m.group(1)}-{int(m.group(1))+1}'
     return None
 
+# 只认 2020-2021 学年及以后的授课：教务、超星拉取时更早的课不入库；已经入库的旧课不删，
+# 只是不再显示、不计学分，学年下拉框也不再列出。学期名称认不出学年的仍显示为“未识别学年”。
+MIN_SCHOOL_YEAR='2020-2021'
+
+def year_in_scope(school_year):
+    return school_year is None or school_year==UNKNOWN_YEAR or school_year>=MIN_SCHOOL_YEAR
+
+def term_in_scope(term_name):
+    return year_in_scope(school_year_of(term_name))
+
 _TERM_WORD=re.compile(r'第\s*([一二12])\s*学期|(?:上|下)学期|[-－_ ]\s*([12])\s*$')
 
 @lru_cache(maxsize=8192)
@@ -378,7 +388,7 @@ def annual_teaching_credits(db,rows,*,include_details=True,reviews=None):
     Only courses a reviewer approved add credit and hours; pending ones are totalled
     separately (pending_credit) so teachers see what is still waiting.
     """
-    rows=list(rows)
+    rows=[r for r in rows if term_in_scope(r.term_name)]
     if reviews is None:reviews=credit_reviews(db,[r.id for r in rows])
     def link(r):return str((r.extra or {}).get('jw_course_code') or '').strip()
     catalogue=_catalogue(db,{r.course_code for r in rows if r.origin=='JW'}|{link(r) for r in rows if r.origin=='CX' and link(r)})
@@ -733,7 +743,7 @@ def source_status(db,*,school_year):
         base=(TeacherCourseTerm.origin==origin,)
         no_credit=db.scalar(select(func.count()).select_from(TeacherCourseTerm).where(*base,TeacherCourseTerm.active.is_(True),TeacherCourseTerm.credit.is_(None),
             (~catalogued) if origin=='JW' else true())) or 0
-        terms=db.execute(select(TeacherCourseTerm.term_name,func.count()).where(*base,TeacherCourseTerm.active.is_(True)).group_by(TeacherCourseTerm.term_name)).all()
+        terms=[(t,n) for t,n in db.execute(select(TeacherCourseTerm.term_name,func.count()).where(*base,TeacherCourseTerm.active.is_(True)).group_by(TeacherCourseTerm.term_name)).all() if term_in_scope(t)]
         unknown_year=sum(n for t,n in terms if school_year_of(t) is None)
         not_in_hr=db.scalar(select(func.count()).select_from(TeacherCourseTerm).where(*base,TeacherCourseTerm.active.is_(True),
             ~exists().where(TeacherHrProfile.staff_no==TeacherCourseTerm.staff_no,TeacherHrProfile.active.is_(True)))) or 0
@@ -917,7 +927,7 @@ def _confirm_inbound(db,actor,batch:InboundBatch,expected_version,reason,basis='
         if not key or key!=row.business_key or (key in seen and not duplicate):errors.append('预览业务唯一键异常')
         seen.setdefault(key,normalized)
         if row.errors or errors:raise HTTPException(409,{'row':row.row_no,'errors':row.errors+errors})
-    written=[];unmapped_accounts=0;revoked_sessions=0;done=set()
+    written=[];unmapped_accounts=0;revoked_sessions=0;done=set();skipped_old=0
     for row in rows:
         normalized,errors=validate_inbound(batch.data_type,row.mapped)
         if errors:raise HTTPException(409,{'row':row.row_no,'errors':errors})
@@ -968,6 +978,9 @@ def _confirm_inbound(db,actor,batch:InboundBatch,expected_version,reason,basis='
             audit(db,actor,'teacher_hr',obj.id,'确认数据中台教师人事入库',before=before,after=serial(obj),reason=reason)
             snap={'model':'teacher_hr','created':not before,'before':before,'after':serial(obj),'user_id':user.id if user else None,'user_before':user_before,'user_after':_user_state(user)}
         elif batch.data_type in TEACHING_TYPES:
+            if not term_in_scope(normalized['term_name']):
+                skipped_old+=1
+                written.append({'row_no':row.row_no,'business_key':row.business_key,'skipped':MIN_SCHOOL_YEAR+' 学年以前的课不入库'});continue
             obj=db.scalar(select(TeacherCourseTerm).where(TeacherCourseTerm.external_key==normalized['external_key']).with_for_update())
             user=db.scalar(select(User).where(User.staff_no==normalized['staff_no']))
             values={k:v for k,v in normalized.items() if k not in {'external_key','origin','staff_no','course_code','term_name'}}
@@ -1024,7 +1037,7 @@ def _confirm_inbound(db,actor,batch:InboundBatch,expected_version,reason,basis='
     if batch.data_type=='teacher_hr':
         from .routes.admin import admin_survives
         admin_survives(db)
-    batch.state='COMMITTED';batch.version+=1;batch.receipt={**(batch.receipt or {}),'written':len(written),'rows':written,'unmapped_teacher_accounts':unmapped_accounts,'authorization_changes':revoked_sessions,'committed_at':utcnow().isoformat(),'configuration_hash':batch.configuration_hash,'content_hash':batch.content_hash}
+    batch.state='COMMITTED';batch.version+=1;batch.receipt={**(batch.receipt or {}),'written':len(written),'rows':written,'unmapped_teacher_accounts':unmapped_accounts,'authorization_changes':revoked_sessions,'skipped_before_min_year':skipped_old,'committed_at':utcnow().isoformat(),'configuration_hash':batch.configuration_hash,'content_hash':batch.content_hash}
     audit(db,actor,'inbound',batch.id,'确认数据中台入站整批入库',after=batch.receipt,reason=reason)
     return batch
 

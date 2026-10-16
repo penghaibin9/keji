@@ -683,7 +683,7 @@ const pages={
   const keep=`<input type="hidden" name="tab" value="${esc(tab)}">`;
   const bar=(fields,hint)=>`<form id="filters" class="filterbar">${keep}${fields}<button class="btn primary" type="submit">筛选</button>${act('重置','reset-filters','','text')}</form>${hint?`<p class="small muted" style="padding:0 16px 12px">${esc(hint)}</p>`:''}`;
   const qBox=ph=>`<input name="q" placeholder="${esc(ph)}" aria-label="关键词" value="${esc(filter.q||'')}">`;
-  const desc='教务授课按课程号到课程总库取学分，超星课程用自带学分（只算创建人）；同一学年两个学期合计。拉取来的课先“待认定”，学校（教务处）认定后才计学分学时和积分。';
+  const desc='教务授课按课程号到课程总库取学分，超星课程用自带学分（只算创建人）；同一学年两个学期合计，只统计 2020-2021 学年及以后。拉取来的课先“待认定”，学校（教务处）认定后才计学分学时和积分。';
   if(tab==='summary'){
    const d=await api('/reference/teacher-credits?'+query({...pick(filter,['q','school_year','problem','org_id','review']),page:tablePage,size:20}));view=d;
    const orgPick=me.role.kind==='college'||me.role.kind==='school'?`<select name="org_id" aria-label="教研室"><option value="">${me.role.kind==='school'?'全部学院和教研室':'全部教研室'}</option>${orgs.filter(o=>o.active!==false&&o.kind!=='school').map(o=>`<option value="${esc(o.id)}" ${filter.org_id===o.id?'selected':''}>${o.kind==='dept'?'　':''}${esc(o.name)}</option>`).join('')}</select>`:'';
