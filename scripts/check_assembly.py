@@ -20,6 +20,7 @@ REQUIRED = [
  'backend/app/paged_inbound.py','backend/app/adapters/paged_datahub.py','backend/app/routes/integration_center.py','backend/app/routes/integration_intake.py','backend/app/routes/sso_trial.py',
  'frontend/integration-workspace.js','frontend/integration-drafts.js',
  'backend/app/social_models.py','backend/app/social_schemas.py','backend/app/social_training.py','backend/app/routes/social.py','backend/app/social_export.py','frontend/social-training.js','frontend/social-training.css','backend/social_schema.json','backend/social_release.json','backend/teaching_schema.json','backend/teaching_release.json',
+ 'backend/app/approvals.py','backend/app/applications.py','backend/app/routes/applications.py','frontend/applications.js',
  'backend/app/ledger_check.py','backend/app/routes/ledgers.py','frontend/social-ledgers.js','frontend/school-data.js','frontend/approval-flow.js',
  'backend/app/cli.py','backend/app/grants.py','backend/app/maintenance.py',
  'backend/requirements.txt','backend/app/resources/integration-coordination.xlsx','frontend/index.html','frontend/icons.js','frontend/app.js','frontend/scope.js','frontend/styles.css','frontend/integration.css','frontend/portal.css','frontend/portal-ui.js',

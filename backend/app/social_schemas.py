@@ -367,3 +367,76 @@ class CaseNoteIn(Reason):
         if self.kind=='violation' and not self.basis:raise ValueError('登记或更正正式处理结论必须填写书面依据')
         if self.settlement_result and (self.kind!='settlement' or not self.basis):raise ValueError('结算核验结论仅用于结算事项，须填写财务认定或例外批准依据')
         return self
+
+
+# ---- 老师发起的申请（培训课程、社会培训课、培训基地），审批规则见 approvals.py ----
+TEACHING_MODES = {'lecture':'讲授','practice':'实训实操','case':'案例研讨','onsite':'现场教学','online':'线上自学'}
+IDEOLOGY = {'ideology_course':'思政课程','course_ideology':'课程思政','none':'无'}
+BASE_USAGES = {'practice':'实践教学基地','ideology':'思政实践教学基地'}
+
+
+class CoursewareReview(Input):
+    checked: bool = False
+    reviewer: str = Field(default='', max_length=100)
+    reviewed_on: date | None = None
+    reference: str = Field(default='', max_length=200)
+
+
+class CourseApplyData(Input):
+    # teaching：老师把自己从教务、超星拉来的课申报为社会培训课；manual：直接申请一门培训课程（学院可代老师登记）。
+    source: Literal['teaching', 'manual']
+    course_term_id: Ident | None = None
+    code: str = Field(default='', max_length=64)
+    name: str = Field(default='', max_length=160)
+    project_code: str = Field(default='', max_length=64)
+    teacher_id: Ident | None = None
+    hours: Nonnegative | None = None
+    teaching_mode: Literal['lecture', 'practice', 'case', 'onsite', 'online']
+    ideology: Literal['ideology_course', 'course_ideology', 'none']
+    audience: str = Field(default='', max_length=500)
+    intro: str = Field(default='', max_length=2000)
+    courseware: CoursewareReview = Field(default_factory=CoursewareReview)
+    @model_validator(mode='after')
+    def required(self):
+        if self.source == 'teaching':
+            if not self.course_term_id: raise ValueError('请选择要申报的课程')
+            if not self.audience.strip(): raise ValueError('请填写面向对象（这门课准备面向哪些社会学员）')
+        else:
+            if not self.code.strip() or not self.name.strip(): raise ValueError('请填写课程编号和名称')
+            if self.hours is None: raise ValueError('请填写学时')
+        if self.courseware.checked and not (self.courseware.reviewer.strip() and self.courseware.reviewed_on):
+            raise ValueError('勾选课件已审查时，请填写审查人和审查日期')
+        return self
+
+
+class CourseApplyIn(Reason):
+    data: CourseApplyData
+    expected_version: int | None = Field(default=None, ge=1)
+
+
+class BaseApplyData(Input):
+    teacher_id: Ident | None = None
+    code: Code
+    name: Name
+    location: str = Field(default='', max_length=500)
+    onsite: bool = True
+    recognition: Text
+    usages: list[Literal['practice', 'ideology']] = Field(min_length=1, max_length=2)
+    established_on: date
+    partner: str = Field(default='', max_length=200)
+    project_id: Ident | None = None
+    @model_validator(mode='after')
+    def partner_required(self):
+        if not self.onsite and not self.partner.strip(): raise ValueError('校外基地请填写共建单位')
+        if len(set(self.usages)) != len(self.usages): raise ValueError('基地用途不能重复')
+        return self
+
+
+class BaseApplyIn(Reason):
+    data: BaseApplyData
+    expected_version: int | None = Field(default=None, ge=1)
+
+
+class ApplicationAction(Reason):
+    expected_version: int = Field(ge=1)
+    action: Literal['submit', 'approve', 'return', 'withdraw']
