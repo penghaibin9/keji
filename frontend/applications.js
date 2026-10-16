@@ -114,10 +114,11 @@ export function teachingCourseForm(course, existing = null) {
 }
 
 // 培训课程申请：不来自本人学历课的培训课程（学院、学校可以代老师登记）。
-export function manualCourseForm(existing = null) {
-  const d = existing?.item?.data || {};
+export function manualCourseForm(existing = null, projectCode = '') {
+  const d = existing?.item?.data || {project_code: projectCode};
+  const college = c.me.role.kind === 'college';
   const who = c.me.role.kind === 'teacher' ? '' : c.teacherField(d.teacher_id || '', 'teacher_id', '主讲教师（输入工号或姓名检索）');
-  const body = c.note('学院审批 → 学校（继续教育学院）审批，通过后进入培训课程库。') + who +
+  const body = c.note(college ? '学院登记的课程视为学院已确认，直接到学校（继续教育学院）审批，通过后进入培训课程库。' : '学院审批 → 学校（继续教育学院）审批，通过后进入培训课程库。') + who +
     c.field('code', '课程编号', 'text', d.code || '', {readonly: !!existing}) + c.field('name', '课程名称', 'text', existing?.item?.name || '') +
     c.field('project_code', '关联项目编号', 'text', d.project_code || '', {required: false, hint: '不关联项目可留空。'}) +
     c.field('hours', '学时', 'number', d.hours ?? '', {min: 0, step: '0.5'}) +
@@ -130,7 +131,7 @@ export function manualCourseForm(existing = null) {
       teaching_mode: v.teaching_mode, ideology: v.ideology, intro: v.intro || '', courseware: coursewareValue(v)};
     const r = existing ? await c.api('/applications/courses/' + existing.item.id, {method: 'PUT', body: {data, reason: v.reason, expected_version: existing.item.version}})
       : await c.api('/applications/courses', {method: 'POST', body: {data, reason: v.reason}});
-    c.closeModal(); c.toast(existing ? '已保存，请点“重新提交”' : '已提交，等待学院审批'); await c.renderKeep(); await showApplication(r.item.id);
+    c.closeModal(); c.toast(existing ? '已保存，请点“重新提交”' : college ? '已提交，等待学校审批' : '已提交，等待学院审批'); await c.renderKeep(); await showApplication(r.item.id);
   }, {wide: true, submit: existing ? '保存补正' : '提交申请', returnTo: existing ? () => showApplication(existing.item.id) : null});
 }
 
@@ -138,7 +139,8 @@ export function baseForm(existing = null) {
   const d = existing?.item?.data || {};
   const who = c.me.role.kind === 'teacher' ? '' : c.teacherField(d.teacher_id || '', 'teacher_id', '基地负责人（输入工号或姓名检索）');
   const used = new Set(d.usages || ['practice']);
-  const body = c.note('学院审批 → 学校（继续教育学院）审批，通过后进入基地清单。') + who +
+  const college = c.me.role.kind === 'college';
+  const body = c.note(college ? '学院登记的基地视为学院已确认，直接到学校（继续教育学院）审批，通过后进入基地清单。' : '学院审批 → 学校（继续教育学院）审批，通过后进入基地清单。') + who +
     c.field('code', '来源编号', 'text', existing?.item?.code || '', {readonly: !!existing, hint: '协议编号或学院登记编号。'}) + c.field('name', '基地名称', 'text', existing?.item?.name || '') +
     `<fieldset class="form-field full apply-tags"><legend>基地用途 <b>*</b></legend><div class="apply-tag-row">${BASE_USAGES.map(([k, l]) => `<label><input type="checkbox" name="usage_${k}" ${used.has(k) ? 'checked' : ''}>${c.esc(l)}</label>`).join('')}</div></fieldset>` +
     c.field('onsite', '校内 / 校外', 'select', d.onsite === false ? 'no' : 'yes', {options: [['yes', '校内'], ['no', '校外']]}) +
@@ -151,7 +153,7 @@ export function baseForm(existing = null) {
     if (!data.usages.length) throw Error('请选择基地用途');
     const r = existing ? await c.api('/applications/bases/' + existing.item.id, {method: 'PUT', body: {data, reason: v.reason, expected_version: existing.item.version}})
       : await c.api('/applications/bases', {method: 'POST', body: {data, reason: v.reason}});
-    c.closeModal(); c.toast(existing ? '已保存，请点“重新提交”' : '已提交，等待学院审批'); await c.renderKeep(); await showApplication(r.item.id);
+    c.closeModal(); c.toast(existing ? '已保存，请点“重新提交”' : college ? '已提交，等待学校审批' : '已提交，等待学院审批'); await c.renderKeep(); await showApplication(r.item.id);
   }, {wide: true, submit: existing ? '保存补正' : '提交申请', returnTo: existing ? () => showApplication(existing.item.id) : null});
 }
 
@@ -312,7 +314,7 @@ export async function applicationAction(action, id, ctx) {
   if (action === 'app-detail') return showApplication(id);
   if (action === 'app-edit') return edit(id);
   if (action === 'app-upload') return upload(id);
-  if (action === 'app-course-new') return manualCourseForm();
+  if (action === 'app-course-new') return manualCourseForm(null, id || '');
   if (action === 'app-base-new') return baseForm();
   const map = {'app-approve': 'approve', 'app-return': 'return', 'app-submit': 'submit', 'app-withdraw': 'withdraw'};
   if (map[action]) {

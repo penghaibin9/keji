@@ -96,6 +96,10 @@ def workspace(request:Request,section:str=Query('projects',pattern='^(projects|c
                 school_reports=(SocialResource.org_id==parent.parent_id)&(SocialResource.kind=='point_report')&SocialResource.state.in_(['PUBLIC','ARCHIVED'])
                 resource_query=select(SocialResource).where(SocialResource.kind.in_(['base','achievement','course_resource','ledger','correction','point_review','point_report'])).where(or_(SocialResource.id.in_(visible),school_reports))
         resource_query=resource_query.where(or_(SocialResource.kind!='course_resource',st.course_resource_scope(db,a)))
+        if a.role.kind in ('teacher','dept'):
+            # 审批中、退回或撤回的基地申请，只有申请人（教研室看本室老师）能在基地清单里看到。
+            own=[a.id] if a.role.kind=='teacher' else [a.id,*a.teacher_ids]
+            resource_query=resource_query.where(or_(SocialResource.kind!='base',SocialResource.state.notin_(['DEPT','COLLEGE','SCHOOL','RETURNED','WITHDRAWN']),SocialResource.data['teacher_id'].as_string().in_(own)))
         if section in {'bases','outcomes'}:resource_query=resource_query.where(SocialResource.kind==('base' if section=='bases' else 'achievement'))
         elif section=='recognition':resource_query=resource_query.where(SocialResource.kind.in_(['correction','point_report','point_review']))
         elif section=='courses':resource_query=resource_query.where(SocialResource.kind=='course_resource')
@@ -107,13 +111,19 @@ def workspace(request:Request,section:str=Query('projects',pattern='^(projects|c
         for r in db.scalars(select(SocialResource).where(st.course_resource_scope(db,a),SocialResource.kind=='course_resource')):
             stats=course_stats.setdefault(r.data['course_code'],{'resources':0,'videos':0,'minutes':st.D(0)});stats['resources']+=1
             if r.data['resource_type']=='video':stats['videos']+=st.resource_video_count(r.data);stats['minutes']+=st.D(r.data['duration_minutes'])
+        course_info={}
+        codes=[c.code for c in courses]
+        for i in range(0,len(codes),500):
+            for r in db.scalars(select(SocialResource).where(SocialResource.kind=='course_apply',SocialResource.state=='ACTIVE',SocialResource.data['course_code'].as_string().in_(codes[i:i+500]))):
+                d=r.data;course_info[d['course_code']]={**{k:d.get(k) for k in ('hours','teaching_mode','ideology','teacher_name','courseware','audience','intro')},
+                    'application_id':r.id if d.get('application') else None,'source':d.get('source')}
         resource_orgs=dict(db.execute(select(Org.id,Org.name).where(Org.id.in_({r.org_id for r in resources}|{r.org_id for r in annuals}))).all()) if resources or annuals else {}
         display=lambda rows:[{**serial(row),'state_label':st.state_label(row)} for row in rows]
         from ..social_schemas import quality_blockers
         project_items=[{**st.project_read_item(a,p),'state_label':st.state_label(p),'report_issues':quality_blockers(p.data)} for p in projects]
         claim_items=[st.claim_read_item(db,a,c) for c in claims]
         return {'projects':project_items,'claims':claim_items,'annuals':[{**st.annual_read_item(a,row),'org_name':resource_orgs.get(row.org_id,'—')} for row in annuals],'resources':[{**row,'org_name':resource_orgs[row['org_id']]} for row in display(resources)],
-                'policies':display(policies),'courses':serial(courses),'course_stats':serial(course_stats),'states':st.STATES,'decisions':st.DECISIONS,
+                'policies':display(policies),'courses':serial(courses),'course_stats':serial(course_stats),'course_info':serial(course_info),'states':st.STATES,'decisions':st.DECISIONS,
                 'my_duties':[k for k,v in st.assignments(db).items() if a.id in v],
                 'pagination':{'page':page,'size':size,'total':totals.get(section,0),'q':q},'resource_pagination':{'page':resource_page,'size':size,'total':totals.get('resources',0)}}
     return read_operation(request,'records.read',load)
@@ -589,19 +599,44 @@ def date_from(value):
     return date.fromisoformat(value)
 
 
+def school_registrar(a):
+    if a.role.kind!='school':raise HTTPException(403,'学院、教研室和老师请走“申请培训课程”，由学校审批后入库')
+
+
+COURSE_INFO_KEYS=('hours','teaching_mode','ideology','courseware')
+
+
+def course_info(db,a,row,org_id):
+    """学校直接登记的课程，五项资料（学时、教学方式、思政属性、主讲教师、课件审查）记在一条课程资料记录里，不改课程主表。"""
+    dumped=row.model_dump(mode='json');values={k:dumped[k] for k in COURSE_INFO_KEYS if dumped.get(k) not in (None,'')}
+    if not values and not (row.teacher or row.teacher_id):return None
+    teacher=st.resolve_teacher(db,org_id,row.teacher,row.teacher_id) if (row.teacher or row.teacher_id) else None
+    if row.teacher_id and not teacher:raise HTTPException(422,'主讲教师与学院或姓名不匹配')
+    values.update(registered=True,course_code=row.code,project_code=row.project_code,source='registered',
+                  teacher_id=teacher.id if teacher else None,teacher_name=teacher.name if teacher else row.teacher)
+    obj=SocialResource(kind='course_apply',org_id=org_id,code='CI-'+row.code,name=row.name,state='ACTIVE',data=serial(values))
+    db.add(obj);db.flush();workflow(db,a,'social_resource',obj.id,'登记培训课程资料',{},serial(obj),row.reason,'')
+    return obj
+
+
 @router.post('/courses')
 def course_create(data:CourseIn,request:Request):
     def apply(db,a,s):
+        school_registrar(a)
         projects=db.scalars(select(SocialProject).where(SocialProject.org_id.in_(a.org_ids))).all()
-        if not any(p.data['code']==data.project_code for p in projects):raise HTTPException(403,'须先建立本组织项目')
+        project=next((p for p in projects if p.data['code']==data.project_code),None)
+        if project is None:raise HTTPException(403,'须先建立本组织项目')
+        if db.scalar(select(SocialResource.id).where(SocialResource.code=='CI-'+data.code)):raise HTTPException(409,'课程编号已有资料记录')
         obj=TrainingCourseMaster(code=data.code,name=data.name,project_code=data.project_code,source='学校人工登记')
-        db.add(obj);db.flush();audit(db,a,'social_courses',obj.id,'登记培训课程',after=serial(obj),reason=data.reason);return obj
-    return command(request,data.model_dump(),'records.write',apply)
+        db.add(obj);db.flush();course_info(db,a,data,project.org_id)
+        audit(db,a,'social_courses',obj.id,'登记培训课程',after=serial(obj),reason=data.reason);return obj
+    return command(request,data.model_dump(mode='json'),'records.write',apply)
 
 
 @router.post('/courses/import/{operation}')
 def course_import(operation:str,data:CourseBatchIn,request:Request):
     def apply(db,a,s):
+        school_registrar(a)
         projects=db.scalars(select(SocialProject).where(SocialProject.org_id.in_(a.org_ids))).all()
         allowed={p.data['code'] for p in projects};seen=set()
         for row in data.rows:
@@ -610,12 +645,14 @@ def course_import(operation:str,data:CourseBatchIn,request:Request):
             org_id=next(p.org_id for p in projects if p.data['code']==row.project_code)
             if row.teacher_id and not st.resolve_teacher(db,org_id,row.teacher,row.teacher_id):raise HTTPException(422,'课程教师与学院或姓名不匹配')
             seen.add(row.code)
+            if db.scalar(select(SocialResource.id).where(SocialResource.code=='CI-'+row.code)):raise HTTPException(409,'课程编号已有资料记录，本批未导入')
         fingerprint=digest(serial([r.model_dump() for r in data.rows]))
         if operation=='preview':return {'count':len(data.rows),'videos':sum(1 for r in data.rows if r.video_minutes is not None),'preview_hash':fingerprint}
         if operation!='confirm' or data.preview_hash!=fingerprint:raise HTTPException(409,'须先预检未修改的课程清单')
         orgs={p.data['code']:p.org_id for p in projects};videos=0
         for row in data.rows:
             db.add(TrainingCourseMaster(code=row.code,name=row.name,project_code=row.project_code,source='超星学习通导出' if row.source=='chaoxing' else '学校批量登记'))
+            course_info(db,a,row,orgs[row.project_code])
             if row.video_minutes is None:continue
             from uuid import uuid4
             code='CXV-'+str(uuid4());name=row.name[:150]+'（超星视频）'
@@ -628,7 +665,7 @@ def course_import(operation:str,data:CourseBatchIn,request:Request):
             db.add(obj);db.flush();event(db,a,'social_resource',obj,'登记培训资源',{},data.reason);videos+=1
         audit(db,a,'social_courses','batch','批量登记培训课程',after={'codes':sorted(seen),'basis':data.basis,'sources':sorted({r.source for r in data.rows}),'video_resources':videos},reason=data.reason)
         return {'count':len(data.rows),'video_resources':videos}
-    return command(request,data.model_dump(),'records.write',apply)
+    return command(request,data.model_dump(mode='json'),'records.write',apply)
 
 
 def claim_busy(db,claim_id,*,reviews=True):

@@ -1,6 +1,6 @@
 // School business pages reuse the portal's forms, permissions, navigation and attachments.
 import {checkUploadFiles,uploadEntries,uploadSequential,uploadStatusHtml,failedEntries,MAX_ATTACHMENTS} from './approval-flow.js?v=20261012-streamline1';
-import {progressHtml,AUDIENCE} from './applications.js?v=20261016-apply1';
+import {progressHtml,AUDIENCE,TEACHING_MODES,IDEOLOGY} from './applications.js?v=20261016-apply1';
 const names={module:'模块式',person_day:'人天式',technical:'技术类',lecture:'讲座类',province:'省级',city:'市级或企业定制',school:'校级',dispatched:'统一委派异地送教',full_day:'全天实操或脱产',ordinary:'常规',subsidy:'补贴性培训',enterprise:'企业定制培训',community:'社区公益培训',rural:'乡村帮扶培训',other:'其他非学历培训',national:'国家级'};
 let workspace,context,opened,workspaceUser;
 let listSection='',listPage=1,listSearch='',resourcePage=1;
@@ -86,6 +86,44 @@ async function importCourses(rows,v,returnTo){
  const preview=await c.api('/social/courses/import/preview',{method:'POST',body});setTimeout(()=>c.formModal('确认课程整批入库',c.note('预检通过，共'+preview.count+'门课程'+(preview.videos?'，其中'+preview.videos+'门同时登记视频数量与总时长':'')+'。'),async()=>{await c.api('/social/courses/import/confirm',{method:'POST',body:{...body,preview_hash:preview.preview_hash}});c.closeModal();await c.render()},{submit:'确认入库',returnTo,returnLabel:'返回修改'}),0);
 }
 
+const APPLYING=['DEPT','COLLEGE','SCHOOL','RETURNED','WITHDRAWN'],BASE_USAGE={practice:'实践教学基地',ideology:'思政实践教学基地'};
+const MODE_LABEL=Object.fromEntries(TEACHING_MODES),IDEOLOGY_LABEL=Object.fromEntries(IDEOLOGY);
+const pending=()=>'<span class="muted small">待补充</span>';
+function courseModes(info){const e=context.esc;return info.teaching_mode||info.ideology?e(MODE_LABEL[info.teaching_mode]||'待补充')+'<br><span class="muted small">'+e(IDEOLOGY_LABEL[info.ideology]||'思政属性待补充')+'</span>':pending()}
+function coursewareText(w){return w?.checked?'已审查（'+[w.reviewer,w.reviewed_on].filter(Boolean).join(' ')+'）':'未审查'}
+function courseTeacher(info){const e=context.esc;return info.teacher_name||info.courseware?e(info.teacher_name||'待补充')+'<br><span class="muted small">课件'+e(coursewareText(info.courseware))+'</span>':pending()}
+function resourceCell(stats){return stats.resources?context.esc(stats.resources+' 项资源 · '+stats.videos+' 个视频 · '+stats.minutes+' 分钟'):'<span class="muted small">暂无资源</span>'}
+// 走申请流程的基地看申请详情（带进度）；其他照旧。
+function resourceOpen(x){const c=context;if(x.data?.application)return c.act(APPLYING.includes(x.state)?'看进度':'查看','app-detail',x.id,'text');return c.act(['teacher','dept'].includes(c.me?.role?.kind)?'查看':'查看与办理','social-detail','social_resource|'+x.id,'text')}
+const COURSE_COLUMNS=['课程编号','课程名称','关联项目编号','学时','教学方式','思政属性','主讲教师','课件审查'];
+function courseInfoFields(){const c=context;return c.field('hours','学时','number','',{required:false,min:0,step:'0.5'})+c.field('teaching_mode','教学方式','select','lecture',{options:TEACHING_MODES})+c.field('ideology','思政属性','select','course_ideology',{options:IDEOLOGY})
+ +c.teacherField('','teacher_id','主讲教师（输入工号或姓名检索）')+c.field('cw_checked','课件审查','checkbox',false,{required:false,checkLabel:'课件已由学院审查（政治方向、知识产权、内容质量）'})+c.field('cw_reviewer','审查人','text','',{required:false})+c.field('cw_reviewed_on','审查日期','date','',{required:false})}
+function courseInfoValue(v){const{cw_checked,cw_reviewer,cw_reviewed_on,hours,teacher_id,...rest}=v;return {...rest,hours:hours===''||hours==null?null:hours,teacher_id:teacher_id||null,courseware:cw_checked?{checked:true,reviewer:cw_reviewer||'',reviewed_on:cw_reviewed_on||null}:null}}
+function pick(pairs,text,label,line){const t=String(text||'').trim();if(!t)return null;const hit=pairs.find(([k,l])=>l===t||k===t);if(!hit)throw Error('第'+line+'行'+label+'“'+t+'”无法识别，可填：'+pairs.map(x=>x[1]).join('、'));return hit[0]}
+export function parseCourseRows(text,teachers=context?.teachers||[]){
+ const lines=String(text||'').trim().split(/\r?\n/),head=(lines.shift()||'').split('\t').map(x=>x.trim());
+ const old=head.join('|')==='课程编号|课程名称|项目编号';
+ if(!old&&head.join('|')!==COURSE_COLUMNS.join('|'))throw Error('请保留表头：'+COURSE_COLUMNS.join('、'));
+ return lines.filter(l=>l.trim()).map((line,i)=>{const n=i+2,v=line.split('\t').map(x=>x.trim());if(v.length>(old?3:8))throw Error('第'+n+'行列数多于表头');
+  const[code,name,project_code,hours,mode,ideology,teacher,review]=v;if(!code||!name||!project_code)throw Error('第'+n+'行须填写课程编号、课程名称和关联项目编号');
+  const row={code,name,project_code};if(old)return row;
+  if(hours){if(!/^\d+(\.\d+)?$/.test(hours))throw Error('第'+n+'行学时“'+hours+'”不是数字');row.hours=hours}
+  const m=pick(TEACHING_MODES,mode,'教学方式',n),g=pick(IDEOLOGY,ideology,'思政属性',n);if(m)row.teaching_mode=m;if(g)row.ideology=g;
+  if(teacher){const[tn,staff]=teacher.split(/\s+/),t=staff&&teachers.find(x=>x.staff_no===staff);row.teacher=tn;if(t)row.teacher_id=t.id}
+  if(review&&review!=='未审查'){const parts=review.split(/\s+/);if(parts[0]!=='已审查')throw Error('第'+n+'行课件审查请填“未审查”或“已审查 审查人 日期”');const day=parts.find(x=>/^\d{4}-\d{2}-\d{2}$/.test(x));
+   row.courseware={checked:true,reviewer:parts.slice(1).filter(x=>x!==day).join(' '),reviewed_on:day||null}}
+  return row});
+}
+function courseView(code){
+ const c=context,e=c.esc,x=workspace.courses.find(r=>r.code===code);if(!x)throw Error('课程不在当前列表里，请刷新');
+ const info=workspace.course_info?.[code]||{},stats=workspace.course_stats[code]||{resources:0,videos:0,minutes:0};
+ const rows=[['课程名称',e(x.name)],['课程编号',e(x.code)],['关联项目',e(x.project_code||'待关联')],['来源',e(x.source||'')],['学时',info.hours!=null?e(info.hours):'待补充'],['教学方式',e(MODE_LABEL[info.teaching_mode]||'待补充')],
+  ['思政属性',e(IDEOLOGY_LABEL[info.ideology]||'待补充')],['主讲教师',e(info.teacher_name||'待补充')],['课件审查',e(coursewareText(info.courseware))],...(info.audience?[['面向对象',e(info.audience)]]:[]),...(info.intro?[['课程简介',e(info.intro)]]:[]),
+  ['资源与视频',e(stats.resources+' 项资源，'+stats.videos+' 个视频，视频总时长 '+stats.minutes+' 分钟')]];
+ const foot=[c.act('查看资源','social-course-resources',code),...(info.application_id?[c.act('查看申请记录','app-detail',info.application_id)]:[]),c.act('关闭','close','','primary')].join('');
+ return c.modal('查看课程',detailFacts('课程资料',rows)+(Object.keys(info).length?'':c.note('这门课是早先登记的，学时、教学方式等五项资料还没有补充。',true)),foot);
+}
+
 export async function socialPage(section,c){
  context=c;if(listSection!==section){listPage=1;listSearch='';resourcePage=1;listSection=section}workspace=await c.api('/social/workspace?section='+section+'&page='+listPage+'&q='+encodeURIComponent(listSearch)+'&resource_page='+resourcePage);workspaceUser=c.me?.user?.id;const {esc,act,table,note,pageHead}=c;
  // 教研室负责人在业务办理里只读：项目由学院申报、学校备案，课程和基地由学院登记（后端同样拒绝写入）。
@@ -93,8 +131,14 @@ export async function socialPage(section,c){
  const buttons=[];
  // 老师可以申报本人负责的培训项目（先到学院审批，再到学校备案）。
  if(section==='projects'&&(can('records.write')||c.me?.role?.kind==='teacher'))buttons.push(act('申报培训项目','social-project-new','','primary'));
- if(section==='courses'&&can('records.write'))buttons.push(act('登记培训课程','social-course-new','','primary'),act('批量导入课程','social-course-import'),act('超星学习通导出表导入','social-course-chaoxing'),act('登记课程资源','social-resource-new','course_resource'));
- if(['bases','outcomes'].includes(section)&&can('records.write'))buttons.push(act(section==='bases'?'登记培训基地':'登记培训成果','social-resource-new',section==='bases'?'base':'achievement','primary'));
+ // 培训课程、培训基地：学校直接登记入库；老师、教研室、学院走申请（学院登记的视为学院已确认，直接到学校审批）。
+ const school=c.me?.role?.kind==='school',applicant=['teacher','dept','college'].includes(c.me?.role?.kind);
+ if(section==='courses'&&school&&can('records.write'))buttons.push(act('登记培训课程','social-course-new','','primary'),act('批量导入课程','social-course-import'),act('超星学习通导出表导入','social-course-chaoxing'));
+ if(section==='courses'&&applicant)buttons.push(act('申请培训课程','app-course-new','','primary'));
+ if(section==='courses'&&can('records.write'))buttons.push(act('登记课程资源','social-resource-new','course_resource'));
+ if(section==='bases'&&school&&can('records.write'))buttons.push(act('登记培训基地','social-resource-new','base','primary'));
+ if(section==='bases'&&applicant)buttons.push(act('申请培训基地','app-base-new','','primary'));
+ if(section==='outcomes'&&can('records.write'))buttons.push(act('登记培训成果','social-resource-new','achievement','primary'));
  if(section==='recognition'&&c.me.user.staff_no)buttons.push(act('申报本人积分','social-claim-new','','primary'));
  if(section==='recognition'&&workspace.my_duties.includes('secretary'))buttons.push(act('生成双月汇总或年度公示','social-report-new'));
  if(section==='annual'&&can('assessment.review')&&['school','college'].includes(c.me?.role?.kind))buttons.push(act('建立学院年度自评','social-annual-new','','primary'));
@@ -104,8 +148,8 @@ export async function socialPage(section,c){
  let rows=[],headers=[],description='';
  const detail=(kind,id)=>act(['teacher','dept'].includes(c.me?.role?.kind)&&['projects','courses','bases','outcomes'].includes(section)?'查看':'查看与办理','social-detail',kind+'|'+id,'text');
  if(section==='projects'){description='从项目申报到备案结项，让每一次培训有据可查。';headers=['项目名称 / 编号','期次','核算方式','办理状态','上报信息','操作'];rows=workspace.projects.map(x=>[identity(x.data.name,x.data.code,'book'),esc(x.cohort),esc(names[x.data.mode])+(x.data.source?.mode_pending?'（待核实）':''),statusBadge(x.state_label||workspace.states[x.state],x.state),x.report_issues?.length?'<span class="badge orange-b" title="'+esc(x.report_issues.join('；'))+'">缺 '+x.report_issues.length+' 项</span>':'<span class="badge green-b">齐全</span>',detail('social_project',x.id)])}
- if(section==='courses'){description='集中管理培训课程、视频与教学资源，清楚掌握资源数量和视频时长。';headers=['课程名称 / 编号','关联项目','资源数','视频数','视频时长（分钟）','操作'];rows=workspace.courses.map(x=>{const stats=workspace.course_stats[x.code]||{resources:0,videos:0,minutes:0};return [identity(x.name,x.code,'book'),esc(x.project_code||'待关联'),stats.resources,stats.videos,esc(stats.minutes),act('查看资源','social-course-resources',x.code,'text')]})}
- if(['bases','outcomes'].includes(section)){description=section==='bases'?'登记基地及认定依据，校外培训保留审批材料。':'按认定文件登记成果；正式计分还须完成年度考核核验。';headers=['名称','编号','认定依据','操作'];rows=workspace.resources.filter(x=>x.kind===(section==='bases'?'base':'achievement')).map(x=>[esc(x.name),esc(x.code),esc(x.data.recognition),detail('social_resource',x.id)])}
+ if(section==='courses'){description='集中管理培训课程、视频与教学资源，清楚掌握资源数量和视频时长。';headers=['课程名称 / 编号','关联项目','学时','教学方式 / 思政属性','主讲教师 / 课件审查','资源与视频','操作'];rows=workspace.courses.map(x=>{const stats=workspace.course_stats[x.code]||{resources:0,videos:0,minutes:0},info=workspace.course_info?.[x.code]||{};return [identity(x.name,x.code,'book'),esc(x.project_code||'待关联'),info.hours!=null?esc(info.hours):pending(),courseModes(info),courseTeacher(info),resourceCell(stats),'<div class="course-actions">'+act('查看课程','social-course-view',x.code,'text')+act('查看资源','social-course-resources',x.code,'text')+'</div>']})}
+ if(['bases','outcomes'].includes(section)){description=section==='bases'?'登记基地及认定依据，校外培训保留审批材料。':'按认定文件登记成果；正式计分还须完成年度考核核验。';headers=['名称','编号','认定依据','操作'];rows=workspace.resources.filter(x=>x.kind===(section==='bases'?'base':'achievement')).map(x=>[esc(x.name),esc(x.code),esc(x.data.recognition),resourceOpen(x)])}
  if(section==='recognition'){description='授课与辅助积分分别申报，按院长、归口学院、分管副校长、教学秘书职责办理。';headers=['申报人','项目','周期','状态','操作'];rows=workspace.claims.map(x=>[identity(c.teacherName(x.teacher_id),'个人积分认定','users'),esc(workspace.projects.find(p=>p.id===x.project_id)?.data.name||'关联项目'),esc(c.periodName(x.period_id)),statusBadge(x.state_label||workspace.states[x.state],x.state),detail('social_claim',x.id)]);workspace.ledger=await c.api('/social/ledger-summary')}
  if(section==='annual'){description='按收入、人次、成果和资金管理分别评分；口径未确认时不发布正式结果。';headers=['学院','周期','状态','操作'];rows=workspace.annuals.map(x=>[identity(x.org_name||c.orgName(x.org_id),'学院年度考核','school'),esc(c.periodName(x.period_id)),statusBadge(x.state_label||workspace.states[x.state],x.state),detail('social_annual',x.id)])}
  if(section==='policy'){description='学校制度已经定稿。本页登记交叉执行口径的书面解释及依据；缺失参数保持待确认，已启用版本不可直接修改。';headers=['名称','周期','状态','待确认项','操作'];rows=workspace.policies.map(x=>[identity(x.name,'制度执行口径','file'),esc(c.periodName(x.period_id)),statusBadge(x.state_label||workspace.states[x.state],x.state),Object.keys(workspace.decisions).filter(k=>x.data[k]==null).length,detail('social_policy',x.id)])}
@@ -114,14 +158,14 @@ export async function socialPage(section,c){
  const followups=section==='recognition'&&workspace.resources.some(r=>['correction','point_report','point_review'].includes(r.kind))?'<section class="card mt20"><div class="card-head"><h2>积分核对、更正与汇总公示</h2></div>'+table(['事项','状态','操作'],workspace.resources.filter(r=>['correction','point_report','point_review'].includes(r.kind)).map(r=>[esc(r.name),esc(r.kind==='point_review'?REVIEW_STATES[r.state]||r.state_label:r.state_label||workspace.states[r.state]),detail('social_resource',r.id)]))+'</section>':'';
  const config={
   projects:{label:'培训项目',icon:'book',steps:[['申报与备案','登记项目资料、培训安排及核算方式，提交审核备案。'],['实施与留证','导入核验后的参训明细，上传考勤、学时及结业材料。'],['结项与核算','核验有效人次与结项材料，再办理个人积分和学院统计。']]},
-  courses:{label:'培训课程',icon:'book',steps:[['登记课程','填写课程编号、名称，并关联培训项目。'],['归集资源','登记视频、文档或链接，保留来源与认定依据。'],['核对时长','视频分钟数表示资源总时长，不代表学员已学习时长。']]},
-  bases:{label:'培训基地',icon:'school',steps:[['登记基本资料','填写基地名称、承办学院和实际地点。'],['补充认定依据','登记学校认定文件，按需上传佐证材料。'],['保留办理记录','校外培训保留审批材料，资料与办理过程可追溯。']]},
+  courses:{label:'培训课程',icon:'book',steps:[['申请或登记课程','老师、学院申请培训课程，学院审批后由学校审批入库；学校可直接登记。填写学时、教学方式、思政属性、主讲教师和课件审查。'],['归集资源','登记视频、文档或链接，保留来源与认定依据。'],['核对时长','视频分钟数表示资源总时长，不代表学员已学习时长。']]},
+  bases:{label:'培训基地',icon:'school',steps:[['申请基地','老师、学院申请培训基地，填写用途、设立日期和共建单位，学院审批后由学校审批生效；项目设立的基地随项目备案生效。'],['补充认定依据','登记学校认定文件，按需上传佐证材料。'],['保留办理记录','校外培训保留审批材料，资料与办理过程可追溯。']]},
   outcomes:{label:'培训成果',icon:'award',steps:[['登记成果','按认定文件填写成果名称与唯一编号。'],['提供佐证','保留成果认定材料，确保来源可核查。'],['年度核验','正式计分须完成年度考核中的成果核验。']]},
   recognition:{label:'积分申报',icon:'award'},annual:{label:'学院自评',icon:'assess'},policy:{label:'执行口径',icon:'file'}
  }[section];
  const p=workspace.pagination,items=section==='recognition'?workspace.claims:section==='annual'?workspace.annuals:section==='policy'?workspace.policies:section==='courses'?workspace.courses:section==='projects'?workspace.projects:workspace.resources;
  let stats=[[listSearch?'当前检索总数':config.label+'总数',p.total,'授权范围内的记录',config.icon]];
- if(section==='bases')stats.push(['本页校内基地',items.filter(x=>x.data.onsite===true).length,'按登记类型统计','school'],['本页校外基地',items.filter(x=>x.data.onsite===false).length,'按登记类型统计','map']);
+ if(section==='bases'){const year=String(new Date().getFullYear()),live=items.filter(x=>x.kind==='base'&&!APPLYING.includes(x.state));stats[0]=['基地总数',p.total,'授权范围内的基地，含你提交的审批中申请','school'];stats.push(['思政实践教学基地',live.filter(x=>(x.data.usages||[]).includes('ideology')).length,'本页已生效、用途含思政实践教学的基地','award'],['本年新设',live.filter(x=>String(x.data.established_on||'').startsWith(year)).length,'本页已生效、设立日期在'+year+'年的基地','clock'])}
  else if(section==='courses')stats.push(['本页课程资源',items.reduce((sum,x)=>sum+(workspace.course_stats[x.code]?.resources||0),0),'所列课程的资源数量','file'],['本页视频资源',items.reduce((sum,x)=>sum+(workspace.course_stats[x.code]?.videos||0),0),'所列课程的视频数量','clock']);
  else if(section==='outcomes')stats.push(['本页记录',items.length,'当前分页内的记录',config.icon],['本页已填认定日期',items.filter(x=>x.data.confirmed_on).length,'已填写认定日期的成果','check']);
  else stats.push(['本页记录',items.length,'当前分页内的记录',config.icon],['本页已'+(section==='projects'?'结项':section==='policy'?'启用':'归档'),items.filter(x=>['CLOSED','ARCHIVED','ACTIVE'].includes(x.state)).length,'依照当前办理状态','check']);
@@ -131,7 +175,7 @@ export async function socialPage(section,c){
  const scopeNote={teacher:{projects:'这里只显示你负责或参与授课的项目。项目由二级学院申报、学校备案；你在“个人培训”申报本人积分。',courses:'这里只显示你参与项目关联的课程，以及登记在你名下的课程资源。',bases:'这里显示所属学院的培训基地，供申报和授课时查阅。',outcomes:'这里显示所属学院已登记的培训成果。'},dept:{projects:'这里显示本教研室教师负责或参与的项目，只能查看和导出；申报、备案、结项由学院和学校办理。',courses:'这里显示本教研室项目关联的课程和学院课程资源，只能查看。',bases:'这里显示所属学院的培训基地，只能查看。',outcomes:'这里显示所属学院的培训成果，只能查看。'}}[c.me?.role?.kind]?.[section];
  const empty='<div class="social-empty"><div class="social-empty-art">'+c.icon(listSearch?'search':config.icon)+'</div><h3>'+(listSearch?'没有找到匹配的记录':'还没有'+config.label)+'</h3><p>'+(listSearch?'换个关键词试试。':'')+'</p><div class="social-empty-action">'+(listSearch?act('查看全部','social-list-reset'):buttons[0]||'')+'</div></div>';
  let content=rows.length?table(headers,rows):empty;
- if(section==='bases'&&items.length)content='<div class="social-resource-grid">'+items.map(x=>'<article class="social-resource-card"><div class="social-resource-top"><div class="social-resource-icon">'+c.icon(x.data.onsite===true?'school':'map')+'</div><span class="social-badge" data-tone="'+(x.data.onsite===true?'blue':'slate')+'">'+(x.data.onsite===true?'校内基地':x.data.onsite===false?'校外基地':'类型待补充')+'</span></div><h3>'+esc(x.name)+'</h3><p class="social-code">'+esc(x.code)+'</p><div class="social-resource-meta"><div class="social-meta-line">'+c.icon('org')+'<span>'+esc(x.org_name||c.orgName(x.org_id))+'</span></div><div class="social-meta-line">'+c.icon('map')+'<span>'+esc(x.data.location||'地点待补充')+'</span></div></div><div class="social-resource-evidence">认定依据：'+esc(x.data.recognition||'待补充')+'</div><div class="social-resource-foot">'+statusBadge(x.state_label||workspace.states[x.state],x.state)+detail('social_resource',x.id)+'</div></article>').join('')+'</div>';
+ if(section==='bases'&&items.length)content='<div class="social-resource-grid">'+items.map(x=>'<article class="social-resource-card"><div class="social-resource-top"><div class="social-resource-icon">'+c.icon(x.data.onsite===true?'school':'map')+'</div><span class="social-badge" data-tone="'+(x.data.onsite===true?'blue':'slate')+'">'+(x.data.onsite===true?'校内基地':x.data.onsite===false?'校外基地':'类型待补充')+'</span></div><h3>'+esc(x.name)+'</h3><p class="social-code">'+esc(x.code)+'</p><div class="social-resource-meta"><div class="social-meta-line">'+c.icon('org')+'<span>'+esc(x.org_name||c.orgName(x.org_id))+'</span></div><div class="social-meta-line">'+c.icon('map')+'<span>'+esc(x.data.location||'地点待补充')+'</span></div><div class="social-meta-line">'+c.icon('award')+'<span>用途：'+esc((x.data.usages||[]).map(k=>BASE_USAGE[k]||k).join('、')||'待补充')+'</span></div><div class="social-meta-line">'+c.icon('clock')+'<span>设立日期：'+esc(x.data.established_on||'待补充')+'</span></div>'+(x.data.onsite===false||x.data.partner?'<div class="social-meta-line">'+c.icon('users')+'<span>共建单位：'+esc(x.data.partner||'待补充')+'</span></div>':'')+'</div><div class="social-resource-evidence">认定依据：'+esc(x.data.recognition||'待补充')+'</div><div class="social-resource-foot">'+statusBadge(x.state_label||workspace.states[x.state],x.state)+resourceOpen(x)+'</div></article>').join('')+'</div>';
  const guide=config.steps?'<details class="social-guide business-guide" aria-label="'+config.label+'办理指引"><summary>'+config.label+'办理指引</summary><ol>'+config.steps.map(([title,copy])=>'<li><strong>'+title+'</strong><span>'+copy+'</span></li>').join('')+'</ol><div class="social-guide-note">材料完整性与正式认定，以学校审核结论为准。</div></details>':'';
  const main='<div class="social-main"><section class="card social-panel"><div class="social-panel-head"><div><h2>'+config.label+'清单</h2></div></div>'+tools+content+pager+'</section>'+resourceTable+ledger+followups+((['courses','recognition'].includes(section)&&workspace.resource_pagination.total>200)?'<p>资源与更正汇总第'+resourcePage+'页 '+(resourcePage>1?act('前一页明细','social-resource-page',String(resourcePage-1)):'')+(resourcePage*200<workspace.resource_pagination.total?act('后一页明细','social-resource-page',String(resourcePage+1)):'')+'</p>':'')+'</div>';
  return '<div class="social-workspace">'+pageHead(description,buttons.join(''))+summary+main+'<div class="page-guides">'+guide+(scopeNote?note(scopeNote,false,'查看范围'):'')+note('统计仅包含当前账号有权查看的记录；“本页”数量随分页与检索变化。'+stats.map(([label,,hint])=>label+'：'+hint).join('；')+'。未完成审核的记录及候选试算不代表学校正式认定。',false,'统计与认定说明')+'</div></div>';
@@ -210,7 +254,7 @@ async function showDetail(kind,id,courseList=null){
  if(kind==='social_project'&&(c.can('records.write')||ownTeacher)){
   if(['DRAFT','RETURNED'].includes(x.state)){add(c.me?.role?.kind==='teacher'||c.me?.role?.kind==='dept'?'提交学院审批':'提交审核备案','submit');buttons.push(act('修改项目资料','social-project-edit'))}
   if(x.state==='SUBMITTED'&&workspace.my_duties.includes('coordinator')){add('完成审核备案','file');add('退回补正','return')}
-  if(x.state==='FILED'){if(c.can('records.write')){buttons.push(act('登记本项目课程','social-course-for-project'));buttons.push(act('导入参训明细','social-unit-import'))}buttons.push(act('提交结项','social-close'));add('申请重新备案','refile')}
+  if(x.state==='FILED'){if(c.can('records.write')){buttons.push(c.me?.role?.kind==='school'?act('登记本项目课程','social-course-for-project'):act('申请本项目课程','app-course-new',x.data.code));buttons.push(act('导入参训明细','social-unit-import'))}buttons.push(act('提交结项','social-close'));add('申请重新备案','refile')}
   if(x.state==='CLOSE_REVIEW'&&workspace.my_duties.includes('coordinator')){add('核验通过结项','close');add('退回补充材料','return')}
  }
  if(kind==='social_project'&&c.can('assessment.review')&&workspace.my_duties.some(v=>['coordinator','discipline','finance'].includes(v)))buttons.push(act('登记投诉与跟踪','social-note'));
@@ -431,9 +475,8 @@ export async function socialAction(action,id,c){
  if(action==='social-print'){
   document.querySelector('.print-sheet')?.remove();const sheet=document.createElement('section');sheet.className='print-sheet';sheet.innerHTML='<h1>社会培训办理材料</h1>'+opened.printBody;document.body.append(sheet);document.body.classList.add('print-mode');try{window.print()}finally{document.body.classList.remove('print-mode')}return;
  }
- if(action==='social-course-import')return commonForm('批量导入培训课程',c.note('复制表格的三列：课程编号、课程名称、项目编号。先预检，再整批确认。')+c.field('rows','课程清单','textarea','课程编号\t课程名称\t项目编号',{rows:10,full:true}),async v=>{
-  const lines=v.rows.trim().split(/\r?\n/);if(lines.shift()!=='课程编号\t课程名称\t项目编号')throw Error('请保留三列表头');
-  const rows=lines.map(line=>{const[code,name,project_code,...extra]=line.split('\t');if(!code||!name||!project_code||extra.length)throw Error('每行须为课程编号、课程名称、项目编号三列');return {code,name,project_code}});
+ if(action==='social-course-import')return commonForm('批量导入培训课程',c.note('从表格复制八列（含表头）：'+COURSE_COLUMNS.join('、')+'。教学方式填'+TEACHING_MODES.map(x=>x[1]).join('/')+'；思政属性填'+IDEOLOGY.map(x=>x[1]).join('/')+'；主讲教师填姓名，重名时写“姓名 工号”；课件审查填“未审查”或“已审查 审查人 2026-09-01”。后五列可留空。先预检，再整批确认。')+c.field('rows','课程清单','textarea',COURSE_COLUMNS.join('\t'),{rows:10,full:true}),async v=>{
+  const rows=parseCourseRows(v.rows);
   await importCourses(rows,v,async()=>{await socialAction('social-course-import','',c);for(const key of ['rows','reason','basis'])document.getElementById('f-'+key).value=v[key]||''});
  },{submit:'预检课程清单'});
  if(action==='social-course-chaoxing')return commonForm('超星学习通导出表导入',c.note('在超星学习通课程管理中导出课程列表，选择关联项目后上传 CSV 文件或直接粘贴表格内容。可识别课程名称、课程编号（课程ID）、授课教师、视频数、视频时长、章节数和学习人数；视频时长可为分钟数、时:分:秒，或带“分钟”的数值。',false,'导出表填写说明')+await projectPicker('project_code','code')+c.field('file','上传逗号分隔表格（可不选）','file','',{required:false,accept:'.csv,.txt,.tsv'})+c.field('rows','或粘贴导出表内容（含表头）','textarea','',{rows:10,full:true,required:false}),async(v,f)=>{
@@ -460,8 +503,9 @@ export async function socialAction(action,id,c){
  if(action==='social-project-new')return projectForm();if(action==='social-project-edit')return projectForm(true);if(action==='social-policy-new')return policyForm();if(action==='social-policy-edit')return policyForm(opened.item);if(action==='social-policy-copy')return policyForm(opened.item,true);
  if(action==='social-export'){const[k,i]=id.split('|');return c.download(path(k,i)+'/export','社会培训办理材料.xlsx')}
  if(action==='social-course-resources'){const[code,p='1']=id.split('|'),result=await c.api('/social/courses/'+encodeURIComponent(code)+'/resources?page='+p);return c.modal('课程资源',c.table(['名称','类型','视频时长（分钟）','操作'],result.items.map(r=>[c.esc(r.name),c.esc({video:'视频',document:'文档',link:'其他链接'}[r.data.resource_type]),r.data.duration_minutes??'不适用',c.act('查看详情','social-detail','social_resource|'+r.id+'|'+encodeURIComponent(code)+'|'+p)])),(result.page>1?c.act('上一页','social-course-resources',code+'|'+(result.page-1)):'')+(result.page*result.size<result.total?c.act('下一页','social-course-resources',code+'|'+(result.page+1)):''))}
- if(action==='social-course-for-project'){const code=opened.item.data.code;return commonForm('登记本项目课程',c.note('课程将关联到本项目（'+code+'）。登记后，参训明细里的“课程编号”填这里的编号。')+c.field('code','课程编号')+c.field('name','课程名称'),v=>c.api('/social/courses',{method:'POST',body:{...v,project_code:code}}),{submit:'保存课程',reasonLabel:'办理说明',reasonDefault:'登记项目课程',reopen:true})}
- if(action==='social-course-new')return commonForm('登记培训课程',c.field('code','课程编号')+c.field('name','课程名称')+await projectPicker('project_code','code'),v=>c.api('/social/courses',{method:'POST',body:v}),{compact:true,submit:'保存课程'});
+ if(action==='social-course-for-project'){const code=opened.item.data.code;return commonForm('登记本项目课程',c.note('课程将关联到本项目（'+code+'）。登记后，参训明细里的“课程编号”填这里的编号。')+c.field('code','课程编号')+c.field('name','课程名称')+courseInfoFields(),v=>c.api('/social/courses',{method:'POST',body:courseInfoValue({...v,project_code:code})}),{submit:'保存课程',reasonLabel:'办理说明',reasonDefault:'登记项目课程',reopen:true})}
+ if(action==='social-course-view')return courseView(id);
+ if(action==='social-course-new')return commonForm('登记培训课程',c.note('学校直接登记的课程不走审批，保存即入库。')+c.field('code','课程编号')+c.field('name','课程名称')+await projectPicker('project_code','code')+courseInfoFields(),v=>c.api('/social/courses',{method:'POST',body:courseInfoValue(v)}),{compact:true,submit:'保存课程'});
  if(['social-resource-new','social-resource-edit'].includes(action)){
   const edit=action==='social-resource-edit',x=edit?opened.item:null,old=x?{...x.data,name:x.name,code:x.code}:{},courseList=edit?opened.courseList:null;id=x?.kind||id;
   const f=(key,label,type='text',options={})=>c.field(key,label,type,old[key]??'',options);
@@ -556,7 +600,7 @@ export async function socialAction(action,id,c){
   const header='单元编号\t课程编号\t班级编号\t模块名称\t培训日期\t学员编号\t本校全日制生\t准毕业生例外\t实名签到\t学时达标\t全程参训\t结业通过\t重点群体\t剔除原因\t教师工号\t岗位\t人员类型\t佐证说明';
   const code=opened.item.data.code,list=await c.api('/social/workspace?section=courses&q='+encodeURIComponent(code)).then(w=>(w.courses?.items||w.courses||[]).filter(x=>x.project_code===code)).catch(()=>[]);
   setTimeout(()=>typeof document!=='undefined'&&document.getElementById('unit-template')?.addEventListener('click',()=>{const sample=['U001','C001','B01','模块一','2026-09-10','S0001','否','否','是','是','是','是','否','','J001','主讲','校内','签到表第1页'];const blob=new Blob(['\ufeff'+header.split('\t').join(',')+'\r\n'+sample.join(',')+'\r\n'],{type:'text/csv;charset=utf-8'}),a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download='参训明细导入模板.csv';a.click();setTimeout(()=>URL.revokeObjectURL(a.href),5000)}),0);
-  const courseNote=list.length?c.note('本项目已登记课程（“课程编号”列填这些编号）：'+list.map(x=>x.code+' '+x.name).join('；')):c.note('本项目还没有登记课程，参训明细里的课程编号无处关联。请先点下面“返回详情”，再点“登记本项目课程”。',true);
+  const courseNote=list.length?c.note('本项目已登记课程（“课程编号”列填这些编号）：'+list.map(x=>x.code+' '+x.name).join('；')):c.note('本项目还没有登记课程，参训明细里的课程编号无处关联。请先点下面“返回详情”，再点“登记本项目课程”（学院点“申请本项目课程”，学校审批后入库）。',true);
   return commonForm('导入参训明细',courseNote+c.note('三步完成：①下载模板，用 Excel 打开，删掉示例行后按行填写（每位学员每个单元一行）；②另存为 CSV 后在下面选择文件，或直接从 Excel 复制整表粘贴；③先预检，确认人数无误后再入库。判断项填“是/否”，学员编号用学校内部编号，不填身份证号；同一项目同一学员跨班仍须用同一编号，人天式同一天只计一次。',false,'填写与计数说明')+'<div class="form-field full"><button type="button" class="btn light" id="unit-template">下载导入模板</button><p class="hint">岗位填：主讲 / 实训指导 / 管理辅助；人员类型填：校内 / 外聘。多人同堂使用相同单元编号。</p></div>'+c.field('file','选择填好的逗号分隔表格','file','',{required:false,accept:'.csv,.txt,.tsv'})+c.field('rows','或粘贴电子表格内容（含表头）','textarea',header,{rows:8,full:true,required:false}),async(v,f)=>{
    const file=f?.querySelector('input[type=file]')?.files?.[0],text=file?await readImportFile(file):v.rows;
    const rows=parseTrainingRows(text,opened.item.data.mode,c.teachers),body={rows,expected_version:opened.item.version,reason:v.reason,basis:v.basis};const preview=await c.api('/social/projects/'+opened.id+'/units/preview',{method:'POST',body});

@@ -320,6 +320,10 @@ class ResourceIn(Reason):
     confirmed_on: date | None = None
     teacher_id: Ident | None = None
     teacher: str = Field(default='',max_length=200)
+    # 培训基地：用途（实践教学 / 思政实践教学）、设立日期、共建单位。
+    usages: list[Literal['practice', 'ideology']] = Field(default_factory=list, max_length=2)
+    established_on: date | None = None
+    partner: str = Field(default='', max_length=200)
     @model_validator(mode='after')
     def course_resource(self):
         if self.kind=='course_resource' and not self.course_code:raise ValueError('课程资源须关联课程')
@@ -341,16 +345,33 @@ class DutiesIn(Reason):
         return self
 
 
+class CoursewareReview(Input):
+    checked: bool = False
+    reviewer: str = Field(default='', max_length=100)
+    reviewed_on: date | None = None
+    reference: str = Field(default='', max_length=200)
+
+
 class CourseIn(Reason):
     code: Code
     name: Name
     project_code: Code
+    # 培训课程五项：学时、教学方式、思政属性、主讲教师、课件审查（学校直接登记或批量导入时填写，存在课程资料记录里）。
+    hours: Nonnegative | None = None
+    teaching_mode: Literal['lecture', 'practice', 'case', 'onsite', 'online'] | None = None
+    ideology: Literal['ideology_course', 'course_ideology', 'none'] | None = None
+    teacher: str = Field(default='', max_length=200)
+    teacher_id: Ident | None = None
+    courseware: CoursewareReview | None = None
+    @model_validator(mode='after')
+    def courseware_complete(self):
+        if self.courseware and self.courseware.checked and not (self.courseware.reviewer.strip() and self.courseware.reviewed_on):
+            raise ValueError('课件已审查时，请填写审查人和审查日期')
+        return self
 
 
 class CourseImportRow(CourseIn):
     source: Literal['manual', 'chaoxing'] = 'manual'
-    teacher: str = Field(default='', max_length=200)
-    teacher_id: Ident | None = None
     video_count: int | None = Field(default=None, ge=0, le=100000)
     video_minutes: Nonnegative | None = None
     chapters: int | None = Field(default=None, ge=0, le=100000)
@@ -431,13 +452,6 @@ class CaseNoteIn(Reason):
 TEACHING_MODES = {'lecture':'讲授','practice':'实训实操','case':'案例研讨','onsite':'现场教学','online':'线上自学'}
 IDEOLOGY = {'ideology_course':'思政课程','course_ideology':'课程思政','none':'无'}
 BASE_USAGES = {'practice':'实践教学基地','ideology':'思政实践教学基地'}
-
-
-class CoursewareReview(Input):
-    checked: bool = False
-    reviewer: str = Field(default='', max_length=100)
-    reviewed_on: date | None = None
-    reference: str = Field(default='', max_length=200)
 
 
 class CourseApplyData(Input):

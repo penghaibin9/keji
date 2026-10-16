@@ -65,12 +65,26 @@ def notify(db, obj, title, desc):
     message_push.queue(db, [obj.data.get('teacher_id'), obj.data.get('created_by')], title, desc)
 
 
+def registrar_start(db, a, flow, applicant, org_id):
+    """教研室、学院负责人代老师登记时，本人能办的那几级视为登记时已确认，直接到上一级；学校一级始终要办。"""
+    chain = ap.FLOWS[flow]['chain']
+    skipped = []
+    for level in chain[:-1]:
+        if not ap.can_handle(db, a, applicant, level, org_id):
+            break
+        skipped.append(level)
+    if not skipped:
+        return ap.first_state(flow), None
+    return ap.FLOWS[flow]['states'][chain[len(skipped)]], ap.LEVEL_LABEL[skipped[-1]] + '登记时已确认'
+
+
 def create(db, a, kind, flow, code, name, values, applicant, college, reason):
     values.update(application=True, teacher_id=applicant.id, teacher_name=applicant.name, created_by=a.id, returned_level=None)
-    obj = SocialResource(kind=kind, org_id=college.id, code=code, name=name, state=ap.first_state(flow), data=values)
+    state, confirmed = registrar_start(db, a, flow, applicant, college.id) if a.id != applicant.id else (ap.first_state(flow), None)
+    obj = SocialResource(kind=kind, org_id=college.id, code=code, name=name, state=state, data=values)
     db.add(obj)
     db.flush()
-    return record(db, a, obj, '提交' + ap.FLOWS[flow]['label'], {}, reason, {'flow': flow, 'decision': 'submit'})
+    return record(db, a, obj, '提交' + ap.FLOWS[flow]['label'], {}, reason, {'flow': flow, 'decision': 'submit', 'college_by_registrant': confirmed})
 
 
 @router.get('/mine')
@@ -192,9 +206,12 @@ def action(ident: str, data: ApplicationAction, request: Request):
             if not mine or obj.state not in ('RETURNED', 'WITHDRAWN'):
                 raise HTTPException(409, '只有申请人可以重新提交被退回或已撤回的申请')
             level = obj.data.get('returned_level') if obj.state == 'RETURNED' else None
-            obj.state = ap.resume_state(flow, level)
+            obj.state, confirmed = ap.resume_state(flow, level), None
+            if level is None and applicant is not None and a.id != applicant.id:
+                obj.state, confirmed = registrar_start(db, a, flow, applicant, obj.org_id)
             obj.data = {**obj.data, 'returned_level': None}
-            return record(db, a, obj, '重新提交' + f['label'], before, data.reason, {'flow': flow, 'decision': 'submit', 'resumed_from': level})
+            return record(db, a, obj, '重新提交' + f['label'], before, data.reason,
+                          {'flow': flow, 'decision': 'submit', 'resumed_from': level, 'college_by_registrant': confirmed})
         if data.action == 'withdraw':
             if not mine or obj.state not in apps.PENDING_STATES:
                 raise HTTPException(409, '只有申请人可以撤回审批中的申请')

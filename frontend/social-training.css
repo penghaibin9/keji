@@ -440,3 +440,7 @@
 .lib-tile.active{border-color:var(--blue);box-shadow:0 0 0 2px #dbe7ff}
 .quality-base{grid-column:1/-1;display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:8px 12px;padding:10px 12px;border:1px dashed var(--line);border-radius:10px}
 .quality-base>b{grid-column:1/-1;font-size:13px;color:var(--muted)}
+
+/* 培训课程清单：两个操作上下排，窄列不截断 */
+.course-actions{display:flex;flex-direction:column;align-items:flex-start;gap:2px}
+.course-actions .btn{white-space:nowrap}

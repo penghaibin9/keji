@@ -26,13 +26,13 @@ function renderContext(data={},permissions=[]){
  const workspace={projects:[],courses:[],resources:[],claims:[],annuals:[],policies:[],my_duties:[],course_stats:{},decisions:{},states:{ACTIVE:'已启用',DRAFT:'草稿'},pagination:{total:0,page:1,size:20},resource_pagination:{total:0,page:1,size:200},...data};
  const requests=[];
  return {
-  requests,esc:escapeHtml,can:permission=>permissions.includes(permission),me:{user:{}},
+  requests,esc:escapeHtml,can:permission=>permissions.includes(permission),me:{user:{},role:{kind:'school'}},
   api:async url=>{requests.push(url);return url==='/social/ledger-summary'?{items:[],note:''}:workspace},
   icon:()=>'<svg class="icon"></svg>',
   act:(label,action,id='')=>'<button data-action="'+escapeHtml(action)+'" data-id="'+escapeHtml(id)+'">'+escapeHtml(label)+'</button>',
   table:(headers,rows)=>'<table><thead><tr>'+headers.map(h=>'<th>'+escapeHtml(h)+'</th>').join('')+'</tr></thead><tbody>'+rows.map(row=>'<tr>'+row.map(cell=>'<td>'+cell+'</td>').join('')+'</tr>').join('')+'</tbody></table>',
   note:escapeHtml,pageHead:(description,buttons)=>'<header>'+escapeHtml(description)+buttons+'</header>',
-  orgName:id=>id,teacherName:id=>id,periodName:id=>id,render:async()=>{},closeModal:()=>{},field:()=>''
+  orgName:id=>id,teacherName:id=>id,periodName:id=>id,render:async()=>{},closeModal:()=>{},field:()=>'',teacherField:()=>''
  };
 }
 async function renderSocial(section,context){
@@ -119,9 +119,19 @@ test('基地名称、编号、认定依据和地点始终作为文本显示',asy
 test('基地校内、校外及未知类型分别展示，未知类型不计入校内或校外',async()=>{
  const resources=[base('inside',true),base('outside',false),base('unknown',undefined),base('null',null),base('text','false')];
  const html=await renderSocial('bases',renderContext({resources,pagination:{total:45,page:1,size:20}}));
- assert.deepEqual(summaryValues(html),{'培训基地总数':'45','本页校内基地':'1','本页校外基地':'1'});
+ assert.deepEqual(summaryValues(html),{'基地总数':'45','思政实践教学基地':'0','本年新设':'0'});
  const labels=[...html.matchAll(/<span class="social-badge"[^>]*>(校内基地|校外基地|类型待补充)<\/span>/g)].map(match=>match[1]);
  assert.deepEqual(labels,['校内基地','校外基地','类型待补充','类型待补充','类型待补充']);
+});
+
+test('基地卡片显示用途、设立日期、共建单位，统计思政基地和本年新设，审批中的申请不计入',async()=>{
+ const year=String(new Date().getFullYear());
+ const resources=[base('a',false,{usages:['practice','ideology'],established_on:year+'-03-01',partner:'湘茶集团'}),base('b',true,{usages:['practice'],established_on:'2020-01-01'}),
+  {...base('c',true,{usages:['ideology'],established_on:year+'-09-01',application:true}),state:'COLLEGE'}];
+ const html=await renderSocial('bases',renderContext({resources,pagination:{total:3,page:1,size:200}}));
+ assert.deepEqual(summaryValues(html),{'基地总数':'3','思政实践教学基地':'1','本年新设':'1'});
+ assert.match(html,/用途：实践教学基地、思政实践教学基地/);assert.match(html,/共建单位：湘茶集团/);assert.match(html,/设立日期：2020-01-01/);
+ assert.match(html,/data-action="app-detail" data-id="c">看进度/);
 });
 
 test('分页统计区分授权总数、本页记录和本页已结项',async()=>{
@@ -343,4 +353,16 @@ test('资源补正保留不在当前分页中的课程和教师关联',async()=>
  c.api=async()=>({item,attachments:[],events:[],state_label:'已登记'});
  await socialAction('social-detail','social_resource|r',c);await socialAction('social-resource-edit','',c);
  const body=c.modals.at(-1).body;assert.match(body,/value="OFF-PAGE" selected/);assert.match(body,/value="off-page-teacher" selected/);assert.match(body,/原关联教师（保留）/);
+});
+
+test('course import template has eight columns and maps labels to codes',async()=>{
+ const {parseCourseRows}=await import('../../frontend/social-training.js');
+ const head='课程编号\t课程名称\t关联项目编号\t学时\t教学方式\t思政属性\t主讲教师\t课件审查';
+ const rows=parseCourseRows([head,'C1\t茶艺\tP1\t16\t实训实操\t课程思政\t王老师 J002\t已审查 学院审查组 2026-09-01','C2\t焊接\tP1'].join('\n'),teachers);
+ assert.deepEqual(rows[0],{code:'C1',name:'茶艺',project_code:'P1',hours:'16',teaching_mode:'practice',ideology:'course_ideology',teacher:'王老师',teacher_id:'t2',courseware:{checked:true,reviewer:'学院审查组',reviewed_on:'2026-09-01'}});
+ assert.deepEqual(rows[1],{code:'C2',name:'焊接',project_code:'P1'});
+ assert.deepEqual(parseCourseRows('课程编号\t课程名称\t项目编号\nC3\t旧模板\tP1',teachers),[{code:'C3',name:'旧模板',project_code:'P1'}]);
+ assert.throws(()=>parseCourseRows([head,'C1\t茶艺\tP1\t16\t上课'].join('\n'),teachers),/教学方式/);
+ assert.throws(()=>parseCourseRows([head,'C1\t茶艺\tP1\t\t\t\t\t审了'].join('\n'),teachers),/课件审查/);
+ assert.throws(()=>parseCourseRows('课程编号\t课程名称\nC1\tA',teachers),/表头/);
 });
