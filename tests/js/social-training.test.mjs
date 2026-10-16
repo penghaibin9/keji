@@ -119,17 +119,17 @@ test('基地名称、编号、认定依据和地点始终作为文本显示',asy
 test('基地校内、校外及未知类型分别展示，未知类型不计入校内或校外',async()=>{
  const resources=[base('inside',true),base('outside',false),base('unknown',undefined),base('null',null),base('text','false')];
  const html=await renderSocial('bases',renderContext({resources,pagination:{total:45,page:1,size:20}}));
- assert.deepEqual(summaryValues(html),{'基地总数':'45','思政实践教学基地':'0','本年新设':'0'});
+ assert.deepEqual(summaryValues(html),{'基地总数':'45','思政实践教学基地':'0','近一年新增':'0'});
  const labels=[...html.matchAll(/<span class="social-badge"[^>]*>(校内基地|校外基地|类型待补充)<\/span>/g)].map(match=>match[1]);
  assert.deepEqual(labels,['校内基地','校外基地','类型待补充','类型待补充','类型待补充']);
 });
 
-test('基地卡片显示用途、设立日期、共建单位，统计思政基地和本年新设，审批中的申请不计入',async()=>{
- const year=String(new Date().getFullYear());
- const resources=[base('a',false,{usages:['practice','ideology'],established_on:year+'-03-01',partner:'湘茶集团'}),base('b',true,{usages:['practice'],established_on:'2020-01-01'}),
-  {...base('c',true,{usages:['ideology'],established_on:year+'-09-01',application:true}),state:'COLLEGE'}];
+test('基地卡片显示用途、设立日期、共建单位，统计思政基地和近一年新增，审批中的申请不计入',async()=>{
+ const recent=new Date(Date.now()-30*864e5).toLocaleDateString('sv-SE');
+ const resources=[base('a',false,{usages:['practice','ideology'],established_on:recent,partner:'湘茶集团'}),base('b',true,{usages:['practice'],established_on:'2020-01-01'}),
+  {...base('c',true,{usages:['ideology'],established_on:recent,application:true}),state:'COLLEGE'}];
  const html=await renderSocial('bases',renderContext({resources,pagination:{total:3,page:1,size:200}}));
- assert.deepEqual(summaryValues(html),{'基地总数':'3','思政实践教学基地':'1','本年新设':'1'});
+ assert.deepEqual(summaryValues(html),{'基地总数':'3','思政实践教学基地':'1','近一年新增':'1'});
  assert.match(html,/用途：实践教学基地、思政实践教学基地/);assert.match(html,/共建单位：湘茶集团/);assert.match(html,/设立日期：2020-01-01/);
  assert.match(html,/data-action="app-detail" data-id="c">看进度/);
 });
@@ -365,4 +365,19 @@ test('course import template has eight columns and maps labels to codes',async()
  assert.throws(()=>parseCourseRows([head,'C1\t茶艺\tP1\t16\t上课'].join('\n'),teachers),/教学方式/);
  assert.throws(()=>parseCourseRows([head,'C1\t茶艺\tP1\t\t\t\t\t审了'].join('\n'),teachers),/课件审查/);
  assert.throws(()=>parseCourseRows('课程编号\t课程名称\nC1\tA',teachers),/表头/);
+});
+
+test('导出上报表只给学校、学院，预检有缺项时不出下载按钮，点项目名去补',async()=>{
+ const c=renderContext({},['export','records.read']);
+ const html=await renderSocial('projects',c);assert.match(html,/data-action="social-report-export"/);
+ c.me={user:{},role:{kind:'teacher'}};assert.doesNotMatch(await renderSocial('projects',c),/social-report-export/);
+ c.me={user:{},role:{kind:'college'}};
+ let modal;c.modal=(title,body,foot)=>{modal={title,body,foot}};c.table=(h,rows)=>rows.map(r=>r.join('|')).join('\n');c.note=x=>x;
+ await socialAction('social-report-export','',c);assert.match(modal.body,/2023-07-01/);assert.doesNotMatch(modal.foot,/social-report-download/);
+ const result={start:'2023-07-01',end:'2026-06-30',count:1,blocked:1,ready:false,scope:'本院',note:'说明',items:[{id:'p1',name:'茶艺',cohort:'一期',org_name:'学院一',state_label:'已结项',issues:['请填写总学时']}]};
+ c.api=async url=>{c.last=url;return result};
+ await socialAction('social-report-check','',c);
+ assert.match(c.last,/start=2023-07-01&end=2026-06-30/);assert.match(modal.body,/data-action="social-detail" data-id="social_project\|p1"/);assert.match(modal.body,/请填写总学时/);assert.doesNotMatch(modal.foot,/social-report-download/);
+ Object.assign(result,{blocked:0,ready:true,items:[{...result.items[0],issues:[]}]});
+ await socialAction('social-report-check','',c);assert.match(modal.foot,/social-report-download/);
 });

@@ -444,3 +444,9 @@
 /* 培训课程清单：两个操作上下排，窄列不截断 */
 .course-actions{display:flex;flex-direction:column;align-items:flex-start;gap:2px}
 .course-actions .btn{white-space:nowrap}
+/* 导出上报表弹窗 */
+.report-range{display:flex;flex-wrap:wrap;gap:12px;margin:12px 0}
+.report-range label{display:flex;flex-direction:column;gap:4px;font-size:13px;color:var(--muted);min-width:0}
+.report-range input,.report-range select{min-height:36px}
+.report-result{margin-top:8px;min-width:0}
+.report-issues{color:var(--amber);font-size:13px}

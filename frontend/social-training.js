@@ -124,6 +124,30 @@ function courseView(code){
  return c.modal('查看课程',detailFacts('课程资料',rows)+(Object.keys(info).length?'':c.note('这门课是早先登记的，学时、教学方式等五项资料还没有补充。',true)),foot);
 }
 
+// 导出上报表：选区间 → 预检缺项（点项目名去补）→ 下载“1.2 立德树人”和“绩效数据”两张表。
+let reportRange={start:'2023-07-01',end:'2026-06-30',year:''},reportResult=null;
+function schoolYears(){const now=new Date(),last=now.getMonth()>=8?now.getFullYear():now.getFullYear()-1,out=[];for(let y=last;y>=2020;y--)out.push(y+'-'+(y+1));return out}
+function reportModal(){
+ const c=context,e=c.esc,r=reportResult;
+ const form='<form id="report-range-form" class="report-range" onsubmit="return false"><label>开始日期<input type="date" id="report-start" value="'+e(reportRange.start)+'"></label><label>结束日期<input type="date" id="report-end" value="'+e(reportRange.end)+'"></label>'
+  +'<label>或按学年<select id="report-year"><option value="">用左边的起止日期</option>'+schoolYears().map(y=>'<option value="'+y+'"'+(reportRange.year===y?' selected':'')+'>'+y+' 学年</option>').join('')+'</select></label></form>';
+ let body=c.note('默认是上级给的统计区间（2023-07-01 至 2026-06-30），也可以选学年。只统计已备案及以后的项目；'+(c.me?.role?.kind==='school'?'学校导出全校。':'学院导出本院，用于自查。'))+form;
+ if(r){
+  body+='<div class="report-result">'+(r.count?'<p><strong>'+e(r.start+' 至 '+r.end)+'</strong>：'+e(r.scope)+'共 '+r.count+' 个项目，'+(r.blocked?'<span class="badge orange-b">'+r.blocked+' 个缺上报信息</span>，点项目名打开后用“补填上报信息”补齐。':'<span class="badge green-b">全部齐全</span>，可以下载。')+'</p>':'<p>这个区间里没有已备案的项目。</p>')
+   +(r.items.length?c.table(['项目','承办学院','状态','缺项'],r.items.map(x=>[c.act(x.name+(x.cohort?'（'+x.cohort+'）':''),'social-detail','social_project|'+x.id,'text'),e(x.org_name),e(x.state_label),x.issues.length?'<span class="report-issues">'+x.issues.map(e).join('<br>')+'</span>':'<span class="badge green-b">齐全</span>'])):'')
+   +'<p class="muted small">'+e(r.note)+'</p></div>';
+ }
+ const foot=[c.act(r?'重新预检':'预检','social-report-check','',r?.ready?'':'primary'),...(r?.ready?[c.act('下载上报表','social-report-download','','primary')]:[]),c.act('关闭','close')].join('');
+ return c.modal('导出上报表',body,foot,true);
+}
+function readReportRange(){
+ const val=id=>typeof document==='undefined'?'':document.getElementById(id)?.value||'',year=val('report-year');
+ if(year){const y=Number(year.slice(0,4));reportRange={start:y+'-09-01',end:(y+1)+'-08-31',year}}
+ else reportRange={start:val('report-start')||reportRange.start,end:val('report-end')||reportRange.end,year:''};
+ if(!reportRange.start||!reportRange.end)throw Error('请填写开始和结束日期');
+ return 'start='+encodeURIComponent(reportRange.start)+'&end='+encodeURIComponent(reportRange.end);
+}
+
 export async function socialPage(section,c){
  context=c;if(listSection!==section){listPage=1;listSearch='';resourcePage=1;listSection=section}workspace=await c.api('/social/workspace?section='+section+'&page='+listPage+'&q='+encodeURIComponent(listSearch)+'&resource_page='+resourcePage);workspaceUser=c.me?.user?.id;const {esc,act,table,note,pageHead}=c;
  // 教研室负责人在业务办理里只读：项目由学院申报、学校备案，课程和基地由学院登记（后端同样拒绝写入）。
@@ -142,6 +166,7 @@ export async function socialPage(section,c){
  if(section==='recognition'&&c.me.user.staff_no)buttons.push(act('申报本人积分','social-claim-new','','primary'));
  if(section==='recognition'&&workspace.my_duties.includes('secretary'))buttons.push(act('生成双月汇总或年度公示','social-report-new'));
  if(section==='annual'&&can('assessment.review')&&['school','college'].includes(c.me?.role?.kind))buttons.push(act('建立学院年度自评','social-annual-new','','primary'));
+ if(section==='projects'&&['school','college'].includes(c.me?.role?.kind)&&c.can('export'))buttons.push(act('导出上报表','social-report-export'));
  if(['projects','recognition','annual'].includes(section)&&can('assessment.review')&&(workspace.my_duties.length||c.me.role.kind==='school'))buttons.push(act('利益冲突申报与回避','tz-conflicts'));
  if(section==='policy'&&can('rules.manage'))buttons.push(act('新建制度口径版本','social-policy-new','','primary'),act('一键生成推荐口径草稿','social-policy-recommended'));
  if(section==='policy'&&can('roles.manage')&&c.me.user.is_admin)buttons.push(act('配置审批职责','social-duties'));
@@ -165,7 +190,7 @@ export async function socialPage(section,c){
  }[section];
  const p=workspace.pagination,items=section==='recognition'?workspace.claims:section==='annual'?workspace.annuals:section==='policy'?workspace.policies:section==='courses'?workspace.courses:section==='projects'?workspace.projects:workspace.resources;
  let stats=[[listSearch?'当前检索总数':config.label+'总数',p.total,'授权范围内的记录',config.icon]];
- if(section==='bases'){const year=String(new Date().getFullYear()),live=items.filter(x=>x.kind==='base'&&!APPLYING.includes(x.state));stats[0]=['基地总数',p.total,'授权范围内的基地，含你提交的审批中申请','school'];stats.push(['思政实践教学基地',live.filter(x=>(x.data.usages||[]).includes('ideology')).length,'本页已生效、用途含思政实践教学的基地','award'],['本年新设',live.filter(x=>String(x.data.established_on||'').startsWith(year)).length,'本页已生效、设立日期在'+year+'年的基地','clock'])}
+ if(section==='bases'){const since=new Date(Date.now()-365*864e5).toLocaleDateString('sv-SE'),today=new Date().toLocaleDateString('sv-SE'),live=items.filter(x=>x.kind==='base'&&!APPLYING.includes(x.state));stats[0]=['基地总数',p.total,'授权范围内的基地，含你提交的审批中申请','school'];stats.push(['思政实践教学基地',live.filter(x=>(x.data.usages||[]).includes('ideology')).length,'本页已生效、用途含思政实践教学的基地','award'],['近一年新增',live.filter(x=>{const d=String(x.data.established_on||'');return d>since&&d<=today}).length,'本页已生效、设立日期在近 365 天内的基地','clock'])}
  else if(section==='courses')stats.push(['本页课程资源',items.reduce((sum,x)=>sum+(workspace.course_stats[x.code]?.resources||0),0),'所列课程的资源数量','file'],['本页视频资源',items.reduce((sum,x)=>sum+(workspace.course_stats[x.code]?.videos||0),0),'所列课程的视频数量','clock']);
  else if(section==='outcomes')stats.push(['本页记录',items.length,'当前分页内的记录',config.icon],['本页已填认定日期',items.filter(x=>x.data.confirmed_on).length,'已填写认定日期的成果','check']);
  else stats.push(['本页记录',items.length,'当前分页内的记录',config.icon],['本页已'+(section==='projects'?'结项':section==='policy'?'启用':'归档'),items.filter(x=>['CLOSED','ARCHIVED','ACTIVE'].includes(x.state)).length,'依照当前办理状态','check']);
@@ -500,6 +525,9 @@ export async function socialAction(action,id,c){
  }
  if(action==='social-report-new')return commonForm('双月汇总与年度公示',c.field('org_id','汇总组织（年度公示选择学校）','select','',{options:c.orgs.filter(o=>['school','college'].includes(o.kind)).map(o=>[o.id,o.name])})+c.field('year','年度','number',new Date().getFullYear(),{min:2000,max:2200,step:1})+c.field('window','汇总范围','select','1-2',{options:[['1-2','1—2月'],['3-4','3—4月'],['5-6','5—6月'],['7-8','7—8月'],['9-10','9—10月'],['11-12','11—12月'],['1-12','年度全校公示']]})+c.field('policy_id','已确认制度与校历','select','',{options:workspace.policies.filter(p=>p.state==='ACTIVE').map(p=>[p.id,p.name])}),v=>{const{window,...data}=v;const[start_month,end_month]=window.split('-').map(Number);return c.api('/social/reports',{method:'POST',body:{...data,start_month,end_month}})},{submit:'生成汇总',after:r=>r?.item?.id?showDetail('social_resource',r.item.id):null});
  if(action==='social-report-info')return reportInfoForm();
+ if(action==='social-report-export'){reportResult=null;return reportModal()}
+ if(action==='social-report-check'){const q=readReportRange();reportResult=await c.api('/social/report-export/check?'+q);return reportModal()}
+ if(action==='social-report-download'){const q=readReportRange();return c.download('/social/report-export?'+q,'上报表_'+reportRange.start+'_'+reportRange.end+'.xlsx')}
  if(action==='social-project-new')return projectForm();if(action==='social-project-edit')return projectForm(true);if(action==='social-policy-new')return policyForm();if(action==='social-policy-edit')return policyForm(opened.item);if(action==='social-policy-copy')return policyForm(opened.item,true);
  if(action==='social-export'){const[k,i]=id.split('|');return c.download(path(k,i)+'/export','社会培训办理材料.xlsx')}
  if(action==='social-course-resources'){const[code,p='1']=id.split('|'),result=await c.api('/social/courses/'+encodeURIComponent(code)+'/resources?page='+p);return c.modal('课程资源',c.table(['名称','类型','视频时长（分钟）','操作'],result.items.map(r=>[c.esc(r.name),c.esc({video:'视频',document:'文档',link:'其他链接'}[r.data.resource_type]),r.data.duration_minutes??'不适用',c.act('查看详情','social-detail','social_resource|'+r.id+'|'+encodeURIComponent(code)+'|'+p)])),(result.page>1?c.act('上一页','social-course-resources',code+'|'+(result.page-1)):'')+(result.page*result.size<result.total?c.act('下一页','social-course-resources',code+'|'+(result.page+1)):''))}
