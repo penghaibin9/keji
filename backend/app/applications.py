@@ -509,7 +509,7 @@ def todo_items(db, a):
             continue
         hint = '（' + handling['acting_for'] + '）' if handling.get('acting_for') else ''
         items.append({'type': 'application', 'id': obj.id, 'title': ap.FLOWS[flow]['label'] + '：' + obj.name + hint,
-                      'state': state_label(obj), 'teacher_id': obj.data.get('teacher_id'), 'target_id': None,
+                      'state': state_label(obj), 'teacher_id': obj.data.get('teacher_id'), 'target_id': obj.org_id,
                       'same_person': ap.SAME_PERSON if ap.same_person(db, 'social_resource', obj.id, a) else None})
     return items + project_todos(db, a)
 

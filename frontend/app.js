@@ -1,6 +1,6 @@
 import {icons} from './icons.js';
-import {socialPage,socialAction} from './social-training.js?v=20261016-apply16';
-import {applicationAction,trainersHtml,myApplicationsHtml,homeApplicationsHtml,myCoursesHtml,libraryHtml,libraryFilterSubmit,homeCoursesHtml,courseAction} from './applications.js?v=20261016-apply16';
+import {socialPage,socialAction} from './social-training.js?v=20261016-apply17';
+import {applicationAction,trainersHtml,myApplicationsHtml,homeApplicationsHtml,myCoursesHtml,libraryHtml,libraryFilterSubmit,homeCoursesHtml,courseAction} from './applications.js?v=20261016-apply17';
 import {nextCode,runBatch,batchStage,batchMode,batchPerformer,BATCH_LABELS} from './approval-flow.js?v=20261012-streamline1';
 import {ledgerPage,resourceStatsPage,homeIndicators,ledgerAction,resetLedgerView,minePage,mineReminders} from './social-ledgers.js?v=20261016-tui1';
 import {rosterSection,rosterHandlers,onlineHandlers,showStaffDetail,showCourseDetail,presetRoster,loadCodeTables} from './school-data.js?v=20261014-school-review1';
@@ -167,7 +167,7 @@ const periodName=id=>periods.find(p=>p.id===id)?.name||'未选择周期';
 const orgName=id=>orgs.find(o=>o.id===id)?.name||'—';
 const query=o=>{const q=new URLSearchParams;for(const[k,v]of Object.entries(o))if(v!==''&&v!==null&&v!==undefined)q.set(k,String(v));return q.toString()};
 const requestKey=()=>typeof crypto.randomUUID==='function'?crypto.randomUUID():Array.from(crypto.getRandomValues(new Uint8Array(24)),x=>x.toString(16).padStart(2,'0')).join('');
-const reasonFields=(value='',label='办理意见 / 调整原因',basisRequired=false)=>field('reason',label,'textarea',value,{required:true,full:true,hint:''})+field('basis','依据说明或材料编号','text','',{full:true,required:basisRequired});
+const reasonFields=(value='',label='办理意见 / 调整原因',basisRequired=false,basisPlaceholder='例：学院会议纪要〔2026〕3号、协议编号、材料编号',reasonPlaceholder='')=>field('reason',label,'textarea',value,{required:true,full:true,hint:'',placeholder:reasonPlaceholder})+field('basis','依据说明或材料编号','text','',{full:true,required:basisRequired,placeholder:basisPlaceholder});
 async function api(path,{method='GET',body,raw=false,key,headers:providedHeaders={}}={}){
  const headers={...providedHeaders};if(method!=='GET'){headers['X-CSRF-Token']=csrf;if(method!=='DELETE')headers['Idempotency-Key']=key||requestKey()}
  const isBlob=typeof Blob!=='undefined'&&body instanceof Blob;
@@ -194,7 +194,7 @@ function validationMessage(error){
 const friendlyError=err=>{const m=String(err?.message??err??'');if(/[\u4e00-\u9fff]/.test(m))return m;console.error(err);return '这一页暂时没加载出来，请点“重新读取”或刷新页面；还不行请联系管理员。'+(err?.requestId?`（请求编号 ${err.requestId}）`:'')};
 function toast(message,error=false){if(error)message=friendlyError({message});const root=$('#toasts');const live=()=>Array.from(root.children||[]);live().forEach(x=>{if(x.dataset?.msg===message)x.remove()});if(!error)live().forEach(x=>{if(x.classList?.contains('error'))x.remove()});while(live().length>=3)live()[0].remove();const el=document.createElement('div');el.className='toast'+(error?' error':'');if(el.dataset)el.dataset.msg=message;el.setAttribute?.('role',error?'alert':'status');const text=document.createElement('span');text.className='toast-text';text.textContent=message;const close=document.createElement('button');close.type='button';close.className='toast-close';close.setAttribute?.('aria-label','关闭提示');close.textContent='×';close.addEventListener?.('click',()=>el.remove());el.append(text,close);root.append(el);setTimeout(()=>el.remove(),error?9000:5000)}
 function field(name,label,type='text',value='',opts={}){
- const attrs=`id="f-${name}" name="${name}" ${opts.required===false?'':'required'} ${opts.readonly?'readonly':''} ${opts.min!==undefined?`min="${opts.min}"`:''} ${opts.max!==undefined?`max="${opts.max}"`:''} ${opts.step?`step="${opts.step}"`:''}`;
+ const attrs=`id="f-${name}" name="${name}" ${opts.required===false?'':'required'} ${opts.readonly?'readonly':''} ${opts.min!==undefined?`min="${opts.min}"`:''} ${opts.max!==undefined?`max="${opts.max}"`:''} ${opts.step?`step="${opts.step}"`:''} ${opts.placeholder?`placeholder="${esc(opts.placeholder)}"`:''}`;
  let input;if(type==='select')input=`<select ${attrs}>${(opts.options||[]).map(o=>{let [v,l]=Array.isArray(o)?o:[o,o];return `<option value="${esc(v)}" ${String(v)===String(value)?'selected':''}>${esc(l)}</option>`}).join('')}</select>`;
  else if(type==='textarea')input=`<textarea ${attrs} rows="${opts.rows||3}">${esc(value)}</textarea>`;
  else if(type==='checkbox')input=`<label class="flex"><input id="f-${name}" name="${name}" type="checkbox" ${value?'checked':''}>${esc(opts.checkLabel||'启用')}</label>`;
