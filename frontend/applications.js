@@ -1,4 +1,4 @@
-// 老师发起的申请（社会培训课申报、培训课程申请、培训基地申请）：进度、详情与办理、我的申请、申请表。
+// 老师发起的申请（培训课程申报、培训基地申请）：进度、详情与办理、我的申请、申请表。
 // 只调用 /api/applications；谁能办、回避、代办、版本和材料都由后端核对，这里按后端给的 permissions 显示按钮。
 let c = null, opened = null;
 
@@ -94,18 +94,18 @@ function coursewareFields(cw = {}) {
 
 const coursewareValue = v => ({checked: !!v.cw_checked, reviewer: v.cw_reviewer || '', reviewed_on: v.cw_on || null, reference: v.cw_ref || ''});
 
-// 社会培训课：老师从“我的课程”里选一门本人的教务或超星课申报。course 为“我的课程”里那一行。
+// 培训课程申报（课程遴选）之一：从“我的课程”里选一门本人的教务或超星课，课程信息带出来。course 为“我的课程”里那一行。
 export function teachingCourseForm(course, existing = null) {
   const e = c.esc, d = existing?.item?.data || {};
   const facts = `<div class="apply-source"><span class="badge ${course.origin === 'CX' ? 'green-b' : 'blue-b'}">${course.origin === 'CX' ? '超星' : '教务'}</span><strong>${e(course.course_name)}</strong><span>${e(course.course_code)} · ${e(course.term_name)}${course.credit != null ? ' · ' + e(course.credit) + ' 学分' : ''}${course.hours != null ? ' · ' + e(course.hours) + ' 学时' : ''}</span></div>`;
-  const body = facts + c.note('把这门课申报为社会培训课：教研室审核 → 学院审批 → 学校（继续教育学院）审批，通过后进入培训课程库，按学校设置给你记积分。同一门课只申报一次。') +
+  const body = facts + c.note('把这门课申报为培训课程，面向社会学员开设：教研室审核 → 学院审批 → 学校（继续教育学院）审批，通过后进入学校培训课程库。同一门课只申报一次。课程入库不单独记积分，以后在培训项目里授课按人次计积分。') +
     c.field('teaching_mode', '教学方式', 'select', d.teaching_mode || 'lecture', {options: TEACHING_MODES}) +
     c.field('ideology', '思政属性', 'select', d.ideology || 'course_ideology', {options: IDEOLOGY}) +
     c.field('hours', '培训学时', 'number', d.hours ?? course.hours ?? '', {required: false, min: 0, step: '0.5', hint: '默认用这门课的学时，按社会培训实际安排可调整。'}) +
-    c.field('reason', '申报说明', 'text', existing ? '按意见补正' : '申报为社会培训课') +
+    c.field('reason', '申报说明', 'text', existing ? '按意见补正' : '申报为培训课程') +
     audienceFields(d.audience) + c.field('intro', '课程简介', 'textarea', d.intro || course.description || '', {required: false, full: true, hint: '面向社会学员怎么上、学完能做什么。'}) +
     coursewareFields(d.courseware);
-  return c.formModal(existing ? '补正社会培训课申报' : '申报为社会培训课', body, async v => {
+  return c.formModal(existing ? '补正培训课程申报' : '申报为培训课程', body, async v => {
     const data = {source: 'teaching', course_term_id: course.id, hours: v.hours, teaching_mode: v.teaching_mode, ideology: v.ideology, audience: audienceValue(v), intro: v.intro || '', courseware: coursewareValue(v)};
     if (!data.audience) throw Error('请至少选择一类面向对象');
     const r = existing ? await c.api('/applications/courses/' + existing.item.id, {method: 'PUT', body: {data, reason: v.reason, expected_version: existing.item.version}})
@@ -114,26 +114,26 @@ export function teachingCourseForm(course, existing = null) {
   }, {wide: true, submit: existing ? '保存补正' : '提交申报', returnTo: existing ? () => showApplication(existing.item.id) : null});
 }
 
-// 培训课程申请：不来自本人学历课的培训课程（学院、学校可以代老师登记）。
+// 培训课程申报之二：新填一门不来自本人学历课的课程（教研室、学院可以代老师登记）。
 export function manualCourseForm(existing = null, projectCode = '') {
   const d = existing?.item?.data || {project_code: projectCode};
   const college = c.me.role.kind === 'college';
   const who = c.me.role.kind === 'teacher' ? '' : c.teacherField(d.teacher_id || '', 'teacher_id', '主讲教师（输入工号或姓名检索）');
-  const body = c.note(college ? '学院登记的课程视为学院已确认，直接到学校（继续教育学院）审批，通过后进入培训课程库。' : '学院审批 → 学校（继续教育学院）审批，通过后进入培训课程库。') + who +
+  const body = c.note(college ? '学院登记的课程视为教研室、学院已确认，直接到学校（继续教育学院）审批，通过后进入培训课程库。' : (c.me.role.kind === 'dept' ? '教研室登记的课程视为教研室已确认，' : '教研室审核 → ') + '学院审批 → 学校（继续教育学院）审批，通过后进入培训课程库。' + (c.me.role.kind === 'teacher' ? '要是本人教过的学历课，从“我的课程”里申报更省事，课程信息会自动带出。' : '')) + who +
     c.field('code', '课程编号', 'text', d.code || '', {readonly: !!existing}) + c.field('name', '课程名称', 'text', existing?.item?.name || '') +
     c.field('project_code', '关联项目编号', 'text', d.project_code || '', {required: false, hint: '不关联项目可留空。'}) +
     c.field('hours', '学时', 'number', d.hours ?? '', {min: 0, step: '0.5'}) +
     c.field('teaching_mode', '教学方式', 'select', d.teaching_mode || 'lecture', {options: TEACHING_MODES}) +
     c.field('ideology', '思政属性', 'select', d.ideology || 'course_ideology', {options: IDEOLOGY}) +
     c.field('intro', '课程简介', 'textarea', d.intro || '', {required: false, full: true}) + coursewareFields(d.courseware) +
-    c.field('reason', '申请说明', 'text', existing ? '按意见补正' : '申请培训课程', {full: true});
-  return c.formModal(existing ? '补正培训课程申请' : '申请培训课程', body, async v => {
+    c.field('reason', '申请说明', 'text', existing ? '按意见补正' : '申报培训课程', {full: true});
+  return c.formModal(existing ? '补正培训课程申报' : '新填一门培训课程', body, async v => {
     const data = {source: 'manual', code: v.code, name: v.name, project_code: v.project_code || '', teacher_id: v.teacher_id || null, hours: v.hours,
       teaching_mode: v.teaching_mode, ideology: v.ideology, intro: v.intro || '', courseware: coursewareValue(v)};
     const r = existing ? await c.api('/applications/courses/' + existing.item.id, {method: 'PUT', body: {data, reason: v.reason, expected_version: existing.item.version}})
       : await c.api('/applications/courses', {method: 'POST', body: {data, reason: v.reason}});
-    c.closeModal(); c.toast(existing ? '已保存，请点“重新提交”' : college ? '已提交，等待学校审批' : '已提交，等待学院审批'); await c.renderKeep(); await showApplication(r.item.id);
-  }, {wide: true, submit: existing ? '保存补正' : '提交申请', returnTo: existing ? () => showApplication(existing.item.id) : null});
+    c.closeModal(); c.toast(existing ? '已保存，请点“重新提交”' : college ? '已提交，等待学校审批' : c.me.role.kind === 'dept' ? '已提交，等待学院审批' : '已提交，等待教研室审核'); await c.renderKeep(); await showApplication(r.item.id);
+  }, {wide: true, submit: existing ? '保存补正' : '提交申报', returnTo: existing ? () => showApplication(existing.item.id) : null});
 }
 
 export function baseForm(existing = null) {
@@ -154,8 +154,8 @@ export function baseForm(existing = null) {
     if (!data.usages.length) throw Error('请选择基地用途');
     const r = existing ? await c.api('/applications/bases/' + existing.item.id, {method: 'PUT', body: {data, reason: v.reason, expected_version: existing.item.version}})
       : await c.api('/applications/bases', {method: 'POST', body: {data, reason: v.reason}});
-    c.closeModal(); c.toast(existing ? '已保存，请点“重新提交”' : college ? '已提交，等待学校审批' : '已提交，等待学院审批'); await c.renderKeep(); await showApplication(r.item.id);
-  }, {wide: true, submit: existing ? '保存补正' : '提交申请', returnTo: existing ? () => showApplication(existing.item.id) : null});
+    c.closeModal(); c.toast(existing ? '已保存，请点“重新提交”' : college ? '已提交，等待学校审批' : c.me.role.kind === 'dept' ? '已提交，等待学院审批' : '已提交，等待教研室审核'); await c.renderKeep(); await showApplication(r.item.id);
+  }, {wide: true, submit: existing ? '保存补正' : '提交申报', returnTo: existing ? () => showApplication(existing.item.id) : null});
 }
 
 async function edit(id) {
@@ -177,9 +177,9 @@ export async function myApplicationsHtml(ctx) {
   const n = m.counts;
   const chips = `<div class="apply-counts"><span>审批中 <b>${n.pending}</b></span><span class="${n.returned ? 'warn' : ''}">待我补正 <b>${n.returned}</b></span><span>已办结 <b>${n.done}</b></span></div>`;
   const open = x => x.type === 'social_project' ? c.act('查看', 'social-detail', 'social_project|' + x.id, 'sm') : c.act(x.state === 'RETURNED' ? '去补正' : '查看', 'app-detail', x.id, x.state === 'RETURNED' ? 'sm primary' : 'sm');
-  return `<div class="card"><div class="card-head"><div><h2>我的申请</h2><p>我提交的社会培训课申报、培训课程、培训基地和培训项目，走到哪一级、谁在办，都在这里。</p></div>${chips}</div>` +
+  return `<div class="card"><div class="card-head"><div><h2>我的申请</h2><p>我提交的培训课程、培训基地和培训项目申请，走到哪一级、谁在办，都在这里。</p></div>${chips}</div>` +
     c.table(['申请', '进度', '操作'], m.items.map(x => [`<strong>${e(x.name)}</strong><p class="cell-sub">${e(x.label)} · ${e(x.state_label)}</p>`,
-      progressHtml({...x.progress, nodes: x.nodes, label: x.label}, e, {compact: true}), open(x)]), '还没有申请', '在“我的课程”里选一门课申报为社会培训课，或从培训课程、培训基地页面发起申请。') + `</div>`;
+      progressHtml({...x.progress, nodes: x.nodes, label: x.label}, e, {compact: true}), open(x)]), '还没有申请', '在首页“业务办理”里申报培训课程、培训项目或培训基地。') + `</div>`;
 }
 
 // 首页卡片：只列还没办结的申请（最多 3 条），没有就不显示。
@@ -208,17 +208,17 @@ const SOURCE = {1: '自建', 2: '克隆', 3: '映射'};
 function applyButton(x, index, cls) {
   const w = x.window || {};
   if (w.state === 'closed') return `<span class="muted small" title="截止后需要补报请联系学院负责人">已于 ${c.esc(w.deadline)} 截止</span>`;
-  return c.act(w.state === 'reopened' ? '补报为社会培训课' : '申报为社会培训课', 'mc-apply', String(index), cls);
+  return c.act(w.state === 'reopened' ? '补报为培训课程' : '申报为培训课程', 'mc-apply', String(index), cls);
 }
 
 function deadlineNotes(d) {
-  return (d.deadline_reminders || []).map(w => c.note(`${w.school_year} 学年的社会培训课申报${w.state === 'reopened' ? '补报' : ''}将于 ${w.state === 'reopened' ? w.reopen_until : w.deadline} 截止，还剩 ${w.days_left} 天，你还有这个学年的课没申报。`, true, '申报截止提醒')).join('');
+  return (d.deadline_reminders || []).map(w => c.note(`${w.school_year} 学年的课程申报${w.state === 'reopened' ? '补报' : ''}将于 ${w.state === 'reopened' ? w.reopen_until : w.deadline} 截止，还剩 ${w.days_left} 天，你还有这个学年的课没申报。`, true, '申报截止提醒')).join('');
 }
 
 function statusStrip(x, index, scope) {
   const e = c.esc, a = x.application;
-  if (a) return `<div class="mc-status ${a.state === 'ACTIVE' ? 'ok' : a.state === 'RETURNED' ? 'warn' : ''}"><span>社会培训课：${e(a.state_label)}</span>${c.act(a.state === 'RETURNED' ? '去补正' : '看进度', 'app-detail', a.id, 'sm text')}</div>`;
-  return scope === 'mine' ? `<div class="mc-status"><span>还没申报为社会培训课</span>${applyButton(x, index, 'sm primary')}</div>` : `<div class="mc-status muted"><span>未申报</span></div>`;
+  if (a) return `<div class="mc-status ${a.state === 'ACTIVE' ? 'ok' : a.state === 'RETURNED' ? 'warn' : ''}"><span>培训课程：${e(a.state_label)}</span>${c.act(a.state === 'RETURNED' ? '去补正' : '看进度', 'app-detail', a.id, 'sm text')}</div>`;
+  return scope === 'mine' ? `<div class="mc-status"><span>还没申报为培训课程</span>${applyButton(x, index, 'sm primary')}</div>` : `<div class="mc-status muted"><span>未申报</span></div>`;
 }
 
 function courseCard(x, index, scope) {
@@ -238,10 +238,10 @@ export async function myCoursesHtml(ctx, tab, year) {
   const list = mine.courses.map((x, i) => [x, i]).filter(([x]) => x.origin === (tab === 'cx' ? 'CX' : 'JW') && pick(x));
   const years = [...new Set(mine.courses.flatMap(x => x.years))].sort().reverse();
   const chips = `<div class="todo-chips" role="group" aria-label="学年">${[['', '全部学年（2020-2021 起）'], ...years.map(y => [y, y + ' 学年'])].map(([v, l]) => `<button type="button" class="btn sm ${(year || '') === v ? 'primary' : 'light'}" data-action="mc-year" data-id="${e(v)}">${e(l)}</button>`).join('')}</div>`;
-  const tip = c.note('哪门课适合面向社会学员开设，你就选哪门申报为社会培训课：教研室审核 → 学院审批 → 学校审批，通过后进入培训课程库并给你记积分。同一门课只申报一次。常规学历课堂本身不算积分（积分办法第六条）。每学年的课在学年结束后的 9 月 30 日前申报（学校可调整），截止后需要补报请联系学院负责人。', false, '申报说明') + deadlineNotes(mine);
-  if (tab === 'cx') return `<div class="card"><div class="card-head"><div><h2>我的超星课（${list.length}）</h2><p>只列你作为建课人的课；同一门课每学期一张卡合成一张。教学团队成员能看到课，积分只算给申报的主讲教师。</p></div></div><div class="card-pad">${chips}${tip}${list.length ? `<div class="mc-cards">${list.map(([x, i]) => courseCard(x, i, 'mine')).join('')}</div>` : '<p class="muted">这个学年没有作为建课人的超星课。</p>'}</div></div>`;
+  const tip = c.note('哪门课适合面向社会学员开设，就选它申报为培训课程（管理办法第十六条，学历课程向社会培训延伸）：教研室审核 → 学院审批 → 学校审批，通过后进入学校培训课程库。同一门课只申报一次。课程入库和常规学历课堂都不单独记积分，积分按你在培训项目里授课的人次计算（积分办法第五、六条）。每学年的课在学年结束后的 9 月 30 日前申报（学校可调整），截止后需要补报请联系学院负责人。', false, '申报说明') + deadlineNotes(mine);
+  if (tab === 'cx') return `<div class="card"><div class="card-head"><div><h2>我的超星课（${list.length}）</h2><p>只列你作为建课人的课；同一门课每学期一张卡合成一张。教学团队成员能看到课，由建课人申报。</p></div></div><div class="card-pad">${chips}${tip}${list.length ? `<div class="mc-cards">${list.map(([x, i]) => courseCard(x, i, 'mine')).join('')}</div>` : '<p class="muted">这个学年没有作为建课人的超星课。</p>'}</div></div>`;
   return `<div class="card"><div class="card-head"><div><h2>我的教务课（${list.length}）</h2><p>按课程号合并，多个学期列在一起。</p></div></div><div class="card-pad">${chips}${tip}</div>` +
-    c.table(['课程', '学期', '学分', '学时', '社会培训课', '操作'], list.map(([x, i]) => [`<strong>${e(x.course_name)}</strong><p class="cell-sub mono">${e(x.course_code)}</p>${x.problems.length ? `<p class="mc-problem">${e(x.problems[0])}</p>` : ''}`,
+    c.table(['课程', '学期', '学分', '学时', '培训课程', '操作'], list.map(([x, i]) => [`<strong>${e(x.course_name)}</strong><p class="cell-sub mono">${e(x.course_code)}</p>${x.problems.length ? `<p class="mc-problem">${e(x.problems[0])}</p>` : ''}`,
       e(x.terms.map(t => t.term_name).join('、')), x.credit == null ? '<span class="badge orange-b">缺学分</span>' : num(x.credit), num(x.hours),
       x.application ? e(x.application.state_label) : '<span class="muted">未申报</span>',
       x.application ? c.act(x.application.state === 'RETURNED' ? '去补正' : '看进度', 'app-detail', x.application.id, 'sm') : applyButton(x, i, 'sm primary')]), '这个学年没有教务授课', '教务系统同步后显示。') + `</div>`;
@@ -256,14 +256,14 @@ async function courseDetail(x, scope) {
     ['超星最后修改', e(String(x.edited_at_source || '').slice(0, 10))]].filter(([k, v]) => ['学分', '学时'].includes(k) || (v && v !== '—'));
   const terms = c.table(['学期', '学年', '学分', '学时', '授课认定'], x.terms.map(t => [e(t.term_name), e(t.school_year), t.credit == null ? '缺学分' : num(t.credit), num(t.hours), e({PENDING: '待认定', APPROVED: '已认定', EXCLUDED: '不计分'}[t.review] || (t.counted === false ? '不重复计算' : '—'))]));
   let progress = '';
-  if (x.application) { const d = await c.api('/applications/' + x.application.id).catch(() => null); if (d) progress = '<h3 class="mt16">社会培训课申报进度</h3>' + progressHtml(d.progress, e); }
+  if (x.application) { const d = await c.api('/applications/' + x.application.id).catch(() => null); if (d) progress = '<h3 class="mt16">培训课程申报进度</h3>' + progressHtml(d.progress, e); }
   const intro = x.description ? `<details class="cx-intro-box mt16"${x.description.length <= 160 ? ' open' : ''}><summary>课程简介</summary><div class="cx-intro small">${e(x.description)}</div></details>` : '';
   const problems = x.problems.map(p => c.note(p, true)).join('');
   const index = (scope === 'mine' ? mine.courses : library.items).indexOf(x);
   const foot = [url ? `<a class="btn" href="${e(url)}" target="_blank" rel="noopener noreferrer">去超星看课 ↗</a>` : '',
     scope === 'mine' && !x.application ? applyButton(x, index, 'primary') : '',
     x.application ? c.act('查看申报', 'app-detail', x.application.id) : '', c.act('关闭', 'close')].join('');
-  c.modal(x.course_name, problems + `<dl class="kv">${rows.map(([k, v]) => `<dt>${k}</dt><dd>${v}</dd>`).join('')}</dl><h3 class="mt16">开课学期</h3>${terms}${intro}${progress}<p class="small muted mt16">计分按学期逐条算：同一学年教务已有这门课时超星课只算一次。申报为社会培训课后，同一门课只记一次积分，不在别的学年重复记。</p>`, foot, true);
+  c.modal(x.course_name, problems + `<dl class="kv">${rows.map(([k, v]) => `<dt>${k}</dt><dd>${v}</dd>`).join('')}</dl><h3 class="mt16">开课学期</h3>${terms}${intro}${progress}<p class="small muted mt16">学分按学期逐条算：同一学年教务已有这门课时超星课只算一次。同一门课只能申报一次培训课程，不在别的学年重复申报。</p>`, foot, true);
 }
 
 export async function libraryHtml(ctx) {
@@ -299,11 +299,11 @@ export async function homeCoursesHtml(ctx) {
   mine = d;
   const cx = d.courses.filter(x => x.origin === 'CX');
   const notes = deadlineNotes(d);
-  if (!cx.length) return notes ? `<section class="card"><div class="card-head"><div><h2>社会培训课申报</h2></div>${c.act('去我的课程', 'nav-mycourses', 'jw', 'text')}</div><div class="card-pad">${notes}</div></section>` : '';
+  if (!cx.length) return notes ? `<section class="card"><div class="card-head"><div><h2>培训课程申报</h2></div>${c.act('去我的课程', 'nav-mycourses', 'jw', 'text')}</div><div class="card-pad">${notes}</div></section>` : '';
   const now = cx.filter(x => x.years.includes(d.school_year_now));
   const credit = now.reduce((s, x) => s + (x.credit == null ? 0 : Number(x.credit)), 0);
   const todo = cx.map(x => [x, d.courses.indexOf(x)]).filter(([x]) => x.problems.length || x.application?.state === 'RETURNED').slice(0, 3);
-  const row = ([x, i]) => `<div class="apply-home-row"><div><strong>${e(x.course_name)}</strong></div><span class="${x.application?.state === 'RETURNED' ? 'red' : 'mc-problem'}">${e(x.application?.state === 'RETURNED' ? '社会培训课申报被退回' : x.problems[0].split('：')[0])}</span>${c.act('查看', 'mc-detail', String(i), 'sm')}</div>`;
+  const row = ([x, i]) => `<div class="apply-home-row"><div><strong>${e(x.course_name)}</strong></div><span class="${x.application?.state === 'RETURNED' ? 'red' : 'mc-problem'}">${e(x.application?.state === 'RETURNED' ? '培训课程申报被退回' : x.problems[0].split('：')[0])}</span>${c.act('查看', 'mc-detail', String(i), 'sm')}</div>`;
   return `<section class="card"><div class="card-head"><div><h2>我的超星课</h2><p>作为建课人 · ${e(d.school_year_now)} 学年</p></div>${c.act('全部 ' + cx.length + ' 门', 'nav-mycourses', 'cx', 'text')}</div><div class="card-pad">${notes}<div class="mc-home-stats"><span><b>${now.length}</b>本学年在用</span><span><b>${credit.toFixed(1)}</b>可计学分</span><span><b>${todo.length}</b>需要处理</span></div>${todo.map(row).join('')}</div></section>`;
 }
 

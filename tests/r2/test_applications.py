@@ -1,6 +1,6 @@
-"""老师发起的申请走通用审批：社会培训课 教研室→学院→学校，培训基地 学院→学校。
+"""老师发起的申请走通用审批：培训课程申报（含从我的课程带出）教研室→学院→学校，培训基地 学院→学校。
 
-覆盖：逐级办理、退回后从退回那一级接着审、本人回避、缺负责人上交代办、同一人连审、进度显示、我的申请、待办、积分。
+覆盖：逐级办理、退回后从退回那一级接着审、本人回避、缺负责人上交代办、同一人连审、进度显示、我的申请、待办、通过后不自动记积分。
 """
 from sqlalchemy import select
 from sqlalchemy.orm import Session
@@ -60,7 +60,7 @@ def test_teaching_course_goes_dept_college_school_and_resumes_at_returned_level(
     assert apply_course(c, ids['K0']).status_code == 422
     assert act(c, ident, 'approve').status_code == 403
     r = c.get("/api/applications/mine"); assert r.status_code == 200, r.text; mine = r.json()
-    assert mine['counts']['pending'] == 1 and mine['items'][0]['label'] == '社会培训课申报'
+    assert mine['counts']['pending'] == 1 and mine['items'][0]['label'] == '培训课程申报'
     auth(c, 'otherteacher')
     assert c.get('/api/applications/' + ident).status_code == 403
     auth(c, 'collegehead')
@@ -91,10 +91,10 @@ def test_teaching_course_goes_dept_college_school_and_resumes_at_returned_level(
     d = r.json()
     assert d['item']['state'] == 'ACTIVE' and d['state_label'] == '已入培训课程库' and d['progress']['tone'] == 'green'
     assert [n['state'] for n in d['progress']['nodes']] == ['done'] * 5
-    assert d['item']['data']['points']['state'] == 'pending'
+    assert 'points' not in d['item']['data']
     with Session(app2.state.engine) as db:
         master = db.scalar(select(TrainingCourseMaster).where(TrainingCourseMaster.code == d['item']['code']))
-        assert master and master.name == '高等数学' and master.source == '学历课申报为社会培训课'
+        assert master and master.name == '高等数学' and master.source == '学历课申报为培训课程'
     auth(c, 'teacher')
     courses = c.get('/api/applications/teaching-courses').json()['courses']
     k1 = next(i for i in courses if i['course_code'] == 'K1')
@@ -108,6 +108,7 @@ def test_vacant_dept_is_handled_by_college_marked_and_same_person_flagged(app2, 
     ids = setup(app2)
     with app2.state.sessions.begin() as db:
         db.get(User, 'depthead').active = False
+        # 即使学校设了旧的每门分值参数，课程遴选也不记积分（积分只按项目授课人次算）。
         db.add(Setting(key='param:social_course_points', value={'name': '每门社会培训课积分', 'type': 'decimal', 'value': '2'}))
     auth(c, 'teacher')
     ident = apply_course(c, ids['X2']).json()['item']['id']
@@ -121,10 +122,9 @@ def test_vacant_dept_is_handled_by_college_marked_and_same_person_flagged(app2, 
     assert nodes[1]['acting_for'] and nodes[2]['same_person'] == '同一人连审'
     auth(c, 'reviewer')
     d = act(c, ident, 'approve').json()
-    assert d['item']['data']['points']['state'] == 'booked'
+    assert d['item']['state'] == 'ACTIVE' and 'points' not in d['item']['data']
     with Session(app2.state.engine) as db:
-        entry = db.scalar(select(PointEntry).where(PointEntry.teacher_id == 'teacher', PointEntry.kind == 'SOCIAL'))
-        assert entry is not None and str(entry.amount).startswith('2')
+        assert db.scalar(select(PointEntry).where(PointEntry.teacher_id == 'teacher')) is None
 
 
 def test_school_level_recuses_the_applicant(app2, client2):

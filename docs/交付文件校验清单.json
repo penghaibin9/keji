@@ -139,12 +139,12 @@
       "size": 20137
     },
     "backend/app/applications.py": {
-      "sha256": "7c437f7a665381ac801582c60b001cfc75b4642da6bccedd9ab4066be7568b43",
-      "size": 33149
+      "sha256": "9d515c8d7c3523daa2891a851ea4dba7407d97e20c6865a1deb3b774e058ccc4",
+      "size": 29577
     },
     "backend/app/approvals.py": {
-      "sha256": "f923b13d887e58e44ac7156f0522e95e7526cccd3455d791c3ff0a7da24d71ed",
-      "size": 12371
+      "sha256": "1c52ee24daa9a6847c077145bfa7dfdd3d10ee1b507dbabef08c2e17f9236383",
+      "size": 12528
     },
     "backend/app/assessment_evidence.py": {
       "sha256": "d513bf688edb566dc691ba2cf52a82e7d0c5964d169965af7323c920fd23294f",
@@ -339,8 +339,8 @@
       "size": 34291
     },
     "backend/app/routes/applications.py": {
-      "sha256": "42d11e5b7bc356e67bbc1bdb35567dfb6afa91204fef0fa6c3c014741ab3e419",
-      "size": 17282
+      "sha256": "760ec49979040fb698d48be92f8e2bac657e1c14620064adc2eb0c6a1d40d35d",
+      "size": 16937
     },
     "backend/app/routes/auth.py": {
       "sha256": "e88edafd69c8fe8d9646b250fec4303421d16775221ab32e28316a35b0e285f7",
@@ -439,8 +439,8 @@
       "size": 11605
     },
     "backend/app/social_schemas.py": {
-      "sha256": "c1aab2a481625f87c1d1f3a43f799adef97a91363c1094d55dc62583b9e2d12e",
-      "size": 24780
+      "sha256": "cf70ccf3c2b0f60c03a360ef5dcc9919744268cdf0ef146a13eba2971cca3ab0",
+      "size": 24774
     },
     "backend/app/social_training.py": {
       "sha256": "a722fe18b45885ecb771b1b198d3872bb3421dbd59bd3ab031f679150951250c",
@@ -687,8 +687,8 @@
       "size": 242094
     },
     "docs/升级说明_申报与审批改造_20261016.md": {
-      "sha256": "13dd73e4affbc7ba3af958a42a36e6df57cdf4a57de86a7fb1077b5944655fc8",
-      "size": 9570
+      "sha256": "efdcff5db8fbe98b5fef7307190d930b93bc7eaf3b60e9b7b1b3ea05af389dc8",
+      "size": 10098
     },
     "docs/培训方案与课件.md": {
       "sha256": "aafd79633ea976624158d5596201c4a7bad746a8142549ccb7f3cc86e8237c05",
@@ -751,12 +751,12 @@
       "size": 14687
     },
     "frontend/app.js": {
-      "sha256": "8390f4c4f7ceba6850d21141cec6a6ffb9bd5f40ab28981ebbe3f408d7e30b56",
-      "size": 419728
+      "sha256": "82c84f01f5e3ca0f2b172d39b2a35fbe008d0b720651efb73f00d1ec13e22a2f",
+      "size": 420830
     },
     "frontend/applications.js": {
-      "sha256": "5055ac89f3b22f520fce9861decbdcaf46dce2ae54dad1e7142c393909cc83bd",
-      "size": 34736
+      "sha256": "304f85f26329d1893ce648a9aaac626566986beb41d094299d5f613169dc15c8",
+      "size": 35250
     },
     "frontend/approval-flow.js": {
       "sha256": "f1850f90540d9c25ac35ef217ea27ae672a4b9137a83c00aadcb12df3d564666",
@@ -795,7 +795,7 @@
       "size": 2302
     },
     "frontend/index.html": {
-      "sha256": "d878c00febb5fbce3c9fe0127da2f791639fc8abece3bce8e0cf3f18e2cda080",
+      "sha256": "6538189661e021c32f6f499b4b843c1342c5e0325c27a6e06b1ebe47bb65280d",
       "size": 1394
     },
     "frontend/integration-drafts.js": {
@@ -843,12 +843,12 @@
       "size": 52325
     },
     "frontend/social-training.css": {
-      "sha256": "a451f3c1359ff3aaf4fb382f35d760174d66cac95bac6f36b4614fe7672cb8f4",
-      "size": 52994
+      "sha256": "bfd1edbcc3661b8d7ad04794c9c0fe2a889a66e43dd34f2d956b5dfd14bfb124",
+      "size": 53126
     },
     "frontend/social-training.js": {
-      "sha256": "47c2136142927ba17c1465f0ccc5fc49b3974d05908d3a01760fca6bf879416a",
-      "size": 143608
+      "sha256": "3e4d50c8a1c74f4b9c5aa9c84fe4422ce9747761055b5c26e9410c0dcb90448b",
+      "size": 142884
     },
     "frontend/styles.css": {
       "sha256": "764753e07c0ad1094bd60ac3b28afe66d13a2554b6d73657198387807ef5a625",
@@ -1067,8 +1067,8 @@
       "size": 600
     },
     "tests/js/applications.test.mjs": {
-      "sha256": "cf8b2282d0c7d055698cea713319b219fac6f941ce0ef674405ec4a4c360c3c3",
-      "size": 5040
+      "sha256": "fb4504b8077f187566a01945037c0c7f38861f62e4a11f7eead4629216d62e3d",
+      "size": 5016
     },
     "tests/js/approval-flow.test.mjs": {
       "sha256": "c6e913ce88dac95c926a366098146d53b0fd8b8240213ffffc2a6ced36b3ebbe",
@@ -1243,8 +1243,8 @@
       "size": 15447
     },
     "tests/r2/test_applications.py": {
-      "sha256": "e6d57af6e7559389df2745a2573209c3cfe3718a72fef715565d33e62093baaf",
-      "size": 10818
+      "sha256": "b9b7d8efe63852468323d5074611553fc19e06d4a4ad629b46b8b51091d9a2cb",
+      "size": 10901
     },
     "tests/r2/test_approval_streamline.py": {
       "sha256": "526ce9dfe52dd5ea0b7931b7a189735f23efd6baf5f5d5d8fe1a17404a81a7e9",
@@ -1287,12 +1287,12 @@
       "size": 11992
     },
     "tests/r2/test_course_base_apply.py": {
-      "sha256": "41af11ee174f75c4b1fcd2c7ae8f4388ecae808bae98dd3d22cdb21bd844f7cf",
-      "size": 6332
+      "sha256": "62518b484b807b010207fc592af519e610deef10ea613a86a1a057b26b39a597",
+      "size": 7572
     },
     "tests/r2/test_course_deadline.py": {
-      "sha256": "a82024330d1c797eb0bc19f542f42ab843d5dc5ddb040d050bd2d580b43ddedf",
-      "size": 5723
+      "sha256": "4ba9a180b90100c51d0995231f499d8482572c3f0687bc8c6a39da25deda94e2",
+      "size": 5451
     },
     "tests/r2/test_cx_unmatched.py": {
       "sha256": "0ad25b617766c9f86213c9660c5947662cb3b8c1fc5b5c79257b9f71e4e41f68",

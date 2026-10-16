@@ -4,7 +4,7 @@ import assert from 'node:assert/strict';
 import {progressHtml, myCoursesHtml} from '../../frontend/applications.js';
 
 const esc = s => String(s ?? '').replace(/[&<>"]/g, ch => ({'&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;'})[ch]);
-const p = {label: '社会培训课申报', text: '学院审批中 · 第 3 步 / 共 4 步', headline: '测试学院一负责人正在审批。无需你操作。', tone: 'blue',
+const p = {label: '培训课程申报', text: '学院审批中 · 第 3 步 / 共 4 步', headline: '测试学院一负责人正在审批。无需你操作。', tone: 'blue',
   nodes: [{label: '提交', state: 'done', who: '测试教师一', at: '2026-10-01T09:00:00'}, {label: '教研室审核', state: 'done', who: '<b>主任</b>', acting_for: '缺负责人由学院代办'},
     {label: '学院审批', state: 'current', who: '院长', waiting_days: 3}, {label: '进入培训课程库', state: 'todo'}]};
 
@@ -41,7 +41,7 @@ test('超星课一门课一张卡，写学期数，没申报的可以直接申�
     application: {id: 'a1', state: 'RETURNED', state_label: '退回补正'}})]}), 'cx', '');
   assert.equal([...html.matchAll(/class="mc-card"/g)].length, 2);
   assert.match(html, /3 个学期/);
-  assert.match(html, /data-action="mc-apply" data-id="0">申报为社会培训课/);
+  assert.match(html, /data-action="mc-apply" data-id="0">申报为培训课程/);
   assert.match(html, /退回补正.*去补正/s);
   assert.match(html, /超星没填学分/);
   assert.doesNotMatch(html, /<img/);
@@ -62,8 +62,8 @@ test('申报期限：截止的课不出申报按钮，补报中改成补报，�
     deadline_reminders: [{school_year: '2025-2026', state: 'open', deadline: '2026-09-30', days_left: 5}]};
   const html = await myCoursesHtml(ctx(data), 'cx', '');
   assert.match(html, /已于 2025-09-30 截止/);
-  assert.doesNotMatch(html, /data-id="0">申报为社会培训课/);
-  assert.match(html, /data-id="1">补报为社会培训课/);
-  assert.match(html, /data-id="2">申报为社会培训课/);
-  assert.match(html, /2025-2026 学年的社会培训课申报将于 2026-09-30 截止，还剩 5 天/);
+  assert.doesNotMatch(html, /data-id="0">申报为培训课程/);
+  assert.match(html, /data-id="1">补报为培训课程/);
+  assert.match(html, /data-id="2">申报为培训课程/);
+  assert.match(html, /2025-2026 学年的课程申报将于 2026-09-30 截止，还剩 5 天/);
 });

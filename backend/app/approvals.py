@@ -1,4 +1,4 @@
-"""老师发起、一级一级往上审的通用审批规则（培训项目、培训课程、培训基地、社会培训课申报共用）。
+"""老师发起、一级一级往上审的通用审批规则（培训项目、培训课程、培训基地共用）。
 
 不改数据库结构：当前办到哪一级由业务对象自己的 state 表示，退回到哪一级记在 data 里，
 每一步谁办、何时办、是否代办或同一人连审，都写进现有的 workflow_events（办理记录），
@@ -29,9 +29,10 @@ FLOWS = {
                 'done': 'FILED', 'final': '已备案', 'object_type': 'social_project'},
     'project_close': {'label': '培训项目结项', 'chain': ('college', 'school'), 'states': {'college': 'CLOSE_COLLEGE', 'school': 'CLOSE_REVIEW'},
                       'done': 'CLOSED', 'final': '已结项', 'object_type': 'social_project'},
-    'course': {'label': '培训课程申请', 'chain': ('college', 'school'), 'states': {'college': 'COLLEGE', 'school': 'SCHOOL'},
+    # 培训课程申报（管理办法第十六条课程遴选）：从我的课程带出（teaching_course）和新填一门（course）是同一条流程。
+    'course': {'label': '培训课程申报', 'chain': ('dept', 'college', 'school'), 'states': {'dept': 'DEPT', 'college': 'COLLEGE', 'school': 'SCHOOL'},
                'done': 'ACTIVE', 'final': '进入培训课程库', 'object_type': 'social_resource'},
-    'teaching_course': {'label': '社会培训课申报', 'chain': ('dept', 'college', 'school'), 'states': {'dept': 'DEPT', 'college': 'COLLEGE', 'school': 'SCHOOL'},
+    'teaching_course': {'label': '培训课程申报', 'chain': ('dept', 'college', 'school'), 'states': {'dept': 'DEPT', 'college': 'COLLEGE', 'school': 'SCHOOL'},
                         'done': 'ACTIVE', 'final': '进入培训课程库', 'object_type': 'social_resource'},
     'base': {'label': '培训基地申请', 'chain': ('college', 'school'), 'states': {'college': 'COLLEGE', 'school': 'SCHOOL'},
              'done': 'DRAFT', 'final': '进入基地清单', 'object_type': 'social_resource'},

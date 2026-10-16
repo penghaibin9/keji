@@ -97,3 +97,23 @@ def test_base_fields_and_pending_applications_hidden_from_other_teachers(setup_s
 def setup_org(app2):
     with Session(app2.state.engine) as db:
         return db.scalar(select(SocialResource.org_id).limit(1)) or db.get(User, 'collegehead').org_id
+
+
+def test_teacher_new_course_goes_dept_college_school_without_points(setup_social, client2):
+    """新填一门和从我的课程带出是同一条课程遴选流程：教研室 → 学院 → 学校，通过后进课程库，不记积分。"""
+    from app.models import PointEntry
+    c = client2
+    auth(c, 'teacher')
+    data = {'source': 'manual', 'code': 'SOC-T7', 'name': '社区营养配餐', 'hours': '12', 'teaching_mode': 'lecture', 'ideology': 'course_ideology', 'courseware': REVIEW}
+    r = post(c, '/api/applications/courses', {'data': data, 'reason': '申报培训课程'})
+    assert r.status_code == 200, r.text
+    d = r.json()
+    ident = d['item']['id']
+    assert d['item']['state'] == 'DEPT' and d['flow'] == 'course' and d['progress']['text'].startswith('教研室审核中')
+    for user, after in (('depthead', 'COLLEGE'), ('collegehead', 'SCHOOL'), ('reviewer', 'ACTIVE')):
+        auth(c, user)
+        r = act(c, ident, 'approve')
+        assert r.status_code == 200 and r.json()['item']['state'] == after, r.text
+    assert 'SOC-T7' in courses(c)['course_info']
+    with Session(client2.app.state.engine) as db:
+        assert db.scalar(select(PointEntry).where(PointEntry.teacher_id == 'teacher')) is None

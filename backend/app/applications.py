@@ -1,15 +1,17 @@
-"""老师发起的申请：培训课程、社会培训课（把本人教务、超星的课申报为社会培训课）、培训基地，以及培训项目的进度。
+"""老师发起的申请：培训课程（可以从本人教务、超星的课里带出来，也可以新填一门）、培训基地，以及培训项目的进度。
+
+培训课程申报是《社会培训管理办法》第十六条的课程（培训包）遴选：通过后进入培训课程库，不记积分。
+积分只按《社会培训积分量化管理办法》第五、六、十一条，由备案项目里的授课人次核算。
 
 申请单存在现有的 social_resources 表（kind='course_apply' 或 'base'），不改数据库结构。
 审批链、回避、代办、同一人连审和进度显示见 approvals.py。
 """
 from __future__ import annotations
 import hashlib
-from decimal import Decimal
 from fastapi import HTTPException
 from sqlalchemy import select
 from .core import serial, school_today, workflow
-from .models import User, Org, Setting, Period, PointBalance, PointEntry
+from .models import User, Org, Setting
 from .reference_data import TeacherCourseTerm, TrainingCourseMaster, annual_teaching_credits, school_year_of, school_year_now, term_in_scope, UNKNOWN_YEAR
 from .social_models import SocialResource, SocialProject
 from .social_schemas import TEACHING_MODES, IDEOLOGY, BASE_USAGES
@@ -18,7 +20,6 @@ from . import approvals as ap
 APP_KINDS = ('course_apply', 'base')
 PENDING_STATES = ('DEPT', 'COLLEGE', 'SCHOOL')
 CX_KEYS = ('course_url', 'cover_url', 'chapters', 'team_names', 'group_name', 'course_type', 'jw_course_code')
-POINTS_PARAM = 'param:social_course_points'
 
 
 def flow_of(obj):
@@ -79,7 +80,7 @@ def read_check(db, a, obj):
     raise HTTPException(403, '申请超出你的查看范围')
 
 
-# ---- 社会培训课：老师本人的教务、超星课 ----
+# ---- 从“我的课程”申报培训课程：老师本人的教务、超星课 ----
 
 def _norm(name):
     return ' '.join(str(name or '').split())
@@ -152,8 +153,8 @@ def course_problems(origin, credit):
     if credit is not None:
         return []
     if origin == 'CX':
-        return ['超星没填学分：这门课暂不计授课学分。请在超星平台补上，下周同步后自动更新；不影响申报为社会培训课。']
-    return ['课程总库里这门课没有学分：暂不计授课学分，请联系教务处核对；不影响申报为社会培训课。']
+        return ['超星没填学分：这门课暂不计授课学分。请在超星平台补上，下周同步后自动更新；不影响申报为培训课程。']
+    return ['课程总库里这门课没有学分：暂不计授课学分，请联系教务处核对；不影响申报为培训课程。']
 
 
 def app_brief(app):
@@ -186,7 +187,7 @@ def cards_for(db, rows, details, apps_by_code, owner_id):
 
 
 def my_courses(db, user):
-    """“我的课程”：本人 2020-2021 学年以后的教务、超星课。years 是学年学分汇总，courses 是合并后的课程卡，每张带社会培训课申报状态。"""
+    """“我的课程”：本人 2020-2021 学年以后的教务、超星课。years 是学年学分汇总，courses 是合并后的课程卡，每张带培训课程申报状态。"""
     rows = teaching_rows(db, user)
     groups = annual_teaching_credits(db, rows) if rows else []
     details = {d['id']: {**d, 'school_year': g['school_year']} for g in groups for d in g['details']}
@@ -209,7 +210,7 @@ def my_courses(db, user):
     return {'years': years, 'courses': cards, 'school_year_now': school_year_now(), 'windows': windows, 'deadline_reminders': reminders}
 
 
-# ---- 社会培训课申报期限 ----
+# ---- 从“我的课程”申报培训课程的期限 ----
 # 每学年一个截止日，默认学年结束后的 9 月 30 日，学校可以改；截止后由学院负责人为本院开放补报。
 # 存在 settings 表的 social_course_deadlines 里：{'deadlines': {'2025-2026': '2026-09-30'}, 'reopen': {学院ID: {'2024-2025': '2026-11-15'}}}
 DEADLINE_KEY = 'social_course_deadlines'
@@ -259,7 +260,7 @@ def window(db, school_year, college_id, setting=None, today=None):
 def check_window(db, school_year, college_id):
     w = window(db, school_year, college_id)
     if not w['open']:
-        raise HTTPException(409, school_year + ' 学年的社会培训课申报已于 ' + w['deadline'] + ' 截止' +
+        raise HTTPException(409, school_year + ' 学年的课申报培训课程已于 ' + w['deadline'] + ' 截止' +
                             ('（学院补报已于 ' + w['reopen_until'] + ' 结束）' if w['reopen_until'] else '') + '；需要补报请联系学院负责人开放补报')
     return w
 
@@ -274,8 +275,7 @@ def deadline_overview(db, a):
     for y in years:
         w = window(db, y, college.id if college else '', setting)
         items.append({**w, 'custom': y in setting['deadlines'], 'default_deadline': default_deadline(y).isoformat()})
-    pending = len(pending_points(db)) if a.role.kind == 'school' else 0
-    return {'items': items, 'version': row.version if row else 0, 'college': college.name if college else None, 'pending_points': pending,
+    return {'items': items, 'version': row.version if row else 0, 'college': college.name if college else None,
             'can_set': a.role.kind == 'school', 'can_reopen': college is not None, 'remind_days': REMIND_DAYS, 'reopen_max_days': REOPEN_MAX_DAYS}
 
 
@@ -394,9 +394,6 @@ def fields(db, obj):
         rows.append(('关联项目', d.get('project_code') or '不关联项目'))
     if d.get('intro'):
         rows.append(('课程简介', d['intro']))
-    if d.get('points'):
-        p = d['points']
-        rows.append(('积分', (p.get('amount') + ' 分，已计入 ' + p.get('period_name', '')) if p.get('state') == 'booked' else '学校尚未设置每门课的分值，设置后补记'))
     return [(k, '' if v is None else str(v)) for k, v in rows]
 
 
@@ -447,67 +444,6 @@ def last_event_at(db, obj):
 
 # ---- 生效 ----
 
-def open_period(db):
-    today = school_today()
-    return db.scalar(select(Period).where(Period.state == 'OPEN', Period.start_date <= today, Period.end_date >= today).order_by(Period.start_date.desc()).limit(1))
-
-
-def points_value(db):
-    obj = db.get(Setting, POINTS_PARAM)
-    value = (obj.value or {}).get('value') if obj else None
-    try:
-        return Decimal(str(value)) if value not in (None, '') else None
-    except Exception:
-        return None
-
-
-def book_points(db, a, obj):
-    """社会培训课入库后按学校设置的每门课分值给本人记积分；没设置分值的先记“待补记”。同一门课只记一次。"""
-    value = points_value(db)
-    period = open_period(db)
-    if value is None or value <= 0 or period is None:
-        obj.data = {**obj.data, 'points': {'state': 'pending', 'note': '学校尚未设置每门社会培训课的分值' if value is None else '当前没有进行中的考核周期'}}
-        return None
-    key = 'social_course_' + obj.code
-    if db.scalar(select(PointEntry.id).where(PointEntry.item_key == key, PointEntry.teacher_id == obj.data['teacher_id'])):
-        return None
-    balance = db.scalar(select(PointBalance).where(PointBalance.teacher_id == obj.data['teacher_id'], PointBalance.period_id == period.id))
-    if balance and balance.confirmed:
-        obj.data = {**obj.data, 'points': {'state': 'pending', 'note': '本周期积分已确认，须先解锁后补记'}}
-        return None
-    if not balance:
-        balance = PointBalance(teacher_id=obj.data['teacher_id'], period_id=period.id)
-        db.add(balance); db.flush()
-    db.add(PointEntry(teacher_id=obj.data['teacher_id'], period_id=period.id, item_key=key, kind='SOCIAL', amount=value, raw_value=str(value),
-                      formula='学历课申报为社会培训课，经教研室、学院、学校遴选入库，每门 ' + str(value) + ' 分',
-                      source_snapshot={'social_course': obj.id, 'course': obj.data.get('course'), 'rule': {'name': '社会培训课程积分（学校设置的每门分值）'}},
-                      actor_id=a.id, reason='社会培训课入库', basis=obj.code))
-    balance.version += 1
-    obj.data = {**obj.data, 'points': {'state': 'booked', 'amount': str(value), 'period_id': period.id, 'period_name': period.name}}
-    return value
-
-
-def pending_points(db):
-    """已入库、但当时学校还没设分值（或没有进行中的周期、周期已确认）而没记上积分的社会培训课。"""
-    rows = db.scalars(select(SocialResource).where(SocialResource.kind == 'course_apply', SocialResource.state == 'ACTIVE')).all()
-    return [r for r in rows if is_application(r) and r.data.get('source') == 'teaching' and (r.data.get('points') or {}).get('state') == 'pending']
-
-
-def rebook_points(db, a):
-    """学校设好分值后补记：逐门再记一次，仍记不上的保留原因。同一门课只记一次。"""
-    booked, left = 0, []
-    for obj in pending_points(db):
-        before = obj.data.get('points')
-        if book_points(db, a, obj):
-            booked += 1
-            obj.version += 1
-            db.flush()
-            workflow(db, a, 'social_resource', obj.id, '补记社会培训课积分', {'points': before}, {'points': obj.data['points']}, '学校设置分值后补记', '')
-        else:
-            left.append({'id': obj.id, 'name': obj.name, 'note': (obj.data.get('points') or {}).get('note', '')})
-    return {'booked': booked, 'left': left}
-
-
 def complete(db, a, obj, flow):
     today = school_today().isoformat()
     if flow in ('course', 'teaching_course'):
@@ -517,12 +453,11 @@ def complete(db, a, obj, flow):
             raise HTTPException(409, '培训课程库里已有编号 ' + code + ' 的课程，请核对后退回')
         if existing is None:
             db.add(TrainingCourseMaster(code=code, name=obj.name, project_code=obj.data.get('project_code') or None,
-                                        source='学历课申报为社会培训课' if flow == 'teaching_course' else '老师申请'))
+                                        source='学历课申报为培训课程' if flow == 'teaching_course' else '老师申请'))
         else:
             existing.active = True; existing.name = obj.name; existing.version += 1
+        # 课程遴选入库不记积分：积分只按备案项目里的授课人次核算（积分办法第五、六、十一条）。
         obj.data = {**obj.data, 'effective_on': today, 'course_code': code}
-        if flow == 'teaching_course':
-            book_points(db, a, obj)
     else:
         obj.data = {**obj.data, 'effective_on': today}
 

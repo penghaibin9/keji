@@ -1,6 +1,6 @@
 // School business pages reuse the portal's forms, permissions, navigation and attachments.
 import {checkUploadFiles,uploadEntries,uploadSequential,uploadStatusHtml,failedEntries,MAX_ATTACHMENTS} from './approval-flow.js?v=20261012-streamline1';
-import {progressHtml,AUDIENCE,TEACHING_MODES,IDEOLOGY} from './applications.js?v=20261016-apply13';
+import {progressHtml,AUDIENCE,TEACHING_MODES,IDEOLOGY} from './applications.js?v=20261016-apply14';
 const names={module:'模块式',person_day:'人天式',technical:'技术类',lecture:'讲座类',province:'省级',city:'市级或企业定制',school:'校级',dispatched:'统一委派异地送教',full_day:'全天实操或脱产',ordinary:'常规',subsidy:'补贴性培训',enterprise:'企业定制培训',community:'社区公益培训',rural:'乡村帮扶培训',other:'其他非学历培训',national:'国家级'};
 let workspace,context,opened,workspaceUser;
 let listSection='',listPage=1,listSearch='',resourcePage=1;
@@ -148,16 +148,15 @@ function readReportRange(){
  return 'start='+encodeURIComponent(reportRange.start)+'&end='+encodeURIComponent(reportRange.end);
 }
 
-// 社会培训课申报期限：学校改各学年截止日，学院在截止后为本院开放补报（最多 90 天）。
+// 培训课程申报期限（从“我的课程”申报的学历课）：学校改各学年截止日，学院在截止后为本院开放补报（最多 90 天）。
 let deadlines=null;
 async function deadlinesModal(){
  const c=context,e=c.esc,d=deadlines=await c.api('/applications/deadlines');
  const STATE={open:'申报中',reopened:'补报中',closed:'已截止'},tone={open:'green-b',reopened:'blue-b',closed:'gray-b'};
  const ops=x=>d.can_set?c.act('改截止日','social-deadline-edit',x.school_year,'text'):d.can_reopen?(x.state==='closed'?c.act('开放补报','social-deadline-reopen',x.school_year,'text'):x.state==='reopened'?c.act('改补报日期','social-deadline-reopen',x.school_year,'text')+c.act('关闭补报','social-deadline-close',x.school_year,'text'):''):'';
  const rows=d.items.map(x=>[e(x.school_year+' 学年'),e(x.deadline)+(x.custom?' <span class="muted small">（已调整，默认 '+e(x.default_deadline)+'）</span>':''),'<span class="badge '+tone[x.state]+'">'+STATE[x.state]+'</span>'+(x.days_left!=null?' <span class="muted small">还剩 '+x.days_left+' 天</span>':''),e(x.reopen_until||'—'),ops(x)]);
- const tip=c.note('每学年的课在学年结束后的 9 月 30 日前申报，到期前 '+d.remind_days+' 天在老师的“我的课程”和工作总览里提醒。'+(d.can_set?'学校可以调整截止日；':'')+'截止后由学院负责人为本院开放补报，最长 '+d.reopen_max_days+' 天。退回补正的申报不受截止日限制。'+(d.college?'当前学院：'+d.college+'。':''));
- const points=d.pending_points?c.note('有 '+d.pending_points+' 门已入库的社会培训课还没记上积分（当时学校没设每门分值，或没有进行中的考核周期）。设好后点“补记积分”。',true):'';
- return c.modal('社会培训课申报期限',tip+points+c.table(['学年','申报截止日','状态','本院补报截止','操作'],rows),(d.pending_points?c.act('补记积分','social-points-rebook','','primary'):'')+c.act('关闭','close'),true);
+ const tip=c.note('从“我的课程”申报的课，每学年的课在学年结束后的 9 月 30 日前申报，到期前 '+d.remind_days+' 天在老师的“我的课程”和工作总览里提醒。'+(d.can_set?'学校可以调整截止日；':'')+'截止后由学院负责人为本院开放补报，最长 '+d.reopen_max_days+' 天。退回补正的申报不受截止日限制。'+(d.college?'当前学院：'+d.college+'。':''));
+ return c.modal('培训课程申报期限',tip+c.table(['学年','申报截止日','状态','本院补报截止','操作'],rows),c.act('关闭','close'),true);
 }
 
 export async function socialPage(section,c){
@@ -170,9 +169,9 @@ export async function socialPage(section,c){
  // 培训课程、培训基地：学校直接登记入库；老师、教研室、学院走申请（学院登记的视为学院已确认，直接到学校审批）。
  const school=c.me?.role?.kind==='school',applicant=['teacher','dept','college'].includes(c.me?.role?.kind);
  if(section==='courses'&&school&&can('records.write'))buttons.push(act('登记培训课程','social-course-new','','primary'),act('批量导入课程','social-course-import'),act('超星学习通导出表导入','social-course-chaoxing'));
- if(section==='courses'&&applicant)buttons.push(act('申请培训课程','app-course-new','','primary'));
+ if(section==='courses'&&applicant)buttons.push(c.me?.role?.kind==='teacher'?act('申报培训课程','teacher-apply','course|','primary'):act('申报培训课程','app-course-new','','primary'));
  if(section==='courses'&&can('records.write'))buttons.push(act('登记课程资源','social-resource-new','course_resource'));
- if(section==='courses'&&['school','college'].includes(c.me?.role?.kind))buttons.push(act('社会培训课申报期限','social-deadlines'));
+ if(section==='courses'&&['school','college'].includes(c.me?.role?.kind))buttons.push(act('培训课程申报期限','social-deadlines'));
  if(section==='bases'&&school&&can('records.write'))buttons.push(act('登记培训基地','social-resource-new','base','primary'));
  if(section==='bases'&&applicant)buttons.push(act('申请培训基地','app-base-new','','primary'));
  if(section==='outcomes'&&can('records.write'))buttons.push(act('登记培训成果','social-resource-new','achievement','primary'));
@@ -547,7 +546,6 @@ export async function socialAction(action,id,c){
  if(action==='social-course-for-project'){const code=opened.item.data.code;return commonForm('登记本项目课程',c.note('课程将关联到本项目（'+code+'）。登记后，参训明细里的“课程编号”填这里的编号。')+c.field('code','课程编号')+c.field('name','课程名称')+courseInfoFields(),v=>c.api('/social/courses',{method:'POST',body:courseInfoValue({...v,project_code:code})}),{submit:'保存课程',reasonLabel:'办理说明',reasonDefault:'登记项目课程',reopen:true})}
  if(action==='social-course-view')return courseView(id);
  if(action==='social-deadlines')return deadlinesModal();
- if(action==='social-points-rebook')return commonForm('补记社会培训课积分',c.note('按学校当前设置的每门分值，给已入库但还没记上积分的社会培训课补记。同一门课只记一次。'),async v=>{const r=await c.api('/applications/points/rebook',{method:'POST',body:{reason:v.reason,basis:v.basis||''}});c.toast('补记 '+r.booked+' 门'+(r.left.length?'，还有 '+r.left.length+' 门没记上：'+r.left[0].note:''));return r},{compact:true,submit:'补记',reasonDefault:'学校设置分值后补记',after:()=>deadlinesModal()});
  if(action==='social-deadline-edit'){const x=deadlines.items.find(r=>r.school_year===id);return commonForm('调整 '+id+' 学年申报截止日',c.field('deadline','申报截止日','date',x.deadline,{hint:'默认 '+x.default_deadline+'；改回默认日期即恢复默认。'}),v=>c.api('/applications/deadlines',{method:'PUT',body:{school_year:id,deadline:v.deadline,reason:v.reason,basis:v.basis||'',expected_version:deadlines.version}}),{compact:true,submit:'保存截止日',reasonDefault:'按学校通知调整截止日',after:()=>deadlinesModal()})}
  if(action==='social-deadline-reopen'){const x=deadlines.items.find(r=>r.school_year===id),max=new Date(Date.now()+deadlines.reopen_max_days*864e5).toLocaleDateString('sv-SE');return commonForm('开放 '+id+' 学年补报',c.note('只对本院老师开放，补报截止后自动关闭。')+c.field('until','补报截止日','date',x.reopen_until||'',{max,hint:'最晚 '+max+'。'}),v=>c.api('/applications/deadlines/reopen',{method:'PUT',body:{school_year:id,until:v.until,reason:v.reason,basis:v.basis||'',expected_version:deadlines.version}}),{compact:true,submit:'开放补报',reasonDefault:'本院老师补报',after:()=>deadlinesModal()})}
  if(action==='social-deadline-close')return commonForm('关闭 '+id+' 学年补报',c.note('关闭后本院老师不能再申报这个学年的课；已提交的申报照常审批。'),v=>c.api('/applications/deadlines/reopen',{method:'PUT',body:{school_year:id,until:null,reason:v.reason,basis:v.basis||'',expected_version:deadlines.version}}),{compact:true,submit:'关闭补报',reasonDefault:'补报结束',after:()=>deadlinesModal()});

@@ -1,4 +1,4 @@
-"""社会培训课申报期限：每学年一个截止日（默认学年结束后的 9 月 30 日），到期前 7 天提醒，截止后学院可为本院开放补报。"""
+"""培训课程申报期限：每学年一个截止日（默认学年结束后的 9 月 30 日），到期前 7 天提醒，截止后学院可为本院开放补报。"""
 from datetime import date
 import pytest
 from conftest import auth, put
@@ -78,7 +78,8 @@ def test_default_deadline_is_september_30_after_the_year(year, expected):
     assert apps.default_deadline(year) == expected
 
 
-def test_points_left_pending_are_booked_after_school_sets_the_value(app2, client2):
+def test_approved_course_books_no_points_and_rebook_is_gone(app2, client2):
+    """管理办法第十六条是课程遴选：通过后进培训课程库，不给老师记积分（积分办法只按项目授课人次计）。"""
     from sqlalchemy import select
     from sqlalchemy.orm import Session
     from app.models import Setting, PointEntry
@@ -86,21 +87,16 @@ def test_points_left_pending_are_booked_after_school_sets_the_value(app2, client
     from test_applications import act
     c = client2
     ids = setup(app2)
+    with app2.state.sessions.begin() as db:
+        db.add(Setting(key='param:social_course_points', value={'name': '每门社会培训课积分', 'type': 'decimal', 'value': '3'}))
     auth(c, 'teacher')
     ident = apply_course(c, ids['K1']).json()['item']['id']
     for user in ('depthead', 'collegehead', 'reviewer'):
         auth(c, user)
         assert act(c, ident, 'approve').status_code == 200
-    assert c.get('/api/applications/' + ident).json()['item']['data']['points']['state'] == 'pending'
+    assert 'points' not in c.get('/api/applications/' + ident).json()['item']['data']
     auth(c, 'schooladmin')
-    assert overview(c)['pending_points'] == 1
-    with app2.state.sessions.begin() as db:
-        db.add(Setting(key='param:social_course_points', value={'name': '每门社会培训课积分', 'type': 'decimal', 'value': '3'}))
-    auth(c, 'collegehead')
-    assert post(c, '/api/applications/points/rebook', {'reason': '学校设置分值后补记'}).status_code == 403
-    auth(c, 'schooladmin')
-    r = post(c, '/api/applications/points/rebook', {'reason': '学校设置分值后补记'})
-    assert r.status_code == 200 and r.json()['booked'] == 1, r.text
-    assert post(c, '/api/applications/points/rebook', {'reason': '学校设置分值后补记'}).json()['booked'] == 0  # 只记一次
+    assert 'pending_points' not in overview(c)
+    assert post(c, '/api/applications/points/rebook', {'reason': '补记'}).status_code in (404, 405)
     with Session(app2.state.engine) as db:
-        assert len(db.scalars(select(PointEntry).where(PointEntry.teacher_id == 'teacher', PointEntry.kind == 'SOCIAL')).all()) == 1
+        assert db.scalars(select(PointEntry).where(PointEntry.teacher_id == 'teacher')).all() == []

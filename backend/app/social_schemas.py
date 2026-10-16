@@ -448,14 +448,14 @@ class CaseNoteIn(Reason):
         return self
 
 
-# ---- 老师发起的申请（培训课程、社会培训课、培训基地），审批规则见 approvals.py ----
+# ---- 老师发起的申请（培训课程、培训基地），审批规则见 approvals.py ----
 TEACHING_MODES = {'lecture':'讲授','practice':'实训实操','case':'案例研讨','onsite':'现场教学','online':'线上自学'}
 IDEOLOGY = {'ideology_course':'思政课程','course_ideology':'课程思政','none':'无'}
 BASE_USAGES = {'practice':'实践教学基地','ideology':'思政实践教学基地'}
 
 
 class CourseApplyData(Input):
-    # teaching：老师把自己从教务、超星拉来的课申报为社会培训课；manual：直接申请一门培训课程（学院可代老师登记）。
+    # teaching：老师把自己从教务、超星拉来的课申报为培训课程；manual：新填一门培训课程（学院可代老师登记）。
     source: Literal['teaching', 'manual']
     course_term_id: Ident | None = None
     code: str = Field(default='', max_length=64)
@@ -524,7 +524,7 @@ class ReportInfoIn(Reason):
 
 
 class DeadlineIn(Reason):
-    # 社会培训课每学年的申报截止日（默认学年结束后的 9 月 30 日）。
+    # 从我的课程申报培训课程，每学年的申报截止日（默认学年结束后的 9 月 30 日）。
     school_year: str = Field(pattern=r'^20\d{2}-20\d{2}$')
     deadline: date
     expected_version: int = Field(ge=0)
