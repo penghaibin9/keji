@@ -117,3 +117,30 @@ def test_teacher_new_course_goes_dept_college_school_without_points(setup_social
     assert 'SOC-T7' in courses(c)['course_info']
     with Session(client2.app.state.engine) as db:
         assert db.scalar(select(PointEntry).where(PointEntry.teacher_id == 'teacher')) is None
+
+
+def test_course_package_and_one_skill_flags_and_base_level(setup_social, client2):
+    """管理办法第十六、十七条：课程有培训包和“一人一技”专项标记（专项必须写重点群体），基地有级别。"""
+    c = client2
+    auth(c, 'teacher')
+    data = {'source': 'manual', 'code': 'SOC-P8', 'name': '家政服务培训包', 'hours': '24', 'teaching_mode': 'practice', 'ideology': 'course_ideology',
+            'courseware': REVIEW, 'package': True, 'one_skill': True}
+    r = post(c, '/api/applications/courses', {'data': data, 'reason': '申报培训包'})
+    assert r.status_code == 422, r.text  # 一人一技必须写重点群体
+    r = post(c, '/api/applications/courses', {'data': {**data, 'target_groups': '农民工、退役军人；对接技兴三湘行动'}, 'reason': '申报培训包'})
+    assert r.status_code == 200, r.text
+    ident = r.json()['item']['id']
+    fields = dict((k, v) for k, v in r.json()['fields'])
+    assert fields['培训包'] == '是' and fields['“一人一技”专项'].startswith('是 · 农民工')
+    for user in ('depthead', 'collegehead', 'reviewer'):
+        auth(c, user)
+        assert act(c, ident, 'approve').status_code == 200
+    info = courses(c)['course_info']['SOC-P8']
+    assert info['package'] is True and info['one_skill'] is True and info['target_groups'].startswith('农民工')
+    auth(c, 'teacher')
+    base = {'code': 'BASE-L1', 'name': '省级茶艺基地', 'onsite': True, 'recognition': '省厅认定', 'usages': ['practice'], 'established_on': '2026-09-01', 'level': 'province'}
+    r = post(c, '/api/applications/bases', {'data': base, 'reason': '申请基地'})
+    assert r.status_code == 200 and dict(r.json()['fields'])['基地级别'] == '省级及以上'
+    assert post(c, '/api/applications/bases', {'data': {**base, 'code': 'BASE-L2', 'level': 'world'}, 'reason': '申请基地'}).status_code == 422
+    r = post(c, '/api/applications/bases', {'data': {k: v for k, v in base.items() if k != 'level'} | {'code': 'BASE-L3'}, 'reason': '申请基地'})
+    assert dict(r.json()['fields'])['基地级别'] == '校级'  # 不填默认校级

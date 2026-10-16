@@ -115,7 +115,7 @@ def workspace(request:Request,section:str=Query('projects',pattern='^(projects|c
         codes=[c.code for c in courses]
         for i in range(0,len(codes),500):
             for r in db.scalars(select(SocialResource).where(SocialResource.kind=='course_apply',SocialResource.state=='ACTIVE',SocialResource.data['course_code'].as_string().in_(codes[i:i+500]))):
-                d=r.data;course_info[d['course_code']]={**{k:d.get(k) for k in ('hours','teaching_mode','ideology','teacher_name','courseware','audience','intro')},
+                d=r.data;course_info[d['course_code']]={**{k:d.get(k) for k in ('hours','teaching_mode','ideology','teacher_name','courseware','audience','intro','package','one_skill','target_groups')},
                     'application_id':r.id if d.get('application') else None,'source':d.get('source')}
         resource_orgs=dict(db.execute(select(Org.id,Org.name).where(Org.id.in_({r.org_id for r in resources}|{r.org_id for r in annuals}))).all()) if resources or annuals else {}
         display=lambda rows:[{**serial(row),'state_label':st.state_label(row)} for row in rows]
@@ -603,12 +603,12 @@ def school_registrar(a):
     if a.role.kind!='school':raise HTTPException(403,'学院、教研室和老师请走“申请培训课程”，由学校审批后入库')
 
 
-COURSE_INFO_KEYS=('hours','teaching_mode','ideology','courseware')
+COURSE_INFO_KEYS=('hours','teaching_mode','ideology','courseware','package','one_skill','target_groups')
 
 
 def course_info(db,a,row,org_id):
     """学校直接登记的课程，五项资料（学时、教学方式、思政属性、主讲教师、课件审查）记在一条课程资料记录里，不改课程主表。"""
-    dumped=row.model_dump(mode='json');values={k:dumped[k] for k in COURSE_INFO_KEYS if dumped.get(k) not in (None,'')}
+    dumped=row.model_dump(mode='json');values={k:dumped[k] for k in COURSE_INFO_KEYS if dumped.get(k) not in (None,'') and not (k in ('package','one_skill') and dumped[k] is False)}
     if not values and not (row.teacher or row.teacher_id):return None
     teacher=st.resolve_teacher(db,org_id,row.teacher,row.teacher_id) if (row.teacher or row.teacher_id) else None
     if row.teacher_id and not teacher:raise HTTPException(422,'主讲教师与学院或姓名不匹配')

@@ -14,7 +14,7 @@ from .core import serial, school_today, workflow
 from .models import User, Org, Setting
 from .reference_data import TeacherCourseTerm, TrainingCourseMaster, annual_teaching_credits, school_year_of, school_year_now, term_in_scope, UNKNOWN_YEAR
 from .social_models import SocialResource, SocialProject
-from .social_schemas import TEACHING_MODES, IDEOLOGY, BASE_USAGES, TRAINER_DIRECTIONS
+from .social_schemas import TEACHING_MODES, IDEOLOGY, BASE_USAGES, BASE_LEVELS, TRAINER_DIRECTIONS
 from . import approvals as ap
 
 APP_KINDS = ('course_apply', 'base', 'trainer')
@@ -377,7 +377,7 @@ def fields(db, obj):
     d = obj.data
     if obj.kind == 'base':
         rows = [('基地名称', obj.name), ('来源编号', obj.code), ('校内 / 校外', '校内' if d.get('onsite') else '校外'),
-                ('基地用途', '、'.join(BASE_USAGES.get(x, x) for x in d.get('usages', [])) or '待补充'),
+                ('基地用途', '、'.join(BASE_USAGES.get(x, x) for x in d.get('usages', [])) or '待补充'), ('基地级别', BASE_LEVELS.get(d.get('level'), '未标注')),
                 ('设立日期', d.get('established_on') or '待补充'), ('共建单位', d.get('partner') or ('—' if d.get('onsite') else '待补充')),
                 ('地点', d.get('location') or '待补充'), ('认定依据', d.get('recognition') or '')]
         if d.get('project_id'):
@@ -398,6 +398,7 @@ def fields(db, obj):
     rows = [('课程名称', obj.name), ('学时', d.get('hours') or '待补充'),
             ('教学方式', TEACHING_MODES.get(d.get('teaching_mode'), '待补充')), ('思政属性', IDEOLOGY.get(d.get('ideology'), '待补充')),
             ('主讲教师', d.get('teacher_name') or ''),
+            ('培训包', '是' if d.get('package') else '否'), ('“一人一技”专项', ('是 · ' + (d.get('target_groups') or '')) if d.get('one_skill') else '否'),
             ('课件审查', ('已审查 · ' + review.get('reviewer', '') + ' · ' + str(review.get('reviewed_on') or '')) if review.get('checked') else '待审查')]
     if d.get('source') == 'teaching':
         rows[1:1] = [('原课程', c.get('origin_label', '') + ' · ' + c.get('course_code', '') + ' · ' + c.get('term_name', '')),

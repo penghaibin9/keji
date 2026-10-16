@@ -363,8 +363,14 @@ class CourseIn(Reason):
     teacher: str = Field(default='', max_length=200)
     teacher_id: Ident | None = None
     courseware: CoursewareReview | None = None
+    # 管理办法第十六条：培训包遴选，重点开发“一人一技”专项培训包。
+    package: bool = False
+    one_skill: bool = False
+    target_groups: str = Field(default='', max_length=1000)
     @model_validator(mode='after')
     def courseware_complete(self):
+        if self.one_skill and not self.target_groups.strip():
+            raise ValueError('“一人一技”专项课程须说明重点群体和行动对接内容')
         if self.courseware and self.courseware.checked and not (self.courseware.reviewer.strip() and self.courseware.reviewed_on):
             raise ValueError('课件已审查时，请填写审查人和审查日期')
         return self
@@ -452,6 +458,7 @@ class CaseNoteIn(Reason):
 TEACHING_MODES = {'lecture':'讲授','practice':'实训实操','case':'案例研讨','onsite':'现场教学','online':'线上自学'}
 IDEOLOGY = {'ideology_course':'思政课程','course_ideology':'课程思政','none':'无'}
 BASE_USAGES = {'practice':'实践教学基地','ideology':'思政实践教学基地'}
+BASE_LEVELS = {'school':'校级','city':'市级','province':'省级及以上'}
 
 
 class CourseApplyData(Input):
@@ -468,8 +475,14 @@ class CourseApplyData(Input):
     audience: str = Field(default='', max_length=500)
     intro: str = Field(default='', max_length=2000)
     courseware: CoursewareReview = Field(default_factory=CoursewareReview)
+    # 管理办法第十六条：是否按培训包开发、是否“一人一技”专项（专项须写重点群体和行动对接）。
+    package: bool = False
+    one_skill: bool = False
+    target_groups: str = Field(default='', max_length=1000)
     @model_validator(mode='after')
     def required(self):
+        if self.one_skill and not self.target_groups.strip():
+            raise ValueError('“一人一技”专项课程须说明重点群体和行动对接内容')
         if self.source == 'teaching':
             if not self.course_term_id: raise ValueError('请选择要申报的课程')
             if not self.audience.strip(): raise ValueError('请填写面向对象（这门课准备面向哪些社会学员）')
@@ -497,6 +510,8 @@ class BaseApplyData(Input):
     established_on: date
     partner: str = Field(default='', max_length=200)
     project_id: Ident | None = None
+    # 管理办法第十七条鼓励申报省级及以上培训基地。
+    level: Literal['school', 'city', 'province'] = 'school'
     @model_validator(mode='after')
     def partner_required(self):
         if not self.onsite and not self.partner.strip(): raise ValueError('校外基地请填写共建单位')

@@ -88,6 +88,15 @@ function audienceValue(v) {
   return list.join('、');
 }
 
+// 管理办法第十六条：培训包、“一人一技”专项两个标记。
+function packageFields(d = {}) {
+  return c.field('package', '培训包', 'checkbox', !!d.package, {required: false, checkLabel: '按培训包开发（成套的教学包）', full: true}) +
+    c.field('one_skill', '“一人一技”专项', 'checkbox', !!d.one_skill, {required: false, checkLabel: '面向“一人一技”专项培训行动', full: true}) +
+    c.field('target_groups', '重点群体与行动对接', 'textarea', d.target_groups || '', {required: false, full: true, hint: '勾选“一人一技”专项时必填：面向哪些重点群体、怎么对接行动。'});
+}
+
+const packageValue = v => ({package: !!v.package, one_skill: !!v.one_skill, target_groups: v.target_groups || ''});
+
 function coursewareFields(cw = {}) {
   return c.field('cw_checked', '课件审查', 'checkbox', !!cw.checked, {required: false, checkLabel: '学院已审查课件（政治方向、知识产权、内容质量）', full: true}) +
     c.field('cw_reviewer', '审查人或审查组', 'text', cw.reviewer || '', {required: false}) + c.field('cw_on', '审查日期', 'date', cw.reviewed_on || '', {required: false}) +
@@ -106,9 +115,9 @@ export function teachingCourseForm(course, existing = null) {
     c.field('hours', '培训学时', 'number', d.hours ?? course.hours ?? '', {required: false, min: 0, step: '0.5', hint: '默认用这门课的学时，按社会培训实际安排可调整。'}) +
     c.field('reason', '申报说明', 'text', existing ? '按意见补正' : '申报为培训课程') +
     audienceFields(d.audience) + c.field('intro', '课程简介', 'textarea', d.intro || course.description || '', {required: false, full: true, hint: '面向社会学员怎么上、学完能做什么。'}) +
-    coursewareFields(d.courseware);
+    packageFields(d) + coursewareFields(d.courseware);
   return c.formModal(existing ? '补正培训课程申报' : '申报为培训课程', body, async v => {
-    const data = {source: 'teaching', course_term_id: course.id, hours: v.hours, teaching_mode: v.teaching_mode, ideology: v.ideology, audience: audienceValue(v), intro: v.intro || '', courseware: coursewareValue(v)};
+    const data = {source: 'teaching', course_term_id: course.id, hours: v.hours, teaching_mode: v.teaching_mode, ideology: v.ideology, audience: audienceValue(v), intro: v.intro || '', courseware: coursewareValue(v), ...packageValue(v)};
     if (!data.audience) throw Error('请至少选择一类面向对象');
     const r = existing ? await c.api('/applications/courses/' + existing.item.id, {method: 'PUT', body: {data, reason: v.reason, expected_version: existing.item.version}})
       : await c.api('/applications/courses', {method: 'POST', body: {data, reason: v.reason}});
@@ -127,11 +136,11 @@ export function manualCourseForm(existing = null, projectCode = '') {
     c.field('hours', '学时', 'number', d.hours ?? '', {min: 0, step: '0.5'}) +
     c.field('teaching_mode', '教学方式', 'select', d.teaching_mode || 'lecture', {options: TEACHING_MODES}) +
     c.field('ideology', '思政属性', 'select', d.ideology || 'course_ideology', {options: IDEOLOGY}) +
-    c.field('intro', '课程简介', 'textarea', d.intro || '', {required: false, full: true}) + coursewareFields(d.courseware) +
+    c.field('intro', '课程简介', 'textarea', d.intro || '', {required: false, full: true}) + packageFields(d) + coursewareFields(d.courseware) +
     c.field('reason', '申请说明', 'text', existing ? '按意见补正' : '申报培训课程', {full: true});
   return c.formModal(existing ? '补正培训课程申报' : '新填一门培训课程', body, async v => {
     const data = {source: 'manual', code: v.code, name: v.name, project_code: v.project_code || '', teacher_id: v.teacher_id || null, hours: v.hours,
-      teaching_mode: v.teaching_mode, ideology: v.ideology, intro: v.intro || '', courseware: coursewareValue(v)};
+      teaching_mode: v.teaching_mode, ideology: v.ideology, intro: v.intro || '', courseware: coursewareValue(v), ...packageValue(v)};
     const r = existing ? await c.api('/applications/courses/' + existing.item.id, {method: 'PUT', body: {data, reason: v.reason, expected_version: existing.item.version}})
       : await c.api('/applications/courses', {method: 'POST', body: {data, reason: v.reason}});
     c.closeModal(); c.toast(existing ? '已保存，请点“重新提交”' : college ? '已提交，等待学校审批' : c.me.role.kind === 'dept' ? '已提交，等待学院审批' : '已提交，等待教研室审核'); await c.renderKeep(); await showApplication(r.item.id);
@@ -147,12 +156,13 @@ export function baseForm(existing = null) {
     c.field('code', '来源编号', 'text', existing?.item?.code || '', {readonly: !!existing, hint: '协议编号或学院登记编号。'}) + c.field('name', '基地名称', 'text', existing?.item?.name || '') +
     `<fieldset class="form-field full apply-tags"><legend>基地用途 <b>*</b></legend><div class="apply-tag-row">${BASE_USAGES.map(([k, l]) => `<label><input type="checkbox" name="usage_${k}" ${used.has(k) ? 'checked' : ''}>${c.esc(l)}</label>`).join('')}</div></fieldset>` +
     c.field('onsite', '校内 / 校外', 'select', d.onsite === false ? 'no' : 'yes', {options: [['yes', '校内'], ['no', '校外']]}) +
+    c.field('level', '基地级别', 'select', d.level || 'school', {options: [['school', '校级'], ['city', '市级'], ['province', '省级及以上']], hint: '学校鼓励申报省级及以上培训基地。'}) +
     c.field('partner', '共建单位', 'text', d.partner || '', {required: false, hint: '校外基地必填。'}) + c.field('established_on', '设立日期', 'date', d.established_on || '') +
     c.field('location', '地点', 'text', d.location || '', {required: false}) + c.field('recognition', '认定依据', 'textarea', d.recognition || '', {full: true, hint: '共建协议、学校发文或学院会议纪要。'}) +
     c.field('reason', '申请说明', 'text', existing ? '按意见补正' : '申请培训基地', {full: true});
   return c.formModal(existing ? '补正培训基地申请' : '申请培训基地', body, async v => {
     const data = {code: v.code, name: v.name, teacher_id: v.teacher_id || null, usages: BASE_USAGES.map(([k]) => k).filter(k => v['usage_' + k]), onsite: v.onsite === 'yes',
-      partner: v.partner || '', established_on: v.established_on, location: v.location || '', recognition: v.recognition};
+      partner: v.partner || '', level: v.level || 'school', established_on: v.established_on, location: v.location || '', recognition: v.recognition};
     if (!data.usages.length) throw Error('请选择基地用途');
     const r = existing ? await c.api('/applications/bases/' + existing.item.id, {method: 'PUT', body: {data, reason: v.reason, expected_version: existing.item.version}})
       : await c.api('/applications/bases', {method: 'POST', body: {data, reason: v.reason}});
