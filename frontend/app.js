@@ -1,6 +1,6 @@
 import {icons} from './icons.js';
-import {socialPage,socialAction} from './social-training.js?v=20261016-apply17';
-import {applicationAction,trainersHtml,myApplicationsHtml,homeApplicationsHtml,myCoursesHtml,libraryHtml,libraryFilterSubmit,homeCoursesHtml,courseAction} from './applications.js?v=20261016-apply17';
+import {socialPage,socialAction} from './social-training.js?v=20261016-apply18';
+import {applicationAction,trainersHtml,myApplicationsHtml,homeApplicationsHtml,myCoursesHtml,libraryHtml,libraryFilterSubmit,homeCoursesHtml,courseAction} from './applications.js?v=20261016-apply18';
 import {nextCode,runBatch,batchStage,batchMode,batchPerformer,BATCH_LABELS} from './approval-flow.js?v=20261012-streamline1';
 import {ledgerPage,resourceStatsPage,homeIndicators,ledgerAction,resetLedgerView,minePage,mineReminders} from './social-ledgers.js?v=20261016-tui1';
 import {rosterSection,rosterHandlers,onlineHandlers,showStaffDetail,showCourseDetail,presetRoster,loadCodeTables} from './school-data.js?v=20261014-school-review1';
@@ -167,7 +167,7 @@ const periodName=id=>periods.find(p=>p.id===id)?.name||'未选择周期';
 const orgName=id=>orgs.find(o=>o.id===id)?.name||'—';
 const query=o=>{const q=new URLSearchParams;for(const[k,v]of Object.entries(o))if(v!==''&&v!==null&&v!==undefined)q.set(k,String(v));return q.toString()};
 const requestKey=()=>typeof crypto.randomUUID==='function'?crypto.randomUUID():Array.from(crypto.getRandomValues(new Uint8Array(24)),x=>x.toString(16).padStart(2,'0')).join('');
-const reasonFields=(value='',label='办理意见 / 调整原因',basisRequired=false,basisPlaceholder='例：学院会议纪要〔2026〕3号、协议编号、材料编号',reasonPlaceholder='')=>field('reason',label,'textarea',value,{required:true,full:true,hint:'',placeholder:reasonPlaceholder})+field('basis','依据说明或材料编号','text','',{full:true,required:basisRequired,placeholder:basisPlaceholder});
+const reasonFields=(value='',label='办理意见 / 调整原因',basisRequired=false,basisPlaceholder='例：学院会议纪要〔2026〕3号、协议编号、材料编号',reasonPlaceholder='',reasonOptional=false)=>field('reason',label,'textarea',value,{required:!reasonOptional,full:true,hint:'',placeholder:reasonPlaceholder})+field('basis','依据说明或材料编号','text','',{full:true,required:basisRequired,placeholder:basisPlaceholder});
 async function api(path,{method='GET',body,raw=false,key,headers:providedHeaders={}}={}){
  const headers={...providedHeaders};if(method!=='GET'){headers['X-CSRF-Token']=csrf;if(method!=='DELETE')headers['Idempotency-Key']=key||requestKey()}
  const isBlob=typeof Blob!=='undefined'&&body instanceof Blob;

@@ -55,9 +55,9 @@ function decide(id, action) {
   const hint = action === 'return' ? '写清楚要补什么。老师补正后从这一级接着审，不从头走。' : action === 'approve' ? (level ? '本次办理：' + level + '。' : '') + '通过后自动转到下一级，最后一级通过即生效。' : action === 'withdraw' ? '撤回后可修改再提交，会从第一级重新审。' : '会从退回的那一级接着审。';
   const value = {approve: '材料齐全，同意', return: '', submit: '已按意见补正，重新提交', withdraw: '撤回修改'}[action];
   const needBasis = action === 'approve' && ['组织人事部认定', '教务处备案审核'].includes(level);
-  return c.formModal(label + '：' + d.item.name, c.note(needBasis ? hint + '请在“依据说明”里写' + (level === '组织人事部认定' ? '资格认定文号和日期。' : '备案依据。') : hint) + c.reasonFields(value, action === 'return' ? '退回原因' : '办理意见', false, level === '组织人事部认定' ? '例：湘人认〔2026〕12号，2026年10月16日' : level === '教务处备案审核' ? '例：教务处备案〔2026〕7号' : '例：学院会议纪要〔2026〕3号、协议编号、材料编号', action === 'return' ? '例：资格依据不够具体，请补充证书编号和授课经历' : ''), async v => {
+  return c.formModal(label + '：' + d.item.name, c.note(needBasis ? hint + '请在“依据说明”里写' + (level === '组织人事部认定' ? '资格认定文号和日期。' : '备案依据。') : hint) + c.reasonFields(action === 'return' ? value : '', action === 'return' ? '退回原因' : '办理意见', false, level === '组织人事部认定' ? '例：湘人认〔2026〕12号，2026年10月16日' : level === '教务处备案审核' ? '例：教务处备案〔2026〕7号' : '例：学院会议纪要〔2026〕3号、协议编号、材料编号', action === 'return' ? '例：资格依据不够具体，请补充证书编号和授课经历' : '例：' + value, action !== 'return'), async v => {
     if (needBasis && !(v.basis || '').trim()) throw Error('请填写依据说明：' + (level === '组织人事部认定' ? '资格认定文号和日期' : '备案依据'));
-    await c.api('/applications/' + id + '/actions', {method: 'POST', body: {action, expected_version: d.item.version, reason: v.reason, basis: v.basis}});
+    await c.api('/applications/' + id + '/actions', {method: 'POST', body: {action, expected_version: d.item.version, reason: v.reason || value, basis: v.basis}});
     c.closeModal(); c.toast(label + '完成'); await c.renderKeep(); await showApplication(id);
   }, {submit: '确认' + label, returnTo: () => showApplication(id)});
 }
@@ -113,14 +113,14 @@ export function teachingCourseForm(course, existing = null) {
     c.field('teaching_mode', '教学方式', 'select', d.teaching_mode || 'lecture', {options: TEACHING_MODES}) +
     c.field('ideology', '思政属性', 'select', d.ideology || 'course_ideology', {options: IDEOLOGY}) +
     c.field('hours', '培训学时', 'number', d.hours ?? course.hours ?? '', {required: false, min: 0, step: '0.5', hint: '默认用这门课的学时，按社会培训实际安排可调整。'}) +
-    c.field('reason', '申报说明', 'text', existing ? '按意见补正' : '申报为培训课程') +
+    c.field('reason', '申报说明', 'text', '', { required: false, placeholder: '例：' + (existing ? '按意见补正' : '申报为培训课程')}) +
     audienceFields(d.audience) + c.field('intro', '课程简介', 'textarea', d.intro || course.description || '', {required: false, full: true, hint: '面向社会学员怎么上、学完能做什么。', placeholder: '例：面向社区居民开设，学完能按家庭人数做一周营养配餐'}) +
     packageFields(d) + coursewareFields(d.courseware);
   return c.formModal(existing ? '补正培训课程申报' : '申报为培训课程', body, async v => {
     const data = {source: 'teaching', course_term_id: course.id, hours: v.hours, teaching_mode: v.teaching_mode, ideology: v.ideology, audience: audienceValue(v), intro: v.intro || '', courseware: coursewareValue(v), ...packageValue(v)};
     if (!data.audience) throw Error('请至少选择一类面向对象');
-    const r = existing ? await c.api('/applications/courses/' + existing.item.id, {method: 'PUT', body: {data, reason: v.reason, expected_version: existing.item.version}})
-      : await c.api('/applications/courses', {method: 'POST', body: {data, reason: v.reason}});
+    const r = existing ? await c.api('/applications/courses/' + existing.item.id, {method: 'PUT', body: {data, reason: v.reason || (existing ? '按意见补正' : '申报为培训课程'), expected_version: existing.item.version}})
+      : await c.api('/applications/courses', {method: 'POST', body: {data, reason: v.reason || (existing ? '按意见补正' : '申报为培训课程')}});
     c.closeModal(); c.toast(existing ? '已保存，请点“重新提交”' : '已提交，等待教研室审核'); await c.renderKeep(); await showApplication(r.item.id);
   }, {wide: true, submit: existing ? '保存补正' : '提交申报', returnTo: existing ? () => showApplication(existing.item.id) : null});
 }
@@ -137,12 +137,12 @@ export function manualCourseForm(existing = null, projectCode = '') {
     c.field('teaching_mode', '教学方式', 'select', d.teaching_mode || 'lecture', {options: TEACHING_MODES}) +
     c.field('ideology', '思政属性', 'select', d.ideology || 'course_ideology', {options: IDEOLOGY}) +
     c.field('intro', '课程简介', 'textarea', d.intro || '', {required: false, full: true, placeholder: '例：面向社区居民开设，学完能按家庭人数做一周营养配餐'}) + packageFields(d) + coursewareFields(d.courseware) +
-    c.field('reason', '申请说明', 'text', existing ? '按意见补正' : '申报培训课程', {full: true});
+    c.field('reason', '申请说明', 'text', '', {full: true, required: false, placeholder: '例：' + (existing ? '按意见补正' : '申报培训课程')});
   return c.formModal(existing ? '补正培训课程申报' : '新填一门培训课程', body, async v => {
     const data = {source: 'manual', code: v.code, name: v.name, project_code: v.project_code || '', teacher_id: v.teacher_id || null, hours: v.hours,
       teaching_mode: v.teaching_mode, ideology: v.ideology, intro: v.intro || '', courseware: coursewareValue(v), ...packageValue(v)};
-    const r = existing ? await c.api('/applications/courses/' + existing.item.id, {method: 'PUT', body: {data, reason: v.reason, expected_version: existing.item.version}})
-      : await c.api('/applications/courses', {method: 'POST', body: {data, reason: v.reason}});
+    const r = existing ? await c.api('/applications/courses/' + existing.item.id, {method: 'PUT', body: {data, reason: v.reason || (existing ? '按意见补正' : '申报培训课程'), expected_version: existing.item.version}})
+      : await c.api('/applications/courses', {method: 'POST', body: {data, reason: v.reason || (existing ? '按意见补正' : '申报培训课程')}});
     c.closeModal(); c.toast(existing ? '已保存，请点“重新提交”' : college ? '已提交，等待学校审批' : c.me.role.kind === 'dept' ? '已提交，等待学院审批' : '已提交，等待教研室审核'); await c.renderKeep(); await showApplication(r.item.id);
   }, {wide: true, submit: existing ? '保存补正' : '提交申报', returnTo: existing ? () => showApplication(existing.item.id) : null});
 }
@@ -159,13 +159,13 @@ export function baseForm(existing = null) {
     c.field('level', '基地级别', 'select', d.level || 'school', {options: [['school', '校级'], ['city', '市级'], ['province', '省级及以上']], hint: '学校鼓励申报省级及以上培训基地。'}) +
     c.field('partner', '共建单位', 'text', d.partner || '', {required: false, hint: '校外基地必填。', placeholder: '例：湘茶集团有限公司'}) + c.field('established_on', '设立日期', 'date', d.established_on || '') +
     c.field('location', '地点', 'text', d.location || '', {required: false, placeholder: '例：长沙市岳麓区××路18号'}) + c.field('recognition', '认定依据', 'textarea', d.recognition || '', {full: true, hint: '共建协议、学校发文或学院会议纪要。', placeholder: '例：与湘茶集团签订共建协议（2026年3月），已经学院会议纪要〔2026〕5号确认'}) +
-    c.field('reason', '申请说明', 'text', existing ? '按意见补正' : '申请培训基地', {full: true});
+    c.field('reason', '申请说明', 'text', '', {full: true, required: false, placeholder: '例：' + (existing ? '按意见补正' : '申请培训基地')});
   return c.formModal(existing ? '补正培训基地申请' : '申请培训基地', body, async v => {
     const data = {code: v.code, name: v.name, teacher_id: v.teacher_id || null, usages: BASE_USAGES.map(([k]) => k).filter(k => v['usage_' + k]), onsite: v.onsite === 'yes',
       partner: v.partner || '', level: v.level || 'school', established_on: v.established_on, location: v.location || '', recognition: v.recognition};
     if (!data.usages.length) throw Error('请选择基地用途');
-    const r = existing ? await c.api('/applications/bases/' + existing.item.id, {method: 'PUT', body: {data, reason: v.reason, expected_version: existing.item.version}})
-      : await c.api('/applications/bases', {method: 'POST', body: {data, reason: v.reason}});
+    const r = existing ? await c.api('/applications/bases/' + existing.item.id, {method: 'PUT', body: {data, reason: v.reason || (existing ? '按意见补正' : '申请培训基地'), expected_version: existing.item.version}})
+      : await c.api('/applications/bases', {method: 'POST', body: {data, reason: v.reason || (existing ? '按意见补正' : '申请培训基地')}});
     c.closeModal(); c.toast(existing ? '已保存，请点“重新提交”' : college ? '已提交，等待学校审批' : c.me.role.kind === 'dept' ? '已提交，等待学院审批' : '已提交，等待教研室审核'); await c.renderKeep(); await showApplication(r.item.id);
   }, {wide: true, submit: existing ? '保存补正' : '提交申报', returnTo: existing ? () => showApplication(existing.item.id) : null});
 }
@@ -189,13 +189,13 @@ export async function trainerForm(existing = null, source = '') {
     `<fieldset class="form-field full apply-tags"><legend>培训方向 <b>*</b></legend><div class="apply-tag-row">${TRAINER_DIRECTIONS.map(([k, l]) => `<label><input type="checkbox" name="dir_${k}" ${picked.has(k) ? 'checked' : ''}>${e(l)}</label>`).join('')}</div></fieldset>` + quals +
     c.field('qualification_basis', '资格依据', 'textarea', d.qualification_basis || '', {full: true, hint: '职称、职业资格、行业经历等，写清楚能证明什么。', placeholder: '例：茶艺高级技师（证书编号见资质），从事茶艺培训十年，主讲过省级技能培训班'}) +
     c.field('experience', '授课经历', 'textarea', d.experience || '', {required: false, full: true, placeholder: '例：2023—2025年为社区开设茶艺公益班12期，累计学员360人次'}) +
-    c.field('reason', '申报说明', 'text', existing ? '按意见补正' : external ? '登记外聘培训师' : '申报培训师', {full: true});
+    c.field('reason', '申报说明', 'text', '', {full: true, required: false, placeholder: '例：' + (existing ? '按意见补正' : external ? '登记外聘培训师' : '申报培训师')});
   return c.formModal(existing ? '补正培训师申报' : external ? '登记外聘培训师' : '申报培训师', body, async (v, f) => {
     const data = {source: external ? 'external' : 'internal', name: v.name || '', unit: v.unit || '', title: v.title || '', directions: TRAINER_DIRECTIONS.map(([k]) => k).filter(k => v['dir_' + k]),
       qualification_ids: [...f.querySelectorAll('input[name^="qual_"]:checked')].map(i => i.name.slice(5)), qualification_basis: v.qualification_basis, experience: v.experience || ''};
     if (!data.directions.length) throw Error('请至少选择一个培训方向');
-    const r = existing ? await c.api('/applications/trainers/' + existing.item.id, {method: 'PUT', body: {data, reason: v.reason, expected_version: existing.item.version}})
-      : await c.api('/applications/trainers', {method: 'POST', body: {data, reason: v.reason}});
+    const r = existing ? await c.api('/applications/trainers/' + existing.item.id, {method: 'PUT', body: {data, reason: v.reason || (existing ? '按意见补正' : external ? '登记外聘培训师' : '申报培训师'), expected_version: existing.item.version}})
+      : await c.api('/applications/trainers', {method: 'POST', body: {data, reason: v.reason || (existing ? '按意见补正' : external ? '登记外聘培训师' : '申报培训师')}});
     c.closeModal(); c.toast(existing ? '已保存，请点“重新提交”' : external ? '已提交，等待教务处备案审核' : '已提交，等待教研室审核'); await c.renderKeep(); await showApplication(r.item.id);
   }, {wide: true, submit: existing ? '保存补正' : '提交申报', returnTo: existing ? () => showApplication(existing.item.id) : null});
 }
