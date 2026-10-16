@@ -44,6 +44,7 @@ def test_social_menu_form_resources_and_refresh_in_browser(tmp_path,monkeypatch)
             page.locator('#f-org_id').select_option(index=1)
             # 项目层级、授课场景没有默认值，须由申报人选择（与后端必填一致）
             page.locator('#f-level').select_option('school');page.locator('#f-scene').select_option('ordinary')
+            page.locator('#f-venue_type').select_option('campus');page.locator('#f-venue_place').fill('隔离楼101教室')
             page.locator('#f-reason').fill('隔离浏览器验证项目申报')
             page.locator('button[form="edit-form"]').first.click()
             # 保存草稿后直接打开项目详情，提示下一步上传材料并提交备案

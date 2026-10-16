@@ -1,6 +1,6 @@
 // School business pages reuse the portal's forms, permissions, navigation and attachments.
 import {checkUploadFiles,uploadEntries,uploadSequential,uploadStatusHtml,failedEntries,MAX_ATTACHMENTS} from './approval-flow.js?v=20261012-streamline1';
-import {progressHtml,AUDIENCE,TEACHING_MODES,IDEOLOGY} from './applications.js?v=20261016-apply15';
+import {progressHtml,AUDIENCE,TEACHING_MODES,IDEOLOGY} from './applications.js?v=20261016-apply16';
 const names={module:'模块式',person_day:'人天式',technical:'技术类',lecture:'讲座类',province:'省级',city:'市级或企业定制',school:'校级',dispatched:'统一委派异地送教',full_day:'全天实操或脱产',ordinary:'常规',subsidy:'补贴性培训',enterprise:'企业定制培训',community:'社区公益培训',rural:'乡村帮扶培训',other:'其他非学历培训',national:'国家级'};
 let workspace,context,opened,workspaceUser;
 let listSection='',listPage=1,listSearch='',resourcePage=1;
@@ -288,6 +288,7 @@ async function showDetail(kind,id,courseList=null){
  const add=(label,action)=>{if(selfOwned&&reviewActions.includes(action)&&!(x.kind==='point_report'&&action==='archive')){avoided=true;return}opened.labels[action]=label;if(action==='approve'&&(kind==='social_claim'||(kind==='social_resource'&&x.kind==='correction'))){opened.inlineApprove=true;return}buttons.push(act(label,'social-transition',action,action==='return'?'danger':['submit','approve','file','close','activate','publish','archive'].includes(action)?'primary':''))};
  // 学院这一级：老师、教研室提交的项目先由学院审批，结项先由学院核验（后端 college_handle 已判断回避和代办）。
  if(kind==='social_project'&&d.college_handle){add(x.state==='COLLEGE'?'学院审批通过':'学院结项核验通过','approve');add('退回补正','college_return')}
+ if(kind==='social_project'&&x.state!=='CLOSED'&&((c.me?.role?.kind==='teacher'&&x.owner_id===c.me.user.id)||(c.can('records.write')&&['college','school'].includes(c.me?.role?.kind))))buttons.push(act('更新开班准备','social-prep'));
  if(kind==='social_project'&&c.can('records.write')&&['college','school'].includes(c.me?.role?.kind)&&['FILED','CLOSE_COLLEGE','CLOSE_REVIEW','CLOSED'].includes(x.state))buttons.push(act(d.report_issues?.length?'补填上报信息':'修改上报信息','social-report-info','',d.report_issues?.length?'primary':''));
  if(kind==='social_project'&&(c.can('records.write')||ownTeacher)){
   if(['DRAFT','RETURNED'].includes(x.state)){add(c.me?.role?.kind==='teacher'||c.me?.role?.kind==='dept'?'提交学院审批':'提交审核备案','submit');buttons.push(act('修改项目资料','social-project-edit'))}
@@ -355,6 +356,7 @@ async function showDetail(kind,id,courseList=null){
   const pending=data.source||{},needs=[pending.dates_pending||pending.date_pending?'实际培训日期':'',pending.mode_pending?'备案核算方式':'',...(pending.policy_pending||(pending.ledger_id?['level','scene'].filter(k=>!data[k+'_confirmed']):[])).map(k=>({level:'项目层级',scene:'授课场景'}[k]))].filter(Boolean);
   if(needs.length)body+=note('台账草稿待核实：'+needs.join('、')+'。当前显示的自动生成值仅供整理，不能直接正式备案。',true);
   body+=detailFacts('项目资料',[['名称',esc(data.name)],['期次',esc(x.cohort)],['培训期间',esc(data.start_date+' 至 '+data.end_date)],['核算方式',esc(names[data.mode])],['备案登记日期',esc(data.filed_on||'未备案')],['前置审核日期',esc(data.prior_review_on||'不适用')],['备案依据',esc(data.filing_basis||'待补充')],['培训类别',esc(names[data.category])],['预计收入',esc(data.expected_income)+' 元'],['预期成果',esc(data.expected_outcomes)],['有效人次',d.facts.effective],['剔除人次',d.facts.excluded]]);
+  body+=venueBlock(data)+prepBlock(data);
   body+=qualityBlock(data,d.report_issues);
   if(d.facts.units.length)body+='<h3>参训明细</h3>'+table(['单元编号','培训日期','课程编号','参训记录数'],d.facts.units.map(u=>[esc(u.external_key),esc(u.data.event_date),esc(u.data.course_code),u.data.learners.length]));
   body+=detailFacts('备案核算条件',[['承办学院',esc(d.org_name||c.orgName(x.org_id))],['负责人',esc(c.teacherName(x.owner_id))],['标准班类型',esc(names[data.class_type])],['项目层级',esc(names[data.level])],['专项层级依据',esc(data.level_basis||'按类别通常口径')],['授课场景',esc(names[data.scene])],['辅助积分细则',esc(data.auxiliary_standard||'未备案')],['个人辅助积分每日上限',data.auxiliary_daily_cap??'未确认']]);
@@ -405,6 +407,20 @@ function qualityFields(q={}){
 }
 function takeReview(v,key){const r={checked:!!v[key+'_checked'],signer:v[key+'_signer']||'',reviewed_on:v[key+'_on']||null,reference:v[key+'_ref']||''};for(const k of ['checked','signer','on','ref'])delete v[key+'_'+k];return r}
 // 把表单里的平铺字段收成 total_hours、audiences、quality，其余原样留给项目资料。
+const VENUE_TYPES=[['base','校内培训基地'],['campus','其他校内场所'],['offsite','校外']];
+function venueFields(g={}){
+ const c=context;
+ return c.field('venue_type','培训场地','select',g.type||'',{options:[['','请选择培训场地'],...VENUE_TYPES]})
+  +c.field('venue_place','具体地点（基地名称、楼宇教室或外出地点）','text',g.place||'',{})
+  +c.field('venue_reason','校外培训的外出理由（一事一议）','textarea',g.offsite_reason||'',{required:false,hint:'选“校外”时必填：说明为什么不能在校内开展。'})
+  +c.field('venue_ref','议定文号或会议日期','text',g.offsite_ref||'',{required:false,hint:'选“校外”时必填：学校一事一议的会议日期或文号。'});
+}
+function takeVenue(v){
+ const t=v.venue_type,venue={type:t,place:(v.venue_place||'').trim(),offsite_reason:(v.venue_reason||'').trim(),offsite_ref:(v.venue_ref||'').trim()};
+ for(const k of ['venue_type','venue_place','venue_reason','venue_ref'])delete v[k];
+ if(t==='offsite'&&!(venue.offsite_reason&&venue.offsite_ref))throw Error('校外培训须登记一事一议：外出理由、议定文号或会议日期');
+ return venue;
+}
 function takeQuality(v){
  const audiences=AUDIENCE.filter((t,i)=>v['aud_'+i]);AUDIENCE.forEach((t,i)=>delete v['aud_'+i]);
  const ideology_modes=IDEOLOGY_MODES.map(([k])=>k).filter(k=>v['mode_'+k]);IDEOLOGY_MODES.forEach(([k])=>delete v['mode_'+k]);
@@ -412,6 +428,22 @@ function takeQuality(v){
  const quality={ideology_modes,ideology_hours:v.ideology_hours===''||v.ideology_hours==null?null:v.ideology_hours,bases,teacher_review:takeReview(v,'teacher_review'),courseware_review:takeReview(v,'courseware_review')};
  delete v.ideology_hours;
  return {audiences,audience_other:v.audience_other||'',total_hours:v.total_hours===''||v.total_hours==null?null:v.total_hours,quality};
+}
+const PREP_ITEMS=[['plan','教学计划'],['lecturers','师资安排'],['venue','场地'],['equipment','设备'],['materials','教材教具'],['notice','培训告知书或邀请函']];
+function venueBlock(data){
+ const e=context.esc,g=data.venue,label=Object.fromEntries(VENUE_TYPES);
+ if(!g)return '<section class="social-detail-section"><h3>培训场地</h3><p class="muted small">未登记（已备案的项目不强制补填，重新备案时须填写）</p></section>';
+ const rows=[['场地类型',e(label[g.type]||g.type)],['具体地点',e(g.place)]];
+ if(g.type==='offsite')rows.push(['一事一议：外出理由',e(g.offsite_reason)],['议定文号或会议日期',e(g.offsite_ref)]);
+ return '<section class="social-detail-section"><h3>培训场地</h3><dl class="kv">'+rows.map(([k,v])=>'<dt>'+k+'</dt><dd>'+v+'</dd>').join('')+'</dl></section>';
+}
+function prepBlock(data){
+ const e=context.esc,prep=data.prep||{},left=PREP_ITEMS.filter(([k])=>!prep[k]);
+ return '<section class="social-detail-section"><h3>开班前准备</h3><ul class="prep-list">'+PREP_ITEMS.map(([k,l])=>'<li data-done="'+!!prep[k]+'">'+(prep[k]?'✓ ':'○ ')+e(l)+'</li>').join('')+'</ul>'+(left.length?'<p class="muted small">还有 '+left.length+' 项未确认：'+e(left.map(x=>x[1]).join('、'))+'。仅作提醒，不影响办理。</p>':'<p class="muted small">六项准备均已确认。</p>')+'</section>';
+}
+function prepForm(){
+ const c=context,x=opened.item,prep=x.data.prep||{};
+ commonForm('开班前准备：'+x.data.name,formSection('准备事项',PREP_ITEMS.map(([k,l])=>c.field('prep_'+k,l+'已准备','checkbox',!!prep[k])).join(''),'勾选已落实的事项；仅作提醒，不影响审批和备案。'),async raw=>{const {reason,basis,...rest}=raw;const items={};for(const [k] of PREP_ITEMS)items[k]=!!rest['prep_'+k];return c.api('/social/projects/'+x.id+'/prep',{method:'PUT',body:{reason:reason||'更新开班前准备清单',expected_version:x.version,items}})},{reopen:true,submit:'保存',hideReason:true,reasonDefault:'更新开班前准备清单'});
 }
 function qualityBlock(data,issues){
  const c=context,e=c.esc,q=data.quality||{},label=Object.fromEntries(IDEOLOGY_MODES);
@@ -433,8 +465,8 @@ function projectForm(edit=false){
  if(pending.dates_pending||pending.date_pending)confirmations.push(f('dates_confirmed','确认实际培训期间','checkbox',{checkLabel:'已核对开始、结束日期，占位日期已更正'}));
  if(pending.mode_pending)confirmations.push(f('mode_confirmed','确认备案核算方式','checkbox',{checkLabel:'已核对模块或培训工作日明细'}));
  for(const [key,label] of [['level','项目层级'],['scene','授课场景']])if((pending.policy_pending||[]).includes(key)||(pending.ledger_id&&!v[key+'_confirmed']))confirmations.push(f(key+'_confirmed','确认'+label,'checkbox',{checkLabel:'已依据项目材料核实'+label}));
- const body=formSection('一、项目基本资料',f('code','项目编号')+f('name','项目名称')+f('cohort','项目期次')+(teacher?'<input type="hidden" name="org_id" value="'+c.esc(v.org_id||myCollege)+'"><input type="hidden" name="owner_id" value="'+c.esc(c.me.user.id)+'">'+c.field('owner_view','项目负责人','text',c.me.user.name,{readonly:true,required:false,hint:'老师申报的项目，负责人是本人，承办学院是本人所在学院。'}):collegeField(v.org_id)+c.teacherField(v.owner_id||'', 'owner_id','项目负责人（输入工号或姓名检索）'))+f('category','培训类别','select',{options:[...(edit?[]:[['','请选择培训类别']]),...selectable(['subsidy','enterprise','community','rural','other'])]})+f('high_risk','高风险项目','checkbox',{required:false,checkLabel:'属于其他高风险项目（须前置审核，备案时登记审核日期及依据）'}),'')+formSection('二、培训安排',f('start_date','开始日期','date')+f('end_date','结束日期','date')+f('expected_income','预计收入（公益类填0）','number',{min:0,step:0.01})+f('expected_participants','预计人次','number',{min:0,step:1})+f('expected_outcomes','预期成果','textarea')+f('target_groups','重点群体与行动对接','textarea',{required:false,hint:'补贴性培训必填：写明面向哪些重点群体、对接哪项行动；其他类别可不填。'})+f('total_hours','总学时','number',{required:false,min:0,step:0.5})+audienceFields(v))+formSection('三、积分核算依据',f('mode','核算方式','select',{options:selectable(['module','person_day'])})+f('class_type','标准班类型','select',{options:selectable(['technical','lecture'])})+f('level','项目层级','select',{options:[...(edit?[]:[['','请选择'+'项目层级']]),...selectable(['province','city','school'])]})+f('scene','授课场景','select',{options:[...(edit?[]:[['','请选择'+'授课场景']]),...selectable(['dispatched','full_day','ordinary'])]})+f('level_basis','专项层级认定依据','textarea',{required:false,hint:'企业定制通常选市级；社区、免费帮扶通常选校级。属于更高层级专项时，填写正式认定依据并提交归口核验。'})+f('auxiliary_standard','随项目备案的辅助积分细则','textarea',{required:false})+f('auxiliary_daily_cap','个人辅助积分每日上限','number',{required:false,min:0,step:0.01}),'同期项目只采用一种核算方式；尚未确认的辅助积分标准请留空。')+formSection('四、立德树人与质量',qualityFields(v.quality||{}),'上级 1.2 立德树人表要的数。'+(teacher||c.me?.role?.kind==='dept'?'提交学院审批前须填完；两项审查由学院做，学院签字后再勾选。':'学院、学校登记的项目可以先保存，结项后也能补填。'))+(confirmations.length?formSection('五、台账草稿待核实事项',confirmations.join(''),'核实并保存后才能提交正式备案；自动生成的值不能代替材料核验。'):'');
- commonForm(edit?'修改项目申报':'申报培训项目',body,async v=>{delete v.owner_id_search;delete v.owner_view;const info=takeQuality(v);const data=cleanReason(v);Object.assign(data.data,info);return c.api('/social/projects'+(edit?'/'+x.id:''),{method:edit?'PUT':'POST',body:{...data,...(edit?{expected_version:x.version}:{})}})},
+ const body=formSection('一、项目基本资料',f('code','项目编号')+f('name','项目名称')+f('cohort','项目期次')+(teacher?'<input type="hidden" name="org_id" value="'+c.esc(v.org_id||myCollege)+'"><input type="hidden" name="owner_id" value="'+c.esc(c.me.user.id)+'">'+c.field('owner_view','项目负责人','text',c.me.user.name,{readonly:true,required:false,hint:'老师申报的项目，负责人是本人，承办学院是本人所在学院。'}):collegeField(v.org_id)+c.teacherField(v.owner_id||'', 'owner_id','项目负责人（输入工号或姓名检索）'))+f('category','培训类别','select',{options:[...(edit?[]:[['','请选择培训类别']]),...selectable(['subsidy','enterprise','community','rural','other'])]})+f('high_risk','高风险项目','checkbox',{required:false,checkLabel:'属于其他高风险项目（须前置审核，备案时登记审核日期及依据）'}),'')+formSection('二、培训安排',f('start_date','开始日期','date')+f('end_date','结束日期','date')+f('expected_income','预计收入（公益类填0）','number',{min:0,step:0.01})+f('expected_participants','预计人次','number',{min:0,step:1})+f('expected_outcomes','预期成果','textarea')+f('target_groups','重点群体与行动对接','textarea',{required:false,hint:'补贴性培训必填：写明面向哪些重点群体、对接哪项行动；其他类别可不填。'})+f('total_hours','总学时','number',{required:false,min:0,step:0.5})+venueFields(v.venue||{})+audienceFields(v))+formSection('三、积分核算依据',f('mode','核算方式','select',{options:selectable(['module','person_day'])})+f('class_type','标准班类型','select',{options:selectable(['technical','lecture'])})+f('level','项目层级','select',{options:[...(edit?[]:[['','请选择'+'项目层级']]),...selectable(['province','city','school'])]})+f('scene','授课场景','select',{options:[...(edit?[]:[['','请选择'+'授课场景']]),...selectable(['dispatched','full_day','ordinary'])]})+f('level_basis','专项层级认定依据','textarea',{required:false,hint:'企业定制通常选市级；社区、免费帮扶通常选校级。属于更高层级专项时，填写正式认定依据并提交归口核验。'})+f('auxiliary_standard','随项目备案的辅助积分细则','textarea',{required:false})+f('auxiliary_daily_cap','个人辅助积分每日上限','number',{required:false,min:0,step:0.01}),'同期项目只采用一种核算方式；尚未确认的辅助积分标准请留空。')+formSection('四、立德树人与质量',qualityFields(v.quality||{}),'上级 1.2 立德树人表要的数。'+(teacher||c.me?.role?.kind==='dept'?'提交学院审批前须填完；两项审查由学院做，学院签字后再勾选。':'学院、学校登记的项目可以先保存，结项后也能补填。'))+(confirmations.length?formSection('五、台账草稿待核实事项',confirmations.join(''),'核实并保存后才能提交正式备案；自动生成的值不能代替材料核验。'):'');
+ commonForm(edit?'修改项目申报':'申报培训项目',body,async v=>{delete v.owner_id_search;delete v.owner_view;const venue=takeVenue(v);const info=takeQuality(v);const data=cleanReason(v);Object.assign(data.data,info,{venue});return c.api('/social/projects'+(edit?'/'+x.id:''),{method:edit?'PUT':'POST',body:{...data,...(edit?{expected_version:x.version}:{})}})},
   edit?{reopen:true}:{submit:'保存草稿',reasonLabel:'申报说明',reasonDefault:teacher?'申报本人负责的培训项目':'学院申报培训项目',hint:teacher?'保存草稿后上传材料，再提交学院审批；学院通过后到学校备案。':'保存草稿后上传材料，再提交审核备案。',after:r=>r?.item?.id?showDetail('social_project',r.item.id):null});
  bindProjectCategory();
 }
@@ -537,7 +569,7 @@ export async function socialAction(action,id,c){
   return commonForm('追加积分更正',body,v=>c.api('/social/corrections'+(edit?'/'+x.id:''),{method:edit?'PUT':'POST',body:{...v,claim_id:edit?old.claim_id:x.id,...(edit?{expected_version:x.version}:{})}}),{after:r=>r?.item?.id?showDetail('social_resource',r.item.id):null});
  }
  if(action==='social-report-new')return commonForm('双月汇总与年度公示',c.field('org_id','汇总组织（年度公示选择学校）','select','',{options:c.orgs.filter(o=>['school','college'].includes(o.kind)).map(o=>[o.id,o.name])})+c.field('year','年度','number',new Date().getFullYear(),{min:2000,max:2200,step:1})+c.field('window','汇总范围','select','1-2',{options:[['1-2','1—2月'],['3-4','3—4月'],['5-6','5—6月'],['7-8','7—8月'],['9-10','9—10月'],['11-12','11—12月'],['1-12','年度全校公示']]})+c.field('policy_id','已确认制度与校历','select','',{options:workspace.policies.filter(p=>p.state==='ACTIVE').map(p=>[p.id,p.name])}),v=>{const{window,...data}=v;const[start_month,end_month]=window.split('-').map(Number);return c.api('/social/reports',{method:'POST',body:{...data,start_month,end_month}})},{submit:'生成汇总',after:r=>r?.item?.id?showDetail('social_resource',r.item.id):null});
- if(action==='social-report-info')return reportInfoForm();
+ if(action==='social-report-info')return reportInfoForm();if(action==='social-prep')return prepForm();
  if(action==='social-report-export'){reportResult=null;return reportModal()}
  if(action==='social-report-check'){const q=readReportRange();reportResult=await c.api('/social/report-export/check?'+q);return reportModal()}
  if(action==='social-report-download'){const q=readReportRange();return c.download('/social/report-export?'+q,'上报表_'+reportRange.start+'_'+reportRange.end+'.xlsx')}

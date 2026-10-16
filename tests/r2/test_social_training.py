@@ -18,7 +18,7 @@ def payload():
     return {'reason':'隔离测试项目申报','data':{'code':'SOC-P1','name':'隔离技能培训','cohort':'第一期','org_id':'college1','owner_id':'teacher',
         'category':'community','high_risk':False,'expected_income':'0','expected_participants':30,'expected_outcomes':'完成技能培训',
         'start_date':'2026-09-01','end_date':'2026-09-02','mode':'module','class_type':'technical','level':'province','level_basis':'隔离省级专项认定依据','scene':'dispatched',
-        'auxiliary_standard':'隔离已备案细则','auxiliary_daily_cap':'2'}}
+        'auxiliary_standard':'隔离已备案细则','auxiliary_daily_cap':'2','venue':{'type':'campus','place':'隔离楼101教室'}}}
 
 
 def row(key='unit1',count=30):
@@ -476,3 +476,22 @@ def test_missing_closeout_materials_and_chinese_project_search(setup_social,clie
     assert action(client2,'projects','social_project',pid,'close').status_code==409
     result=client2.get('/api/social/workspace?section=projects&q=隔离技能').json()
     assert result['pagination']['total']==1;assert result['projects'][0]['id']==pid
+
+
+def test_project_venue_required_offsite_needs_record_and_prep_checklist(client2,app2):
+    auth(client2,'schooladmin')
+    base=payload()
+    no_venue={**base,'data':{k:v for k,v in base['data'].items() if k!='venue'}}
+    assert post(client2,'/api/social/projects',no_venue).status_code==422
+    offsite={**base,'data':{**base['data'],'venue':{'type':'offsite','place':'市技师学院实训楼'}}}
+    assert post(client2,'/api/social/projects',offsite).status_code==422  # 校外缺一事一议
+    offsite['data']['venue'].update(offsite_reason='校内无该设备',offsite_ref='校长办公会 2026-08-20')
+    r=post(client2,'/api/social/projects',offsite);assert r.status_code==200,r.text
+    p=r.json()['item'];assert p['data']['venue']['offsite_ref']=='校长办公会 2026-08-20'
+    # 清单只提醒：勾选后保留，改草稿不丢
+    r=put(client2,'/api/social/projects/'+p['id']+'/prep',{'reason':'准备','expected_version':p['version'],'items':{'plan':True,'notice':True}});assert r.status_code==200,r.text
+    item=r.json()['item'];assert item['data']['prep']=={'plan':True,'notice':True}
+    edit={**offsite,'expected_version':item['version']}
+    r=put(client2,'/api/social/projects/'+p['id'],edit);assert r.status_code==200,r.text
+    assert r.json()['item']['data']['prep']=={'plan':True,'notice':True}
+    assert put(client2,'/api/social/projects/'+p['id']+'/prep',{'reason':'x','items':{'bogus':True}}).status_code==422

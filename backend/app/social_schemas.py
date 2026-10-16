@@ -29,6 +29,19 @@ class ProjectBase(Input):
         return self
 
 
+class ProjectVenue(Input):
+    # 培训场地：校内基地、其他校内场所、校外。校外须附一事一议记录（外地点、理由、议定文号或会议日期）。
+    type: Literal['base','campus','offsite']
+    place: str = Field(min_length=1, max_length=200)
+    offsite_reason: str = Field(default='', max_length=1000)
+    offsite_ref: str = Field(default='', max_length=200)
+    @model_validator(mode='after')
+    def offsite_record(self):
+        if self.type == 'offsite' and not (self.offsite_reason.strip() and self.offsite_ref.strip()):
+            raise ValueError('校外培训须登记一事一议：外出理由、议定文号或会议日期')
+        return self
+
+
 class ReviewRecord(Input):
     checked: bool = False
     signer: str = Field(default='', max_length=100)
@@ -94,6 +107,7 @@ class ProjectData(Input):
     audiences: list[str] = Field(default_factory=list, max_length=12)
     audience_other: str = Field(default='', max_length=200)
     quality: ProjectQuality | None = None
+    venue: ProjectVenue | None = None
     @model_validator(mode='after')
     def valid_dates(self):
         if self.end_date < self.start_date: raise ValueError('结束日期不能早于开始日期')
@@ -553,6 +567,15 @@ class TrainerApplyIn(Reason):
 class ApplicationAction(Reason):
     expected_version: int = Field(ge=1)
     action: Literal['submit', 'approve', 'return', 'withdraw']
+
+
+PREP_ITEMS = {'plan':'教学计划','lecturers':'师资安排','venue':'场地','equipment':'设备','materials':'教材教具','notice':'培训告知书或邀请函'}
+
+
+class PrepIn(Reason):
+    """开班前准备清单：只提醒，不拦截任何办理。"""
+    expected_version: int | None = Field(default=None, ge=1)
+    items: dict[Literal['plan','lecturers','venue','equipment','materials','notice'], bool]
 
 
 class ReportInfoIn(Reason):

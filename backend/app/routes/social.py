@@ -8,7 +8,7 @@ from ..core import command, read_operation, serial, audit, workflow, check_versi
 from ..models import Org, User, Role, Setting, Period, PointEntry, Notice, WorkflowEvent
 from ..reference_data import TrainingProjectMaster, TrainingCourseMaster, TrainingClassMaster
 from ..social_models import SocialProject, SocialUnit, SocialPolicy, SocialClaim, SocialAnnual, SocialResource
-from ..social_schemas import ReportInfoIn,ProjectIn, UnitsIn, SocialAction, PolicyIn, PolicyUpdate, RecommendedPolicyIn, PolicyCalendarIn, PolicyData, ClaimIn, AnnualIn, ResourceIn, ResourceUpdate, DutiesIn, CourseIn, CourseBatchIn, CaseNoteIn, CorrectionIn, ReportIn, PointReviewIn
+from ..social_schemas import ReportInfoIn,PrepIn,ProjectIn, UnitsIn, SocialAction, PolicyIn, PolicyUpdate, RecommendedPolicyIn, PolicyCalendarIn, PolicyData, ClaimIn, AnnualIn, ResourceIn, ResourceUpdate, DutiesIn, CourseIn, CourseBatchIn, CaseNoteIn, CorrectionIn, ReportIn, PointReviewIn
 from .. import social_training as st
 
 router=APIRouter(prefix='/api/social',tags=['社会培训项目与制度'])
@@ -187,6 +187,7 @@ def set_duties(data:DutiesIn,request:Request):
 def project_create(data:ProjectIn,request:Request):
     def apply(db,a,s):
         p=data.data;project_applicant(db,a,p);project_owner(db,p.owner_id,p.org_id)
+        if not p.venue:raise HTTPException(422,'请填写培训场地（校内基地、其他校内场所或校外一事一议）')
         master=db.scalar(select(TrainingProjectMaster).where(TrainingProjectMaster.code==p.code))
         if master and master.name!=p.name:raise HTTPException(409,'项目编码已存在，请使用现有项目名称')
         if not master:
@@ -202,6 +203,7 @@ def project_edit(ident:str,data:ProjectIn,request:Request):
         obj=st.scoped(db,a,'social_project',ident,write=True)
         if obj.state not in {'DRAFT','RETURNED'}:raise HTTPException(409,'核心事项变更须先办理重新备案')
         check_version(obj,data.expected_version);before=serial(obj)
+        if not data.data.venue:raise HTTPException(422,'新申报和重新备案须填写培训场地（校内基地、其他校内场所或校外一事一议）')
         if any(getattr(data.data,k)!=obj.data[k] for k in ('code','cohort','org_id')):raise HTTPException(422,'项目编号、期次及承办学院不能直接替换')
         if a.role.kind=='teacher' and data.data.owner_id!=a.id:raise HTTPException(403,'老师不能把项目负责人改成别人')
         project_owner(db,data.data.owner_id,obj.org_id)
@@ -214,7 +216,7 @@ def project_edit(ident:str,data:ProjectIn,request:Request):
             if data.data.mode_confirmed:source.pop('mode_pending',None)
             source['policy_pending']=[key for key in source.get('policy_pending',['level','scene'] if source.get('ledger_id') else []) if not values.get(key+'_confirmed')]
             values['source']=source
-        values={**values,**{k:obj.data[k] for k in ('returned_level',) if k in obj.data}}
+        values={**values,**{k:obj.data[k] for k in ('returned_level','prep') if k in obj.data}}
         obj.data=values;obj.owner_id=data.data.owner_id
         return event(db,a,'social_project',obj,'修改申报草稿',before,data.reason)
     return command(request,data.model_dump(),'portal.read',apply)
@@ -367,6 +369,18 @@ def project_bases(db,project):
         db.add(SocialResource(kind='base',org_id=project.org_id,code=code,name=b['name'],state='DRAFT',
             data={**b,'usages':['ideology'],'recognition':'随培训项目备案设立：'+project.data['name'],'project_id':project.id,'auto':True,'effective_on':st.today().isoformat()}))
     db.flush()
+
+
+@router.put('/projects/{ident}/prep')
+def project_prep(ident:str,data:PrepIn,request:Request):
+    """开班前准备清单：负责人、学院、学校勾选，只提醒不拦截。"""
+    def apply(db,a,s):
+        obj=st.scoped(db,a,'social_project',ident,write=True);check_version(obj,data.expected_version)
+        if obj.state in {'CLOSED','CANCELLED'}:raise HTTPException(409,'项目已结束，不再维护开班准备')
+        before=serial(obj);prep={**obj.data.get('prep',{}),**data.items}
+        obj.data={**obj.data,'prep':prep}
+        return event(db,a,'social_project',obj,'更新开班前准备清单',before,data.reason)
+    return command(request,data.model_dump(mode='json'),'portal.read',apply)
 
 
 @router.put('/projects/{ident}/report-info')
