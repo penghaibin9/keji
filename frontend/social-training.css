@@ -606,3 +606,29 @@ body[data-role="teacher"] .apply-counts span:nth-child(3){background:#e9f9ef;col
 .prep-list{list-style:none;margin:0 0 8px;padding:0;display:flex;flex-wrap:wrap;gap:8px 20px}
 .prep-list li{color:var(--muted)}
 .prep-list li[data-done="true"]{color:var(--green,#218b74);font-weight:600}
+/* 点选：选项按钮，一点就选中，不用下拉 */
+.choice-row{display:flex;flex-wrap:wrap;gap:8px}
+.choice{position:relative;cursor:pointer}
+.choice input{position:absolute;opacity:0;inset:0;width:100%;height:100%;margin:0;cursor:pointer}
+.choice span{display:inline-flex;align-items:center;min-height:38px;padding:0 16px;border:1px solid var(--line);border-radius:10px;background:var(--panel,#fff);font-weight:500;transition:border-color .12s,background .12s,color .12s}
+.choice:hover span{border-color:#9db4f5}
+.choice input:checked+span{border-color:#2563eb;background:#eaf1ff;color:#1d4ed8;font-weight:600}
+.choice input:focus-visible+span{outline:2px solid #2563eb;outline-offset:2px}
+.choice input:required:invalid+span{border-color:var(--line)}
+/* 申报表单整页：铺满窗口，内容居中，底部按钮固定 */
+#modal-root .modal.page-form{width:100vw!important;max-width:none!important;height:100vh!important;max-height:none!important;border-radius:0;display:flex;flex-direction:column}
+#modal-root .modal.page-form .modal-body{flex:1;overflow:auto;max-width:none;width:100%;padding:24px max(24px,calc((100vw - 1040px)/2))}
+#modal-root .modal.page-form .modal-head,#modal-root .modal.page-form .modal-foot{padding-left:max(24px,calc((100vw - 1040px)/2));padding-right:max(24px,calc((100vw - 1040px)/2))}
+#modal-root .modal.page-form .modal-foot{position:sticky;bottom:0;background:var(--panel,#fff);border-top:1px solid var(--line)}
+#modal-root .modal.page-form .social-fieldset{background:var(--panel,#fff);border:1px solid var(--line);border-radius:14px;margin:0 0 18px;padding:18px 22px}
+#modal-root .modal.page-form .social-fieldset legend{font-size:16px;font-weight:700;padding:0 8px}
+#modal-root .modal-overlay:has(.page-form),.modal-overlay:has(.page-form){padding:0;align-items:stretch;justify-content:stretch}
+.apply-entry-top{display:flex;align-items:center;justify-content:space-between;gap:20px;padding:22px 26px;flex-wrap:wrap}
+.apply-entry-top h2{font-size:20px;margin-bottom:6px}
+.apply-entry-top p{color:var(--muted);margin:0;max-width:640px}
+.apply-entry-top .btn{min-height:44px;padding:0 24px;font-size:15px}
+/* 多选标签和单选按钮同一个样子 */
+.apply-tag-row{gap:8px}
+.apply-tag-row label{position:relative;display:inline-flex;align-items:center;gap:6px;min-height:38px;padding:0 14px;border:1px solid var(--line);border-radius:10px;background:var(--panel,#fff);cursor:pointer;font-weight:500}
+.apply-tag-row label:hover{border-color:#9db4f5}
+.apply-tag-row label:has(input:checked){border-color:#2563eb;background:#eaf1ff;color:#1d4ed8;font-weight:600}

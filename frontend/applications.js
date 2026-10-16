@@ -110,8 +110,8 @@ export function teachingCourseForm(course, existing = null) {
   const e = c.esc, d = existing?.item?.data || {};
   const facts = `<div class="apply-source"><span class="badge ${course.origin === 'CX' ? 'green-b' : 'blue-b'}">${course.origin === 'CX' ? '超星' : '教务'}</span><strong>${e(course.course_name)}</strong><span>${e(course.course_code)} · ${e(course.term_name)}${course.credit != null ? ' · ' + e(course.credit) + ' 学分' : ''}${course.hours != null ? ' · ' + e(course.hours) + ' 学时' : ''}</span></div>`;
   const body = facts + c.note('把这门课申报为培训课程，面向社会学员开设：教研室审核 → 学院审批 → 学校（继续教育学院）审批，通过后进入学校培训课程库。同一门课只申报一次。课程入库不单独记积分，以后在培训项目里授课按人次计积分。') +
-    c.field('teaching_mode', '教学方式', 'select', d.teaching_mode || 'lecture', {options: TEACHING_MODES}) +
-    c.field('ideology', '思政属性', 'select', d.ideology || 'course_ideology', {options: IDEOLOGY}) +
+    c.field('teaching_mode', '教学方式', 'select', d.teaching_mode || 'lecture', {options: TEACHING_MODES, chips: true}) +
+    c.field('ideology', '思政属性', 'select', d.ideology || 'course_ideology', {options: IDEOLOGY, chips: true}) +
     c.field('hours', '培训学时', 'number', d.hours ?? course.hours ?? '', {required: false, min: 0, step: '0.5', hint: '默认用这门课的学时，按社会培训实际安排可调整。'}) +
     c.field('reason', '申报说明', 'text', '', { required: false, placeholder: '例：' + (existing ? '按意见补正' : '申报为培训课程')}) +
     audienceFields(d.audience) + c.field('intro', '课程简介', 'textarea', d.intro || course.description || '', {required: false, full: true, hint: '面向社会学员怎么上、学完能做什么。', placeholder: '例：面向社区居民开设，学完能按家庭人数做一周营养配餐'}) +
@@ -122,7 +122,7 @@ export function teachingCourseForm(course, existing = null) {
     const r = existing ? await c.api('/applications/courses/' + existing.item.id, {method: 'PUT', body: {data, reason: v.reason || (existing ? '按意见补正' : '申报为培训课程'), expected_version: existing.item.version}})
       : await c.api('/applications/courses', {method: 'POST', body: {data, reason: v.reason || (existing ? '按意见补正' : '申报为培训课程')}});
     c.closeModal(); c.toast(existing ? '已保存，请点“重新提交”' : '已提交，等待教研室审核'); await c.renderKeep(); await showApplication(r.item.id);
-  }, {wide: true, submit: existing ? '保存补正' : '提交申报', returnTo: existing ? () => showApplication(existing.item.id) : null});
+  }, {wide: true, page: true, submit: existing ? '保存补正' : '提交申报', returnTo: existing ? () => showApplication(existing.item.id) : null});
 }
 
 // 培训课程申报之二：新填一门不来自本人学历课的课程（教研室、学院可以代老师登记）。
@@ -134,8 +134,8 @@ export function manualCourseForm(existing = null, projectCode = '') {
     c.field('code', '课程编号', 'text', d.code || '', {readonly: !!existing, placeholder: '例：SOC-2026-001'}) + c.field('name', '课程名称', 'text', existing?.item?.name || '', {placeholder: '例：社区营养配餐'}) +
     c.field('project_code', '关联项目编号', 'text', d.project_code || '', {required: false, hint: '不关联项目可留空。', placeholder: '例：SOC-P1（没有可留空）'}) +
     c.field('hours', '学时', 'number', d.hours ?? '', {min: 0, step: '0.5', placeholder: '例：16'}) +
-    c.field('teaching_mode', '教学方式', 'select', d.teaching_mode || 'lecture', {options: TEACHING_MODES}) +
-    c.field('ideology', '思政属性', 'select', d.ideology || 'course_ideology', {options: IDEOLOGY}) +
+    c.field('teaching_mode', '教学方式', 'select', d.teaching_mode || 'lecture', {options: TEACHING_MODES, chips: true}) +
+    c.field('ideology', '思政属性', 'select', d.ideology || 'course_ideology', {options: IDEOLOGY, chips: true}) +
     c.field('intro', '课程简介', 'textarea', d.intro || '', {required: false, full: true, placeholder: '例：面向社区居民开设，学完能按家庭人数做一周营养配餐'}) + packageFields(d) + coursewareFields(d.courseware) +
     c.field('reason', '申请说明', 'text', '', {full: true, required: false, placeholder: '例：' + (existing ? '按意见补正' : '申报培训课程')});
   return c.formModal(existing ? '补正培训课程申报' : '新填一门培训课程', body, async v => {
@@ -144,7 +144,7 @@ export function manualCourseForm(existing = null, projectCode = '') {
     const r = existing ? await c.api('/applications/courses/' + existing.item.id, {method: 'PUT', body: {data, reason: v.reason || (existing ? '按意见补正' : '申报培训课程'), expected_version: existing.item.version}})
       : await c.api('/applications/courses', {method: 'POST', body: {data, reason: v.reason || (existing ? '按意见补正' : '申报培训课程')}});
     c.closeModal(); c.toast(existing ? '已保存，请点“重新提交”' : college ? '已提交，等待学校审批' : c.me.role.kind === 'dept' ? '已提交，等待学院审批' : '已提交，等待教研室审核'); await c.renderKeep(); await showApplication(r.item.id);
-  }, {wide: true, submit: existing ? '保存补正' : '提交申报', returnTo: existing ? () => showApplication(existing.item.id) : null});
+  }, {wide: true, page: true, submit: existing ? '保存补正' : '提交申报', returnTo: existing ? () => showApplication(existing.item.id) : null});
 }
 
 export function baseForm(existing = null) {
@@ -155,8 +155,8 @@ export function baseForm(existing = null) {
   const body = c.note(college ? '学院登记的基地视为学院已确认，直接到学校（继续教育学院）审批，通过后进入基地清单。' : '学院审批 → 学校（继续教育学院）审批，通过后进入基地清单。') + who +
     c.field('code', '来源编号', 'text', existing?.item?.code || '', {readonly: !!existing, hint: '协议编号或学院登记编号。', placeholder: '例：JD-2026-001'}) + c.field('name', '基地名称', 'text', existing?.item?.name || '', {placeholder: '例：湘茶思政实践教学基地'}) +
     `<fieldset class="form-field full apply-tags"><legend>基地用途 <b>*</b></legend><div class="apply-tag-row">${BASE_USAGES.map(([k, l]) => `<label><input type="checkbox" name="usage_${k}" ${used.has(k) ? 'checked' : ''}>${c.esc(l)}</label>`).join('')}</div></fieldset>` +
-    c.field('onsite', '校内 / 校外', 'select', d.onsite === false ? 'no' : 'yes', {options: [['yes', '校内'], ['no', '校外']]}) +
-    c.field('level', '基地级别', 'select', d.level || 'school', {options: [['school', '校级'], ['city', '市级'], ['province', '省级及以上']], hint: '学校鼓励申报省级及以上培训基地。'}) +
+    c.field('onsite', '校内 / 校外', 'select', d.onsite === false ? 'no' : 'yes', {options: [['yes', '校内'], ['no', '校外']], chips: true}) +
+    c.field('level', '基地级别', 'select', d.level || 'school', {options: [['school', '校级'], ['city', '市级'], ['province', '省级及以上']], chips: true, hint: '学校鼓励申报省级及以上培训基地。'}) +
     c.field('partner', '共建单位', 'text', d.partner || '', {required: false, hint: '校外基地必填。', placeholder: '例：湘茶集团有限公司'}) + c.field('established_on', '设立日期', 'date', d.established_on || '') +
     c.field('location', '地点', 'text', d.location || '', {required: false, placeholder: '例：长沙市岳麓区××路18号'}) + c.field('recognition', '认定依据', 'textarea', d.recognition || '', {full: true, hint: '共建协议、学校发文或学院会议纪要。', placeholder: '例：与湘茶集团签订共建协议（2026年3月），已经学院会议纪要〔2026〕5号确认'}) +
     c.field('reason', '申请说明', 'text', '', {full: true, required: false, placeholder: '例：' + (existing ? '按意见补正' : '申请培训基地')});
@@ -167,7 +167,7 @@ export function baseForm(existing = null) {
     const r = existing ? await c.api('/applications/bases/' + existing.item.id, {method: 'PUT', body: {data, reason: v.reason || (existing ? '按意见补正' : '申请培训基地'), expected_version: existing.item.version}})
       : await c.api('/applications/bases', {method: 'POST', body: {data, reason: v.reason || (existing ? '按意见补正' : '申请培训基地')}});
     c.closeModal(); c.toast(existing ? '已保存，请点“重新提交”' : college ? '已提交，等待学校审批' : c.me.role.kind === 'dept' ? '已提交，等待学院审批' : '已提交，等待教研室审核'); await c.renderKeep(); await showApplication(r.item.id);
-  }, {wide: true, submit: existing ? '保存补正' : '提交申报', returnTo: existing ? () => showApplication(existing.item.id) : null});
+  }, {wide: true, page: true, submit: existing ? '保存补正' : '提交申报', returnTo: existing ? () => showApplication(existing.item.id) : null});
 }
 
 // 培训师申报（管理办法第十五条）：校内老师本人申报，外聘培训师由学院负责人登记。
@@ -197,7 +197,7 @@ export async function trainerForm(existing = null, source = '') {
     const r = existing ? await c.api('/applications/trainers/' + existing.item.id, {method: 'PUT', body: {data, reason: v.reason || (existing ? '按意见补正' : external ? '登记外聘培训师' : '申报培训师'), expected_version: existing.item.version}})
       : await c.api('/applications/trainers', {method: 'POST', body: {data, reason: v.reason || (existing ? '按意见补正' : external ? '登记外聘培训师' : '申报培训师')}});
     c.closeModal(); c.toast(existing ? '已保存，请点“重新提交”' : external ? '已提交，等待教务处备案审核' : '已提交，等待教研室审核'); await c.renderKeep(); await showApplication(r.item.id);
-  }, {wide: true, submit: existing ? '保存补正' : '提交申报', returnTo: existing ? () => showApplication(existing.item.id) : null});
+  }, {wide: true, page: true, submit: existing ? '保存补正' : '提交申报', returnTo: existing ? () => showApplication(existing.item.id) : null});
 }
 
 // 培训师资库：学校看全校，学院和教研室看本院；学校可以给在库培训师记“推荐进入省级师资库”。
@@ -235,6 +235,28 @@ export async function myApplicationsHtml(ctx) {
   return `<div class="card"><div class="card-head"><div><h2>我的申请</h2><p>我提交的培训课程、培训基地、培训师和培训项目申请，走到哪一级、谁在办，都在这里。</p></div>${chips}</div>` +
     c.table(['申请', '进度', '操作'], m.items.map(x => [`<strong>${e(x.name)}</strong><p class="cell-sub">${e(x.label)} · ${e(x.state_label)}</p>`,
       progressHtml({...x.progress, nodes: x.nodes, label: x.label}, e, {compact: true}), open(x)]), '还没有申请', '在首页“业务办理”里申报培训课程、培训项目、培训基地或培训师。') + `</div>`;
+}
+
+// 老师左侧的四个申报菜单：每个菜单一页，上面是“新建”，下面是本人这一类申请的进度。
+export const APPLY_PAGES = {
+  apply_course: {title: '申报培训课程', flows: ['course', 'teaching_course'], action: 'course|', button: '新申报一门培训课程', intro: '从我的课程里选，或新填一门；教研室、学院、学校逐级审批，通过后进入培训课程库。'},
+  apply_project: {title: '申报培训项目', flows: ['project', 'project_close'], action: 'projects|social-project-new', button: '新申报一个培训项目', intro: '本人为负责人；学院审批后由学校备案。项目已备案后在这里办结项。'},
+  apply_base: {title: '申请培训基地', flows: ['base'], action: 'bases|app-base-new', button: '新申请一个培训基地', intro: '实践教学或思政实践教学基地；学院审批后学校审批，通过后进入基地清单。'},
+  apply_trainer: {title: '申报培训师', flows: ['trainer'], action: 'trainer|', button: '新申报培训师', intro: '校内遴选：教研室、学院、学校审核后，由组织人事部认定，进入培训师资库。'}
+};
+
+export async function applyPageHtml(ctx, key) {
+  c = ctx;
+  const e = c.esc, cfg = APPLY_PAGES[key];
+  let m;
+  try { m = await c.api('/applications/mine'); } catch (err) { return c.note('读取失败：' + err.message, true); }
+  const mine = (m.items || []).filter(x => cfg.flows.includes(x.flow));
+  const open = x => x.type === 'social_project' ? c.act('查看', 'social-detail', 'social_project|' + x.id, 'sm') : c.act(x.state === 'RETURNED' ? '去补正' : '查看', 'app-detail', x.id, x.state === 'RETURNED' ? 'sm primary' : 'sm');
+  const back = mine.filter(x => x.state === 'RETURNED').length;
+  return `<div class="card apply-entry"><div class="apply-entry-top"><div><h2>${e(cfg.title)}</h2><p>${e(cfg.intro)}</p></div>${c.act(cfg.button, 'teacher-apply', cfg.action, 'primary')}</div></div>` +
+    `<div class="card"><div class="card-head"><div><h2>我的${e(cfg.title.replace(/^(申报|申请)/, ''))}申请</h2><p>走到哪一级、谁在办，都在这里。</p></div>${back ? `<span class="badge red-b">待我补正 ${back}</span>` : ''}</div>` +
+    c.table(['申请', '进度', '操作'], mine.map(x => [`<strong>${e(x.name)}</strong><p class="cell-sub">${e(x.label)} · ${e(x.state_label)}</p>`,
+      progressHtml({...x.progress, nodes: x.nodes, label: x.label}, e, {compact: true}), open(x)]), '还没有申请', '点上面的按钮新建一个，提交后进度会出现在这里。') + `</div>`;
 }
 
 // 首页卡片：只列还没办结的申请（最多 3 条），没有就不显示。
