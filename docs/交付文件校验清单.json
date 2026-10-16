@@ -751,8 +751,8 @@
       "size": 14687
     },
     "frontend/app.js": {
-      "sha256": "33e931665afc8b21e5c3fd721e64ae78ae794d88172670df01b766dd7f2ac695",
-      "size": 418210
+      "sha256": "8390f4c4f7ceba6850d21141cec6a6ffb9bd5f40ab28981ebbe3f408d7e30b56",
+      "size": 419728
     },
     "frontend/applications.js": {
       "sha256": "5055ac89f3b22f520fce9861decbdcaf46dce2ae54dad1e7142c393909cc83bd",
@@ -795,7 +795,7 @@
       "size": 2302
     },
     "frontend/index.html": {
-      "sha256": "18a7eae77da7d01d0e48d16f9e9cf42a4fcf512510738b7e748c94885e36cbb6",
+      "sha256": "d878c00febb5fbce3c9fe0127da2f791639fc8abece3bce8e0cf3f18e2cda080",
       "size": 1394
     },
     "frontend/integration-drafts.js": {
@@ -843,11 +843,11 @@
       "size": 52325
     },
     "frontend/social-training.css": {
-      "sha256": "abd714d666f6130f6eed82c7634708ecb1680c55070eddbc09784a21b1f8dad0",
-      "size": 51372
+      "sha256": "a451f3c1359ff3aaf4fb382f35d760174d66cac95bac6f36b4614fe7672cb8f4",
+      "size": 52994
     },
     "frontend/social-training.js": {
-      "sha256": "0f553e8a0b618e5f38fba7b2da625607ab36f0dcc32f308897102a3391a178ff",
+      "sha256": "47c2136142927ba17c1465f0ccc5fc49b3974d05908d3a01760fca6bf879416a",
       "size": 143608
     },
     "frontend/styles.css": {

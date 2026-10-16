@@ -1,6 +1,6 @@
 import {icons} from './icons.js';
-import {socialPage,socialAction} from './social-training.js?v=20261016-apply11';
-import {applicationAction,myApplicationsHtml,homeApplicationsHtml,myCoursesHtml,libraryHtml,libraryFilterSubmit,homeCoursesHtml,courseAction} from './applications.js?v=20261016-apply11';
+import {socialPage,socialAction} from './social-training.js?v=20261016-apply13';
+import {applicationAction,myApplicationsHtml,homeApplicationsHtml,myCoursesHtml,libraryHtml,libraryFilterSubmit,homeCoursesHtml,courseAction} from './applications.js?v=20261016-apply13';
 import {nextCode,runBatch,batchStage,batchMode,batchPerformer,BATCH_LABELS} from './approval-flow.js?v=20261012-streamline1';
 import {ledgerPage,resourceStatsPage,homeIndicators,ledgerAction,resetLedgerView,minePage,mineReminders} from './social-ledgers.js?v=20261016-tui1';
 import {rosterSection,rosterHandlers,onlineHandlers,showStaffDetail,showCourseDetail,presetRoster,loadCodeTables} from './school-data.js?v=20261014-school-review1';
@@ -541,6 +541,13 @@ function mountDemoSwitcher(){
  });
 }
 function syncLocation(replace=false){const hash=navigationHash(page,filter,periodId);if(replace)history.replaceState(null,'',location.pathname+location.search+hash);else if(location.hash!==hash)location.hash=hash;}
+// 老师的“业务办理”：四类申请集中在一处，点了直接打开对应的申请表。
+function teacherApplyCard(){
+ if(me?.role?.kind!=='teacher')return '';
+ const items=[['credits','','book','申报社会培训课','从我的教务课、超星课里选一门'],['projects','social-project-new','tasks','申报培训项目','本人为负责人，学院审批后学校备案'],['courses','app-course-new','data','申请培训课程','学院审批后进入培训课程库'],['bases','app-base-new','org','申请培训基地','实践教学或思政实践教学基地']].filter(([p])=>pageAllowed(p));
+ if(!items.length)return '';
+ return `<section class="card teacher-apply"><div class="card-head"><div><h2>业务办理</h2><p>要申请什么，点一下直接填表；提交后在“我的待办 → 我的申请”看进度。</p></div>${link('我的申请','todos-mine','')}</div><div class="teacher-apply-grid">${items.map(([p,a,i,l,sub])=>`<button type="button" class="teacher-apply-item" data-action="teacher-apply" data-id="${p}|${a}">${icon(i)}<span><b>${esc(l)}</b><small>${esc(sub)}</small></span>${icon('arrow')}</button>`).join('')}</div></section>`;
+}
 function nav(dest,extra={}){if(!Object.hasOwn(titles,dest))return;if(dest==='ledgers')resetLedgerView(true);page=dest;filter=pageFilters(dest,extra);tablePage=1;participationPage=1;syncLocation();setMobileMenu(false);return render()}
 function scopeNav(dest,extra={}){const f=drillFilters(dest,filter,extra);return nav(dest,f)}
 async function render(){
@@ -633,7 +640,7 @@ function ledgerContext(){return {api,esc,ts,icon,act,link,table,note,field,pageH
 async function refreshPeriods(){periods=(await api('/periods')).items;return periods}
 function socialContext(){return {refreshPeriods,api,esc,icon,act,table,note,toast,pageHead,can,me,periods,teachers,orgs,teacherName,periodName,orgName,field,teacherField,formModal,modal,reasonFields,closeModal,render,renderKeep,queueNext,openNext,download,downloads,eventsHtml}}
 const pages={
- mine:async()=>minePage(ledgerContext(),await api('/statistics?'+query(aggregateFilters({period_id:periodId}))).catch(()=>null)),
+ mine:async()=>(await minePage(ledgerContext(),await api('/statistics?'+query(aggregateFilters({period_id:periodId}))).catch(()=>null))).replace('<section class="card mine-todo',teacherApplyCard()+'<section class="card mine-todo'),
  ledgers:()=>ledgerPage(ledgerContext()),resources:()=>resourceStatsPage(ledgerContext()),
  ...Object.fromEntries(['projects','courses','bases','outcomes','recognition','annual','policy'].map(section=>[section,()=>socialPage(section,socialContext())])),
  async home(){
@@ -851,12 +858,12 @@ async function teacherHome(){
  view={};
  const todos=m?.reminders||[],pts=o?.points,target=Number(pts?.five_year_target||340),five=Number(pts?.five_years||0),pct=Math.max(0,Math.min(100,target?five/target*100:0));
  const hour=new Date().getHours(),hello=hour<11?'上午好':hour<14?'中午好':hour<18?'下午好':'晚上好';
- const hero=`<section class="teacher-hero"><div><p class="teacher-hero-date">${esc(new Date().toLocaleDateString('zh-CN',{month:'long',day:'numeric',weekday:'long'}))}</p><h1>${esc(me.user.name)}老师，${hello}</h1><p class="teacher-hero-sub">${!m?'待办暂时没有加载出来，请打开“个人培训”查看':todos.length?`今天有 <b>${todos.length}</b> 件事要你处理`:'今天没有要你处理的事'}</p><nav class="teacher-hero-links" aria-label="常用入口">${[['credits','book','我的课程','申报社会培训课'],['points','award','我的积分','每一笔怎么算的'],['qualifications','cert','我的资质','双师型与证书']].filter(([p])=>pageAllowed(p)).map(([p,i,l,sub])=>`<button type="button" class="teacher-hero-link" data-action="nav" data-id="${p}">${icon(i)}<span><b>${l}</b><small>${sub}</small></span></button>`).join('')}</nav></div><div class="teacher-hero-actions">${pageAllowed('mine')?act('打开个人培训','nav','mine','primary','arrow'):''}${me.user.staff_no&&can('points.read')&&m&&!m.claim_ready?.reason?act('申报本人积分','social-claim-new','',''):''}</div></section>`;
+ const hero=`<section class="teacher-hero"><div><p class="teacher-hero-date">${esc(new Date().toLocaleDateString('zh-CN',{month:'long',day:'numeric',weekday:'long'}))}</p><h1>${esc(me.user.name)}老师，${hello}</h1><p class="teacher-hero-sub">${!m?'待办暂时没有加载出来，请打开“个人培训”查看':todos.length?`今天有 <b>${todos.length}</b> 件事要你处理`:'今天没有要你处理的事'}</p><nav class="teacher-hero-links" aria-label="常用入口">${[['credits','book','我的课程','教务课与超星课'],['points','award','我的积分','每一笔怎么算的'],['qualifications','cert','我的资质','双师型与证书']].filter(([p])=>pageAllowed(p)).map(([p,i,l,sub])=>`<button type="button" class="teacher-hero-link" data-action="nav" data-id="${p}">${icon(i)}<span><b>${l}</b><small>${sub}</small></span></button>`).join('')}</nav></div><div class="teacher-hero-actions">${pageAllowed('mine')?act('打开个人培训','nav','mine','primary','arrow'):''}${me.user.staff_no&&can('points.read')&&m&&!m.claim_ready?.reason?act('申报本人积分','social-claim-new','',''):''}</div></section>`;
  const todo=`<section class="card teacher-todo"><div class="card-head"><div><h2>需要我处理 <span class="workbench-count">${todos.length}</span></h2></div>${link('全部待办','nav','todos')}</div>${todos.length?mineReminders(ledgerContext(),m,4)+(todos.length>4?`<p class="small muted card-pad">另有 ${todos.length-4} 项提醒</p>`:''):m?`<div class="teacher-todo-clear"><span>✓</span><p>都处理完了。有新的待办会在这里提醒你。</p></div>`:`<p class="card-pad muted">待办暂时没有加载出来，请稍后刷新或打开“个人培训”查看。</p>`}</section>`;
  const points=pts?`<section class="card teacher-points"><div class="card-head"><div><h2>我的社会培训积分</h2></div>${pageAllowed('points')?link('积分明细','nav','points'):''}</div><div class="card-pad"><div class="teacher-points-now"><strong>${number(pts.year,2)}</strong><small>分 · ${year} 年已认定</small></div><div class="teacher-points-bar" role="img" aria-label="近五年累计 ${number(five,2)} 分，目标 ${number(target)} 分"><span style="width:${pct.toFixed(1)}%"></span></div><p class="teacher-points-meta">近五年累计 <b>${number(five,2)}</b> / ${number(target)} 分 · 职称折算 ${pts.title_points==null?'待核定':esc(pts.title_points)+' 分（按归档口径试算）'}</p>${pts.trial!=null?`<p class="teacher-points-meta">另有 ${number(pts.trial,2)} 分还在审批中</p>`:''}</div></section>`:'';
  const notices=`<section class="card"><div class="card-head"><h2>政策通知</h2>${can('notice.read')?link('查看全部','nav','notices'):''}</div><div class="card-pad">${(n?.items||[]).map(x=>`<button class="notice-row" data-action="notice" data-id="${esc(x.id)}"><span>${esc(x.title)}</span><time>${esc(x.created_at?.slice(0,10))}</time></button>`).join('')||'<p class="muted teacher-empty-line">暂无政策通知。</p>'}</div></section>`;
  const [applications,courses]=await Promise.all([homeApplicationsHtml(socialContext()),homeCoursesHtml(socialContext())]);
- return `<div class="teacher-home">${hero}${todo}${applications}${courses}<div class="teacher-home-grid">${points}${a?myAssessmentCard(a.assessment,a.period,{link:true}):''}</div>${notices}</div>`;
+ return `<div class="teacher-home">${hero}${teacherApplyCard()}${todo}${applications}${courses}<div class="teacher-home-grid">${points}${a?myAssessmentCard(a.assessment,a.period,{link:true}):''}</div>${notices}</div>`;
 }
 async function qualificationForm(id){const cats=await api('/qualification-categories');let x=id?(await api('/qualifications/'+id)).qualification:{};
  const info=field('category','资质类别','select',x.category||cats.categories[0],{options:[...new Set([...(x.category?[x.category]:[]),...cats.categories])]})+field('name','证书名称','text',x.name||'')+field('certificate_no','证书编号','text',x.certificate_no||'')+field('issuer','发证机构','text',x.issuer||'')+field('obtained','取得日期','date',x.obtained||'')+field('expires','有效期至','date',x.expires||'',{required:false,hint:'长期有效可留空；判定考核资质以周期结束日是否有效为准。'});
@@ -1584,7 +1591,7 @@ const handlers={
  'integration-intake-download':downloadIntegrationIntake,'integration-intake-import':importIntegrationIntake,'integration-intake-confirm':confirmIntegrationIntake,
  'coordination-checklist':downloadCoordinationChecklist,'integration-profile-download':downloadIntegrationProfile,'integration-profile-import':importIntegrationProfile,
  'inbound-page':code=>{const[id,p]=code.split('|');return showInbound(id,Number(p))},
- nav:id=>nav(id),refresh:()=>render(),'code-tables':()=>showCodeTables(),'code-table-import':id=>{closeModal();return importCodeTable(id)},'source-problem':id=>openSourceProblem(id),'cx-unmatched':()=>download('/reference/cx-unmatched.xlsx'),'cx-claim':()=>showCxClaim(),'cx-claim-submit':id=>submitCxClaim(id),'cx-claims-admin':()=>showCxClaimsAdmin(),'cx-claim-decide':id=>decideCxClaim(id),'hr-unmatched':()=>showHrUnmatched(),'user-from-hr':id=>{const [staff,name]=id.split('|');closeModal();userPreset={staff_no:staff,username:staff,name};return userForm(null)},close:()=>closeModal(),prev:()=>{tablePage=Math.max(1,tablePage-1);return render()},next:()=>{tablePage++;return render()},'reset-filters':()=>{filter={};periodId='';tablePage=1;participationPage=1;syncLocation(true);return render()},
+ nav:id=>nav(id),'teacher-apply':async id=>{const [p,a]=id.split('|');if(p==='credits')return nav('credits',{tab:'jw'});await nav(p);if(a&&handlers[a])return handlers[a]('')},'todos-mine':async()=>{todoTab='mine';await nav('todos')},refresh:()=>render(),'code-tables':()=>showCodeTables(),'code-table-import':id=>{closeModal();return importCodeTable(id)},'source-problem':id=>openSourceProblem(id),'cx-unmatched':()=>download('/reference/cx-unmatched.xlsx'),'cx-claim':()=>showCxClaim(),'cx-claim-submit':id=>submitCxClaim(id),'cx-claims-admin':()=>showCxClaimsAdmin(),'cx-claim-decide':id=>decideCxClaim(id),'hr-unmatched':()=>showHrUnmatched(),'user-from-hr':id=>{const [staff,name]=id.split('|');closeModal();userPreset={staff_no:staff,username:staff,name};return userForm(null)},close:()=>closeModal(),prev:()=>{tablePage=Math.max(1,tablePage-1);return render()},next:()=>{tablePage++;return render()},'reset-filters':()=>{filter={};periodId='';tablePage=1;participationPage=1;syncLocation(true);return render()},
  'toggle-menu':()=>setMobileMenu(!$('#sidebar').classList.contains('open')),
  'close-menu':()=>setMobileMenu(false,true),
  'collapse-sidebar':toggleSidebar,
