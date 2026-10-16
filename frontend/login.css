@@ -1,0 +1,68 @@
+/* 登录页独立样式，保留工作台现有布局。 */
+.login-page{min-height:100vh;min-height:100svh;background:#fff;color:#10365d}
+.login-page [hidden]{display:none!important}
+.login-main{display:grid;grid-template-columns:minmax(0,1.75fr) minmax(390px,1fr);min-height:100vh;min-height:100svh}
+.login-intro{display:flex;flex-direction:column;position:relative;min-width:0;min-height:100vh;min-height:100svh;overflow:hidden;padding:42px clamp(40px,4.4vw,88px) 40px;background:#0b3456 url('/assets/assets/login-campus-blue.png') center/cover no-repeat;color:#fff}
+.login-school{display:block;flex:none;width:380px;max-width:100%;aspect-ratio:422/82;overflow:hidden}
+.login-school img{display:block;width:100%;height:auto}
+.login-intro-copy{margin:54px 0 0 28px}
+.login-intro h1{font-family:"Noto Serif CJK SC","Source Han Serif SC","Songti SC","SimSun",serif;font-size:clamp(40px,4.1vw,76px);font-weight:700;line-height:1.15;letter-spacing:0;margin:0 0 24px;color:#fff}
+.login-intro h1 span{color:#f3c57d}
+.login-description{font-family:"Noto Serif CJK SC","Source Han Serif SC","Songti SC","SimSun",serif;font-size:20px;line-height:1.9;color:#d1e2ef;max-width:36em}
+.login-description:before{content:"";display:block;width:48px;height:2px;margin:0 0 20px;background:#f3c57d}
+.login-motto{margin:auto 0 0;padding-top:48px;font-family:"Noto Serif CJK SC","Source Han Serif SC","Songti SC","SimSun",serif;font-size:17px;line-height:1.8;color:#e0ebf4}
+.login-motto:before{content:"";display:block;width:40px;height:2px;margin-bottom:16px;background:#f3c57d}
+.login-access{display:flex;align-items:center;justify-content:center;min-width:0;padding:56px clamp(32px,4vw,76px);background:#fff}
+.login-page .login-form{width:100%;max-width:420px;margin:0;padding:0;border:0;border-radius:0;background:transparent;box-shadow:none}
+.login-page .login-form h2{margin:0;font-size:32px;font-weight:700;line-height:1.4;color:#10365d}
+.login-page .login-form>p:not(.login-help){margin:12px 0 30px;color:#62758c;font-size:16px;line-height:1.7}
+.login-page .login-sso{margin:0;gap:0;text-align:left}
+.login-page .login-form .btn{width:100%;min-height:52px;justify-content:center;border-radius:7px;font-size:16px;line-height:1.5}
+.login-page .login-sso .btn.primary{background:#095fd1;border-color:#095fd1;color:#fff;font-weight:600;box-shadow:none}
+.login-page .login-sso .btn.primary:hover:not(:disabled){background:#084da8;border-color:#084da8}
+.login-page .login-sso .btn:disabled{background:#6e8fb9;border-color:#6e8fb9;opacity:1;cursor:not-allowed}
+.login-page #local-login-note{margin:10px 0 0;font-size:13px;line-height:1.7;color:#576f8a}
+.login-methods{display:flex;gap:0;border-bottom:1px solid #dce5ef;margin:0 0 14px}
+.login-methods>button{flex:1;min-height:48px;padding:10px 6px;border:0;border-bottom:3px solid transparent;margin-bottom:-1px;background:transparent;color:#62758c;font-size:16px;font-weight:600;white-space:nowrap}
+.login-methods>button[aria-selected="true"]{border-bottom-color:#095fd1;color:#095fd1}
+.login-methods>button:focus-visible,.login-password-toggle:focus-visible{outline:3px solid #86b4ee;outline-offset:2px}
+.login-panels{min-height:360px}
+.login-page .login-method-note{margin:0 0 26px;color:#62758c;font-size:13px;line-height:1.7}
+.login-page .login-form .form-field{margin:0 0 22px}
+.login-page .form-field label{margin:0 0 9px;color:#203d60;font-size:16px;line-height:1.6;font-weight:600}
+.login-input{position:relative}
+.login-page .login-input input{width:100%;height:52px;padding:12px 16px;border:1px solid #c7d5e5;border-radius:7px;background:#fff;color:#173b63;font-size:16px;line-height:1.5;box-shadow:none}
+.login-page #password{padding-right:54px}
+.login-password-toggle{position:absolute;right:4px;top:4px;display:grid;place-items:center;width:44px;height:44px;padding:0;background:transparent;border:0;border-radius:5px;color:#62758c}
+.login-password-toggle:hover{background:#f1f6fc;color:#095fd1}
+.login-page .login-input input::placeholder{color:#738399}
+.login-page .login-input input:focus{border-color:#1763bd;outline:3px solid #dceaff;outline-offset:1px}
+.login-page .login-local-submit{margin-top:3px;background:#095fd1;border:1px solid #095fd1;color:#fff;font-weight:600;box-shadow:none}
+.login-page .login-local-submit:hover{background:#084da8;border-color:#084da8}
+.login-page .btn:focus-visible{outline:3px solid #86b4ee;outline-offset:3px}
+.login-page .login-help{margin:22px 0 0;font-size:13px;line-height:1.8;color:#62758c}
+.login-page #login-error:empty{display:none}
+.login-page #login-error:not(:empty){margin-bottom:20px;font-size:14px;line-height:1.7}
+.login-page-footer{margin-top:24px;border-top:1px solid #e0e8f1;padding-top:18px;font-size:12px;line-height:1.7;text-align:center;color:#62758c}
+@media(max-width:1100px){
+ .login-main{grid-template-columns:minmax(0,1.2fr) minmax(360px,1fr)}
+ .login-intro{padding:36px 32px}
+ .login-intro-copy{margin-left:0}
+ .login-intro h1{font-size:40px}
+ .login-description{font-size:16px}
+ .login-access{padding-inline:32px}
+}
+@media(max-width:800px){
+ .login-main{display:block}
+ .login-intro{min-height:0;padding:20px 24px;background-position:top center}
+ .login-school{width:280px;max-width:100%}
+ .login-intro-copy{margin:10px 0 0}
+ .login-description,.login-motto{display:none}
+ .login-intro h1{font-family:inherit;font-size:clamp(20px,6.15vw,24px);line-height:1.6;margin:0;letter-spacing:0}
+ .login-intro h1 br{display:none}
+ .login-intro h1 span{margin-left:4px}
+ .login-access{display:block;padding:32px 24px;max-width:468px;margin:0 auto}
+ .login-page .login-form h2{font-size:28px}
+ .login-page .login-form>p:not(.login-help){font-size:14px;margin-bottom:24px}
+ .login-page-footer{margin-top:22px;padding-top:18px}
+}

@@ -385,15 +385,36 @@ function filterSummary(){
  return '<div class="filter-applied" aria-label="已生效筛选">'+(periodId?'<span>周期：'+esc(periodName(periodId))+'</span>':'')+pairs.map(([k,v])=>'<span>'+names[k]+'：'+esc(value(k,v))+'</span>').join('')+'</div>';
 }
 function loginView(message=''){
- $('#app').innerHTML=`<div class="login-shell"><section class="login-story"><div class="flex">${icon('school')}<strong>湖南科技职业学院</strong></div><h1>数据有依据<br>办事有闭环</h1><p>一站式非学历教育智慧前台<br>把资质、积分、考核与分级管理，汇聚到一个工作入口。</p><div class="login-features"><span>教师本人办理</span><span>四级组织权限</span><span>学校本地部署</span></div></section><section class="login-form-shell"><form id="login-form" class="login-form"><h2>欢迎登录</h2><p>使用学校管理员为你开通的账号。</p><div id="sso-entry"></div><div id="login-error">${message?`<div class="error-text">${esc(message)}</div>`:''}</div><div class="form-field"><label for="username">账号</label><input id="username" name="username" autocomplete="username" required placeholder="输入账号"></div><div class="form-field"><label for="password">密码</label><input id="password" name="password" autocomplete="current-password" type="password" required placeholder="输入密码"></div><button class="btn primary" type="submit">登录工作台 ${icon('arrow')}</button><div class="login-foot">忘记密码请联系学校管理员。<br><span id="local-login-note">统一认证对接完成前，使用本地账号认证。</span><br><small>技术支持：湖南跃科信息工程有限公司</small></div></form></section></div>`;
+ $('#app').innerHTML=`<div class="login-page">
+ <main class="login-main">
+ <section class="login-intro" aria-labelledby="login-title"><div class="login-school"><img src="/assets/assets/school-brand.png" alt="湖南科技职业学院" width="422" height="118"></div><div class="login-intro-copy"><h1 id="login-title">一站式非学历教育<br><span>智慧前台</span></h1><p class="login-description">资质、积分、考核与分级管理，一个入口办理。</p></div><p class="login-motto">数据有依据，办事有闭环。</p></section>
+ <section class="login-access" aria-labelledby="login-heading"><div class="login-form">
+ <h2 id="login-heading">欢迎登录</h2><p>登录学校工作台，办理教培业务。</p>
+ <div class="login-methods" role="tablist" aria-label="登录方式"><button type="button" id="login-sso-tab" role="tab" aria-selected="true" aria-controls="sso-entry">学校统一认证</button><button type="button" id="login-local-tab" role="tab" aria-selected="false" aria-controls="login-form" tabindex="-1">本地账号登录</button></div>
+ <div id="login-error" role="alert">${message?`<div class="error-text">${esc(message)}</div>`:''}</div>
+ <div class="login-panels"><div id="sso-entry" class="login-sso" role="tabpanel" aria-labelledby="login-sso-tab"><p class="login-method-note">使用学校统一身份账号登录。</p><button type="button" class="btn primary" id="sso-login" disabled>${icon('shield')} 学校统一身份认证登录</button><p id="local-login-note" role="status">正在确认学校统一认证状态…</p></div>
+ <form id="login-form" class="login-local-form" role="tabpanel" aria-labelledby="login-local-tab" hidden><p class="login-method-note">请使用学校管理员开通的本地账号。</p>
+ <div class="form-field"><label for="username">账号</label><div class="login-input"><input id="username" name="username" autocomplete="username" required placeholder="请输入本地账号"></div></div>
+ <div class="form-field"><label for="password">密码</label><div class="login-input"><input id="password" name="password" autocomplete="current-password" type="password" required placeholder="请输入密码"><button type="button" id="login-password-toggle" class="login-password-toggle" aria-label="显示密码" aria-pressed="false">${icon('eye')}</button></div></div>
+ <button class="btn primary login-local-submit" type="submit">登录工作台</button>
+ <p class="login-help">忘记密码？请联系学校管理员。</p>
+ </form></div><footer class="login-page-footer">技术支持：湖南跃科信息工程有限公司</footer></div></section></main></div>`;
+ const selectMethod=(method,focus=false)=>{
+  for(const name of ['sso','local']){const selected=name===method,tab=$('#login-'+name+'-tab');tab.setAttribute('aria-selected',String(selected));tab.tabIndex=selected?0:-1;$(name==='sso'?'#sso-entry':'#login-form').hidden=!selected;if(selected&&focus)tab.focus()}
+ };
+ for(const method of ['sso','local']){
+  const tab=$('#login-'+method+'-tab');tab.addEventListener('click',()=>selectMethod(method));
+  tab.addEventListener('keydown',e=>{if(!['ArrowLeft','ArrowRight','Home','End'].includes(e.key))return;e.preventDefault();selectMethod(e.key==='Home'?'sso':e.key==='End'?'local':method==='sso'?'local':'sso',true)});
+ }
+ selectMethod('sso');
+ $('#login-password-toggle').addEventListener('click',()=>{const password=$('#password'),button=$('#login-password-toggle'),shown=password.type==='password';password.type=shown?'text':'password';button.setAttribute('aria-label',shown?'隐藏密码':'显示密码');button.setAttribute('aria-pressed',String(shown))});
  $('#login-form').addEventListener('submit',async e=>{e.preventDefault();const b=$('button[type=submit]',e.target);b.disabled=true;try{const v=formValues(e.target);await api('/auth/login',{method:'POST',body:v});await boot()}catch(err){$('#login-error').innerHTML=`<div class="error-text">${esc(err.message)}</div>`}finally{if(b.isConnected)b.disabled=false}});
  fetch('/api/auth/sso/status',{credentials:'same-origin',cache:'no-store'}).then(r=>r.ok?r.json():null).then(v=>{
-   const slot=$('#sso-entry');if(!slot||v?.available!==true)return;
-   // 统一认证开通后放在最上面作为主入口，本地账号退为备用。
-   slot.innerHTML=`<div class="login-sso login-sso-first"><button type="button" class="btn primary" id="sso-login">${icon('shield')} 学校统一身份认证登录</button><span>或使用本地账号（备用）</span></div>`;
-   $('#login-form button[type=submit]')?.classList.remove('primary');$('#local-login-note')?.remove();
-   $('#sso-login')?.addEventListener('click',()=>location.assign('/api/auth/sso/start'));
- }).catch(()=>{});
+   const button=$('#sso-login'),note=$('#local-login-note');if(!button||!note)return;
+   if(v?.available!==true){note.textContent=v?'当前环境未连接学校统一认证，请切换“本地账号登录”。':'暂时无法确认统一认证状态，请切换“本地账号登录”。';return}
+   button.disabled=false;note.hidden=true;
+   button.addEventListener('click',()=>location.assign('/api/auth/sso/start'));
+ }).catch(()=>{const note=$('#local-login-note');if(note)note.textContent='暂时无法确认统一认证状态，请切换“本地账号登录”。'});
 }
 // 系统管理简化（2026-10-09）：几个相关页面合成一个菜单，页面顶部用标签切换；原页面和权限代码不变。
 const pageGroups={rules:{title:'规则与配置',tabs:[['rules','考核周期与规则','rules.manage'],['policy','社会培训制度口径','rules.manage'],['settings','字典与参数','settings.manage']]},audit:{title:'日志与运行',tabs:[['audit','安全提示与操作日志','audit.read'],['operations','运行与备份','operations.read']]},assessment:{title:'三级考核管理',tabs:[['assessment','三级考核','assessment.read'],['annual','学院社会培训年度考核','assessment.read']]},points:{title:'教师积分激励',tabs:[['points','积分核对与确认','points.read'],['recognition','社会培训积分申报与认定','points.read']]},imports:{title:'表格导入导出',tabs:[['imports','表格导入','import'],['exports','导出下载','export']]}};

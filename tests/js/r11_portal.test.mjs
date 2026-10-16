@@ -70,6 +70,51 @@ function engine(responder=async()=>({items:[],total:0,page:1,size:20}), role='sc
  ctx.T.setUser({user:{id:'u',name:'合成用户',is_admin:role==='school'},role:{kind:role,name:role},permissions:['portal.read','records.read','qualification.read','points.read','assessment.read','sync.manage','organization.read','notice.read','import','export','settings.manage','users.manage','audit.read','operations.read','rules.manage','dispute.write'],csrf:'test-csrf'});
  return {t:ctx.T,ctx,requests,node};
 }
+test('登录页默认选中第一个统一认证标签，开通后跳转原认证入口',async()=>{
+ const e=engine(async()=>({available:true})),button=e.node('#sso-login'),note=e.node('#local-login-note');
+ let click,target;button.disabled=true;button.addEventListener=(event,handler)=>{if(event==='click')click=handler};e.ctx.location.assign=url=>{target=url};
+ vm.runInContext("loginView('<提示>')",e.ctx);await new Promise(resolve=>setImmediate(resolve));
+ const html=e.node('#app').innerHTML;
+ assert.ok(html.indexOf('id="login-sso-tab"')<html.indexOf('id="login-local-tab"'));
+ assert.match(html,/id="sso-login" disabled/);assert.match(html,/本地账号登录/);assert.match(html,/&lt;提示&gt;/);
+ assert.match(html,/autocomplete="username"/);assert.match(html,/autocomplete="current-password" type="password" required/);
+ assert.match(html,/role="tablist" aria-label="登录方式"/);
+ assert.equal(e.node('#login-sso-tab').getAttribute('aria-selected'),'true');assert.equal(e.node('#sso-entry').hidden,false);assert.equal(e.node('#login-form').hidden,true);
+ assert.equal(button.disabled,false);assert.equal(note.hidden,true);click();assert.equal(target,'/api/auth/sso/start');
+ assert.deepEqual(e.requests.map(x=>x.url),['/api/auth/sso/status']);
+});
+test('当前环境未连接统一认证时保留说明和本地登录，不产生认证跳转',async()=>{
+ const e=engine(async()=>({available:false})),button=e.node('#sso-login');let bound=false;button.disabled=true;button.addEventListener=()=>{bound=true};
+ vm.runInContext('loginView()',e.ctx);await new Promise(resolve=>setImmediate(resolve));
+ assert.equal(button.disabled,true);assert.equal(bound,false);assert.match(e.node('#local-login-note').textContent,/当前环境未连接/);
+ assert.match(e.node('#app').innerHTML,/class="btn primary login-local-submit" type="submit"/);
+});
+test('统一认证状态请求失败时如实提示未知且不启用入口',async()=>{
+ for(const fail of [async()=>{throw Error('网络中断')},async()=>({ok:false})]){
+  const e=engine(),button=e.node('#sso-login');e.ctx.fetch=fail;button.disabled=true;
+  vm.runInContext('loginView()',e.ctx);await new Promise(resolve=>setImmediate(resolve));
+  assert.equal(button.disabled,true);assert.match(e.node('#local-login-note').textContent,/暂时无法确认/);
+  assert.match(e.node('#app').innerHTML,/id="login-error" role="alert"/);
+ }
+});
+test('登录方式点击和方向键切换只显示对应内容，并保留已填写账号',()=>{
+ const e=engine(),events={};
+ for(const method of ['sso','local']){events[method]={};e.node('#login-'+method+'-tab').addEventListener=(name,fn)=>{events[method][name]=fn}}
+ vm.runInContext('loginView()',e.ctx);e.node('#username').value='teacher';
+ events.local.click();assert.equal(e.node('#login-form').hidden,false);assert.equal(e.node('#sso-entry').hidden,true);
+ assert.equal(e.node('#login-local-tab').getAttribute('aria-selected'),'true');assert.equal(e.node('#login-local-tab').tabIndex,0);assert.equal(e.node('#login-sso-tab').tabIndex,-1);
+ let prevented=false;events.local.keydown({key:'Home',preventDefault(){prevented=true}});
+ assert.equal(prevented,true);assert.equal(e.node('#sso-entry').hidden,false);assert.equal(e.node('#login-form').hidden,true);
+ events.sso.keydown({key:'ArrowRight',preventDefault(){}});assert.equal(e.node('#login-form').hidden,false);assert.equal(e.node('#username').value,'teacher');
+ events.local.keydown({key:'ArrowLeft',preventDefault(){}});assert.equal(e.node('#sso-entry').hidden,false);
+ events.sso.keydown({key:'End',preventDefault(){}});assert.equal(e.node('#login-form').hidden,false);
+});
+test('密码显示按钮能切换回遮蔽状态，并同步无障碍说明',()=>{
+ const e=engine(),password=e.node('#password'),button=e.node('#login-password-toggle');let click;
+ password.type='password';button.addEventListener=(name,fn)=>{if(name==='click')click=fn};vm.runInContext('loginView()',e.ctx);
+ click();assert.equal(password.type,'text');assert.equal(button.getAttribute('aria-label'),'隐藏密码');assert.equal(button.getAttribute('aria-pressed'),'true');
+ click();assert.equal(password.type,'password');assert.equal(button.getAttribute('aria-label'),'显示密码');assert.equal(button.getAttribute('aria-pressed'),'false');
+});
 const types=[{data_type:'teacher_hr',name:'教师人事信息',local_status:'AVAILABLE',mapping_count:0},{data_type:'training_income',name:'培训收入',local_status:'AVAILABLE',mapping_count:0}];
 
 test('接口保存保留学校专用认证和未显示的凭据绑定',()=>{
