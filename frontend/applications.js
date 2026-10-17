@@ -257,9 +257,23 @@ export async function applyPageHtml(ctx, key) {
     `<div class="card"><div class="card-head"><div><h2>我的${e(cfg.title.replace(/^(申报|申请)/, ''))}申请</h2><p>走到哪一级、谁在办，都在这里。</p></div>${back ? `<span class="badge red-b">待我补正 ${back}</span>` : ''}</div>` +
     c.table(['申请', '进度', '操作'], mine.map(x => [`<strong>${e(x.name)}</strong><p class="cell-sub">${e(x.label)} · ${e(x.state_label)}</p>`,
       progressHtml({...x.progress, nodes: x.nodes, label: x.label}, e, {compact: true}), open(x)]), '还没有申请', '点上面的按钮新建一个，提交后进度会出现在这里。') + `</div>`;
+  if (key === 'apply_base') {
+    const usage = Object.fromEntries(BASE_USAGES), live = mine.filter(x => x.progress?.tone === 'green');
+    return html + `<div class="card"><div class="card-head"><div><h2>我的培训基地</h2><p>已通过审批、进入基地清单的基地。</p></div></div>` +
+      c.table(['基地名称 / 编号', '用途', '设立日期', '操作'], live.map(x => [`<strong>${e(x.name)}</strong><p class="cell-sub">${e(x.code || '')}</p>`,
+        e((x.info?.usages || []).map(k => usage[k] || k).join('、') || '—'), e(x.info?.established_on || x.info?.effective_on || '—'), c.act('查看', 'app-detail', x.id, 'sm')]),
+        '还没有进入基地清单的基地', '基地通过学院、学校审批后，会出现在这里。') + `</div>`;
+  }
+  if (key === 'apply_trainer') {
+    const live = mine.filter(x => x.progress?.tone === 'green');
+    return html + `<div class="card"><div class="card-head"><div><h2>我的培训师资格</h2><p>已通过认定、进入培训师资库。</p></div></div>` +
+      c.table(['培训师', '单位 / 职称', '生效日期', '操作'], live.map(x => [`<strong>${e(x.name)}</strong><p class="cell-sub">${e(x.code || '')}</p>`,
+        e([x.info?.unit, x.info?.title].filter(Boolean).join(' · ') || '—'), e(x.info?.effective_on || '—'), c.act('查看', 'app-detail', x.id, 'sm')]),
+        '还没有通过认定的培训师资格', '认定通过后，会出现在这里。') + `</div>`;
+  }
   if (key !== 'apply_course') return html;
   // 办结的培训课程进入培训课程库，老师在这里能看到自己的课程。
-  const modeName = Object.fromEntries(TEACHING_MODES), active = mine.filter(x => x.state === 'ACTIVE');
+  const modeName = Object.fromEntries(TEACHING_MODES), active = mine.filter(x => x.progress?.tone === 'green');
   return html + `<div class="card"><div class="card-head"><div><h2>我的培训课程</h2><p>已通过审批、进入培训课程库的课程。</p></div></div>` +
     c.table(['课程名称 / 编号', '学时', '教学方式', '操作'], active.map(x => [`<strong>${e(x.name)}</strong><p class="cell-sub">${e(x.course?.course_code || x.code || '')}</p>`,
       x.course?.hours != null && x.course.hours !== '' ? e(x.course.hours) : '—', e(modeName[x.course?.teaching_mode] || '—'), c.act('查看课程', 'app-detail', x.id, 'sm')]),

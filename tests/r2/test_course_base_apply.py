@@ -144,3 +144,19 @@ def test_course_package_and_one_skill_flags_and_base_level(setup_social, client2
     assert post(c, '/api/applications/bases', {'data': {**base, 'code': 'BASE-L2', 'level': 'world'}, 'reason': '申请基地'}).status_code == 422
     r = post(c, '/api/applications/bases', {'data': {k: v for k, v in base.items() if k != 'level'} | {'code': 'BASE-L3'}, 'reason': '申请基地'})
     assert dict(r.json()['fields'])['基地级别'] == '校级'  # 不填默认校级
+
+
+def test_approved_course_visible_to_applicant_and_own_department_only(setup_social, client2):
+    c = client2
+    auth(c, 'collegehead')
+    data = {'source': 'manual', 'code': 'SOC-C10', 'name': '不关联项目的课', 'teacher_id': 'teacher', 'hours': '8', 'teaching_mode': 'lecture', 'ideology': 'none'}
+    r = post(c, '/api/applications/courses', {'data': data, 'reason': '学院代老师申请'})
+    assert r.status_code == 200, r.text
+    auth(c, 'teacher')
+    assert 'SOC-C10' not in {x['code'] for x in courses(c)['courses']}  # 还没批下来，不在课程库里
+    ident = r.json()['item']['id']
+    auth(c, 'reviewer')
+    assert act(c, ident, 'approve').json()['item']['state'] == 'ACTIVE'
+    for user, seen in (('teacher', True), ('depthead', True), ('otherdept', False)):
+        auth(c, user)
+        assert ('SOC-C10' in {x['code'] for x in courses(c)['courses']}) is seen, user
