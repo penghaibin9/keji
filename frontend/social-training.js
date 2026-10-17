@@ -1,6 +1,6 @@
 // School business pages reuse the portal's forms, permissions, navigation and attachments.
 import {checkUploadFiles,uploadEntries,uploadSequential,uploadStatusHtml,failedEntries,MAX_ATTACHMENTS} from './approval-flow.js?v=20261012-streamline1';
-import {progressHtml,AUDIENCE,TEACHING_MODES,IDEOLOGY} from './applications.js?v=20261016-apply25';
+import {progressHtml,AUDIENCE,TEACHING_MODES,IDEOLOGY} from './applications.js?v=20261016-apply26';
 const names={module:'模块式',person_day:'人天式',technical:'技术类',lecture:'讲座类',province:'省级',city:'市级或企业定制',school:'校级',dispatched:'统一委派异地送教',full_day:'全天实操或脱产',ordinary:'常规',subsidy:'补贴性培训',enterprise:'企业定制培训',community:'社区公益培训',rural:'乡村帮扶培训',other:'其他非学历培训',national:'国家级'};
 let workspace,context,opened,workspaceUser;
 let listSection='',listPage=1,listSearch='',resourcePage=1;
@@ -401,7 +401,7 @@ function qualityFields(q={}){
  const baseRow=i=>{const b=bases[i]||{};return '<div class="quality-base"><b>基地 '+(i+1)+'</b>'+c.field('base_'+i+'_name','基地名称','text',b.name||'',{required:false,placeholder:'例：湘茶思政实践教学基地'})+c.field('base_'+i+'_onsite','校内 / 校外','select',b.onsite===false?'no':'yes',{chips:true,options:[['yes','校内'],['no','校外']]})+c.field('base_'+i+'_partner','共建单位','text',b.partner||'',{required:false,placeholder:'例：湘茶集团有限公司'})+c.field('base_'+i+'_location','地点','text',b.location||'',{required:false,placeholder:'例：长沙市岳麓区'})+c.field('base_'+i+'_on','设立日期','date',b.established_on||'',{required:false})+'</div>'};
  return '<fieldset class="form-field full apply-tags"><legend>大思政课实施方式 <b>*</b></legend><div class="apply-tag-row">'+IDEOLOGY_MODES.map(([k,l])=>'<label><input type="checkbox" name="mode_'+k+'" '+(modes.has(k)?'checked':'')+'>'+e(l)+'</label>').join('')+'</div></fieldset>'
   +c.field('ideology_hours','思政课学时','number',q.ideology_hours??'',{required:false,min:0,step:0.5,placeholder:'例：4',hint:'项目里思政专题、课程思政、实践教学的学时合计；未开展填 0。'})
-  +'<div class="form-field full"><p class="hint">本项目设立的思政实践教学基地（没有可不填）：随项目备案一并进入基地清单，不用另外申请。</p></div>'+Array.from({length:Math.max(BASE_ROWS,bases.length)},(_,i)=>baseRow(i)).join('')
+  +'<div class="form-field full"><p class="hint">本项目设立的思政实践教学基地（没有可不填）：随项目备案一并进入基地清单，不用另外申请。</p></div>'+Array.from({length:Math.max(BASE_ROWS,bases.length)},(_,i)=>i<Math.max(1,bases.length)?baseRow(i):'').join('')+(Math.max(BASE_ROWS,bases.length)>Math.max(1,bases.length)?'<details class="form-field full quality-base-more"><summary>还有基地？再添加（最多 '+BASE_ROWS+' 个）</summary>'+Array.from({length:Math.max(BASE_ROWS,bases.length)-Math.max(1,bases.length)},(_,k)=>baseRow(Math.max(1,bases.length)+k)).join('')+'</details>':'')
   +reviewFields('teacher_review','主讲教师资格审查',q.teacher_review,'学院已用政审表审查主讲教师资格并签字')
   +reviewFields('courseware_review','课件内容审查',q.courseware_review,'学院已审查课件（政治方向、知识产权、内容质量）');
 }
