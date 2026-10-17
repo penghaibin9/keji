@@ -125,7 +125,7 @@ function courseView(code){
  return c.modal('查看课程',detailFacts('课程资料',rows)+(Object.keys(info).length?'':c.note('这门课是早先登记的，学时、教学方式等五项资料还没有补充。',true)),foot);
 }
 
-// 导出上报表：选区间 → 预检缺项（点项目名去补）→ 下载“1.2 立德树人”和“绩效数据”两张表。
+// 导出上报表：选区间 → 预检缺项（点项目名去补）→ 下载“项目清单”和“绩效数据”两张表。
 let reportRange={start:'2023-07-01',end:'2026-06-30',year:''},reportResult=null;
 function schoolYears(){const now=new Date(),last=now.getMonth()>=8?now.getFullYear():now.getFullYear()-1,out=[];for(let y=last;y>=2020;y--)out.push(y+'-'+(y+1));return out}
 function reportModal(){

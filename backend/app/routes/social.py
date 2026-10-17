@@ -997,7 +997,7 @@ def report_export(request:Request,start:str=Query('',max_length=10),end:str=Quer
     def load(db,a,s):
         a.require('records.read')
         sheets,result=social_report.export(db,a,start,end)
-        audit(db,a,'social_report_export',result['start']+'~'+result['end'],'导出上报表',after={'scope':result['scope'],'projects':result['count'],'start':result['start'],'end':result['end']},reason='导出 1.2 立德树人与绩效数据')
+        audit(db,a,'social_report_export',result['start']+'~'+result['end'],'导出上报表',after={'scope':result['scope'],'projects':result['count'],'start':result['start'],'end':result['end']},reason='导出项目清单与绩效数据')
         return sheets
     content=social_report.xlsx(read_operation(request,'export',load))
     return Response(content,media_type='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',headers={'Content-Disposition':"attachment; filename=social-report.xlsx"})

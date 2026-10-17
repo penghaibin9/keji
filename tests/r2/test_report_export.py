@@ -47,12 +47,11 @@ def test_precheck_lists_missing_items_then_exports_two_sheets(setup_social, clie
     r = c.get('/api/social/report-export', params=RANGE)
     assert r.status_code == 200, r.text
     book = load_workbook(BytesIO(r.content))
-    assert book.sheetnames == ['1.2 立德树人', '绩效数据']
-    head, row = [x.value for x in book['1.2 立德树人'][1]], [x.value for x in book['1.2 立德树人'][2]]
+    assert book.sheetnames == ['项目清单', '绩效数据']
+    head, row = [x.value for x in book['项目清单'][1]], [x.value for x in book['项目清单'][2]]
     got = dict(zip(head, row))
-    assert got['受众群体类型'] == '企业职工、退役军人' and got['总学时数'] == 16 and got['思政课学时数（个）'] == 4
-    assert got['视频资源总时长（分钟）'] == 30 and got['设立的思政实践教学基地数（个）'] == 1 and got['设立的思政实践教学基地名称'] == '湘茶思政实践基地'
-    assert got['对主讲教师进行资格审查的百分比（%）'] == 100 and got['对课件内容进行审查的百分比（%）'] == 50
+    assert got['服务面向类型'] == '国家战略' and got['总学时'] == 16 and got['教学实施方式'] == '课堂教学'
+    assert got['视频资源总时长（分钟）'] == 30 and got['实践教学基地数量（个）'] == 0
     perf = dict(zip([x.value for x in book['绩效数据'][1]], [x.value for x in book['绩效数据'][2]]))
     assert perf['统计范围'] == '全校' and perf['项目数（个）'] == 1 and perf['实践教学基地数量（个）'] == 1 and perf['实践教学基地名称'] == '实训基地'
     assert perf['非讲授式教学学时占比（%）'] == 75 and perf['近一年新增实践教学基地数（个）'] == 1

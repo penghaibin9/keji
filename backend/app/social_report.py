@@ -1,11 +1,11 @@
-"""导出上报表：先预检缺项，再导出“1.2 立德树人”（每个项目一行）和“绩效数据”（全校或本院一条）。
+"""导出上报表：先预检缺项，再导出“项目清单”（每个项目一行，与领导给的项目列表字段一致）和“绩效数据”（全校或本院一条）。
 
 口径（见申报与审批改造总体规划）：
 - 只统计已备案及以后的项目（已备案、待学院结项核验、待结项核验、已结项），申报中、被退回的不算。
 - 统计区间按上级给的起止日期，培训起止日期与区间有重叠的项目都算；也可以选学年。
-- 设立的思政实践教学基地只算项目第 4 步登记的“本项目设立的基地”。
-- 绩效数据的实践教学基地统计全部已生效基地；思政只看 1.2 表。
-- 能自动算的数不让人填：视频时长、基地个数和名称、审查百分比、非讲授式占比都从系统里算。
+- 项目清单的视频时长、基地数量取项目申报时填的数；视频时长没填时用课程视频合计。
+- 绩效数据的实践教学基地统计全部已生效基地。
+- 能自动算的数不让人填：基地名称、非讲授式占比从系统里算。
 """
 from __future__ import annotations
 from datetime import date, timedelta
@@ -18,16 +18,15 @@ from sqlalchemy import select
 from .models import Org
 from .reference_data import TrainingCourseMaster
 from .social_models import SocialProject, SocialResource
-from .social_schemas import IDEOLOGY_MODES, application_blockers, review_percent
+from .social_schemas import SERVICE_TYPES, TEACHING_METHODS, application_blockers
 from . import social_training as st
 
 REPORT_STATES = ('FILED', 'CLOSE_COLLEGE', 'CLOSE_REVIEW', 'CLOSED')
 APPLYING = ('DEPT', 'COLLEGE', 'SCHOOL', 'RETURNED', 'WITHDRAWN')
 DEFAULT_RANGE = ('2023-07-01', '2026-06-30')
-SHEET_12 = '1.2 立德树人'
+SHEET_12 = '项目清单'
 SHEET_PERF = '绩效数据'
-COLUMNS_12 = ['序号', '项目名称', '受众群体类型', '总学时数', '大思政课实施方式', '思政课学时数（个）', '视频资源总时长（分钟）',
-              '设立的思政实践教学基地数（个）', '设立的思政实践教学基地名称', '对主讲教师进行资格审查的百分比（%）', '对课件内容进行审查的百分比（%）',
+COLUMNS_12 = ['序号', '项目名称', '服务面向类型', '总学时', '视频资源总时长（分钟）', '实践教学基地数量（个）', '教学实施方式',
               '项目编号（核对用）', '承办学院（核对用）']
 COLUMNS_PERF = ['统计范围', '统计区间', '项目数（个）', '总学时数', '视频资源总时长（分钟）', '实践教学基地数量（个）', '实践教学基地名称',
                 '近一年新增培训课程数（门）', '近一年新增视频资源时长（分钟）', '近一年新增实践教学基地数（个）', '非讲授式教学学时占比（%）']
@@ -107,22 +106,15 @@ def course_facts(db, codes):
 
 
 def project_row(p, courses):
-    d, q = p.data, p.data.get('quality') or {}
+    d = p.data
     mine = [c for c in courses.values() if c['project_code'] == d['code']]
-    audiences = list(d.get('audiences') or []) + ([d['audience_other'].strip()] if str(d.get('audience_other') or '').strip() else [])
-    modes = [IDEOLOGY_MODES.get(m, m) for m in q.get('ideology_modes') or []]
-    bases = q.get('bases') or []
-    teacher_pct = review_percent(q.get('teacher_review'))
-    # 课件审查：本项目课程逐门登记了审查情况的按门数算；没有逐门登记时取项目的学院课件审查结论。
-    recorded = [c for c in mine if c['courseware'] is not None]
-    if recorded:
-        courseware_pct = round(100 * sum(1 for c in recorded if c['courseware'].get('checked')) / len(recorded))
-    else:
-        courseware_pct = review_percent(q.get('courseware_review'))
     minutes = sum((c['minutes'] for c in mine), D(0))
-    return [d['name'] + ('（' + p.cohort + '）' if p.cohort else ''), '、'.join(audiences), plain(num(d.get('total_hours'))), '、'.join(modes),
-            plain(num(q.get('ideology_hours'))) if q.get('ideology_modes') != ['none'] else 0, plain(minutes), len(bases),
-            '；'.join(b['name'] for b in bases) or '无', teacher_pct, courseware_pct, d['code']]
+    if d.get('video_minutes') not in (None, ''):
+        minutes = num(d['video_minutes']) or minutes
+    svc = '、'.join(SERVICE_TYPES.get(x, x) for x in d.get('service_types') or [])
+    methods = '、'.join(TEACHING_METHODS.get(x, x) for x in d.get('teaching_methods') or [])
+    return [d['name'] + ('（' + p.cohort + '）' if p.cohort else ''), svc, plain(num(d.get('total_hours'))), plain(minutes),
+            d.get('base_count') if d.get('base_count') is not None else 0, methods, d['code']]
 
 
 def issues(p):
@@ -139,7 +131,7 @@ def check(db, a, start, end):
     blocked = [x for x in items if x['issues']]
     return {'start': s.isoformat(), 'end': e.isoformat(), 'count': len(items), 'blocked': len(blocked), 'ready': bool(items) and not blocked,
             'scope': '全校' if a.role.kind == 'school' else '本院', 'items': blocked + [x for x in items if not x['issues']],
-            'note': '只统计已备案及以后的项目；1.2 表行数应等于上级 1.1 表填报的项目数（本区间 %d 个）。' % len(items)}
+            'note': '只统计已备案及以后的项目；项目清单行数应等于上级 1.1 表填报的项目数（本区间 %d 个）。' % len(items)}
 
 
 def bases(db, a, end):
