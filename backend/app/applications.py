@@ -449,7 +449,9 @@ def summary(db, obj, applicant=None):
     else:
         name, kind = obj.name, 'application'
     p = ap.progress(db, flow, obj, applicant, returned_level=returned)
-    return {'type': kind, 'id': obj.id, 'name': name, 'flow': flow, 'label': ap.FLOWS[flow]['label'], 'state': obj.state,
+    d = obj.data or {}
+    course = {k: d.get(k) for k in ('course_code', 'hours', 'teaching_mode', 'teacher_name')} if getattr(obj, 'kind', '') == 'course_apply' else None
+    return {'type': kind, 'id': obj.id, 'name': name, 'code': getattr(obj, 'code', None), 'course': course, 'flow': flow, 'label': ap.FLOWS[flow]['label'], 'state': obj.state,
             'state_label': state_label(obj), 'progress': {k: p[k] for k in ('text', 'headline', 'step', 'total', 'tone', 'needs_applicant')},
             'nodes': [{k: n.get(k) for k in ('label', 'state')} for n in p['nodes']], 'updated_at': last_event_at(db, obj) or obj.created_at}
 

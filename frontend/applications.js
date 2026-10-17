@@ -253,10 +253,17 @@ export async function applyPageHtml(ctx, key) {
   const mine = (m.items || []).filter(x => cfg.flows.includes(x.flow));
   const open = x => x.type === 'social_project' ? c.act('查看', 'social-detail', 'social_project|' + x.id, 'sm') : c.act(x.state === 'RETURNED' ? '去补正' : '查看', 'app-detail', x.id, x.state === 'RETURNED' ? 'sm primary' : 'sm');
   const back = mine.filter(x => x.state === 'RETURNED').length;
-  return `<div class="card apply-entry"><div class="apply-entry-top"><div><h2>${e(cfg.title)}</h2><p>${e(cfg.intro)}</p></div>${c.act(cfg.button, 'teacher-apply', cfg.action, 'primary')}</div></div>` +
+  const html = `<div class="card apply-entry"><div class="apply-entry-top"><div><h2>${e(cfg.title)}</h2><p>${e(cfg.intro)}</p></div>${c.act(cfg.button, 'teacher-apply', cfg.action, 'primary')}</div></div>` +
     `<div class="card"><div class="card-head"><div><h2>我的${e(cfg.title.replace(/^(申报|申请)/, ''))}申请</h2><p>走到哪一级、谁在办，都在这里。</p></div>${back ? `<span class="badge red-b">待我补正 ${back}</span>` : ''}</div>` +
     c.table(['申请', '进度', '操作'], mine.map(x => [`<strong>${e(x.name)}</strong><p class="cell-sub">${e(x.label)} · ${e(x.state_label)}</p>`,
       progressHtml({...x.progress, nodes: x.nodes, label: x.label}, e, {compact: true}), open(x)]), '还没有申请', '点上面的按钮新建一个，提交后进度会出现在这里。') + `</div>`;
+  if (key !== 'apply_course') return html;
+  // 办结的培训课程进入培训课程库，老师在这里能看到自己的课程。
+  const modeName = Object.fromEntries(TEACHING_MODES), active = mine.filter(x => x.state === 'ACTIVE');
+  return html + `<div class="card"><div class="card-head"><div><h2>我的培训课程</h2><p>已通过审批、进入培训课程库的课程。</p></div></div>` +
+    c.table(['课程名称 / 编号', '学时', '教学方式', '操作'], active.map(x => [`<strong>${e(x.name)}</strong><p class="cell-sub">${e(x.course?.course_code || x.code || '')}</p>`,
+      x.course?.hours != null && x.course.hours !== '' ? e(x.course.hours) : '—', e(modeName[x.course?.teaching_mode] || '—'), c.act('查看课程', 'app-detail', x.id, 'sm')]),
+      '还没有进入课程库的课程', '课程通过教研室、学院、学校审批后，会出现在这里。') + `</div>`;
 }
 
 // 首页卡片：只列还没办结的申请（最多 3 条），没有就不显示。
