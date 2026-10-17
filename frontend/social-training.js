@@ -1,6 +1,6 @@
 // School business pages reuse the portal's forms, permissions, navigation and attachments.
 import {checkUploadFiles,uploadEntries,uploadSequential,uploadStatusHtml,failedEntries,MAX_ATTACHMENTS} from './approval-flow.js?v=20261012-streamline1';
-import {progressHtml,AUDIENCE,TEACHING_MODES,IDEOLOGY} from './applications.js?v=20261016-apply26';
+import {progressHtml,AUDIENCE,TEACHING_MODES,IDEOLOGY} from './applications.js?v=20261016-apply28';
 const names={module:'模块式',person_day:'人天式',technical:'技术类',lecture:'讲座类',province:'省级',city:'市级或企业定制',school:'校级',dispatched:'统一委派异地送教',full_day:'全天实操或脱产',ordinary:'常规',subsidy:'补贴性培训',enterprise:'企业定制培训',community:'社区公益培训',rural:'乡村帮扶培训',other:'其他非学历培训',national:'国家级'};
 let workspace,context,opened,workspaceUser;
 let listSection='',listPage=1,listSearch='',resourcePage=1;
@@ -387,25 +387,20 @@ async function showDetail(kind,id,courseList=null){
 
 // ---- 立德树人与质量（上级 1.2 立德树人表要的数）：申报向导第 4 步、详情块、学院补填共用 ----
 const IDEOLOGY_MODES=[['ideology_course','开设思政专题课'],['course_ideology','课程思政融入专业教学'],['practice','思政实践教学（参观、基地实践）'],['lecture','专题讲座、报告'],['none','未开展']];
-const BASE_ROWS=3;
 function audienceFields(v){
  const c=context,e=c.esc,picked=new Set(v.audiences||[]);
  return '<fieldset class="form-field full apply-tags"><legend>受众群体 <b>*</b></legend><div class="apply-tag-row">'+AUDIENCE.map((t,i)=>'<label><input type="checkbox" name="aud_'+i+'" '+(picked.has(t)?'checked':'')+'>'+e(t)+'</label>').join('')+'</div><input name="audience_other" aria-label="其他受众群体" placeholder="其他（选填）" maxlength="200" value="'+e(v.audience_other||'')+'"></fieldset>';
 }
-function reviewFields(key,label,r={},hint=''){
- const c=context;
- return c.field(key+'_checked',label,'checkbox',!!r.checked,{required:false,checkLabel:hint,full:true})+c.field(key+'_signer','签字人 / 审查人','text',r.signer||'',{required:false,placeholder:'例：学院党委副书记 张三'})+c.field(key+'_on','日期','date',r.reviewed_on||'',{required:false})+c.field(key+'_ref','记录编号','text',r.reference||'',{required:false,placeholder:'例：政审〔2026〕018号'});
-}
 function qualityFields(q={}){
  const c=context,e=c.esc,modes=new Set(q.ideology_modes||[]),bases=q.bases||[];
- const baseRow=i=>{const b=bases[i]||{};return '<div class="quality-base"><b>基地 '+(i+1)+'</b>'+c.field('base_'+i+'_name','基地名称','text',b.name||'',{required:false,placeholder:'例：湘茶思政实践教学基地'})+c.field('base_'+i+'_onsite','校内 / 校外','select',b.onsite===false?'no':'yes',{chips:true,options:[['yes','校内'],['no','校外']]})+c.field('base_'+i+'_partner','共建单位','text',b.partner||'',{required:false,placeholder:'例：湘茶集团有限公司'})+c.field('base_'+i+'_location','地点','text',b.location||'',{required:false,placeholder:'例：长沙市岳麓区'})+c.field('base_'+i+'_on','设立日期','date',b.established_on||'',{required:false})+'</div>'};
+ const pct=r=>r?.percent!=null?r.percent:(r?.checked?100:'');
  return '<fieldset class="form-field full apply-tags"><legend>大思政课实施方式 <b>*</b></legend><div class="apply-tag-row">'+IDEOLOGY_MODES.map(([k,l])=>'<label><input type="checkbox" name="mode_'+k+'" '+(modes.has(k)?'checked':'')+'>'+e(l)+'</label>').join('')+'</div></fieldset>'
-  +c.field('ideology_hours','思政课学时','number',q.ideology_hours??'',{required:false,min:0,step:0.5,placeholder:'例：4',hint:'项目里思政专题、课程思政、实践教学的学时合计；未开展填 0。'})
-  +'<div class="form-field full"><p class="hint">本项目设立的思政实践教学基地（没有可不填）：随项目备案一并进入基地清单，不用另外申请。</p></div>'+Array.from({length:Math.max(BASE_ROWS,bases.length)},(_,i)=>i<Math.max(1,bases.length)?baseRow(i):'').join('')+(Math.max(BASE_ROWS,bases.length)>Math.max(1,bases.length)?'<details class="form-field full quality-base-more"><summary>还有基地？再添加（最多 '+BASE_ROWS+' 个）</summary>'+Array.from({length:Math.max(BASE_ROWS,bases.length)-Math.max(1,bases.length)},(_,k)=>baseRow(Math.max(1,bases.length)+k)).join('')+'</details>':'')
-  +reviewFields('teacher_review','主讲教师资格审查',q.teacher_review,'学院已用政审表审查主讲教师资格并签字')
-  +reviewFields('courseware_review','课件内容审查',q.courseware_review,'学院已审查课件（政治方向、知识产权、内容质量）');
+  +c.field('ideology_hours','思政课学时（个）','number',q.ideology_hours??'',{required:false,min:0,step:0.5,placeholder:'例：4',hint:'项目里思政专题、课程思政、实践教学的学时合计；未开展填 0。'})
+  +c.field('base_count','设立的思政实践教学基地数（个）','number',q.bases?bases.length:'',{required:false,min:0,step:1,placeholder:'例：2',hint:'没有设立填 0。'})
+  +c.field('base_names','设立的思政实践教学基地名称','text',bases.map(b=>b.name).join('；'),{required:false,full:true,placeholder:'例：校内“红色文化园”；校外“湘茶思政实践基地”',hint:'请用中文分号“；”隔开，名称个数要和基地数一致；基地数为 0 时填“无”。'})
+  +c.field('teacher_pct','对主讲教师进行资格审查的百分比（%）','number',pct(q.teacher_review),{required:false,min:0,max:100,step:1,placeholder:'例：100',hint:'本项目主讲教师中，经政审表审查资格的比例。'})
+  +c.field('courseware_pct','对课件内容进行审查的百分比（%）','number',pct(q.courseware_review),{required:false,min:0,max:100,step:1,placeholder:'例：100',hint:'本项目课件中，经学院审查内容的比例（政治方向、知识产权、内容质量）。'});
 }
-function takeReview(v,key){const r={checked:!!v[key+'_checked'],signer:v[key+'_signer']||'',reviewed_on:v[key+'_on']||null,reference:v[key+'_ref']||''};for(const k of ['checked','signer','on','ref'])delete v[key+'_'+k];return r}
 // 把表单里的平铺字段收成 total_hours、audiences、quality，其余原样留给项目资料。
 const VENUE_TYPES=[['base','校内培训基地'],['campus','其他校内场所'],['offsite','校外']];
 function venueFields(g={}){
@@ -422,12 +417,18 @@ function takeVenue(v){
  return venue;
 }
 function takeQuality(v){
- const audiences=AUDIENCE.filter((t,i)=>v['aud_'+i]);AUDIENCE.forEach((t,i)=>delete v['aud_'+i]);
+ const hasQuality='ideology_hours' in v,audiences=AUDIENCE.filter((t,i)=>v['aud_'+i]);AUDIENCE.forEach((t,i)=>delete v['aud_'+i]);
  const ideology_modes=IDEOLOGY_MODES.map(([k])=>k).filter(k=>v['mode_'+k]);IDEOLOGY_MODES.forEach(([k])=>delete v['mode_'+k]);
- const bases=[];for(let i=0;v['base_'+i+'_name']!==undefined;i++){const b={name:(v['base_'+i+'_name']||'').trim(),onsite:v['base_'+i+'_onsite']!=='no',partner:v['base_'+i+'_partner']||'',location:v['base_'+i+'_location']||'',established_on:v['base_'+i+'_on']||null};for(const k of ['name','onsite','partner','location','on'])delete v['base_'+i+'_'+k];if(b.name){if(!b.established_on)throw Error('请填写基地“'+b.name+'”的设立日期');bases.push(b)}}
- const quality={ideology_modes,ideology_hours:v.ideology_hours===''||v.ideology_hours==null?null:v.ideology_hours,bases,teacher_review:takeReview(v,'teacher_review'),courseware_review:takeReview(v,'courseware_review')};
+ const num=k=>{const x=v[k];delete v[k];return x===''||x==null?null:Number(x)};
+ const baseCount=num('base_count'),baseText=(v.base_names||'').trim();delete v.base_names;
+ const names=baseText.split(/[;；]/).map(t=>t.trim()).filter(t=>t&&t!=='无');
+ if(baseCount!=null&&names.length!==baseCount)throw Error(baseCount?'基地数填了 '+baseCount+' 个，但基地名称里有 '+names.length+' 个，请用“；”隔开并核对':'基地数为 0 时，基地名称请填“无”或留空');
+ if(baseCount==null&&names.length)throw Error('请填写设立的思政实践教学基地数');
+ const bases=names.map(name=>({name,onsite:true,partner:'',location:'',established_on:null}));
+ const teacher_pct=num('teacher_pct'),courseware_pct=num('courseware_pct');
+ const quality={ideology_modes,ideology_hours:v.ideology_hours===''||v.ideology_hours==null?null:v.ideology_hours,bases,teacher_review:{percent:teacher_pct},courseware_review:{percent:courseware_pct}};
  delete v.ideology_hours;
- return {audiences,audience_other:v.audience_other||'',total_hours:v.total_hours===''||v.total_hours==null?null:v.total_hours,quality};
+ return {audiences,audience_other:v.audience_other||'',total_hours:v.total_hours===''||v.total_hours==null?null:v.total_hours,...(hasQuality?{quality}:{})};
 }
 const PREP_ITEMS=[['plan','教学计划'],['lecturers','师资安排'],['venue','场地'],['equipment','设备'],['materials','教材教具'],['notice','培训告知书或邀请函']];
 function venueBlock(data){
@@ -447,10 +448,10 @@ function prepForm(){
 }
 function qualityBlock(data,issues){
  const c=context,e=c.esc,q=data.quality||{},label=Object.fromEntries(IDEOLOGY_MODES);
- const review=r=>r?.checked?'已审查 · '+e(r.signer||'')+' · '+e(r.reviewed_on||''):'<span class="red">未审查</span>';
+ const review=r=>r?.percent!=null?e(r.percent)+'%':r?.checked?'100%（已审查 · '+e(r.signer||'')+'）':'<span class="red">未填</span>';
  const rows=[['总学时',data.total_hours!=null&&data.total_hours!==''?e(data.total_hours):'<span class="red">待补充</span>'],['受众群体',e([...(data.audiences||[]),...(data.audience_other?['其他：'+data.audience_other]:[])].join('、'))||'<span class="red">待补充</span>'],
   ['大思政课实施方式',e((q.ideology_modes||[]).map(k=>label[k]||k).join('、'))||'<span class="red">待补充</span>'],['思政课学时',q.ideology_hours!=null?e(q.ideology_hours):'—'],
-  ['本项目设立的思政实践教学基地',e((q.bases||[]).map(b=>b.name+(b.onsite?'（校内）':'（校外 · '+b.partner+'）')).join('、'))||'无'],['主讲教师资格审查（政审表）',review(q.teacher_review)],['课件内容审查',review(q.courseware_review)]];
+  ['设立的思政实践教学基地（'+(q.bases||[]).length+' 个）',e((q.bases||[]).map(b=>b.name).join('；'))||'无'],['对主讲教师进行资格审查的百分比',review(q.teacher_review)],['对课件内容进行审查的百分比',review(q.courseware_review)]];
  return '<section class="social-detail-section"><h3>立德树人与质量</h3>'+(issues?.length?c.note('上报信息还缺：'+issues.join('；'),true):'')+'<dl class="kv">'+rows.map(([k,v])=>'<dt>'+e(k)+'</dt><dd>'+v+'</dd>').join('')+'</dl>'+(data.report_info_on?'<p class="small muted">学院 '+e(data.report_info_on)+' 补填</p>':'')+'</section>';
 }
 function reportInfoForm(){
@@ -465,7 +466,7 @@ function projectForm(edit=false){
  if(pending.dates_pending||pending.date_pending)confirmations.push(f('dates_confirmed','确认实际培训期间','checkbox',{checkLabel:'已核对开始、结束日期，占位日期已更正'}));
  if(pending.mode_pending)confirmations.push(f('mode_confirmed','确认备案核算方式','checkbox',{checkLabel:'已核对模块或培训工作日明细'}));
  for(const [key,label] of [['level','项目层级'],['scene','授课场景']])if((pending.policy_pending||[]).includes(key)||(pending.ledger_id&&!v[key+'_confirmed']))confirmations.push(f(key+'_confirmed','确认'+label,'checkbox',{checkLabel:'已依据项目材料核实'+label}));
- const body=formSection('一、项目基本资料',f('code','项目编号','text',{placeholder:'例：SOC-2026-01'})+f('name','项目名称','text',{placeholder:'例：2026年社区茶艺公益培训'})+f('cohort','项目期次','text',{placeholder:'例：第一期'})+(teacher?'<input type="hidden" name="org_id" value="'+c.esc(v.org_id||myCollege)+'"><input type="hidden" name="owner_id" value="'+c.esc(c.me.user.id)+'">'+c.field('owner_view','项目负责人','text',c.me.user.name,{readonly:true,required:false,hint:'老师申报的项目，负责人是本人，承办学院是本人所在学院。'}):collegeField(v.org_id)+c.teacherField(v.owner_id||'', 'owner_id','项目负责人（输入工号或姓名检索）'))+f('category','培训类别','select',{chips:true,options:selectable(['subsidy','enterprise','community','rural','other'])})+audienceFields(v)+f('high_risk','高风险项目','checkbox',{required:false,checkLabel:'属于其他高风险项目（须前置审核，备案时登记审核日期及依据）'}),'')+formSection('二、培训安排',f('start_date','开始日期','date')+f('end_date','结束日期','date')+f('expected_income','预计收入（公益类填0）','number',{min:0,step:0.01,placeholder:'例：0 或 30000'})+f('expected_participants','预计人次','number',{min:0,step:1,placeholder:'例：120'})+f('expected_outcomes','预期成果','textarea',{placeholder:'例：学员掌握基础茶艺，80%以上取得结业证书'})+f('target_groups','重点群体与行动对接','textarea',{required:false,hint:'补贴性培训必填：写明面向哪些重点群体、对接哪项行动；其他类别可不填。',placeholder:'例：脱贫人口、退役军人；对接“一人一技”行动'})+f('total_hours','总学时','number',{required:false,min:0,step:0.5,placeholder:'例：32'})+venueFields(v.venue||{}))+formSection('三、积分核算依据',f('mode','核算方式','select',{chips:true,options:selectable(['module','person_day'])})+f('class_type','标准班类型','select',{chips:true,options:selectable(['technical','lecture'])})+f('level','项目层级','select',{chips:true,options:selectable(['province','city','school'])})+f('scene','授课场景','select',{chips:true,options:selectable(['dispatched','full_day','ordinary'])})+f('level_basis','专项层级认定依据','textarea',{required:false,hint:'企业定制通常选市级；社区、免费帮扶通常选校级。属于更高层级专项时，填写正式认定依据并提交归口核验。',placeholder:'例：省人社厅专项培训认定文件〔2026〕8号'})+f('auxiliary_standard','随项目备案的辅助积分细则','textarea',{required:false,placeholder:'例：班主任每天0.5分，每人每天不超过1分'})+f('auxiliary_daily_cap','个人辅助积分每日上限','number',{required:false,min:0,step:0.01,placeholder:'例：1'}),'同期项目只采用一种核算方式；尚未确认的辅助积分标准请留空。')+formSection('四、立德树人与质量',qualityFields(v.quality||{}),'上级 1.2 立德树人表要的数。'+(teacher||c.me?.role?.kind==='dept'?'提交学院审批前须填完；两项审查由学院做，学院签字后再勾选。':'学院、学校登记的项目可以先保存，结项后也能补填。'))+(confirmations.length?formSection('五、台账草稿待核实事项',confirmations.join(''),'核实并保存后才能提交正式备案；自动生成的值不能代替材料核验。'):'');
+ const body=formSection('一、项目基本资料',f('code','项目编号','text',{placeholder:'例：SOC-2026-01'})+f('name','项目名称','text',{placeholder:'例：2026年社区茶艺公益培训'})+f('cohort','项目期次','text',{placeholder:'例：第一期'})+(teacher?'<input type="hidden" name="org_id" value="'+c.esc(v.org_id||myCollege)+'"><input type="hidden" name="owner_id" value="'+c.esc(c.me.user.id)+'">'+c.field('owner_view','项目负责人','text',c.me.user.name,{readonly:true,required:false,hint:'老师申报的项目，负责人是本人，承办学院是本人所在学院。'}):collegeField(v.org_id)+c.teacherField(v.owner_id||'', 'owner_id','项目负责人（输入工号或姓名检索）'))+f('category','培训类别','select',{chips:true,options:selectable(['subsidy','enterprise','community','rural','other'])})+audienceFields(v)+f('high_risk','高风险项目','checkbox',{required:false,checkLabel:'属于其他高风险项目（须前置审核，备案时登记审核日期及依据）'}),'')+formSection('二、培训安排',f('start_date','开始日期','date')+f('end_date','结束日期','date')+f('expected_income','预计收入（公益类填0）','number',{min:0,step:0.01,placeholder:'例：0 或 30000'})+f('expected_participants','预计人次','number',{min:0,step:1,placeholder:'例：120'})+f('expected_outcomes','预期成果','textarea',{placeholder:'例：学员掌握基础茶艺，80%以上取得结业证书'})+f('target_groups','重点群体与行动对接','textarea',{required:false,hint:'补贴性培训必填：写明面向哪些重点群体、对接哪项行动；其他类别可不填。',placeholder:'例：脱贫人口、退役军人；对接“一人一技”行动'})+f('total_hours','总学时','number',{required:false,min:0,step:0.5,placeholder:'例：32'})+venueFields(v.venue||{}))+formSection('三、积分核算依据',f('mode','核算方式','select',{chips:true,options:selectable(['module','person_day'])})+f('class_type','标准班类型','select',{chips:true,options:selectable(['technical','lecture'])})+f('level','项目层级','select',{chips:true,options:selectable(['province','city','school'])})+f('scene','授课场景','select',{chips:true,options:selectable(['dispatched','full_day','ordinary'])})+f('level_basis','专项层级认定依据','textarea',{required:false,hint:'企业定制通常选市级；社区、免费帮扶通常选校级。属于更高层级专项时，填写正式认定依据并提交归口核验。',placeholder:'例：省人社厅专项培训认定文件〔2026〕8号'})+f('auxiliary_standard','随项目备案的辅助积分细则','textarea',{required:false,placeholder:'例：班主任每天0.5分，每人每天不超过1分'})+f('auxiliary_daily_cap','个人辅助积分每日上限','number',{required:false,min:0,step:0.01,placeholder:'例：1'}),'同期项目只采用一种核算方式；尚未确认的辅助积分标准请留空。')+(confirmations.length?formSection('四、台账草稿待核实事项',confirmations.join(''),'核实并保存后才能提交正式备案；自动生成的值不能代替材料核验。'):'');
  commonForm(edit?'修改项目申报':'申报培训项目',body,async v=>{delete v.owner_id_search;delete v.owner_view;const venue=takeVenue(v);const info=takeQuality(v);const data=cleanReason(v);Object.assign(data.data,info,{venue});return c.api('/social/projects'+(edit?'/'+x.id:''),{method:edit?'PUT':'POST',body:{...data,...(edit?{expected_version:x.version}:{})}})},
   edit?{reopen:true,page:true}:{page:true,submit:'保存草稿',reasonLabel:'申报说明',reasonDefault:teacher?'申报本人负责的培训项目':'学院申报培训项目',hint:teacher?'保存草稿后上传材料，再提交学院审批；学院通过后到学校备案。':'保存草稿后上传材料，再提交审核备案。',after:r=>r?.item?.id?showDetail('social_project',r.item.id):null});
  bindProjectCategory();bindVenue();

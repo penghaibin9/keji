@@ -8,7 +8,7 @@ from ..core import command, read_operation, serial, audit, workflow, check_versi
 from ..models import Org, User, Role, Setting, Period, PointEntry, Notice, WorkflowEvent
 from ..reference_data import TrainingProjectMaster, TrainingCourseMaster, TrainingClassMaster
 from ..social_models import SocialProject, SocialUnit, SocialPolicy, SocialClaim, SocialAnnual, SocialResource
-from ..social_schemas import ReportInfoIn,PrepIn,ProjectIn, UnitsIn, SocialAction, PolicyIn, PolicyUpdate, RecommendedPolicyIn, PolicyCalendarIn, PolicyData, ClaimIn, AnnualIn, ResourceIn, ResourceUpdate, DutiesIn, CourseIn, CourseBatchIn, CaseNoteIn, CorrectionIn, ReportIn, PointReviewIn
+from ..social_schemas import ReportInfoIn,review_done,PrepIn,ProjectIn, UnitsIn, SocialAction, PolicyIn, PolicyUpdate, RecommendedPolicyIn, PolicyCalendarIn, PolicyData, ClaimIn, AnnualIn, ResourceIn, ResourceUpdate, DutiesIn, CourseIn, CourseBatchIn, CaseNoteIn, CorrectionIn, ReportIn, PointReviewIn
 from .. import social_training as st
 
 router=APIRouter(prefix='/api/social',tags=['社会培训项目与制度'])
@@ -217,6 +217,7 @@ def project_edit(ident:str,data:ProjectIn,request:Request):
             source['policy_pending']=[key for key in source.get('policy_pending',['level','scene'] if source.get('ledger_id') else []) if not values.get(key+'_confirmed')]
             values['source']=source
         values={**values,**{k:obj.data[k] for k in ('returned_level','prep') if k in obj.data}}
+        if values.get('quality') is None and obj.data.get('quality'):values['quality']=obj.data['quality']
         obj.data=values;obj.owner_id=data.data.owner_id
         return event(db,a,'social_project',obj,'修改申报草稿',before,data.reason)
     return command(request,data.model_dump(),'portal.read',apply)
@@ -272,7 +273,7 @@ def import_units(ident:str,operation:str,data:UnitsIn,request:Request):
 def project_action(ident:str,data:SocialAction,request:Request):
     def apply(db,a,s):
         from .. import approvals as ap
-        from ..social_schemas import quality_blockers
+        from ..social_schemas import quality_blockers, application_blockers
         obj=st.scoped(db,a,'social_project',ident,write=True);check_version(obj,data.expected_version);before=serial(obj)
         if a.role.kind=='teacher' and data.action not in TEACHER_PROJECT_ACTIONS:raise HTTPException(403,'老师只能提交、结项提交或申请重新备案本人负责的项目')
         if data.action in {'file','return','close'} and obj.state in {'SUBMITTED','CLOSE_REVIEW'}:st.check_project_conflicts(db,a,obj)
@@ -284,7 +285,7 @@ def project_action(ident:str,data:SocialAction,request:Request):
             if obj.state not in {'DRAFT','RETURNED'}:raise HTTPException(409,'当前项目不能提交')
             st.require_project_confirmed(obj)
             if not obj.data.get('venue'):raise HTTPException(409,'请先在“修改项目资料”里填写培训场地（新申报和重新备案必填）')
-            if via_college and (issues:=quality_blockers(obj.data)):raise HTTPException(409,'“立德树人与质量”等上报信息还没填完：'+'；'.join(issues))
+            if via_college and (issues:=application_blockers(obj.data)):raise HTTPException(409,'申报信息还没填完：'+'；'.join(issues))
             st.require_evidence(db,'social_project',ident)
             level=obj.data.get('returned_level') if obj.state=='RETURNED' else None
             obj.state='SUBMITTED' if level=='school' or not via_college else 'COLLEGE'
@@ -299,7 +300,7 @@ def project_action(ident:str,data:SocialAction,request:Request):
                 elif obj.data.get('quality'):
                     # 学院结项核验即核对了主讲教师资格审查表和课件内容审查记录（两项审查都由学院做）。
                     q=obj.data['quality']
-                    if not (q.get('teacher_review') or {}).get('checked') or not (q.get('courseware_review') or {}).get('checked'):raise HTTPException(409,'主讲教师资格审查表或课件内容审查记录还没有学院签字')
+                    if not review_done(q.get('teacher_review')) or not review_done(q.get('courseware_review')):raise HTTPException(409,'还没有登记主讲教师资格审查和课件内容审查的百分比')
                     obj.closeout={**obj.closeout,'materials_checked':sorted(set(obj.closeout.get('materials_checked',[]))|{'teacher_review','courseware_review'}),'college_checked_by':a.id}
                 obj.state='SUBMITTED' if flow=='project' else 'CLOSE_REVIEW'
             else:
@@ -314,7 +315,6 @@ def project_action(ident:str,data:SocialAction,request:Request):
                 if data.prior_review_on.isoformat()>obj.data['start_date'] or data.prior_review_on>st.today():raise HTTPException(422,'前置审核须在培训开始前完成，日期不得晚于今天')
             obj.data={**obj.data,'filed_on':st.today().isoformat(),'filed_by':a.id,'prior_review_on':serial(data.prior_review_on),'filing_basis':data.basis}
             obj.state='FILED'
-            project_bases(db,obj)
             handling={'flow':'project','decision':'approve','level':'school'}
         elif data.action=='return':
             st.duty(db,a,'coordinator',obj.owner_id,obj.org_id)
@@ -397,7 +397,6 @@ def project_report_info(ident:str,data:ReportInfoIn,request:Request):
         values={k:v for k,v in serial(data.model_dump()).items() if k in {'total_hours','audiences','audience_other','quality'}}
         obj.data={**obj.data,**values,'report_info_by':a.id,'report_info_on':st.today().isoformat()}
         result=event(db,a,'social_project',obj,'补填上报信息',before,data.reason,data.basis)
-        project_bases(db,obj)
         return result
     return command(request,data.model_dump(mode='json'),'portal.read',apply)
 

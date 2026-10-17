@@ -22,7 +22,7 @@ class ProjectBase(Input):
     location: str = Field(default='', max_length=500)
     onsite: bool = True
     partner: str = Field(default='', max_length=200)
-    established_on: date
+    established_on: date | None = None
     @model_validator(mode='after')
     def partner_required(self):
         if not self.onsite and not self.partner.strip(): raise ValueError('校外基地请填写共建单位')
@@ -47,6 +47,7 @@ class ReviewRecord(Input):
     signer: str = Field(default='', max_length=100)
     reviewed_on: date | None = None
     reference: str = Field(default='', max_length=200)
+    percent: int | None = Field(default=None, ge=0, le=100)  # 审查覆盖百分比，上级 1.2 表直接要这个数
 
 
 class ProjectQuality(Input):
@@ -61,8 +62,26 @@ class ProjectQuality(Input):
         if 'none' in self.ideology_modes and len(self.ideology_modes) > 1: raise ValueError('选了“未开展”就不能再选其他思政实施方式')
         for key, label in (('teacher_review','主讲教师资格审查'),('courseware_review','课件内容审查')):
             r = getattr(self, key)
-            if r.checked and not (r.signer.strip() and r.reviewed_on): raise ValueError(label+'已勾选时，请填写签字人（审查人）和日期')
         return self
+
+
+def review_done(r):
+    """审查已登记：填了百分比，或老数据里学院已勾选。"""
+    r = r or {}
+    return r.get('percent') is not None or bool(r.get('checked'))
+
+
+def review_percent(r):
+    r = r or {}
+    return r['percent'] if r.get('percent') is not None else (100 if r.get('checked') else 0)
+
+
+def application_blockers(data):
+    """申报提交学院前必须有的：总学时、受众群体。思政实施情况由学院之后补填，不拦申报。"""
+    out = []
+    if not (data or {}).get('total_hours'): out.append('请填写总学时')
+    if not (data or {}).get('audiences') and not str((data or {}).get('audience_other') or '').strip(): out.append('请选择受众群体')
+    return out
 
 
 def quality_blockers(data):
@@ -71,8 +90,8 @@ def quality_blockers(data):
     out = []
     if not q.get('ideology_modes'): out.append('请选择大思政课实施方式')
     elif q.get('ideology_modes') != ['none'] and q.get('ideology_hours') in (None, ''): out.append('请填写思政课学时')
-    if not (q.get('teacher_review') or {}).get('checked'): out.append('主讲教师资格审查（政审表）尚未由学院签字')
-    if not (q.get('courseware_review') or {}).get('checked'): out.append('课件内容审查尚未由学院完成')
+    if not review_done(q.get('teacher_review')): out.append('请填写对主讲教师进行资格审查的百分比')
+    if not review_done(q.get('courseware_review')): out.append('请填写对课件内容进行审查的百分比')
     if not (data or {}).get('total_hours'): out.append('请填写总学时')
     if not (data or {}).get('audiences') and not str((data or {}).get('audience_other') or '').strip(): out.append('请选择受众群体')
     return out
@@ -364,6 +383,7 @@ class CoursewareReview(Input):
     reviewer: str = Field(default='', max_length=100)
     reviewed_on: date | None = None
     reference: str = Field(default='', max_length=200)
+    percent: int | None = Field(default=None, ge=0, le=100)  # 审查覆盖百分比，上级 1.2 表直接要这个数
 
 
 class CourseIn(Reason):

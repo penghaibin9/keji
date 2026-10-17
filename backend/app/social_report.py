@@ -18,7 +18,7 @@ from sqlalchemy import select
 from .models import Org
 from .reference_data import TrainingCourseMaster
 from .social_models import SocialProject, SocialResource
-from .social_schemas import IDEOLOGY_MODES, quality_blockers
+from .social_schemas import IDEOLOGY_MODES, quality_blockers, review_percent
 from . import social_training as st
 
 REPORT_STATES = ('FILED', 'CLOSE_COLLEGE', 'CLOSE_REVIEW', 'CLOSED')
@@ -112,13 +112,13 @@ def project_row(p, courses):
     audiences = list(d.get('audiences') or []) + ([d['audience_other'].strip()] if str(d.get('audience_other') or '').strip() else [])
     modes = [IDEOLOGY_MODES.get(m, m) for m in q.get('ideology_modes') or []]
     bases = q.get('bases') or []
-    teacher_pct = 100 if (q.get('teacher_review') or {}).get('checked') else 0
+    teacher_pct = review_percent(q.get('teacher_review'))
     # 课件审查：本项目课程逐门登记了审查情况的按门数算；没有逐门登记时取项目的学院课件审查结论。
     recorded = [c for c in mine if c['courseware'] is not None]
     if recorded:
         courseware_pct = round(100 * sum(1 for c in recorded if c['courseware'].get('checked')) / len(recorded))
     else:
-        courseware_pct = 100 if (q.get('courseware_review') or {}).get('checked') else 0
+        courseware_pct = review_percent(q.get('courseware_review'))
     minutes = sum((c['minutes'] for c in mine), D(0))
     return [d['name'] + ('（' + p.cohort + '）' if p.cohort else ''), '、'.join(audiences), plain(num(d.get('total_hours'))), '、'.join(modes),
             plain(num(q.get('ideology_hours'))) if q.get('ideology_modes') != ['none'] else 0, plain(minutes), len(bases),

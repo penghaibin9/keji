@@ -1,4 +1,4 @@
-"""培训项目开放老师申报：学院审批 → 学校备案；立德树人与质量必填；随项目设立的基地备案后进清单；学院补填历史项目上报信息。"""
+"""培训项目开放老师申报：学院审批 → 学校备案；申报不要求填思政内容，总学时和受众群体必填；学院补填历史项目上报信息。"""
 from sqlalchemy import select
 from app.models import User, Setting
 from app.social_models import SocialResource
@@ -7,9 +7,8 @@ from support import HASH
 from test_social_training import payload, proof, action, detail
 
 QUALITY = {'ideology_modes': ['course_ideology', 'practice'], 'ideology_hours': '4',
-           'bases': [{'name': '湘茶思政实践基地', 'onsite': False, 'partner': '湘茶集团', 'location': '长沙', 'established_on': '2026-08-01'}],
-           'teacher_review': {'checked': True, 'signer': '学院党委', 'reviewed_on': '2026-08-20'},
-           'courseware_review': {'checked': True, 'signer': '学院课件审查组', 'reviewed_on': '2026-08-20'}}
+           'bases': [{'name': '湘茶思政实践基地'}],
+           'teacher_review': {'percent': 100}, 'courseware_review': {'percent': 80}}
 
 
 def setup(app2):
@@ -26,7 +25,7 @@ def teacher_project(c, **data):
     return r.json()['item']
 
 
-def test_teacher_project_goes_college_then_school_and_bases_take_effect(app2, client2):
+def test_teacher_project_goes_college_then_school_and_application_needs_no_ideology_data(app2, client2):
     c = client2
     setup(app2)
     auth(c, 'teacher')
@@ -34,10 +33,10 @@ def test_teacher_project_goes_college_then_school_and_bases_take_effect(app2, cl
     p = teacher_project(c)
     proof(c, 'social_project', p['id'], p['version'])
     r = action(c, 'projects', 'social_project', p['id'], 'submit')
-    assert r.status_code == 409 and '立德树人' in r.text  # 第 4 步没填不能提交
+    assert r.status_code == 409 and '总学时' in r.text and '受众群体' in r.text  # 申报只拦总学时、受众
     d = detail(c, 'social_project', p['id'])
     r = put(c, '/api/social/projects/' + p['id'], {**payload(), 'expected_version': d['item']['version'],
-            'data': {**payload()['data'], 'total_hours': '16', 'audiences': ['企业职工'], 'quality': QUALITY}})
+            'data': {**payload()['data'], 'total_hours': '16', 'audiences': ['企业职工']}})
     assert r.status_code == 200, r.text
     r = action(c, 'projects', 'social_project', p['id'], 'submit')
     assert r.status_code == 200, r.text
@@ -58,9 +57,6 @@ def test_teacher_project_goes_college_then_school_and_bases_take_effect(app2, cl
     assert r.status_code == 200, r.text
     nodes = r.json()['progress']['nodes']
     assert [n['state'] for n in nodes] == ['done'] * 4
-    with app2.state.sessions.begin() as db:
-        base = db.scalar(select(SocialResource).where(SocialResource.kind == 'base', SocialResource.data['project_id'].as_string() == p['id']))
-        assert base is not None and base.name == '湘茶思政实践基地' and base.data['usages'] == ['ideology']
     auth(c, 'teacher')
     mine = c.get('/api/applications/mine').json()['items']
     assert any(x['id'] == p['id'] and x['progress']['tone'] == 'green' for x in mine)

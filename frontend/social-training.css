@@ -632,5 +632,3 @@ body[data-role="teacher"] .apply-counts span:nth-child(3){background:#e9f9ef;col
 .apply-tag-row label{position:relative;display:inline-flex;align-items:center;gap:6px;min-height:38px;padding:0 14px;border:1px solid var(--line);border-radius:10px;background:var(--panel,#fff);cursor:pointer;font-weight:500}
 .apply-tag-row label:hover{border-color:#9db4f5}
 .apply-tag-row label:has(input:checked){border-color:#2563eb;background:#eaf1ff;color:#1d4ed8;font-weight:600}
-.quality-base-more>summary{cursor:pointer;color:var(--primary,#1d5cff);padding:6px 0}
-.quality-base-more[open]>summary{margin-bottom:8px}
