@@ -18,7 +18,7 @@ from sqlalchemy import select
 from .models import Org
 from .reference_data import TrainingCourseMaster
 from .social_models import SocialProject, SocialResource
-from .social_schemas import IDEOLOGY_MODES, quality_blockers, review_percent
+from .social_schemas import IDEOLOGY_MODES, application_blockers, review_percent
 from . import social_training as st
 
 REPORT_STATES = ('FILED', 'CLOSE_COLLEGE', 'CLOSE_REVIEW', 'CLOSED')
@@ -126,12 +126,7 @@ def project_row(p, courses):
 
 
 def issues(p):
-    out = list(quality_blockers(p.data))
-    q = p.data.get('quality') or {}
-    total, ideology = num(p.data.get('total_hours')), num(q.get('ideology_hours'))
-    if total is not None and ideology is not None and ideology > total:
-        out.append('思政课学时不能超过总学时')
-    return out
+    return list(application_blockers(p.data))
 
 
 def check(db, a, start, end):

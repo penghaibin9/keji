@@ -33,10 +33,10 @@ def test_teacher_project_goes_college_then_school_and_application_needs_no_ideol
     p = teacher_project(c)
     proof(c, 'social_project', p['id'], p['version'])
     r = action(c, 'projects', 'social_project', p['id'], 'submit')
-    assert r.status_code == 409 and '总学时' in r.text and '受众群体' in r.text  # 申报只拦总学时、受众
+    assert r.status_code == 409 and all(x in r.text for x in ('总学时', '受众群体', '服务面向类型', '教学实施方式'))  # 申报只拦这四项
     d = detail(c, 'social_project', p['id'])
     r = put(c, '/api/social/projects/' + p['id'], {**payload(), 'expected_version': d['item']['version'],
-            'data': {**payload()['data'], 'total_hours': '16', 'audiences': ['企业职工']}})
+            'data': {**payload()['data'], 'total_hours': '16', 'audiences': ['企业职工'], 'service_types': ['national'], 'teaching_methods': ['classroom', 'case'], 'video_minutes': 120, 'base_count': 2}})
     assert r.status_code == 200, r.text
     r = action(c, 'projects', 'social_project', p['id'], 'submit')
     assert r.status_code == 200, r.text
@@ -72,13 +72,13 @@ def test_college_registered_project_skips_college_level_and_can_fill_report_info
     assert r.status_code == 200 and r.json()['item']['state'] == 'SUBMITTED'
     assert r.json()['report_issues']  # 学院登记的不拦，但标出缺项
     assert r.json()['progress']['nodes'][1]['state'] == 'done'
-    assert put(c, '/api/social/projects/' + p['id'] + '/report-info', {'expected_version': r.json()['item']['version'], 'quality': QUALITY, 'reason': '补填'}).status_code == 409
+    assert put(c, '/api/social/projects/' + p['id'] + '/report-info', {'expected_version': r.json()['item']['version'], 'service_types': ['regional'], 'reason': '补填'}).status_code == 409
     auth(c, 'reviewer')
     item = action(c, 'projects', 'social_project', p['id'], 'file').json()['item']
     auth(c, 'teacher')
-    assert put(c, '/api/social/projects/' + p['id'] + '/report-info', {'expected_version': item['version'], 'quality': QUALITY, 'reason': '补填'}).status_code == 403
+    assert put(c, '/api/social/projects/' + p['id'] + '/report-info', {'expected_version': item['version'], 'service_types': ['regional'], 'reason': '补填'}).status_code == 403
     auth(c, 'collegehead')
-    r = put(c, '/api/social/projects/' + p['id'] + '/report-info', {'expected_version': item['version'], 'total_hours': '16', 'audiences': ['社区居民'], 'quality': QUALITY, 'reason': '补填历史项目上报信息'})
+    r = put(c, '/api/social/projects/' + p['id'] + '/report-info', {'expected_version': item['version'], 'total_hours': '16', 'audiences': ['社区居民'], 'service_types': ['regional'], 'teaching_methods': ['case'], 'video_minutes': 120, 'base_count': 2, 'reason': '补填历史项目上报信息'})
     assert r.status_code == 200, r.text
     assert r.json()['report_issues'] == [] and r.json()['item']['state'] == 'FILED'
     assert any(e['action'] == '补填上报信息' for e in r.json()['events'])

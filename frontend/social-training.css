@@ -632,3 +632,14 @@ body[data-role="teacher"] .apply-counts span:nth-child(3){background:#e9f9ef;col
 .apply-tag-row label{position:relative;display:inline-flex;align-items:center;gap:6px;min-height:38px;padding:0 14px;border:1px solid var(--line);border-radius:10px;background:var(--panel,#fff);cursor:pointer;font-weight:500}
 .apply-tag-row label:hover{border-color:#9db4f5}
 .apply-tag-row label:has(input:checked){border-color:#2563eb;background:#eaf1ff;color:#1d4ed8;font-weight:600}
+.content[data-page="projects"] .social-panel .projects-table th{white-space:normal;line-height:1.4;padding-left:10px;padding-right:10px}
+.content[data-page="projects"] .social-panel .projects-table td{padding-left:10px;padding-right:10px}
+.content[data-page="projects"] .social-panel .projects-table th:nth-child(1){width:60px;text-align:center;white-space:nowrap}.content[data-page="projects"] .social-panel .projects-table td:nth-child(1){text-align:center}
+.content[data-page="projects"] .social-panel .projects-table th:nth-child(2){width:19%}
+.content[data-page="projects"] .social-panel .projects-table th:nth-child(3){width:11%}
+.content[data-page="projects"] .social-panel .projects-table th:nth-child(4){width:7%}
+.content[data-page="projects"] .social-panel .projects-table th:nth-child(5){width:10%}
+.content[data-page="projects"] .social-panel .projects-table th:nth-child(6){width:9%}
+.content[data-page="projects"] .social-panel .projects-table th:nth-child(7){width:21%}
+.content[data-page="projects"] .social-panel .projects-table th:nth-child(8){width:9%}
+.content[data-page="projects"] .social-panel .projects-table th:nth-child(4),.content[data-page="projects"] .social-panel .projects-table td:nth-child(4),.content[data-page="projects"] .social-panel .projects-table th:nth-child(5),.content[data-page="projects"] .social-panel .projects-table td:nth-child(5),.content[data-page="projects"] .social-panel .projects-table th:nth-child(6),.content[data-page="projects"] .social-panel .projects-table td:nth-child(6){text-align:center}

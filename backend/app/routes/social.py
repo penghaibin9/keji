@@ -119,8 +119,11 @@ def workspace(request:Request,section:str=Query('projects',pattern='^(projects|c
                     'application_id':r.id if d.get('application') else None,'source':d.get('source')}
         resource_orgs=dict(db.execute(select(Org.id,Org.name).where(Org.id.in_({r.org_id for r in resources}|{r.org_id for r in annuals}))).all()) if resources or annuals else {}
         display=lambda rows:[{**serial(row),'state_label':st.state_label(row)} for row in rows]
-        from ..social_schemas import quality_blockers
-        project_items=[{**st.project_read_item(a,p),'state_label':st.state_label(p),'report_issues':quality_blockers(p.data)} for p in projects]
+        from ..social_schemas import application_blockers
+        from ..social_report import course_facts
+        minutes={}
+        for f in course_facts(db,[p.data['code'] for p in projects]).values():minutes[f['project_code']]=minutes.get(f['project_code'],0)+float(f['minutes'])
+        project_items=[{**st.project_read_item(a,p),'state_label':st.state_label(p),'report_issues':application_blockers(p.data),'video_minutes':round(minutes.get(p.data['code'],0))} for p in projects]
         claim_items=[st.claim_read_item(db,a,c) for c in claims]
         return {'projects':project_items,'claims':claim_items,'annuals':[{**st.annual_read_item(a,row),'org_name':resource_orgs.get(row.org_id,'—')} for row in annuals],'resources':[{**row,'org_name':resource_orgs[row['org_id']]} for row in display(resources)],
                 'policies':display(policies),'courses':serial(courses),'course_stats':serial(course_stats),'course_info':serial(course_info),'states':st.STATES,'decisions':st.DECISIONS,
@@ -394,7 +397,7 @@ def project_report_info(ident:str,data:ReportInfoIn,request:Request):
         a.require('records.write');check_version(obj,data.expected_version)
         if obj.state not in {'FILED','CLOSE_COLLEGE','CLOSE_REVIEW','CLOSED'}:raise HTTPException(409,'还没备案的项目请在申报里填写')
         before=serial(obj)
-        values={k:v for k,v in serial(data.model_dump()).items() if k in {'total_hours','audiences','audience_other','quality'}}
+        values={k:v for k,v in serial(data.model_dump()).items() if k in {'total_hours','audiences','audience_other','service_types','teaching_methods','base_count','video_minutes'}}
         obj.data={**obj.data,**values,'report_info_by':a.id,'report_info_on':st.today().isoformat()}
         result=event(db,a,'social_project',obj,'补填上报信息',before,data.reason,data.basis)
         return result

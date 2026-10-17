@@ -129,7 +129,7 @@ body{font-family:"Microsoft YaHei","PingFang SC",sans-serif}
  .social-empty{padding:30px 20px}.social-empty-art{width:38px;height:38px;margin-bottom:10px}.social-empty h3{font-size:16px;font-weight:500;color:#647891}.social-empty p:empty{display:none}.social-empty-action:empty{display:none}
  .social-panel .table{table-layout:fixed;width:100%;min-width:0}.social-panel .table th:last-child{width:116px}.social-panel .table td{white-space:normal;overflow-wrap:anywhere;line-height:1.6}.social-panel .table td:last-child{white-space:nowrap}
  .social-identity>div{min-width:0}.social-identity small{overflow-wrap:anywhere;white-space:normal}
- .content[data-page="projects"] .social-panel .table th:first-child{width:38%}.content[data-page="projects"] .social-panel .table th:nth-child(2){width:14%}
+ 
  .content[data-page="courses"] .social-panel .table th:first-child{width:32%}
  .content[data-page="outcomes"] .social-panel .table th:first-child{width:28%}.content[data-page="outcomes"] .social-panel .table th:nth-child(2){width:18%}
  .content[data-page="cockpit"] .equal2,.content[data-page="organization"] .equal2{align-items:start}

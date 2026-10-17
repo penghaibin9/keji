@@ -666,7 +666,7 @@ def book_claim(db,actor,claim):
 def project_read_item(actor, project):
     item=serial(project)
     if actor.role.kind=='dept' or (actor.role.kind=='teacher' and project.owner_id!=actor.id):
-        item['data']={k:v for k,v in project.data.items() if k in {'code','name','cohort','org_id','category','start_date','end_date','mode','class_type','level','scene'}};item['closeout']={}
+        item['data']={k:v for k,v in project.data.items() if k in {'code','name','cohort','org_id','category','start_date','end_date','mode','class_type','level','scene','service_types','teaching_methods','total_hours','base_count','video_minutes'}};item['closeout']={}
     elif project.state=='CLOSED' and D(str(project.closeout.get('actual_income',0)))>0:
         close=project.closeout;pending=[]
         if not close.get('funding_source'):pending.append('历史结项资金来源待补核验')
@@ -730,12 +730,12 @@ def detail(db,actor,kind,obj):
         # 进度（学院 → 学校）、学院这一级能否由我办、上报信息缺项，给详情弹窗用。
         from . import approvals as ap
         from .applications import flow_of
-        from .social_schemas import quality_blockers
+        from .social_schemas import application_blockers
         owner=db.get(User,obj.owner_id);flow=flow_of(obj)
         level=ap.level_of(flow,obj.state)
         result['progress']=ap.progress(db,flow,obj,owner,returned_level=obj.data.get('returned_level'))
         result['college_handle']=level=='college' and ap.can_handle(db,actor,owner,'college',obj.org_id)
-        result['report_issues']=quality_blockers(obj.data)
+        result['report_issues']=application_blockers(obj.data)
     if isinstance(obj,(SocialProject,SocialResource)):
         org=db.get(Org,obj.org_id);result['org_name']=org.name if org else ''  # 教师、教研室的组织列表不含所属学院，名称由服务端给出
     if isinstance(obj,SocialResource) and obj.kind in ('correction','point_review'):
@@ -768,7 +768,7 @@ def detail(db,actor,kind,obj):
 def personal_claim_trial(trial, teacher_id):
     result=serial(trial);facts=result.get('basis',{}).get('facts')
     if not facts:return result
-    project=facts['project'];project['data']={k:v for k,v in project['data'].items() if k in {'code','name','cohort','org_id','category','start_date','end_date','mode','class_type','level','scene'}}
+    project=facts['project'];project['data']={k:v for k,v in project['data'].items() if k in {'code','name','cohort','org_id','category','start_date','end_date','mode','class_type','level','scene','service_types','teaching_methods','total_hours','base_count','video_minutes'}}
     project['closeout']={k:v for k,v in project.get('closeout',{}).items() if k=='closed_on'}
     rows=[]
     for unit in facts.get('units',[]):

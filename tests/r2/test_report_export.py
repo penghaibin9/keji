@@ -14,7 +14,7 @@ RANGE = {'start': '2023-07-01', 'end': '2026-12-31'}
 def fill(app2, pid, **data):
     with app2.state.sessions.begin() as db:
         p = db.get(SocialProject, pid)
-        p.data = {**p.data, 'total_hours': '16', 'audiences': ['企业职工'], 'audience_other': '退役军人', 'quality': QUALITY, **data}
+        p.data = {**p.data, 'total_hours': '16', 'audiences': ['企业职工'], 'audience_other': '退役军人', 'service_types': ['national'], 'teaching_methods': ['classroom'], 'quality': QUALITY, **data}
         return p.data['code'], p.org_id
 
 

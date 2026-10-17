@@ -16,6 +16,11 @@ IDEOLOGY_MODES = {'ideology_course':'开设思政专题课','course_ideology':'�
 REVIEW_KEYS = ('teacher_review','courseware_review')
 
 
+# 上级项目表（服务面向类型、教学实施方式）的选项。
+SERVICE_TYPES = {'national':'国家战略','regional':'区域发展','industry':'行业发展','other':'其他'}
+TEACHING_METHODS = {'classroom':'课堂教学','case':'案例教学','onsite':'现场教学','field':'实地考察','seminar':'交流研讨','lab':'实验实训','internship':'岗位实习','peer':'学习者互助','other':'其他'}
+
+
 class ProjectBase(Input):
     # 本项目设立的思政实践教学基地，随项目备案一并生效，不另走基地申请。
     name: Name
@@ -81,6 +86,8 @@ def application_blockers(data):
     out = []
     if not (data or {}).get('total_hours'): out.append('请填写总学时')
     if not (data or {}).get('audiences') and not str((data or {}).get('audience_other') or '').strip(): out.append('请选择受众群体')
+    if not (data or {}).get('service_types'): out.append('请选择服务面向类型')
+    if not (data or {}).get('teaching_methods'): out.append('请选择教学实施方式')
     return out
 
 
@@ -125,6 +132,10 @@ class ProjectData(Input):
     total_hours: Nonnegative | None = None
     audiences: list[str] = Field(default_factory=list, max_length=12)
     audience_other: str = Field(default='', max_length=200)
+    service_types: list[Literal['national','regional','industry','other']] = Field(default_factory=list, max_length=4)
+    teaching_methods: list[Literal['classroom','case','onsite','field','seminar','lab','internship','peer','other']] = Field(default_factory=list, max_length=9)
+    video_minutes: Nonnegative | None = None
+    base_count: int | None = Field(default=None, ge=0, le=1000)
     quality: ProjectQuality | None = None
     venue: ProjectVenue | None = None
     @model_validator(mode='after')
@@ -604,7 +615,11 @@ class ReportInfoIn(Reason):
     total_hours: Nonnegative | None = None
     audiences: list[str] = Field(default_factory=list, max_length=12)
     audience_other: str = Field(default='', max_length=200)
-    quality: ProjectQuality
+    service_types: list[Literal['national','regional','industry','other']] = Field(default_factory=list, max_length=4)
+    teaching_methods: list[Literal['classroom','case','onsite','field','seminar','lab','internship','peer','other']] = Field(default_factory=list, max_length=9)
+    video_minutes: Nonnegative | None = None
+    video_minutes: Nonnegative | None = None
+    base_count: int | None = Field(default=None, ge=0, le=1000)
 
 
 class DeadlineIn(Reason):
