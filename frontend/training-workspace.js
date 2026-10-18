@@ -43,7 +43,7 @@ export function filterTrainingRows(rows,s,section){return rows.filter(r=>{
 })}
 const meta=(icon,value,c)=>`<p class="tw-meta">${c.icon(icon)}<span>${c.esc(text(value))}</span></p>`;
 const facts=(rows,c)=>`<dl class="tw-facts">${rows.map(([k,v])=>`<div><dt>${c.esc(k)}</dt><dd>${c.esc(text(v))}</dd></div>`).join('')}</dl>`;
-const badge=(r,c)=>r.status?`<span class="tw-status ${['ACTIVE','CLOSED','ARCHIVED'].includes(r.state)?'is-ok':['RETURNED','DRAFT','CLOSE_REVIEW'].includes(r.state)||r.status==='结项退回补正'?'is-wait':''}">${c.esc(r.status)}</span>`:'';
+const badge=(r,c)=>r.status?`<span class="tw-status ${['ACTIVE','CLOSED','ARCHIVED'].includes(r.state)?'is-ok':['RETURNED','CLOSE_REVIEW'].includes(r.state)||r.state==='DRAFT'&&r.status==='草稿'||r.status==='结项退回补正'?'is-wait':''}">${c.esc(r.status)}</span>`:'';
 // 展示图片维护：记录负责人、申请人，或所属学院、学校有登记权限的账号；后端再次校验。
 function canMaintainImage(row,c){
  if(!row.imageTarget)return false;
@@ -120,6 +120,6 @@ export function renderTrainingWorkspace(section,w,c,options={}){
  if(!filtered.length)list=`<div class="tw-empty">${c.icon(section==='trainers'?'users':'file')}<h3>${s.q?'没有找到匹配的记录':rows.length?'没有符合条件的记录':'暂无'+labels[section].replace('管理','')+'记录'}</h3><p>${rows.length?'调整筛选条件后再试':'新增或审核通过后，资料将显示在这里。'}</p>${s.q?c.act('查看全部','social-list-reset'):rows.length?c.act('清除筛选','training-reset'):''}</div>`;
  const total=options.total??w.pagination?.total??w.total??rows.length,narrowed=Boolean(s.tab||s.org||s.package||s.oneSkill);
  // 学院、状态等筛选作用于当前已读取的记录；总数超过一页时如实提示，并保留翻页。
- const footer=options.pager||`<div class="tw-list-footer"><span>${narrowed?'筛选结果 '+filtered.length+' 条 · ':''}共 ${total} 条${narrowed&&total>rows.length?' · 学院和状态筛选仅作用于当前页 '+rows.length+' 条':''}</span>${options.socialPager||''}</div>`;
+ const footer=options.pager||(!narrowed&&options.socialPager)||`<div class="tw-list-footer"><span>${narrowed?'筛选结果 '+filtered.length+' 条 · ':''}共 ${total} 条${narrowed&&total>rows.length?' · 学院和状态筛选仅作用于当前页 '+rows.length+' 条':''}</span>${options.socialPager||''}</div>`;
  return `<section class="training-workspace tw-section-${section}"><div class="tw-heading"><div><h1>${labels[section]}</h1><p>${descriptions[section]}</p></div><div class="tw-heading-actions">${options.actions||''}</div></div>${options.before||''}<div class="tw-layout"><div class="tw-main">${filter}${tabbar}${section==='records'?`<p class="tw-data-summary">本页 ${rows.length} 条记录 · ${rows.reduce((n,r)=>n+Number(r.raw.hours||0),0)} 学时 · ${rows.reduce((n,r)=>n+Number(r.raw.participants||0),0)} 课程人次</p>`:''}${list}${footer}${options.after||''}</div>${preview(selected,section,c)}</div></section>`;
 }
