@@ -10,6 +10,9 @@ let projectChoice;
 const pendingUploads=new Map(),outcomeNotes=new Map();
 const path=(kind,id)=>'/social/objects/'+kind+'/'+id;
 const REVIEW_STATES={DRAFT:'待发送教师',TEACHER:'待教师回应',COLLEGE:'待学院裁定',CLOSED:'已办结'};
+const BASE_USAGE_OPTIONS=[['practice','实践教学基地'],['ideology','思政实践教学基地']],BASE_LEVEL_OPTIONS=[['school','校级'],['city','市级'],['province','省级及以上']];
+// 基地修改表单带全用途、级别、设立日期和共建单位；其他类型不提交这几项，后端只合并提交的字段。
+export function resourceFormValue(kind,raw){const v={...raw};for(const [k] of BASE_USAGE_OPTIONS)delete v['usage_'+k];if(kind==='base'){v.usages=BASE_USAGE_OPTIONS.map(([k])=>k).filter(k=>raw['usage_'+k]);v.established_on=raw.established_on||null;v.partner=raw.partner||''}return v}
 const selectable=(values,blank=false)=>[...(blank?[['','待学校确认']]:[]),...values.map(v=>[v,names[v]||v])];
 const blankNull=v=>Object.fromEntries(Object.entries(v).map(([k,x])=>[k,x===''?null:x]));
 const tone=state=>['ARCHIVED','CLOSED','ACTIVE'].includes(state)?'green':['RETURNED','DRAFT'].includes(state)?'amber':'blue';
@@ -342,7 +345,7 @@ async function showDetail(kind,id,courseList=null){
   body+=(manager?'</div>':'')+'<section class="social-detail-section" id="social-materials"><h3>佐证材料</h3>'+c.downloads(d.attachments)+'</section><details id="social-history" class="detail-fold mt20"><summary>办理记录</summary>'+c.eventsHtml(d.events)+'</details></div>';
   if(manager){if(moreActions.length)buttons.unshift('<details class="detail-more-actions"><summary>更多操作</summary><div>'+moreActions.join('')+'</div></details>');buttons.push(act('关闭详情','close'))}opened.printBody=body;return c.modal(data.name||x.name||'社会培训办理',body,buttons.join(''),true,manager?detailArea(kind,x)+' / 业务详情':'');
  }
- if(kind==='social_resource'&&['base','achievement','course_resource'].includes(x.kind)&&!x.data.auto&&c.can('records.write')&&['school','college'].includes(c.me?.role?.kind))buttons.push(act('修改资料','social-resource-edit','','primary'));
+ if(kind==='social_resource'&&['base','achievement','course_resource'].includes(x.kind)&&!x.data.auto&&!x.data.application&&c.can('records.write')&&['school','college'].includes(c.me?.role?.kind))buttons.push(act('修改资料','social-resource-edit','','primary'));
  const ownTeacher=kind==='social_project'&&c.me?.role?.kind==='teacher'&&x.owner_id===c.me?.user?.id;
  const me=c.me?.user?.id,uploadable=kind==='social_claim'?x.teacher_id===me&&['DRAFT','RETURNED'].includes(x.state):kind==='social_resource'&&x.kind==='correction'?x.data?.created_by===me&&['DRAFT','RETURNED'].includes(x.state):kind==='social_resource'&&x.kind==='point_review'?(x.data?.created_by===me&&x.state==='DRAFT')||(x.data?.teacher_id===me&&x.state==='TEACHER'):(kind==='social_policy'?c.can('rules.manage'):c.can('records.write')||ownTeacher);
  if(!d.public_summary&&!['ARCHIVED','ACTIVE','CLOSED','VOID'].includes(x.state)&&c.can('file.write')&&uploadable)buttons.push(act('上传佐证','social-upload','',(d.attachments||[]).length?'':'light','file'));
@@ -668,10 +671,10 @@ export async function socialAction(action,id,c){
   const edit=action==='social-resource-edit',x=edit?opened.item:null,old=x?{...x.data,name:x.name,code:x.code}:{},courseList=edit?opened.courseList:null;id=x?.kind||id;
   const f=(key,label,type='text',options={})=>c.field(key,label,type,old[key]??'',options);
   let body=(x?c.field('org_id','承办学院','select',x.org_id,{options:[[x.org_id,c.orgName(x.org_id)]]}):collegeField())+f('code','来源唯一编号','text',{readonly:edit})+f('name','名称')+f('location','地点或资源说明','textarea',{required:false})+f('recognition','认定或登记依据','textarea');
-  if(id==='base')body+=c.field('onsite','基地类型','checkbox',old.onsite??true,{checkLabel:'校内基地（不勾选表示校外）'});
+  if(id==='base'){const used=new Set(old.usages||[]);body+=c.field('onsite','基地类型','checkbox',old.onsite??true,{checkLabel:'校内基地（不勾选表示校外）'})+'<fieldset class="form-field full apply-tags"><legend>基地用途（可多选）</legend><div class="apply-tag-row">'+BASE_USAGE_OPTIONS.map(([k,l])=>'<label><input type="checkbox" name="usage_'+k+'"'+(used.has(k)?' checked':'')+'>'+c.esc(l)+'</label>').join('')+'</div></fieldset>'+c.field('level','基地级别','select',old.level||'school',{options:BASE_LEVEL_OPTIONS})+f('established_on','设立日期','date',{required:false})+f('partner','共建单位','text',{required:false,hint:'校外基地必填。'});}
   if(id==='achievement')body+=c.field('level','成果等级','select',old.level||'school',{options:selectable(['national','province','school'])})+f('confirmed_on','成果正式认定日期','date',{required:false,hint:'日期待补时，不计年度分数'});
   if(id==='course_resource')body+=c.field('course_code','关联课程','select',old.course_code||'',{options:[['','请选择关联课程'],...(old.course_code?[[old.course_code,'原关联课程 · '+old.course_code]]:[])]})+c.field('resource_type','资源类型','select',old.resource_type||'video',{options:[['video','视频'],['document','文档'],['link','其他链接']]})+f('resource_url','资源地址','url',{required:false})+f('duration_minutes','视频总时长（分钟）','number',{required:false,min:0,step:0.01})+c.field('teacher_id','归属教师及工号','select',old.teacher_id||'',{required:false,options:[['','尚未确认人员'],...(old.teacher_id?[[old.teacher_id,'原关联教师（保留）']]:[])]})+'<p id="course-resource-status" class="hint full" role="status"></p>';
-  commonForm((edit?'修改':'登记')+{base:'培训基地',achievement:'培训成果',course_resource:'课程资源'}[id],body,v=>c.api('/social/resources'+(x?'/'+x.id:''),{method:x?'PUT':'POST',body:{...v,kind:id,...(x?{expected_version:x.version}:{}),resource_url:v.resource_url||null,confirmed_on:v.confirmed_on||null,teacher_id:v.teacher_id||null}}),{compact:!edit,reopen:edit,submit:edit?'保存修改':'保存登记',after:r=>r?.item?.id?showDetail('social_resource',r.item.id,courseList):null});
+  commonForm((edit?'修改':'登记')+{base:'培训基地',achievement:'培训成果',course_resource:'课程资源'}[id],body,raw=>{const v=resourceFormValue(id,raw);return c.api('/social/resources'+(x?'/'+x.id:''),{method:x?'PUT':'POST',body:{...v,kind:id,...(x?{expected_version:x.version}:{}),resource_url:v.resource_url||null,confirmed_on:v.confirmed_on||null,teacher_id:v.teacher_id||null}})},{compact:!edit,reopen:edit,submit:edit?'保存修改':'保存登记',after:r=>r?.item?.id?showDetail('social_resource',r.item.id,courseList):null});
   if(id==='course_resource')return bindCourseResourceFields(c,old);return;
  }
  if(['social-claim-new','social-claim-edit'].includes(action)){

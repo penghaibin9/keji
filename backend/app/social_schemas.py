@@ -356,7 +356,8 @@ class ResourceIn(Reason):
     location: str = Field(default='', max_length=500)
     onsite: bool = True
     recognition: Text
-    level: Literal['national', 'province', 'school'] = 'school'
+    # 成果：国家级、省级、校级；基地：校级、市级、省级及以上（与基地申请一致）。
+    level: Literal['national', 'province', 'city', 'school'] = 'school'
     course_code: str = Field(default='', max_length=64)
     resource_type: Literal['video','document','link'] = 'document'
     resource_url: HttpUrl | None = None
@@ -370,6 +371,9 @@ class ResourceIn(Reason):
     partner: str = Field(default='', max_length=200)
     @model_validator(mode='after')
     def course_resource(self):
+        if self.kind=='achievement' and self.level=='city':raise ValueError('成果等级只能选国家级、省级或校级')
+        if self.kind=='base' and self.level=='national':raise ValueError('基地级别只能选校级、市级或省级及以上')
+        if len(set(self.usages))!=len(self.usages):raise ValueError('基地用途不能重复')
         if self.kind=='course_resource' and not self.course_code:raise ValueError('课程资源须关联课程')
         if self.kind=='course_resource' and self.resource_type=='video' and self.duration_minutes is None:raise ValueError('视频须登记资源总时长（分钟）')
         return self

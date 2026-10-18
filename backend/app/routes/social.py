@@ -997,10 +997,14 @@ def resource_values(db,a,data):
     return serial(values)
 
 
+def check_base_values(kind,values):
+    if kind=='base' and values.get('onsite') is False and not str(values.get('partner') or '').strip():raise HTTPException(422,'校外基地请填写共建单位')
+
+
 @router.post('/resources')
 def resource_create(data:ResourceIn,request:Request):
     def apply(db,a,s):
-        values=resource_values(db,a,data)
+        values=resource_values(db,a,data);check_base_values(data.kind,values)
         obj=SocialResource(kind=data.kind,org_id=data.org_id,code=data.code,name=data.name,data=values)
         db.add(obj);db.flush();return event(db,a,'social_resource',obj,'登记培训资源',{},data.reason)
     return command(request,data.model_dump(mode='json'),'records.write',apply)
@@ -1013,7 +1017,12 @@ def resource_update(ident:str,data:ResourceUpdate,request:Request):
         if obj.kind not in {'base','achievement','course_resource'} or obj.data.get('auto') or obj.state=='ARCHIVED':raise HTTPException(409,'此项由原业务生成，请从原业务办理更正')
         if (obj.kind,obj.org_id,obj.code)!=(data.kind,data.org_id,data.code):raise HTTPException(422,'资源类型、所属学院和来源编号不能变更')
         before=serial(obj);values=resource_values(db,a,data)
-        obj.name=data.name;obj.data={**obj.data,**values}
+        # 只合并本次提交的字段：表单没带的用途、设立日期、共建单位、级别等保持原值，不被默认值覆盖。
+        sent=data.model_fields_set
+        if 'teacher' in sent:sent=sent|{'teacher_id'}
+        values={k:v for k,v in values.items() if k in sent}
+        merged={**obj.data,**values};check_base_values(obj.kind,merged)
+        obj.name=data.name;obj.data=merged
         return event(db,a,'social_resource',obj,'补正培训资源资料',before,data.reason,data.basis)
     return command(request,data.model_dump(mode='json'),'records.write',apply)
 

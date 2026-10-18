@@ -224,3 +224,21 @@ def test_report_refresh_rejects_noncreator_revoked_duty_closed_states_and_invali
     assert post(client2,path,body).status_code==403
     with app2.state.sessions() as db:
         obj=db.get(SocialResource,ident);assert obj.data==original['data'] and obj.version==original['version'] and obj.state=='DRAFT'
+
+
+def test_base_edit_keeps_fields_not_submitted_and_requires_external_partner(setup_social,client2,app2):
+    body={'kind':'base','org_id':'college1','code':'EDIT-B1','name':'隔离校内基地','recognition':'隔离认定依据','reason':'隔离登记',
+          'onsite':True,'usages':['practice','ideology'],'established_on':'2026-03-01','partner':'隔离共建单位','level':'city'}
+    auth(client2,'collegehead');r=post(client2,'/api/social/resources',body);assert r.status_code==200,r.text
+    x=r.json()['item']
+    # 旧表单只提交名称、编号、地点、依据和校内外：其余资料必须保持原值。
+    edit={k:body[k] for k in ('kind','org_id','code','recognition','onsite')}|{'name':'隔离校内基地（改名）','reason':'改名','expected_version':x['version']}
+    r=put(client2,'/api/social/resources/'+x['id'],edit);assert r.status_code==200,r.text
+    d=r.json()['item']['data']
+    assert d['usages']==['practice','ideology'] and d['established_on']=='2026-03-01' and d['partner']=='隔离共建单位' and d['level']=='city'
+    # 改为校外时共建单位不能清空；带共建单位则可以保存。
+    v=r.json()['item']['version']
+    assert put(client2,'/api/social/resources/'+x['id'],{**edit,'onsite':False,'partner':'','expected_version':v}).status_code==422
+    r=put(client2,'/api/social/resources/'+x['id'],{**edit,'onsite':False,'expected_version':v});assert r.status_code==200,r.text
+    assert r.json()['item']['data']['onsite'] is False and r.json()['item']['data']['partner']=='隔离共建单位'
+    assert post(client2,'/api/social/resources',{**body,'code':'EDIT-B2','level':'national'}).status_code==422
