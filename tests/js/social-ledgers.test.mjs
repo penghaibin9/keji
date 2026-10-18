@@ -153,7 +153,7 @@ test('个人培训按统一待办计数，保留本人项目、当前审批节�
  assert.match(html,/素质教育学院/);assert.match(html,/待我处理 <span class="workbench-count">2/);assert.match(html,/3 项等待核对或学校确认/);assert.match(html,/data-action="social-claim-new"/);
  assert.match(html,/公益&lt;课&gt;/);assert.doesNotMatch(html,/公益<课>/);assert.match(html,/预计截止 2026-09-23（待学校确认）/);assert.doesNotMatch(html,/已过申报期限/);
  assert.match(html,/<td>院长初审<\/td>/);assert.match(html,/1 项待确认/);assert.doesNotMatch(html,/mine-steps|home-indicators|24 天后到期|我的培训人次/);
- assert.match(html,/第 4 行 · 项目 TZ2026-c1-004/);assert.match(html,/项目核定人次 0/);assert.match(html,/待个人核定/);assert.match(html,/满意度自动生成/);assert.match(html,/我的资质 · 1 项/);assert.ok(c.requests.includes('/todos?attention=handle&page=1&size=1'));
+ assert.match(html,/第 4 行 · 项目 TZ2026-c1-004/);assert.match(html,/项目核定人次 0/);assert.match(html,/待个人核定/);assert.match(html,/满意度自动生成/);assert.match(html,/教师资质管理 · 1 项/);assert.ok(c.requests.includes('/todos?attention=handle&page=1&size=1'));
  const api=c.api;c.api=p=>p.startsWith('/todos?')?Promise.reject(Error('待办断网')):api(p);const unknown=await minePage(c);assert.match(unknown,/workbench-count">—/);assert.match(unknown,/待办暂未读取成功/);assert.doesNotMatch(unknown,/待我处理 <span class="workbench-count">0/);
  const failed=await minePage({...context({}),api:async()=>{throw Error('断网')}},{});assert.match(failed,/个人数据看板读取失败：断网/);
 });

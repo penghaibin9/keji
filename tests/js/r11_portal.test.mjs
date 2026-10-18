@@ -763,7 +763,7 @@ test('教师首页迟到不能清掉已渲染积分台账，本人确认仍打�
  releaseHome({income:0,participants:0});await home;
  assert.equal(e.node('#content').innerHTML,pointsHtml,'迟到首页不能覆盖当前积分页面');
  e.t.captureForm();assert.doesNotThrow(()=>e.t.handlers['balance-action']('balance-j002'));
- const form=e.t.getForm();assert.equal(form.title,'确认本人积分');assert.equal(form.options.contextLabel,'我的积分 / 本人确认');
+ const form=e.t.getForm();assert.equal(form.title,'确认本人积分');assert.equal(form.options.contextLabel,'教师积分激励 / 本人确认');
  assert.match(form.body,/2025合成核对周期 · 测试教师二/);assert.equal(e.t.getView().balances[0].version,7);
  assert.ok(!e.requests.some(r=>r.options.method==='POST'),'打开表单不提前确认或改写台账');
 });
@@ -842,7 +842,7 @@ test('教师菜单保留全部入口，积分和考核归入我的业务，共�
  assert.deepEqual(ids,['home','todos','notices','apply_course','apply_project','apply_base','apply_trainer','credits','mine','qualifications','points','assessment']);
  assert.match(html,/>我要申报</);assert.match(html,/>申报培训课程</);assert.match(html,/>申报培训师</);assert.match(html,/>我的工作</);assert.match(html,/>我的业务</);assert.doesNotMatch(html,/>我的结果</);assert.match(html,/>我的课程</);
  assert.equal((html.match(/class="nav-section"/g)||[]).length,3);const business=html.slice(html.indexOf('>我的业务<'));assert.match(business,/data-id="points"/);assert.match(business,/data-id="assessment"/);
- assert.match(html,/>我的资质</);assert.match(html,/>我的积分</);assert.match(html,/>我的考核</);assert.doesNotMatch(html,/三级考核管理|教师积分激励|培训项目管理/);
+ assert.match(html,/>教师资质管理</);assert.match(html,/>教师积分激励</);assert.match(html,/>三级考核管理</);assert.doesNotMatch(html,/>我的资质<|>我的积分<|>我的考核<|培训项目管理/);
  for(const p of ['projects','courses','disputes','exports','records'])assert.ok(e.t.pageAllowed(p),p+' still reachable from links');
 });
 test('navigation does not expose unauthorized items or empty groups',()=>{
@@ -1266,7 +1266,7 @@ test('资质图片返回时已切换页面，不弹出旧页面的图片',async(
 test('教师学分汇总保留每学年认定与待认定口径，空记录不出现无效分页',async()=>{
  const item={staff_no:'T1',school_year:'2025-2026',jw_credit:'2',cx_credit:'0',total_credit:'2',hours:'32',pending_credit:'1',pending_courses:1,courses:2,missing_credit:[],in_staff_table:true,user_id:'u'};
  for(const items of [[],[item]]){
-  const e=engine(async()=>({items,years:['2025-2026'],total:items.length,page:1,size:20}),'teacher');const html=await e.t.pages.credits();assert.doesNotMatch(html,/pagination/);assert.match(html,/社会培训项目积分在“我的积分”查看/);
+  const e=engine(async()=>({items,years:['2025-2026'],total:items.length,page:1,size:20}),'teacher');const html=await e.t.pages.credits();assert.doesNotMatch(html,/pagination/);assert.match(html,/社会培训项目积分在“教师积分激励”查看/);
   if(items.length){assert.match(html,/已认定学分/);assert.match(html,/待认定学分/);assert.match(html,/1 门待认定/);assert.match(html,/credit-detail/);}else assert.match(html,/暂无授课学分记录/);
  }
 });
@@ -1658,7 +1658,7 @@ test('教师考核详情分区保留零分、核对阻塞和原始依据',async(
  const detail={assessment:{id:'a1',teacher_id:'u',state:'TEACHER',score:0,detail:[{label:'指标<一>',raw:0,formula:'0 × 1',score:0}],source_snapshot:{}},teacher:{name:'合成教师'},period:{name:'合成周期'},rule:{name:'合成规则',version_no:1},events:[],confirmation_blockers:{count:1,can_view:true,can_resolve:false,items:[{id:'d1',object_type:'points',reason:'核对积分',created_at:'2026-10-01'}]}};
  const e=engine(async url=>url==='/api/assessments/a1'?detail:{items:[]},'teacher');e.t.setUser({user:{id:'u'},role:{kind:'teacher'},permissions:['assessment.read','assessment.confirm']});
  e.node('#modal-root .modal-body').insertAdjacentHTML=()=>{};await e.t.handlers.assessment('a1');const html=e.node('#modal-root').innerHTML;
- assert.match(html,/我的考核 \/ 考核详情/);assert.match(html,/data-detail-section="assessment-scores"/);assert.match(html,/id="assessment-history"/);assert.match(html,/&lt;一&gt;/);assert.match(html,/0.00/);assert.match(html,/查看核对进度/);assert.doesNotMatch(html,/data-action="assess-action"/);
+ assert.match(html,/三级考核管理 \/ 考核详情/);assert.match(html,/data-detail-section="assessment-scores"/);assert.match(html,/id="assessment-history"/);assert.match(html,/&lt;一&gt;/);assert.match(html,/0.00/);assert.match(html,/查看核对进度/);assert.doesNotMatch(html,/data-action="assess-action"/);
 });
 
 
