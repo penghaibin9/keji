@@ -1,5 +1,5 @@
 # Module/fault-injection test environment only. Not application deployment dependencies.
 SQLAlchemy==2.0.50
-fastapi==0.128.2
+fastapi==0.144.0
 httpx==0.28.1
 pytest==9.0.2

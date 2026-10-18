@@ -1,16 +1,18 @@
+# 2026-10-18 升级：修复 10-12 扫描的 13 项已知漏洞（starlette、cryptography、python-multipart、pydantic-settings），后端 r2 关键测试与可在 Windows 运行的 p0 测试通过；依赖 Linux 的 p0 测试需在 Linux 上复测。
 # R2 tested application dependency versions; NOT a production release approval.
 # PyMySQL driver is declared for MySQL 8.4 integration; no MySQL server was run.
-fastapi==0.128.2
+fastapi==0.144.0
+starlette==1.8.0
 SQLAlchemy==2.0.50
-pydantic==2.13.4
-pydantic-settings==2.14.1
+pydantic==2.14.1
+pydantic-settings==2.16.0
 argon2-cffi==25.1.0
 uvicorn==0.48.0
-python-multipart==0.0.29
+python-multipart==0.0.32
 Pillow==12.3.0
 pypdf==6.20.0
 PyMySQL[rsa]==1.2.0
-cryptography==46.0.7
+cryptography==50.0.2
 alembic==1.18.4
 openpyxl==3.1.5
 xlrd==2.0.1
