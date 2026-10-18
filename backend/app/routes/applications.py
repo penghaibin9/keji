@@ -385,6 +385,10 @@ def action(ident: str, data: ApplicationAction, request: Request):
             raise HTTPException(422, '请填写' + ('资格认定文号和日期' if level == 'hr' else '备案依据'))
         handling = ap.check_handler(db, a, applicant, level, obj.org_id)
         handling.update(flow=flow, decision=data.action)
+        if data.courseware is not None:
+            if data.action != 'approve' or flow not in ('course', 'teaching_course') or level not in ('college', 'school'):
+                raise HTTPException(422, '仅学院或学校审批课程时可补录课件审查记录')
+            obj.data = {**obj.data, 'courseware': data.courseware.model_dump(mode='json')}
         if data.action == 'return':
             obj.state = 'RETURNED'
             obj.data = {**obj.data, 'returned_level': level}

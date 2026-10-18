@@ -83,7 +83,7 @@ def me(request:Request):
         sso=sso_session(s)
         return {'user':{**serial(a.user),**({'must_change_password':False} if sso else {})},'role':serial(a.role),'org':serial(a.org),'permissions':sorted(a.permissions),
                 'csrf':s.csrf,'school_name':(branding.value if branding else {}).get('school_name',''),
-                'environment':request.app.state.settings.env,'demo_switch':demo_options(a),
+                'environment':request.app.state.settings.env,'demo_switch':demo_options(a,request.app.state.settings),
                 'sso_session':sso,'identities':identity_choices(db,a,request),
                 'primary_role':serial(a.primary_role),'primary_org':serial(a.primary_org),
                 'credit_reviewer':can_review_credits(db,a)}

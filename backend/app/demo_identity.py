@@ -1,11 +1,12 @@
 """Explicit demo-only delegation, bound to an authenticated admin session.
 
 The primary session remains owned by admin. The signed HttpOnly selection only
-narrows the effective actor to one of three existing demonstration accounts.
+narrows the effective actor to one of the fixed existing demonstration accounts.
 No passwords or administrative permissions are transferred to those accounts.
 """
 import hashlib
 import hmac
+from urllib.parse import urlsplit
 from fastapi import HTTPException
 from sqlalchemy import select
 from .models import User, Role, Org
@@ -16,24 +17,42 @@ IDENTITIES = {
     'show_dept': ('dept', '教研室负责人'),
     'show_college': ('college', '二级学院负责人'),
 }
+DAILY_TEST_IDENTITIES = {
+    'teacher': ('teacher', '教师本人'),
+    'depthead': ('dept', '教研室负责人'),
+    'collegehead': ('college', '二级学院负责人'),
+    'schooladmin': ('school', '学校管理员'),
+    'reviewer': ('school', '学校归口审核'),
+    'vice': ('school', '学校分管审批'),
+}
+
+
+def profile_identities(cfg):
+    if cfg.demo_identity_profile == 'daily-test':
+        if cfg.env != 'test' or urlsplit(cfg.public_origin).hostname not in {'localhost','127.0.0.1','::1'}:
+            return {}
+        return DAILY_TEST_IDENTITIES
+    return IDENTITIES
 
 
 def enabled_for(cfg, actor):
-    return (cfg.demo_identity_switch_enabled and actor.user.username == 'admin'
+    return (cfg.demo_identity_switch_enabled
+            and profile_identities(cfg).get(actor.user.username, ('',''))[0] == 'school'
             and actor.user.is_admin and actor.role.kind == 'school'
             and not actor.user.must_change_password)
 
 
 def target_actor(db, controller, username, request, *, write=False):
     from .core import Actor
-    if username not in IDENTITIES:
+    identities = profile_identities(request.app.state.settings)
+    if username not in identities:
         raise HTTPException(403, '该账号不在演示身份授权范围')
     query = select(User).where(User.username == username)
     user = db.scalar(query.with_for_update() if write else query)
     if not user or not user.active or user.must_change_password:
         raise HTTPException(403, '演示账号不可用，请联系管理员')
     role, org = db.get(Role, user.role_id), db.get(Org, user.org_id)
-    if (not role or not org or role.kind != IDENTITIES[username][0]
+    if (not role or not org or role.kind != identities[username][0]
             or org.id not in controller.org_ids):
         raise HTTPException(403, '演示账号身份或学校范围已变化')
     return Actor(db, user, role, org, request)
@@ -65,9 +84,10 @@ def resolve(db, request, controller, session, *, write=False):
     return actor
 
 
-def options(actor):
+def options(actor, cfg):
     if not getattr(actor, 'demo_controller', None):
         return None
     return {'current': actor.user.username,
+            **({'label': '快速切换角色'} if cfg.demo_identity_profile == 'daily-test' else {}),
             'options': [{'username': username, 'label': label}
-                        for username, (_, label) in IDENTITIES.items()]}
+                        for username, (_, label) in profile_identities(cfg).items()]}

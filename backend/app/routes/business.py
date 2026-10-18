@@ -269,7 +269,10 @@ def _todo_items(db,a):
                 '授课认定：'+(names.get(g['user_id']) or g['teacher_name'] or g['staff_no'])+' '+g['school_year']+' 学年 '+str(g['pending_courses'])+' 门课待认定','待认定')
     if 'dispute.write' in a.permissions:
         for x in db.scalars(select(Dispute).where(a.scope(Dispute.teacher_id),Dispute.state=='OPEN')):
-            if x.teacher_id==a.id or 'dispute.resolve' in a.permissions:add('dispute',x,('我提出的异议：' if x.teacher_id==a.id else '数据核对：')+x.reason[:40])
+            if x.teacher_id==a.id or 'dispute.resolve' in a.permissions:
+                add('dispute',x,('我提出的异议：' if x.teacher_id==a.id else '数据核对：')+x.reason[:40],
+                    action_required=x.teacher_id!=a.id,
+                    action_hint='等待授权人员核对，可按需补充佐证。' if x.teacher_id==a.id else '请核对原业务及申请依据。')
     if 'audit.read' in a.permissions and a.role.kind=='school' and a.user.is_admin:
         from ..security_alerts import security_alert
         summary=security_alert(db,a)
@@ -287,23 +290,39 @@ def _todo_items(db,a):
 
 @router.get('/todos')
 def todos(request:Request):
-    f,p,z=filters_from(request,{'q','type','stage'})
+    f,p,z=filters_from(request,{'q','type','stage','attention'})
     from ..read_queries import clean_filters
-    f=clean_filters(f,{'q','type','stage'})
+    f=clean_filters(f,{'q','type','stage','attention'})
+    if f.get('attention') and f['attention'] not in {'handle','waiting'}:raise HTTPException(422,'待办分类无效')
     if f.get('type') and f['type'] not in {'qualification','assessment','organization_assessment','dispute','sync','security','social_project','social_claim','social_annual','social_resource','social_report','credit_review','application'}:
         raise HTTPException(422,'待办类型无效')
     # 待归档清单只是只读筛选：积分认定、更正待教学秘书归档，教师考核待学校归档；办理仍走原单条接口。
     if f.get('stage') and f['stage']!='archive':raise HTTPException(422,'待办环节无效')
     def load(db,a,s):
         items=_todo_items(db,a)
+        attention_counts={'handle':sum(x.get('action_required',True) for x in items),
+                          'waiting':sum(not x.get('action_required',True) for x in items)}
+        if a.role.kind=='teacher' and f.get('attention'):
+            items=[x for x in items if x.get('action_required',True)==(f['attention']=='handle')]
         counts={}
         for x in items:counts[x['type']]=counts.get(x['type'],0)+1
         if f.get('type'):items=[x for x in items if x['type']==f['type']]
         if f.get('stage')=='archive':items=[x for x in items if (x['type'] in {'social_claim','social_resource'} and x['state']=='待教学秘书归档') or (x['type']=='assessment' and x['state']=='READY')]
         if f.get('q'):items=[x for x in items if f['q'].casefold() in x['title'].casefold()]
         total=len(items)
-        return {'items':items[(p-1)*z:p*z],'total':total,'page':p,'size':z,'counts':counts}
+        return {'items':items[(p-1)*z:p*z],'total':total,'page':p,'size':z,'counts':counts,'attention_counts':attention_counts}
     return read_operation(request,'portal.read',load)
+
+@router.get('/approval-center')
+def approval_center(request:Request):
+    from ..approval_center import load
+    from ..read_queries import clean_filters
+    allowed={'tab','q','type','state','period_id','org_id','stage'}
+    filters,page,size=filters_from(request,allowed)
+    filters=clean_filters(filters,allowed)
+    return read_operation(request,'portal.read',lambda db,a,s:load(db,a,filters,page,size,
+        _todo_items(db,a) if filters.get('tab','handle')=='handle' else []))
+
 
 @router.get('/portal/workbench')
 def portal_workbench(request:Request):
@@ -311,6 +330,13 @@ def portal_workbench(request:Request):
     def load(db,a,s):
         items=[x for x in _todo_items(db,a)
                if not x.get('target_id') or x['target_id'] in a.org_ids]
+        reminders_source=[x for x in items if x['state']=='EXPIRING']
+        waiting=0
+        if a.role.kind!='teacher':
+            from ..approval_center import pending
+            approvals=pending(db,a,items)
+            waiting=sum(not x.get('action_required',True) for x in approvals)
+            items=[x for x in approvals if x.get('action_required',True)]+reminders_source
         names=dict(db.execute(select(User.id,User.name).where(a.scope(User.id))).all())
         for item in items:
             if item.get('teacher_id'):
@@ -330,6 +356,7 @@ def portal_workbench(request:Request):
                          'returned':sum(x['state']=='RETURNED' for x in tasks)},
                 'reminders':{'total':len(reminders),'items':reminders[:4],
                              'expired':sum(x['days_remaining']<0 for x in reminders)},
+                'waiting':waiting,
                 'scope_note':'待办理与资质提醒包含全部周期，不受下方统计筛选影响。'}
     return read_operation(request,'portal.read',load)
 

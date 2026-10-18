@@ -8,7 +8,7 @@ from ..core import command, read_operation, serial, audit, workflow, check_versi
 from ..models import Org, User, Role, Setting, Period, PointEntry, Notice, WorkflowEvent
 from ..reference_data import TrainingProjectMaster, TrainingCourseMaster, TrainingClassMaster
 from ..social_models import SocialProject, SocialUnit, SocialPolicy, SocialClaim, SocialAnnual, SocialResource
-from ..social_schemas import ReportInfoIn,review_done,PrepIn,ProjectIn, UnitsIn, SocialAction, PolicyIn, PolicyUpdate, RecommendedPolicyIn, PolicyCalendarIn, PolicyData, ClaimIn, AnnualIn, ResourceIn, ResourceUpdate, DutiesIn, CourseIn, CourseBatchIn, CaseNoteIn, CorrectionIn, ReportIn, PointReviewIn
+from ..social_schemas import ReportInfoIn,review_done,PrepIn,ProjectIn, UnitsIn, SocialAction, PolicyIn, PolicyUpdate, RecommendedPolicyIn, PolicyCalendarIn, PolicyData, ClaimIn, AnnualIn, ResourceIn, ResourceUpdate, DutiesIn, CourseIn, CourseLinkIn, CourseBatchIn, CaseNoteIn, CorrectionIn, ReportIn, PointReviewIn
 from .. import social_training as st
 
 router=APIRouter(prefix='/api/social',tags=['社会培训项目与制度'])
@@ -116,7 +116,8 @@ def workspace(request:Request,section:str=Query('projects',pattern='^(projects|c
         for i in range(0,len(codes),500):
             for r in db.scalars(select(SocialResource).where(SocialResource.kind=='course_apply',SocialResource.state=='ACTIVE',SocialResource.data['course_code'].as_string().in_(codes[i:i+500]))):
                 d=r.data;course_info[d['course_code']]={**{k:d.get(k) for k in ('hours','teaching_mode','ideology','teacher_name','courseware','audience','intro','package','one_skill','target_groups')},
-                    'application_id':r.id if d.get('application') else None,'source':d.get('source')}
+                    'application_id':r.id if d.get('application') else None,'source':d.get('source'),
+                    'org_id':r.org_id,'org_name':db.get(Org,r.org_id).name}
         resource_orgs=dict(db.execute(select(Org.id,Org.name).where(Org.id.in_({r.org_id for r in resources}|{r.org_id for r in annuals}))).all()) if resources or annuals else {}
         display=lambda rows:[{**serial(row),'state_label':st.state_label(row)} for row in rows]
         from ..social_schemas import application_blockers
@@ -125,7 +126,7 @@ def workspace(request:Request,section:str=Query('projects',pattern='^(projects|c
         for f in course_facts(db,[p.data['code'] for p in projects]).values():minutes[f['project_code']]=minutes.get(f['project_code'],0)+float(f['minutes'])
         project_items=[{**st.project_read_item(a,p),'state_label':st.state_label(p),'report_issues':application_blockers(p.data),'video_minutes':round(minutes.get(p.data['code'],0))} for p in projects]
         claim_items=[st.claim_read_item(db,a,c) for c in claims]
-        return {'projects':project_items,'claims':claim_items,'annuals':[{**st.annual_read_item(a,row),'org_name':resource_orgs.get(row.org_id,'—')} for row in annuals],'resources':[{**row,'org_name':resource_orgs[row['org_id']]} for row in display(resources)],
+        return {'projects':project_items,'claims':claim_items,'annuals':[{**st.annual_read_item(a,row),'org_name':resource_orgs.get(row.org_id,'—')} for row in annuals],'resources':[{**st.resource_read_item(a,row),'state_label':st.state_label(row),'org_name':resource_orgs[row.org_id]} for row in resources],
                 'policies':display(policies),'courses':serial(courses),'course_stats':serial(course_stats),'course_info':serial(course_info),'states':st.STATES,'decisions':st.DECISIONS,
                 'my_duties':[k for k,v in st.assignments(db).items() if a.id in v],
                 'pagination':{'page':page,'size':size,'total':totals.get(section,0),'q':q},'resource_pagination':{'page':resource_page,'size':size,'total':totals.get('resources',0)}}
@@ -591,7 +592,7 @@ def annual_action(ident:str,data:SocialAction,request:Request):
             st.duty(db,a,'coordinator',obj.owner_id,obj.org_id)
             if obj.state!='PUBLIC' or not data.basis.strip():raise HTTPException(409,'须在公示期记录异议处理依据')
             if any(x['actor']==a.id and not x['resolved'] for x in obj.snapshot.get('disputes',[])):raise HTTPException(403,'不能处理本人提出的异议')
-            obj.snapshot={**obj.snapshot,'disputes':[{**x,'resolved':True,'resolution':data.basis,'resolved_by':a.id} for x in obj.snapshot.get('disputes',[])]}
+            obj.snapshot={**obj.snapshot,'disputes':[x if x['resolved'] else {**x,'resolved':True,'resolution':data.basis,'resolved_by':a.id} for x in obj.snapshot.get('disputes',[])]}
         elif data.action=='archive':
             st.duty(db,a,'secretary',obj.owner_id,obj.org_id)
             if obj.state!='PUBLIC' or st.today()<=date_from(obj.snapshot['public_end']):raise HTTPException(409,'尚未完成5个完整工作日公示')
@@ -643,11 +644,35 @@ def course_create(data:CourseIn,request:Request):
         projects=db.scalars(select(SocialProject).where(SocialProject.org_id.in_(a.org_ids))).all()
         project=next((p for p in projects if p.data['code']==data.project_code),None)
         if project is None:raise HTTPException(403,'须先建立本组织项目')
+        if db.scalar(select(TrainingCourseMaster.id).where(TrainingCourseMaster.code==data.code)):
+            raise HTTPException(409,'课程编号已入库；未关联项目的已审批课程请使用“关联已入库课程”')
         if db.scalar(select(SocialResource.id).where(SocialResource.code=='CI-'+data.code)):raise HTTPException(409,'课程编号已有资料记录')
         obj=TrainingCourseMaster(code=data.code,name=data.name,project_code=data.project_code,source='学校人工登记')
         db.add(obj);db.flush();course_info(db,a,data,project.org_id)
         audit(db,a,'social_courses',obj.id,'登记培训课程',after=serial(obj),reason=data.reason);return obj
     return command(request,data.model_dump(mode='json'),'records.write',apply)
+
+
+@router.post('/projects/{ident}/courses/link')
+def project_course_link(ident:str,data:CourseLinkIn,request:Request):
+    def apply(db,a,s):
+        school_registrar(a)
+        project=st.scoped(db,a,'social_project',ident,write=True)
+        check_version(project,data.expected_version)
+        if project.state!='FILED':raise HTTPException(409,'仅已备案项目可关联课程')
+        course=db.scalar(select(TrainingCourseMaster).where(TrainingCourseMaster.code==data.course_code).with_for_update())
+        if not course or not course.active:raise HTTPException(409,'课程未入库或已停用，请核对课程编号')
+        if course.project_code:raise HTTPException(409,'课程已有项目归属，不能重复关联或改挂其他项目')
+        approved=db.scalar(select(SocialResource).where(SocialResource.kind=='course_apply',
+            SocialResource.org_id==project.org_id,SocialResource.state=='ACTIVE',
+            SocialResource.data['course_code'].as_string()==course.code))
+        if not approved or not approved.data.get('application'):
+            raise HTTPException(403,'仅可关联承办学院已审批入库的课程')
+        before=serial(course);project_before=serial(project)
+        course.project_code=project.data['code'];course.version+=1;db.flush()
+        audit(db,a,'social_courses',course.id,'关联已入库课程',before,serial(course),data.reason)
+        return event(db,a,'social_project',project,'关联已入库课程：'+course.name,project_before,data.reason,data.basis)
+    return command(request,data.model_dump(),'records.write',apply)
 
 
 @router.post('/courses/import/{operation}')
@@ -836,7 +861,16 @@ def report_action(ident:str,data:SocialAction,request:Request):
         obj=st.scoped(db,a,'social_resource',ident);check_version(obj,data.expected_version);before=serial(obj);d=obj.data
         if obj.kind!='point_report' or obj.state in {'ARCHIVED','VOID'}:raise HTTPException(409,'汇总已归档、已被新公示替代或类型不符')
         if digest(d['rows'])!=d['sha256']:raise HTTPException(409,'汇总快照校验失败')
-        if data.action=='submit':
+        if data.action=='refresh':
+            if obj.state not in {'DRAFT','SUBMITTED'}:raise HTTPException(409,'仅草稿或待归口复核的汇总可重新取数')
+            if a.id!=d['created_by']:raise HTTPException(403,'仅原汇总人可重新取数')
+            st.duty(db,a,'secretary',org=obj.org_id);st.check_report_conflicts(db,a,d['rows'])
+            policy=db.get(SocialPolicy,d['policy_id'])
+            if not policy or policy.state!='ACTIVE':raise HTTPException(409,'原汇总制度口径已失效，不能重新取数')
+            rows=st.report_rows(db,a,obj.org_id,d['year'],d['start_month'],d['end_month']);st.check_report_conflicts(db,a,rows)
+            obj.data={**d,'rows':rows,'sha256':digest(rows)};obj.state='DRAFT'
+            return event(db,a,'social_resource',obj,'积分汇总：重新取数并保存草稿',before,data.reason,data.basis)
+        elif data.action=='submit':
             if a.id!=d['created_by'] or obj.state!='DRAFT':raise HTTPException(403,'仅汇总人可提交草稿')
             obj.state='SUBMITTED'
         elif data.action=='approve':
@@ -879,7 +913,7 @@ def report_action(ident:str,data:SocialAction,request:Request):
             st.duty(db,a,'coordinator',d['created_by'],obj.org_id);st.check_report_conflicts(db,a,d['rows'])
             if obj.state!='PUBLIC' or not data.basis:raise HTTPException(409,'须记录异议核实依据')
             if any(x['actor']==a.id and not x['resolved'] for x in d['disputes']):raise HTTPException(403,'不能处理本人提出的异议')
-            obj.data={**d,'disputes':[{**x,'resolved':True,'resolution':data.basis,'resolved_by':a.id} for x in d['disputes']]}
+            obj.data={**d,'disputes':[x if x['resolved'] else {**x,'resolved':True,'resolution':data.basis,'resolved_by':a.id} for x in d['disputes']]}
         elif data.action=='archive':
             st.duty(db,a,'secretary',org=obj.org_id);st.check_report_conflicts(db,a,d['rows'])
             if obj.state!='PUBLIC' or st.today()<=date_from(d['public_end']):raise HTTPException(409,'尚未完成5个完整工作日公示')

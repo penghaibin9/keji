@@ -192,7 +192,10 @@ def progress(db, flow, obj, applicant, *, returned_level=None):
             done_by = {k: v for k, v in done_by.items() if chain.index(k) < chain.index(h.get('level'))} if h.get('level') in chain else {}
     current = level_of(flow, obj.state)
     finished = obj.state == f['done'] and last_submit is not None
-    returned = obj.state == 'RETURNED'
+    close_returned = flow == 'project_close' and obj.state == 'FILED' and bool(evs) and _handling(evs[-1]).get('decision') == 'return'
+    returned = obj.state == 'RETURNED' or close_returned
+    if close_returned:
+        returned_level = _handling(evs[-1]).get('level')
     nodes = [{'key': 'submit', 'label': '提交', 'state': 'done' if last_submit else 'current',
               'who': last_submit.actor_name if last_submit else applicant.name if applicant else '', 'at': _iso(last_submit.created_at) if last_submit else None}]
     today = school_today()
@@ -240,7 +243,11 @@ def progress(db, flow, obj, applicant, *, returned_level=None):
         back = next((n for n in nodes if n['state'] == 'returned'), None)
         who = LEVEL_LABEL.get(returned_level, '审批人')
         text = who + '退回，待你补正'
-        headline = who + '退回' + ('：' + back['reason'] if back and back.get('reason') else '') + '。请补正后重新提交，会从' + who + '这一级接着审。'
+        reason = (back.get('reason') or '').rstrip() if back else ''
+        reason_text = ('：' + reason if reason else '') + ('' if reason.endswith(('。','！','？','.','!','?')) else '。')
+        headline = who + '退回' + reason_text + '请补正后重新提交，会从' + who + '这一级接着审。'
+        if close_returned:
+            headline = who + '退回结项' + reason_text + '请核对原结项资料后重新提交结项核验。'
     elif current:
         text = LEVEL_LABEL[current] + LEVEL_VERB[current] + '中 · 第 %d 步 / 共 %d 步' % (step, total)
     else:

@@ -5,7 +5,7 @@ external links and oversized ZIP payloads.  Every confirm revalidates against th
 live authorization/database state and commits the whole batch atomically.
 """
 from __future__ import annotations
-from datetime import date, datetime
+from datetime import date, datetime, timedelta
 from decimal import Decimal, InvalidOperation
 from hashlib import sha256
 from pathlib import Path
@@ -13,6 +13,7 @@ from io import BytesIO, StringIO
 from urllib.parse import quote
 import csv, json, os, re, secrets, stat, zipfile
 from fastapi import HTTPException
+from pydantic import ValidationError
 from sqlalchemy import select, func
 from sqlalchemy.inspection import inspect as sa_inspect
 from sqlalchemy.orm import Session
@@ -280,6 +281,11 @@ def validate_rows(db,actor,kind,rows):
                 org=orgs.get(n['org_code'])
                 if not org or org.kind!='dept' or org.id not in actor.org_ids:errors.append('组织编码不存在、不是教研室或超出授权范围')
                 elif not errors:resolved['org_id']=org.id;resolved['role_id']=teacher_role.id
+        except ValidationError as exc:
+            for issue in exc.errors(include_input=False,include_url=False):
+                message=issue.get('ctx',{}).get('error') if issue['type']=='value_error' else None
+                label=next((title for title,key in TEMPLATES[kind] if key in issue['loc']),'本行数据')
+                errors.append(str(message) if message else label+'格式或取值不符合要求')
         except (ValueError,HTTPException) as exc:
             errors.append(exc.detail if isinstance(exc,HTTPException) else str(exc))
         out.append({'row_no':source['row_no'],'raw':source['raw'],'normalized':resolved,'errors':list(dict.fromkeys(errors))})
@@ -352,8 +358,16 @@ def sheets_to_xlsx(sheets):
         ws=wb.create_sheet(title[:31]);ws.append(headers);ws.freeze_panes='A2';ws.auto_filter.ref=f'A1:{get_column_letter(len(headers))}1'
         for cell in ws[1]:cell.font=Font(bold=True);cell.fill=PatternFill('solid',fgColor='D9EAF7')
         for row in rows:ws.append([_safe_excel_value(x) for x in row])
-        for i,h in enumerate(headers,1):ws.column_dimensions[get_column_letter(i)].width=max(12,min(36,len(h)*2+6))
+        for i,h in enumerate(headers,1):
+            ws.column_dimensions[get_column_letter(i)].width=max(12,min(36,len(h)*2+6))
+            if h.startswith('实施人员使用：'):ws.column_dimensions[get_column_letter(i)].hidden=True
     out=BytesIO();wb.save(out);wb.close();return out.getvalue()
+
+
+def import_error_text(value):
+    text=str(value)
+    if re.match(r'^\d+ validation errors? for ',text):return '该行数据校验未通过，请核对日期、数值和必填项后重新上传'
+    return text
 
 
 def error_xlsx(job_rows):
@@ -363,7 +377,7 @@ def error_xlsx(job_rows):
     rows=[]
     for r in job_rows:
         if not r.errors:continue
-        raw=(r.payload or {}).get('raw',{});rows.append([raw.get(h,'') for h in headers[:-1]]+['；'.join(r.errors)])
+        raw=(r.payload or {}).get('raw',{});rows.append([raw.get(h,'') for h in headers[:-1]]+['；'.join(import_error_text(value) for value in r.errors)])
     return rows_to_xlsx(headers,rows,'错误行')
 
 
@@ -411,7 +425,13 @@ def export_rows(db,actor,kind,filters,policy=None):
             if filters.get(k):q=q.where(getattr(PointEntry,k)==filters[k])
         if filters.get('org_id'):q=q.where(PointEntry.teacher_id.in_(select(User.id).where(User.org_id.in_(authorized_org_descendants(db,actor,filters['org_id'])))))
         items=db.scalars(q.order_by(PointEntry.created_at,PointEntry.id)).all();users={u.id:u for u in db.scalars(select(User).where(User.id.in_({x.teacher_id for x in items})))}
-        return ['教师工号','教师姓名','周期ID','积分项','类型','分值','原始值','公式','规则ID','批次ID','时间','原因','依据'],[[staff(users[x.teacher_id]),users[x.teacher_id].name,x.period_id,x.item_key,label(x.kind),x.amount,x.raw_value,x.formula,x.rule_id or '',x.batch_id or '',x.created_at,x.reason,x.basis] for x in items]
+        periods=dict(db.execute(select(Period.id,Period.name).where(Period.id.in_({x.period_id for x in items}))).all())
+        def point_name(x):
+            if x.kind=='SOCIAL':
+                return '社会培训'+('辅助' if 'auxiliary' in x.item_key else '授课')+'积分'+('更正' if x.source_snapshot.get('correction_id') else '')
+            components=((x.source_snapshot.get('rule') or {}).get('config') or {}).get('components') or []
+            return next((v['label'] for v in components if v.get('key')==x.item_key and v.get('label')),None) or {'hours':'授课贡献','participants':'课程人次','income':'收入贡献','manual_review':'人工复核调整'}.get(x.item_key,'积分调整项')
+        return ['教师工号','教师姓名','认定周期','积分项','类型','分值','原始值','公式','实施人员使用：规则编号','实施人员使用：批次编号','时间（北京时间）','原因','依据','实施人员使用：周期编号','实施人员使用：积分项编号','实施人员使用：原始时间（世界协调时）'],[[staff(users[x.teacher_id]),users[x.teacher_id].name,periods.get(x.period_id,'未命名周期'),point_name(x),label(x.kind),x.amount,x.raw_value,x.formula,x.rule_id or '',x.batch_id or '',x.created_at+timedelta(hours=8),x.reason,x.basis,x.period_id,x.item_key,x.created_at] for x in items]
     if kind=='assessments':
         if set(filters)-ASSESSMENT_FILTERS:raise HTTPException(422,'考核导出筛选字段无效')
         from .assessment_evidence import assessment_projection
@@ -419,23 +439,26 @@ def export_rows(db,actor,kind,filters,policy=None):
         rows=[]
         for obj in items:
             d=assessment_projection(db,obj);x=d['assessment'];u=d['teacher']
-            rows.append([pol.value('staff_no',u['staff_no'],obj.teacher_id),u['name'],x['period_id'],Decimal(str(x['score'])),label(x['state']),'是' if x['returned'] else '否',x['rule_id'],x['version'],obj.archive_sha256 or ''])
-        return ['教师工号','教师姓名','周期ID','得分','状态','退回','规则ID','版本','归档SHA256'],rows
+            rows.append([pol.value('staff_no',u['staff_no'],obj.teacher_id),u['name'],d['period']['name'],Decimal(str(x['score'])),label(x['state']),'是' if x['returned'] else '否',x['rule_id'],x['version'],obj.archive_sha256 or '',x['period_id']])
+        return ['教师工号','教师姓名','考核周期','得分','状态','退回','实施人员使用：规则编号','版本','实施人员使用：归档校验值','实施人员使用：周期编号'],rows
     if kind=='organization_assessments':
         if actor.role.kind=='teacher':raise HTTPException(403,'教师不能导出组织考核')
-        allowed={'period_id','target_kind','target_id','state'}
+        allowed={'period_id','target_kind','target_id','state','progress'}
         if set(filters)-allowed:raise HTTPException(422,'组织考核导出筛选字段无效')
         q=select(OrganizationAssessment)
         if actor.role.kind!='school':q=q.where(OrganizationAssessment.target_kind==actor.role.kind,OrganizationAssessment.target_id==actor.org.id)
-        for k,v in filters.items():
-            if v:q=q.where(getattr(OrganizationAssessment,k)==v)
-        from .routes.calculations import _organization_details
+        for k in ('period_id','target_kind','target_id','state'):
+            if filters.get(k):q=q.where(getattr(OrganizationAssessment,k)==filters[k])
+        from .routes.calculations import _organization_details,org_returned_ids,org_progress_clause
+        if filters.get('progress'):
+            generated=db.scalars(q.where(OrganizationAssessment.state=='GENERATED').with_only_columns(OrganizationAssessment.id)).all()
+            q=q.where(org_progress_clause(actor,filters['progress'],org_returned_ids(db,generated)))
         items=db.scalars(q.order_by(OrganizationAssessment.created_at.desc(),OrganizationAssessment.id)).all()
         rows=[]
         for obj in items:
             d=serial(_organization_details(db,actor,obj.id));x=d['assessment']
-            rows.append([d['target']['name'],{'dept':'教研室','college':'学院','school':'学校'}.get(x['target_kind'],x['target_kind']),x['period_id'],Decimal(str(x['score'])),label(x['state']),x['rule_id'],x['version'],obj.archive_sha256 or ''])
-        return ['考核对象','对象层级','周期ID','得分','状态','规则ID','版本','归档SHA256'],rows
+            rows.append([d['target']['name'],{'dept':'教研室','college':'学院','school':'学校'}.get(x['target_kind'],x['target_kind']),d['period']['name'],Decimal(str(x['score'])),label(x['state']),x['rule_id'],x['version'],obj.archive_sha256 or '',x['period_id']])
+        return ['考核对象','对象层级','考核周期','得分','状态','实施人员使用：规则编号','版本','实施人员使用：归档校验值','实施人员使用：周期编号'],rows
     if kind=='audit':
         q=audit_query(db,actor,filters)
         items=db.scalars(q.order_by(Audit.created_at.desc(),Audit.id)).all()

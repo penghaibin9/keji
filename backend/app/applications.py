@@ -22,8 +22,13 @@ PENDING_STATES = ('DEPT', 'COLLEGE', 'SCHOOL', 'HR', 'JWC')
 CX_KEYS = ('course_url', 'cover_url', 'chapters', 'team_names', 'group_name', 'course_type', 'jw_course_code')
 
 
-def flow_of(obj):
+def flow_of(obj, db=None):
     if isinstance(obj, SocialProject):
+        if obj.state == 'FILED' and db is not None:
+            latest = next(((e.after or {}).get('handling') for e in reversed(ap.events(db, 'social_project', obj.id))
+                           if ((e.after or {}).get('handling') or {}).get('flow') in ('project', 'project_close')), {})
+            if latest.get('flow') == 'project_close' and latest.get('decision') == 'return':
+                return 'project_close'
         return 'project_close' if obj.state in ('CLOSE_COLLEGE', 'CLOSE_REVIEW', 'CLOSED') or obj.data.get('returned_flow') == 'project_close' and obj.state == 'RETURNED' else 'project'
     if obj.kind == 'base':
         return 'base'
@@ -395,14 +400,19 @@ def fields(db, obj):
         return [(k, v) for k, v in rows if v]
     c = d.get('course') or {}
     review = d.get('courseware') or {}
-    rows = [('课程名称', obj.name), ('学时', d.get('hours') or '待补充'),
+    rows = [('课程名称', obj.name), ('培训学时' if d.get('source') == 'teaching' else '学时', d.get('hours') if d.get('hours') is not None else '待补充'),
             ('教学方式', TEACHING_MODES.get(d.get('teaching_mode'), '待补充')), ('思政属性', IDEOLOGY.get(d.get('ideology'), '待补充')),
             ('主讲教师', d.get('teacher_name') or ''),
             ('培训包', '是' if d.get('package') else '否'), ('“一人一技”专项', ('是 · ' + (d.get('target_groups') or '')) if d.get('one_skill') else '否'),
             ('课件审查', ('已审查 · ' + review.get('reviewer', '') + ' · ' + str(review.get('reviewed_on') or '')) if review.get('checked') else '待审查')]
+    if review.get('reference'):
+        rows.append(('课件审查记录编号', review['reference']))
+    if review.get('percent') is not None:
+        rows.append(('课件审查覆盖比例', str(review['percent']) + '%'))
     if d.get('source') == 'teaching':
         rows[1:1] = [('原课程', c.get('origin_label', '') + ' · ' + c.get('course_code', '') + ' · ' + c.get('term_name', '')),
-                     ('学分', c.get('credit') or '缺学分')]
+                     ('原课程学分', c.get('credit') if c.get('credit') is not None else '缺学分'),
+                     ('原课程学时', c.get('hours') if c.get('hours') is not None else '待补充')]
         rows.append(('面向对象', d.get('audience') or ''))
         if c.get('course_url'):
             rows.append(('超星课程', c['course_url']))
@@ -441,7 +451,7 @@ def detail(db, a, obj):
 
 def summary(db, obj, applicant=None):
     """“我的申请”列表里一行：名称、类型、进度条文字。"""
-    flow = flow_of(obj)
+    flow = flow_of(obj, db)
     applicant = applicant or applicant_of(db, obj)
     returned = (obj.data or {}).get('returned_level')
     if isinstance(obj, SocialProject):
@@ -455,7 +465,7 @@ def summary(db, obj, applicant=None):
     info = {k: d.get(k) for k in ('usages', 'level', 'established_on', 'effective_on', 'onsite', 'partner')} if kind_of == 'base' else \
         {k: d.get(k) for k in ('unit', 'title', 'directions', 'effective_on')} if kind_of == 'trainer' else None
     return {'type': kind, 'id': obj.id, 'name': name, 'code': getattr(obj, 'code', None), 'course': course, 'info': info, 'flow': flow, 'label': ap.FLOWS[flow]['label'], 'state': obj.state,
-            'state_label': state_label(obj), 'progress': {k: p[k] for k in ('text', 'headline', 'step', 'total', 'tone', 'needs_applicant')},
+            'state_label': '结项退回补正' if flow == 'project_close' and p['tone'] == 'red' else state_label(obj), 'progress': {k: p[k] for k in ('text', 'headline', 'step', 'total', 'tone', 'needs_applicant')},
             'nodes': [{k: n.get(k) for k in ('label', 'state')} for n in p['nodes']], 'updated_at': last_event_at(db, obj) or obj.created_at}
 
 
@@ -550,7 +560,7 @@ def mine(db, a):
     for p in db.scalars(select(SocialProject).where(SocialProject.owner_id == a.id)):
         out.append(summary(db, p))
     out.sort(key=lambda x: str(x['updated_at'] or ''), reverse=True)
-    counts = {'pending': sum(x['progress']['tone'] == 'blue' for x in out), 'returned': sum(x['state'] == 'RETURNED' for x in out),
+    counts = {'pending': sum(x['progress']['tone'] == 'blue' for x in out), 'returned': sum(x['progress']['tone'] == 'red' for x in out),
               'done': sum(x['progress']['tone'] == 'green' for x in out), 'draft': sum(x['state'] in ('DRAFT', 'WITHDRAWN') and x['progress']['tone'] == 'gray' for x in out)}
     return {'items': out, 'counts': counts}
 
@@ -567,7 +577,15 @@ def trainer_library(db, a):
         scope = {a.org.parent_id} if a.role.kind == 'dept' else set(a.org_ids)
         rows = [r for r in rows if r.org_id in scope]
     orgs = dict(db.execute(select(Org.id, Org.name)).all())
+    def can_read_details(obj):
+        try:
+            read_check(db, a, obj)
+            return True
+        except HTTPException as error:
+            if error.status_code not in (403, 404):
+                raise
+            return False
     return {'items': [{'id': r.id, 'code': r.code, 'name': r.name, 'source': r.data.get('source'), 'unit': r.data.get('unit') or '',
                        'title': r.data.get('title') or '', 'directions': [TRAINER_DIRECTIONS.get(x, x) for x in r.data.get('directions', [])],
                        'org_name': orgs.get(r.org_id, ''), 'effective_on': r.data.get('effective_on'), 'filing_basis': r.data.get('filing_basis') or '',
-                       'recommended_province_on': r.data.get('recommended_province_on')} for r in rows], 'total': len(rows)}
+                       'recommended_province_on': r.data.get('recommended_province_on'), 'can_view_detail': can_read_details(r)} for r in rows], 'total': len(rows)}

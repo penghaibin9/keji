@@ -168,7 +168,17 @@ def point_detail(ident:str,request:Request):
 @router.get('/point-balances')
 def balances(request:Request):
     f,_,_=filters_from(request,{'teacher_id','period_id','org_id'})
-    return read_operation(request,'points.read',lambda db,a,s:{'items':db.scalars(point_scope(db,a,PointBalance,f).order_by(PointBalance.created_at,PointBalance.id)).all()})
+    def load(db,a,s):
+        rows=db.scalars(point_scope(db,a,PointBalance,f).order_by(PointBalance.created_at,PointBalance.id)).all()
+        period_ids={x.period_id for x in rows};teacher_ids={x.teacher_id for x in rows}
+        periods=dict(db.execute(select(Period.id,Period.state).where(Period.id.in_(period_ids))).all())
+        archived=set(db.execute(select(Assessment.teacher_id,Assessment.period_id).where(Assessment.teacher_id.in_(teacher_ids),Assessment.period_id.in_(period_ids),Assessment.state=='ARCHIVED')).all())
+        items=[]
+        for obj in rows:
+            reason='考核已归档，该周期积分只读' if (obj.teacher_id,obj.period_id) in archived else '周期已关闭，积分只读' if periods.get(obj.period_id)!='OPEN' else ''
+            items.append({**serial(obj),'locked':bool(reason),'lock_reason':reason})
+        return {'items':items}
+    return read_operation(request,'points.read',load)
 
 @router.post('/point-balances/{ident}/actions')
 def balance_action(ident:str,data:Action,request:Request):
@@ -570,11 +580,11 @@ def list_organization_assessments(request:Request):
 ORG_RETURN_ACTION='退回组织考核复核'
 
 def org_returned_ids(db,ids):
-    """10.9 returned flag without schema change: a GENERATED result whose latest workflow event is a return."""
+    """A return stays pending through evidence uploads; regeneration or review handles it."""
     if not ids:return set()
     latest={}
     for oid,action in db.execute(select(WorkflowEvent.object_id,WorkflowEvent.action).where(WorkflowEvent.object_type=='organization_assessment',
-            WorkflowEvent.object_id.in_(list(ids))).order_by(WorkflowEvent.created_at,WorkflowEvent.id)):latest[oid]=action
+            WorkflowEvent.object_id.in_(list(ids)),WorkflowEvent.action.in_(['生成组织考核',ORG_RETURN_ACTION])).order_by(WorkflowEvent.created_at,WorkflowEvent.id)):latest[oid]=action
     return {i for i,action in latest.items() if action==ORG_RETURN_ACTION}
 
 def org_progress_clause(a,progress,returned):
@@ -641,13 +651,13 @@ def _organization_details(db,a,ident):
         return {'assessment':{**frozen['assessment'],'archive':frozen,'archive_sha256':obj.archive_sha256},
             'rule':frozen.get('rule',{}),'target':frozen.get('target') or frozen['assessment']['source_snapshot']['target'],
             'period':frozen.get('period') or frozen['assessment']['source_snapshot']['period'],
-            'evidence':frozen['evidence'],'events':frozen.get('events',[]),'immutable':True,
+            'evidence':frozen['evidence'],'events':frozen.get('events',[]),'immutable':True,'returned':False,
             'events_frozen':frozen.get('schema_version')==2,
             'history_note':'' if frozen.get('schema_version')==2 else '旧归档未冻结办理轨迹，不以当前日志补写历史。'}
     return {'assessment':obj,'rule':db.get(OrganizationAssessmentRule,obj.rule_id),'target':db.get(Org,obj.target_id),
         'period':db.get(Period,obj.period_id),'evidence':db.scalars(select(OrganizationAssessmentMetricEvidence).where(
             OrganizationAssessmentMetricEvidence.assessment_id==ident).order_by(OrganizationAssessmentMetricEvidence.metric_code)).all(),
-        'events':events(db,'organization_assessment',ident),'immutable':False,'source_changes':organization_source_changes(db,obj)}
+        'events':events(db,'organization_assessment',ident),'immutable':False,'returned':obj.state=='GENERATED' and ident in org_returned_ids(db,[ident]),'source_changes':organization_source_changes(db,obj)}
 
 @router.get('/organization-assessments/{ident}')
 def organization_assessment_detail(ident:str,request:Request):

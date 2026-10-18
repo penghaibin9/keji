@@ -42,7 +42,7 @@ def today():
 
 
 def state_label(obj):
-    if isinstance(obj,SocialResource) and obj.kind in ('course_apply','base') and (obj.data or {}).get('application'):
+    if isinstance(obj,SocialResource) and obj.kind in ('course_apply','base','trainer') and (obj.data or {}).get('application'):
         from .applications import state_label as application_label
         return application_label(obj)
     if isinstance(obj,SocialResource) and obj.kind=='point_report' and obj.state=='VOID':return '已被新公示替代'
@@ -157,7 +157,7 @@ def scoped(db, actor, kind, ident, write=False, allow_participant=False):
     if not model: raise HTTPException(422, '业务类型不支持')
     obj = db.get(model, ident)
     if not obj: raise HTTPException(404, '业务记录不存在')
-    if kind=='social_resource' and obj.kind in ('course_apply','base') and (obj.data or {}).get('application'):
+    if kind=='social_resource' and obj.kind in ('course_apply','base','trainer') and (obj.data or {}).get('application'):
         # 老师发起的申请：申请人、本级办理人和组织范围内的学院、学校可看；申请人在审批中或待补正时可补传附件。
         from .applications import read_check, PENDING_STATES
         read_check(db, actor, obj)
@@ -478,6 +478,7 @@ def point_trial(db, claim):
         ratio=D(count)/standard
         candidates={'ratio_cap':min(ratio,D(2)), 'over_standard_two':D(2) if count>standard else ratio}
         base=candidates.get(cfg.get('cap_mode'))
+        base_formula=f'取较小值（{count}÷{standard}，2）' if cfg.get('cap_mode')=='ratio_cap' else ('2' if count>standard else f'{count}÷{standard}') if cfg.get('cap_mode')=='over_standard_two' else None
         role=D({'lecturer':'1','instructor':'0.8','manager':'0.6'}[t['role']])
         score=None if base is None else D(number(base*level*scene*role))
         if t['role']=='manager':
@@ -486,7 +487,7 @@ def point_trial(db, claim):
         else: teaching += score or D(0)
         details.append({'unit':u['external_key'],'date':u['data']['event_date'],'participants':count,'standard':str(standard),
                         'level':str(level),'scene':str(scene),'role':str(role),'base_candidates':serial(candidates),'score':None if score is None else str(score),
-                        'formula':f'基数 {number(base) if base is not None else "待确认：按比例最高2为"+number(candidates["ratio_cap"])+"，超标准按2为"+number(candidates["over_standard_two"])} × 层级 {level} × 场景 {scene} × 岗位 {role}（有效{count}人次，标准{standard}人）'})
+                        'formula':f'基数 {base_formula if base_formula is not None else "待确认：按比例最高2为"+number(candidates["ratio_cap"])+"，超标准按2为"+number(candidates["over_standard_two"])} × 层级 {level} × 场景 {scene} × 岗位 {role}（有效{count}人次，标准{standard}人）'})
     auxiliary=sum((D(x['amount']) for x in claim.data.get('auxiliary',[])),D(0))
     if auxiliary or managerial:
         blockers += missing(cfg,['auxiliary_overlap'])
@@ -702,12 +703,25 @@ def annual_public_trial(trial):
     return {k:v for k,v in serial(trial).items() if k not in {'basis','points_total','points_average','cost_details','veto_basis'}}
 
 
+def own_public_disputes(actor, rows):
+    return [{k:v for k,v in row.items() if k in {'reason','resolved','resolution'}}
+            for row in rows if row.get('actor')==actor.id]
+
+
+def resource_read_item(actor, resource):
+    item=serial(resource)
+    if actor.role.kind=='teacher' and resource.kind=='point_report':
+        item['data']={**item['data'],'disputes':own_public_disputes(actor,item['data'].get('disputes',[]))}
+    return item
+
+
 def annual_read_item(actor, annual):
     item=serial(annual)
     if actor.role.kind=='teacher':
         item['data']={}
         item['snapshot']={k:v for k,v in item.get('snapshot',{}).items() if k in {'trial','sha256','frozen_on','public_start','public_end'}}
         if item['snapshot'].get('trial'):item['snapshot']['trial']=annual_public_trial(item['snapshot']['trial'])
+        item['snapshot']['disputes']=own_public_disputes(actor,annual.snapshot.get('disputes',[]))
     return item
 
 
@@ -725,6 +739,8 @@ def detail(db,actor,kind,obj):
     result={'item':serial(obj),'state_label':state_label(obj),'attachments':evidence(db,kind,obj.id),
             'events':serial(db.scalars(select(WorkflowEvent).where(WorkflowEvent.object_type==kind,WorkflowEvent.object_id==obj.id).order_by(WorkflowEvent.created_at,WorkflowEvent.id)).all())}
     if isinstance(obj,SocialResource) and obj.kind=='point_report':
+        result['item']=resource_read_item(actor,obj)
+        if actor.role.kind=='teacher':result['events']=[]  # 办理前后快照含其他人的异议，不能随公开积分表返回。
         for row in result['events']:
             if row['action']=='积分汇总：待院长初审' and row['after'].get('state')=='SUBMITTED':row['action']='积分汇总：待归口复核'
     if isinstance(obj,SocialProject):result['item']=project_read_item(actor,obj);result['facts']=project_facts(db,obj)
@@ -733,12 +749,13 @@ def detail(db,actor,kind,obj):
         from . import approvals as ap
         from .applications import flow_of
         from .social_schemas import application_blockers
-        owner=db.get(User,obj.owner_id);flow=flow_of(obj)
+        owner=db.get(User,obj.owner_id);flow=flow_of(obj,db)
         level=ap.level_of(flow,obj.state)
         result['progress']=ap.progress(db,flow,obj,owner,returned_level=obj.data.get('returned_level'))
+        if flow=='project_close' and result['progress']['tone']=='red':result['state_label']='结项退回补正'
         result['college_handle']=level=='college' and ap.can_handle(db,actor,owner,'college',obj.org_id)
         result['report_issues']=application_blockers(obj.data)
-    if isinstance(obj,(SocialProject,SocialResource)):
+    if isinstance(obj,(SocialProject,SocialResource,SocialAnnual)):
         org=db.get(Org,obj.org_id);result['org_name']=org.name if org else ''  # 教师、教研室的组织列表不含所属学院，名称由服务端给出
     if isinstance(obj,SocialResource) and obj.kind in ('correction','point_review'):
         review_id=obj.data.get('review_id') if obj.kind=='correction' else None
@@ -849,13 +866,16 @@ def open_point_reviews(db, teacher_id):
 
 def todo_items(db,a):
     items=[];duties={k for k,v in assignments(db).items() if a.id in v}
-    def add(kind,obj,title,state=None,teacher_id=None,due=None):
+    def add(kind,obj,title,state=None,teacher_id=None,due=None,**extra):
         items.append({'type':kind,'id':obj.id,'title':title,'state':state or state_label(obj),'teacher_id':teacher_id,
-                      'target_id':None if teacher_id else getattr(obj,'org_id',None),'deadline':serial(due)})
+                      'target_id':None if teacher_id else getattr(obj,'org_id',None),'deadline':serial(due),**extra})
     if 'records.read' not in a.permissions:return items
     projects=db.scalars(select(SocialProject).where(SocialProject.org_id.in_(a.org_ids) if a.role.kind!='teacher' else SocialProject.owner_id==a.id)).all()
     for p in projects:
-        if p.state in {'DRAFT','RETURNED'} and 'records.write' in a.permissions:add('social_project',p,'补充项目申报：'+p.data['name'])
+        if p.state=='DRAFT' and a.role.kind=='teacher':
+            add('social_project',p,'待完善项目：'+p.data['name'],teacher_id=a.id,
+                action_hint='项目尚未提交，请完善资料并上传材料后提交学院审核。',action_label='完善项目申报')
+        elif p.state in {'DRAFT','RETURNED'} and 'records.write' in a.permissions:add('social_project',p,'补充项目申报：'+p.data['name'])
         elif p.state in {'SUBMITTED','CLOSE_REVIEW'} and 'coordinator' in duties and p.owner_id!=a.id:add('social_project',p,'项目审核：'+p.data['name'])
         elif p.state=='FILED' and today().isoformat()>p.data['end_date']:add('social_project',p,'培训已结束，请办理结项：'+p.data['name'],'待结项')
         followups=project_followups(db,p.id)
@@ -874,7 +894,15 @@ def todo_items(db,a):
     stages={'SUBMITTED':'dean','DEAN':'coordinator','COORDINATOR':'vice_president','APPROVED':'secretary'}
     for claim in db.scalars(select(SocialClaim).where(a.scope(SocialClaim.teacher_id))):
         if claim.state in {'DRAFT','RETURNED'} and claim.teacher_id==a.id:
-            trial=point_trial(db,claim);add('social_claim',claim,'本人积分申报'+(' · 截至'+trial['deadline'] if trial['deadline'] else ' · 校历待确认'),teacher_id=claim.teacher_id)
+            trial=point_trial(db,claim)
+            policy=db.get(SocialPolicy,claim.policy_id)
+            waiting=claim.state=='DRAFT' and (policy.state!='ACTIVE' or not trial['deadline'] or
+                bool(missing(policy.data,['cap_mode','precision','rounding','effective_date','date_basis'])))
+            project=db.get(SocialProject,claim.project_id)
+            add('social_claim',claim,'本人积分申报 · '+project.data['name'],teacher_id=claim.teacher_id,
+                action_required=not waiting,
+                action_hint='等待学校确认积分口径和申报期限，可先查看准备材料。' if waiting else '请核对申报资料，补充后提交。',
+                action_label='查看进度' if waiting else '补充并提交')
         elif stages.get(claim.state) in duties and claim.teacher_id!=a.id:add('social_claim',claim,'社会培训积分认定',teacher_id=claim.teacher_id)
     for obj in db.scalars(select(SocialResource).where(SocialResource.kind=='correction')):
         if obj.data['teacher_id'] not in a.teacher_ids:continue
@@ -885,9 +913,11 @@ def todo_items(db,a):
         if obj.state=='DRAFT' and obj.data['created_by']==a.id:add('social_resource',obj,'上传核对材料并发给教师',teacher_id=obj.data['teacher_id'])
         elif obj.state=='TEACHER' and obj.data['teacher_id']==a.id:add('social_resource',obj,'教研室请你核对一条积分，请回应',teacher_id=a.id)
         elif obj.state=='COLLEGE' and 'dean' in duties and a.id not in {obj.data['created_by'],obj.data['teacher_id']}:add('social_resource',obj,'积分核对待学院裁定',teacher_id=obj.data['teacher_id'])
+    current=today();has_current_report=False
     for report in db.scalars(select(SocialResource).where(SocialResource.kind=='point_report',SocialResource.org_id.in_(a.org_ids),SocialResource.state.notin_(['ARCHIVED','VOID']))):
+        if report.org_id==a.org.id and report.data.get('year')==current.year and report.data.get('start_month')==current.month-1 and report.data.get('end_month')==current.month:has_current_report=True
         if report.data['created_by']==a.id or duties&{'coordinator','secretary'}:add('social_resource',report,'积分双月报送或年度公示')
-    if 'secretary' in duties and today().month%2==0:
+    if 'secretary' in duties and current.month%2==0 and not has_current_report:
         from types import SimpleNamespace
         add('social_report',SimpleNamespace(id='bimonth',state='DRAFT',org_id=a.org.id),'本双月积分汇总与报送','待汇总')
     if 'assessment.review' in a.permissions:

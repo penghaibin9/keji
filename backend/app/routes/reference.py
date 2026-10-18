@@ -12,7 +12,7 @@ from ..schemas import ParticipationIn,ParticipationUpdate,Reason,CreditReviewIn,
 from pydantic import Field
 from .. import code_tables as codes
 from ..reference_data import TrainingProjectMaster,TrainingCourseMaster,TrainingClassMaster,TeacherParticipation,TeacherHrProfile,TeacherCourseTerm,SchoolCourse,annual_teaching_credits,UNKNOWN_YEAR,record_reference_errors,staff_roster,school_year_now,school_year_of,ROSTER_PROBLEMS,HR_PRIVATE_KEYS,credit_summary,source_status,CREDIT_REVIEW_KIND,credit_review_code,credit_reviews,can_review_credits,term_in_scope,year_in_scope,MIN_SCHOOL_YEAR
-from ..social_models import SocialResource
+from ..social_models import SocialResource,SocialProject
 from ..social_training import check_conflicts
 from ..read_queries import authorized_org_descendants
 from ..settings_catalog import business_dictionary,validate_manual_source
@@ -48,7 +48,7 @@ def participation_detail(ident:str,request:Request):
     def load(db,a,s):
         obj=db.get(TeacherParticipation,ident)
         if not obj or obj.teacher_id not in a.teacher_ids:raise HTTPException(404,'参训记录不存在')
-        return obj
+        return {**serial(obj),'events':db.scalars(select(WorkflowEvent).where(WorkflowEvent.object_type=='participation',WorkflowEvent.object_id==ident).order_by(WorkflowEvent.created_at,WorkflowEvent.id)).all()}
     return read_operation(request,'records.read',load)
 
 @router.post('/participations')
@@ -106,9 +106,13 @@ def projects(request:Request):
 
 @router.get('/reference/courses')
 def courses(request:Request):
-    f,p,z=filters_from(request,{'q','project_code','active'})
+    f,p,z=filters_from(request,{'q','project_code','active','resource_org_id'})
     def load(db,a,s):
         q=select(TrainingCourseMaster)
+        if f.get('resource_org_id'):
+            org_id=f['resource_org_id'];authorized_org_descendants(db,a,org_id)
+            if db.get(Org,org_id).kind!='college':raise HTTPException(403,'课程资源须选择授权学院')
+            q=q.where(TrainingCourseMaster.project_code.in_(select(SocialProject.data['code'].as_string()).where(SocialProject.org_id==org_id)))
         if f.get('q'):q=q.where(TrainingCourseMaster.name.contains(f['q'],autoescape=True)|TrainingCourseMaster.code.contains(f['q'],autoescape=True))
         if f.get('project_code'):q=q.where(TrainingCourseMaster.project_code==f['project_code'])
         if f.get('active'):

@@ -10,7 +10,7 @@ from starlette.concurrency import run_in_threadpool
 from sqlalchemy import select
 from ..core import *
 from ..schemas import VersionedReason,ExportRequest,TaskRetry
-from ..excel_io import inspect_xlsx,template_bytes,validate_rows,commit_import,error_xlsx,read_export_file,import_preview_digest
+from ..excel_io import inspect_xlsx,template_bytes,validate_rows,commit_import,error_xlsx,read_export_file,import_preview_digest,import_error_text
 from ..settings_catalog import import_row_limit
 from ..import_access import require_import_permission, make_import_proof, require_import_access, public_import, import_summary
 from ..read_queries import RECORD_FILTERS,ASSESSMENT_FILTERS
@@ -83,7 +83,9 @@ def import_detail(ident:str,request:Request):
     f,p,z=filters_from(request,set())
     def load(db,a,s):
         job=_owned_import(db,a,ident);q=select(ImportRow).where(ImportRow.job_id==ident).order_by(ImportRow.row_no)
-        return {'job':public_import(job),'rows':page_result(db,q,p,z)}
+        rows=page_result(db,q,p,z)
+        rows['items']=[{**row,'errors':[import_error_text(value) for value in row['errors']]} for row in rows['items']]
+        return {'job':public_import(job),'rows':rows}
     return read_operation(request,'import',load)
 
 @router.get('/imports/{ident}/errors')
@@ -120,7 +122,7 @@ def import_discard(ident:str,data:VersionedReason,request:Request):
 
 EXPORT_FILTERS={
  'records':set(RECORD_FILTERS),'participations':{'q','teacher_id','org_id','start','end','project_code','course_code'},'qualifications':{'q','state','teacher_id','org_id'},'points':{'teacher_id','period_id','org_id'},
- 'assessments':set(ASSESSMENT_FILTERS),'organization_assessments':{'period_id','target_kind','target_id','state'},'audit':{'q','module','result','start','end','actor','org_id','object_id','request_id'},'handover':set(),
+ 'assessments':set(ASSESSMENT_FILTERS),'organization_assessments':{'period_id','target_kind','target_id','state','progress'},'audit':{'q','module','result','start','end','actor','org_id','object_id','request_id'},'handover':set(),
 }
 
 @router.post('/exports')

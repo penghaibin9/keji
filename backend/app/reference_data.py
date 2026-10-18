@@ -416,6 +416,12 @@ def annual_teaching_credits(db,rows,*,include_details=True,reviews=None):
             detail={'term_name':r.term_name,'term_no':term_no,'origin':r.origin,'course_code':r.course_code,'course_name':r.course_name,'credit':None,'hours':None,'credit_from':None,'counted':True,'id':r.id,'review':None,
                     'level':levels.get(course_level_key(r.origin,r.course_code))}
             g.setdefault('details',[]).append(detail)
+        ref=catalogue.get(r.course_code if r.origin=='JW' else link(r))
+        credit=r.credit if r.credit is not None else (ref.credit if ref else None)
+        hours=r.hours if r.hours is not None else (ref.hours if ref else None)
+        if include_details:detail.update(credit=None if credit is None else str(Decimal(str(credit)).quantize(Decimal('0.01'),rounding=ROUND_HALF_UP)),
+            hours=None if hours is None else str(Decimal(str(hours)).quantize(Decimal('0.01'),rounding=ROUND_HALF_UP)),
+            credit_from=None if credit is None else ('source' if r.credit is not None else 'catalogue'))
         if term_no is not None:
             key=(*key,term_no)
             if key in seen:
@@ -427,12 +433,6 @@ def annual_teaching_credits(db,rows,*,include_details=True,reviews=None):
             g['duplicates_skipped']+=1
             if include_details:detail.update(counted=False,linked_course_code=link(r))
             continue
-        ref=catalogue.get(r.course_code if r.origin=='JW' else link(r))
-        credit=r.credit if r.credit is not None else (ref.credit if ref else None)
-        hours=r.hours if r.hours is not None else (ref.hours if ref else None)
-        if include_details:detail.update(credit=None if credit is None else str(Decimal(str(credit)).quantize(Decimal('0.01'),rounding=ROUND_HALF_UP)),
-            hours=None if hours is None else str(Decimal(str(hours)).quantize(Decimal('0.01'),rounding=ROUND_HALF_UP)),
-            credit_from=None if credit is None else ('source' if r.credit is not None else 'catalogue'))
         review=reviews.get(r.id);state=review_state(review,credit_basis(r,credit,hours))
         if include_details:
             detail['review']=state

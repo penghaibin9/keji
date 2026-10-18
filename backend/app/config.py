@@ -33,6 +33,7 @@ class Settings(BaseSettings):
     release_guard: bool = True
     adapter_modules: str = ''
     demo_identity_switch_enabled: bool = False
+    demo_identity_profile: Literal['showcase','daily-test'] = 'showcase'
     # 学校移动门户消息推送：留空即关闭；地址按《湖科职消息中心集成标准接口文档v1.0》。
     message_push_yyid: str = ''
     message_push_endpoint: str = 'https://ydmh.hnkjxy.net.cn/ydmh/api/send/send'
@@ -75,6 +76,8 @@ class Settings(BaseSettings):
         hosts = [x.strip() for x in self.allowed_hosts.split(',')]
         if not all(hosts) or '*' in hosts:
             raise ValueError('必须设置明确的网站域名')
+        if self.demo_identity_profile == 'daily-test' and (self.env != 'test' or origin.hostname not in {'localhost','127.0.0.1','::1'}):
+            raise ValueError('日常测试角色切换仅允许本机测试环境')
         if self.env == 'production':
             if not self.database_url.startswith('mysql+pymysql://'):
                 raise ValueError('生产环境必须使用 MySQL 8.4')

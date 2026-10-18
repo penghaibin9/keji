@@ -397,6 +397,11 @@ class CoursewareReview(Input):
     percent: int | None = Field(default=None, ge=0, le=100)  # 审查覆盖百分比，上级 1.2 表直接要这个数
 
 
+class CourseLinkIn(Reason):
+    expected_version: int = Field(ge=1)
+    course_code: Code
+
+
 class CourseIn(Reason):
     code: Code
     name: Name
@@ -598,6 +603,13 @@ class TrainerApplyIn(Reason):
 class ApplicationAction(Reason):
     expected_version: int = Field(ge=1)
     action: Literal['submit', 'approve', 'return', 'withdraw']
+    courseware: CoursewareReview | None = None
+
+    @model_validator(mode='after')
+    def completed_courseware(self):
+        if self.courseware is not None and not (self.courseware.checked and self.courseware.reviewer.strip() and self.courseware.reviewed_on):
+            raise ValueError('补录课件审查时，请确认已审查并填写审查人和审查日期')
+        return self
 
 
 PREP_ITEMS = {'plan':'教学计划','lecturers':'师资安排','venue':'场地','equipment':'设备','materials':'教材教具','notice':'培训告知书或邀请函'}
