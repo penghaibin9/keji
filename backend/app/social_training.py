@@ -394,6 +394,32 @@ def project_facts(db, project):
             'excluded':sum(len(u.data['learners']) if invalidated else unit_counts(u.data)['excluded'] for u in rows)}
 
 
+def closing_effective_counts(db, project_ids):
+    """列表摘要用：一次查出各项目有效人次（与 project_facts 同口径：投诉作废期次的项目记 0），避免逐项目读取全部学员。"""
+    ids=list(project_ids)
+    if not ids:return {}
+    totals={i:0 for i in ids}
+    for pid,data in db.execute(select(SocialUnit.project_id,SocialUnit.data).where(SocialUnit.project_id.in_(ids))):
+        totals[pid]+=unit_counts(data)['effective']
+    latest={}
+    for pid,after in db.execute(select(WorkflowEvent.object_id,WorkflowEvent.after).where(WorkflowEvent.object_type=='social_project',WorkflowEvent.object_id.in_(ids),WorkflowEvent.action=='投诉与项目跟踪').order_by(WorkflowEvent.created_at,WorkflowEvent.id)):
+        latest[(pid,after['case_reference'])]=after
+    for (pid,_),after in latest.items():
+        if after.get('invalidate_cohort'):totals[pid]=0
+    return totals
+
+
+def close_returned_project_ids(db, project_ids):
+    """已备案项目中，最近一次办理是“结项被学校退回”的项目编号（与 applications.flow_of 同口径，一次查询）。"""
+    ids=list(project_ids)
+    if not ids:return set()
+    latest={}
+    for pid,after in db.execute(select(WorkflowEvent.object_id,WorkflowEvent.after).where(WorkflowEvent.object_type=='social_project',WorkflowEvent.object_id.in_(ids)).order_by(WorkflowEvent.created_at,WorkflowEvent.id)):
+        handling=(after or {}).get('handling') or {}
+        if handling.get('flow') in ('project','project_close'):latest[pid]=handling
+    return {pid for pid,h in latest.items() if h.get('flow')=='project_close' and h.get('decision')=='return'}
+
+
 def project_followups(db,ident):
     latest={}
     for event in db.scalars(select(WorkflowEvent).where(WorkflowEvent.object_type=='social_project',WorkflowEvent.object_id==ident,WorkflowEvent.action=='投诉与项目跟踪').order_by(WorkflowEvent.created_at,WorkflowEvent.id)):

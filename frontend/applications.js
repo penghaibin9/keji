@@ -1,7 +1,7 @@
 // 老师发起的申请（培训课程申报、培训基地申请）：进度、详情与办理、我的申请、申请表。
 // 只调用 /api/applications；谁能办、回避、代办、版本和材料都由后端核对，这里按后端给的 permissions 显示按钮。
 import {materialUploadForm} from './approval-flow.js?v=20261017-multi-materials2';
-import {renderTrainingWorkspace} from './training-workspace.js?v=20261018-claude3';
+import {renderTrainingWorkspace} from './training-workspace.js?v=20261018-claude4';
 let c = null, opened = null;
 
 export const AUDIENCE = ['企业职工', '社区居民', '退役军人', '新型职业农民', '中小学教师', '机关事业单位人员', '待业及转岗人员', '老年学员'];
@@ -267,7 +267,10 @@ export async function trainersHtml(ctx) {
   const e = c.esc;
   const d = await c.api('/applications/trainers');
   const school = c.me.role.kind === 'school';
-  return renderTrainingWorkspace('trainers',d,c,{actions:c.act('查看待认定申报','nav','todos','primary')+(c.me.role.kind==='college'?c.act('登记外聘培训师','app-trainer-new','external'):''),total:d.total});
+  // 人事认定、教务处备案职责没人时，申请会卡住：给学校管理员直接提示并提供配置入口。
+  const gaps = (d.duty_gaps || []).map(g => `<li><strong>${e(g.label)}</strong>尚未指定办理人${g.pending ? `，已有 ${e(g.pending)} 条申请在等待` : ''}</li>`).join('');
+  const before = gaps ? `<section class="duty-gap-notice" role="status"><div><h3>培训师认定流程缺少办理人</h3><ul>${gaps}</ul><p>指定后，等待中的申请会自动进入对应人员的待办，无需重新提交。</p></div>${c.act('配置审批职责','social-duties','','primary')}</section>` : '';
+  return renderTrainingWorkspace('trainers',d,c,{actions:c.act('查看待认定申报','nav','todos','primary')+(c.me.role.kind==='college'?c.act('登记外聘培训师','app-trainer-new','external'):''),total:d.total,before});
 }
 
 async function edit(id) {

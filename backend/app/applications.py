@@ -589,4 +589,6 @@ def trainer_library(db, a):
                        'title': r.data.get('title') or '', 'directions': [TRAINER_DIRECTIONS.get(x, x) for x in r.data.get('directions', [])],
                        'org_name': orgs.get(r.org_id, ''), 'effective_on': r.data.get('effective_on'), 'filing_basis': r.data.get('filing_basis') or '',
                        'recommended_province_on': r.data.get('recommended_province_on'), 'can_view_detail': can_read_details(r),
-                       'photo_id': r.data.get('cover_id'), 'version': r.version, 'teacher_id': r.data.get('teacher_id')} for r in rows], 'total': len(rows)}
+                       'photo_id': r.data.get('cover_id'), 'version': r.version, 'teacher_id': r.data.get('teacher_id')} for r in rows], 'total': len(rows),
+            # 学校管理员可见：人事认定、教务处备案职责未指定时，有多少申请在等。
+            'duty_gaps': ap.pending_duty_gaps(db) if a.role.kind == 'school' and a.user.is_admin else []}

@@ -87,3 +87,56 @@ def test_workspace_summary_metrics_and_cover_reference(setup_social,client2):
     assert p['data']['cover_id']
     w=client2.get('/api/social/workspace?section=courses').json()
     assert all('cover_id' in v and 'info_id' in v for v in w['course_info'].values())
+
+
+def test_pending_application_images_follow_application_scope_and_remove_needs_write(setup_social,app2,client2):
+    auth(client2,'teacher')
+    r=post(client2,'/api/applications/bases',{'reason':'隔离基地申请','data':{'code':'IMG-APP-B1','name':'隔离申请基地','onsite':True,'recognition':'隔离依据','usages':['practice'],'established_on':'2026-02-01'}})
+    assert r.status_code==200,r.text
+    x=r.json()['item'];up=upload(client2,'resource',x['id'],x['version']);assert up.status_code==200,up.text
+    image=up.json()['image']['id'];version=up.json()['version']
+    # 申请人、本院学院负责人可见；其他学院和无关教师不可见。
+    assert client2.get('/api/social/images/'+image).status_code==200
+    auth(client2,'collegehead');assert client2.get('/api/social/images/'+image).status_code==200
+    auth(client2,'otherdept');assert client2.get('/api/social/images/'+image).status_code==403
+    # 无写权限的账号不能移除：只读角色（教研室负责人无本人申请关系）也不能维护。
+    auth(client2,'depthead')
+    assert post(client2,f'/api/social/images/resource/{x["id"]}/remove',{'expected_version':version,'purpose':'cover','image_id':image}).status_code in (403,404)
+    # 申请人可以移除。
+    auth(client2,'teacher')
+    r=post(client2,f'/api/social/images/resource/{x["id"]}/remove',{'expected_version':version,'purpose':'cover','image_id':image});assert r.status_code==200,r.text
+
+
+def test_workspace_metrics_hidden_from_unrelated_teacher_and_counts_voided_cohort(setup_social,app2,client2):
+    pid=setup_social
+    auth(client2,'schooladmin')
+    w=client2.get('/api/social/workspace?section=projects').json()
+    p=next(x for x in w['projects'] if x['id']==pid)
+    assert p['metrics']['courses']==1 and 'effective' not in p['metrics']  # 尚未结项
+    from app import social_training as st
+    with app2.state.sessions.begin() as db:
+        assert st.closing_effective_counts(db,[pid])=={pid:0}
+        assert st.close_returned_project_ids(db,[pid])==set()
+
+
+def test_closed_project_metrics_actual_values_and_visibility(setup_social,client2):
+    from test_social_training import import_rows
+    pid=setup_social
+    auth(client2,'schooladmin')
+    assert import_rows(client2,pid,[__import__('test_social_training').row('M1',30)]).status_code==200
+    auth(client2,'schooladmin');pass
+    from test_social_training import action
+    r=action(client2,'projects','social_project',pid,'close_submit',closeout={'closed_on':'2026-09-02','outcome_report':'完整结项报告','satisfaction':'96','actual_income':'10000','funding_source':'other_training','retained':'2000','personnel':'6000','finance_reference':'财务确认凭证','location':'onsite','implicit_cost':'0','settlement_on':'2026-09-03','materials_checked':['plan','filing_form','roster','attendance','hours','process','assessment','outcomes']});assert r.status_code==200,r.text
+    auth(client2,'reviewer');r=action(client2,'projects','social_project',pid,'close');assert r.status_code==200,r.text
+    auth(client2,'schooladmin')
+    w=client2.get('/api/social/workspace?section=projects').json()
+    p=next(x for x in w['projects'] if x['id']==pid)
+    assert p['state']=='CLOSED' and p['metrics']['effective']==30 and p['metrics']['actual_income']=='10000'
+    auth(client2,'collegehead')
+    p=next(x for x in client2.get('/api/social/workspace?section=projects').json()['projects'] if x['id']==pid)
+    assert p['metrics']['effective']==30
+    # 教研室看到项目，但实际人次和收入不随摘要下发。
+    auth(client2,'depthead')
+    w=client2.get('/api/social/workspace?section=projects').json()
+    p=next((x for x in w['projects'] if x['id']==pid),None)
+    assert p is None or ('effective' not in p['metrics'] and 'actual_income' not in p['metrics'])

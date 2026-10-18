@@ -168,6 +168,41 @@ def handler_names(db, applicant, level):
     return names, (target.name if target else LEVEL_LABEL[kind]) + '负责人', acting
 
 
+DUTY_STATES = {'trainer_hr': ('HR',), 'trainer_filing': ('JWC',)}
+
+
+def duty_gap(db, applicant, level):
+    """这一级没有可办理的人时，给出明确原因和配置位置；有人可办时返回 None。"""
+    from . import social_training as st
+    if level in LEVEL_DUTY:
+        ids = st.assignments(db).get(LEVEL_DUTY[level], [])
+        label = st.DUTIES.get(LEVEL_DUTY[level], LEVEL_LABEL[level])
+        if not ids:
+            return '“' + label + '”尚未指定办理人，申请会停在这一步。请学校管理员在“执行口径 › 配置审批职责”中指定。'
+        if applicant is not None and all(i == applicant.id for i in ids):
+            return '“' + label + '”只指定了申请人本人，本人不能审批自己的申请，请学校管理员另行指定办理人。'
+        return None
+    names, title, _ = handler_names(db, applicant, level) if applicant else ([], LEVEL_LABEL[level], None)
+    if not names:
+        return title + '暂无可办理的负责人，申请会停在这一步。请学校管理员在组织机构中设置负责人。'
+    return None
+
+
+def pending_duty_gaps(db):
+    """学校级职责未指定且有申请在等的情况，给管理员看；只统计申请单数量，不读申请内容。"""
+    from sqlalchemy import func
+    from .social_models import SocialResource
+    from . import social_training as st
+    assigned = st.assignments(db)
+    out = []
+    for code, states in DUTY_STATES.items():
+        if assigned.get(code):
+            continue
+        pending = db.scalar(select(func.count()).select_from(SocialResource).where(SocialResource.kind == 'trainer', SocialResource.state.in_(states))) or 0
+        out.append({'duty': code, 'label': st.DUTIES[code], 'pending': pending})
+    return out
+
+
 def _iso(value):
     return value.isoformat(timespec='seconds') if isinstance(value, datetime) else value
 
@@ -231,6 +266,10 @@ def progress(db, flow, obj, applicant, *, returned_level=None):
                 ('，已等 %d 天' % waited if waited > 0 else '') + '。'
             if acting:
                 headline += '本级' + acting + '。'
+            gap = duty_gap(db, applicant, level) if applicant else None
+            if gap:
+                node.update(unassigned=True)
+                headline = gap
         nodes.append(node)
     nodes.append({'key': 'done', 'label': f['final'], 'state': 'done' if finished else 'todo',
                   'at': _iso(evs[-1].created_at) if finished and evs else None})
@@ -256,4 +295,5 @@ def progress(db, flow, obj, applicant, *, returned_level=None):
         step = 1
     tone = 'green' if finished else 'red' if returned else 'blue' if current else 'gray'
     return {'flow': flow, 'label': f['label'], 'nodes': nodes, 'text': text, 'headline': headline, 'step': step, 'total': total,
-            'tone': tone, 'needs_applicant': returned or not current and not finished}
+            'tone': tone, 'needs_applicant': returned or not current and not finished,
+            'unassigned': any(n.get('unassigned') for n in nodes)}

@@ -50,6 +50,13 @@ def can_view(db,a,target,obj):
             return False
     data=obj.data or {}
     if a.id in {data.get('teacher_id'),data.get('created_by')}:return True
+    if data.get('application'):
+        # 申请单（含审批中的）只给申请人、本级办理人和授权范围内的学院、学校，与申请详情同口径。
+        from ..applications import read_check
+        try:read_check(db,a,obj);return True
+        except HTTPException as error:
+            if error.status_code not in (403,404):raise
+            return False
     if obj.kind=='trainer':
         # 与师资库同口径：学院看本院，教研室看所属学院；教师只看本人。
         scope={a.org.parent_id} if a.role.kind=='dept' else set(a.org_ids) if a.role.kind=='college' else set()
@@ -140,6 +147,7 @@ class ImageRemoveIn(Input):
 @router.post('/{target}/{ident}/remove')
 def remove_image(target:str,ident:str,data:ImageRemoveIn,request:Request):
     def apply(db,a,s):
+        a.require('file.write')
         obj=_target(db,target,ident,lock=True);check_version(obj,data.expected_version)
         if not can_view(db,a,target,obj):raise HTTPException(403,'记录超出你的查看范围')
         can_maintain(db,a,target,obj)
@@ -168,4 +176,4 @@ def show_image(image_id:str,request:Request):
         if not can_view(db,a,target,obj):raise HTTPException(403,'图片超出你的查看范围')
         data=verify_file(request.app.state.settings.storage_dir,item)
         mime=item.mime
-    return Response(data,media_type=mime,headers={'Cache-Control':'private, max-age=600','X-Content-Type-Options':'nosniff','Content-Disposition':'inline'})
+    return Response(data,media_type=mime,headers={'Cache-Control':'private, max-age=60','X-Content-Type-Options':'nosniff','Content-Disposition':'inline'})

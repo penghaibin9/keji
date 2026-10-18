@@ -218,3 +218,32 @@ def test_completed_trainer_materials_stay_readable_but_cannot_be_appended(app2, 
     assert after['item']['version'] == before['item']['version']
     assert after['attachments'] == before['attachments']
     assert c.get('/api/attachments/' + before['attachments'][0]['id'] + '/download').content == original
+
+
+def test_unassigned_filing_duty_is_explained_and_resumes_after_configuration(app2, client2):
+    c = client2
+    with app2.state.sessions.begin() as db:
+        db.add(User(id='reviewer', username='reviewer', name='继续教育学院审核人', org_id='school', role_id='role-school', password_hash=HASH, must_change_password=False, active=True))
+        db.add(Setting(key='social_training_duties', value={'coordinator': ['reviewer'], 'trainer_hr': [], 'trainer_filing': []}))
+    data = {'source': 'external', 'name': '缺口外聘', 'unit': '合成机构', 'directions': ['community'], 'qualification_basis': '合成依据'}
+    auth(c, 'collegehead')
+    r = post(c, '/api/applications/trainers', {'data': data, **REASON}); assert r.status_code == 200, r.text
+    ident = r.json()['item']['id']
+    p = c.get('/api/applications/' + ident).json()['progress']
+    assert p['unassigned'] and '尚未指定办理人' in p['headline'] and '配置审批职责' in p['headline']
+    auth(c, 'schooladmin')
+    gaps = {g['duty']: g['pending'] for g in c.get('/api/social/duties').json()['gaps']}
+    assert gaps == {'trainer_hr': 0, 'trainer_filing': 1}
+    assert {g['duty'] for g in c.get('/api/applications/trainers').json()['duty_gaps']} == {'trainer_hr', 'trainer_filing'}
+    duties = c.get('/api/social/duties').json()
+    r = c.put('/api/social/duties', json={'expected_version': duties['version'], 'assignments': {**duties['assignments'], 'trainer_hr': ['reviewer'], 'trainer_filing': ['reviewer']}, 'reason': '指定认定与备案办理人'},
+              headers={'Idempotency-Key': 'duty-gap-0001'})
+    assert r.status_code == 200, r.text
+    assert c.get('/api/social/duties').json()['gaps'] == []
+    # 指定后无需重新提交：原申请直接到办理人手里，通过后入库。
+    auth(c, 'reviewer')
+    assert approve(c, ident, '教务处备案依据').status_code == 200
+    assert c.get('/api/applications/' + ident).json()['item']['state'] == 'ACTIVE'
+    # 教师不看到学校管理员的职责缺口。
+    auth(c, 'collegehead')
+    assert c.get('/api/applications/trainers').json()['duty_gaps'] == []

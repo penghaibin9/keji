@@ -124,18 +124,20 @@ def workspace(request:Request,section:str=Query('projects',pattern='^(projects|c
         from ..social_report import course_facts
         minutes={}
         for f in course_facts(db,[p.data['code'] for p in projects]).values():minutes[f['project_code']]=minutes.get(f['project_code'],0)+float(f['minutes'])
-        from ..applications import flow_of
-        # 列表右侧摘要：项目阶段指标（结项后取实际有效人次、到账收入）、关联课程数与材料数，均来自原业务数据。
+        # 列表右侧摘要：课程数、材料数人人可见；结项后的有效人次、到账收入只给学院、学校和项目负责人。
         codes_=[p.data['code'] for p in projects];ids_=[p.id for p in projects]
         course_counts=dict(db.execute(select(TrainingCourseMaster.project_code,func.count()).where(TrainingCourseMaster.project_code.in_(codes_),TrainingCourseMaster.active.is_(True)).group_by(TrainingCourseMaster.project_code)).all()) if codes_ else {}
         material_counts=dict(db.execute(select(Attachment.object_id,func.count()).where(Attachment.object_type=='social_project',Attachment.object_id.in_(ids_)).group_by(Attachment.object_id)).all()) if ids_ else {}
+        closing_ids=[p.id for p in projects if p.state in {'CLOSE_COLLEGE','CLOSE_REVIEW','CLOSED'}]
+        effective=st.closing_effective_counts(db,closing_ids)
+        close_returned=st.close_returned_project_ids(db,[p.id for p in projects if p.state=='FILED'])
         def metrics(p,item):
             out={'courses':course_counts.get(p.data['code'],0),'materials':material_counts.get(p.id,0)}
-            if p.state in {'CLOSE_COLLEGE','CLOSE_REVIEW','CLOSED'}:
-                out['effective']=st.project_facts(db,p)['effective']  # 含投诉作废期次等扣除
+            if p.id in effective and (a.role.kind in ('school','college') or p.owner_id==a.id):
+                out['effective']=effective[p.id]
                 if (item.get('closeout') or {}).get('actual_income') is not None:out['actual_income']=item['closeout']['actual_income']
             return out
-        project_items=[{**(item:=st.project_read_item(a,p)),'metrics':metrics(p,item),'state_label':'结项退回补正' if p.state=='FILED' and flow_of(p,db)=='project_close' else st.state_label(p),'report_issues':application_blockers(p.data),'video_minutes':round(minutes.get(p.data['code'],0))} for p in projects]
+        project_items=[{**(item:=st.project_read_item(a,p)),'metrics':metrics(p,item),'state_label':'结项退回补正' if p.id in close_returned else st.state_label(p),'report_issues':application_blockers(p.data),'video_minutes':round(minutes.get(p.data['code'],0))} for p in projects]
         claim_items=[st.claim_read_item(db,a,c) for c in claims]
         return {'projects':project_items,'claims':claim_items,'annuals':[{**st.annual_read_item(a,row),'org_name':resource_orgs.get(row.org_id,'—')} for row in annuals],'resources':[{**st.resource_read_item(a,row),'state_label':st.state_label(row),'org_name':resource_orgs[row.org_id]} for row in resources],
                 'policies':display(policies),'courses':serial(courses),'course_stats':serial(course_stats),'course_info':serial(course_info),'states':st.STATES,'decisions':st.DECISIONS,
@@ -163,7 +165,8 @@ def duties(request:Request):
             user=db.get(User,ident)
             people.append({'id':ident,'name':user.name if user else '原账号已不存在','username':user.username if user else '',
                            'staff_no':user.staff_no if user else '', 'org_name':db.get(Org,user.org_id).name if user and db.get(Org,user.org_id) else ''})
-        return {'assignments':assignments,'version':setting.version if setting else 0,'labels':st.DUTIES,'people':people}
+        from ..approvals import pending_duty_gaps
+        return {'assignments':assignments,'version':setting.version if setting else 0,'labels':st.DUTIES,'people':people,'gaps':pending_duty_gaps(db)}
     return read_operation(request,'roles.manage',load)
 
 
