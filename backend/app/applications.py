@@ -588,4 +588,5 @@ def trainer_library(db, a):
     return {'items': [{'id': r.id, 'code': r.code, 'name': r.name, 'source': r.data.get('source'), 'unit': r.data.get('unit') or '',
                        'title': r.data.get('title') or '', 'directions': [TRAINER_DIRECTIONS.get(x, x) for x in r.data.get('directions', [])],
                        'org_name': orgs.get(r.org_id, ''), 'effective_on': r.data.get('effective_on'), 'filing_basis': r.data.get('filing_basis') or '',
-                       'recommended_province_on': r.data.get('recommended_province_on'), 'can_view_detail': can_read_details(r)} for r in rows], 'total': len(rows)}
+                       'recommended_province_on': r.data.get('recommended_province_on'), 'can_view_detail': can_read_details(r),
+                       'photo_id': r.data.get('cover_id'), 'version': r.version, 'teacher_id': r.data.get('teacher_id')} for r in rows], 'total': len(rows)}

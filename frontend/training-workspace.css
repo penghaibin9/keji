@@ -145,3 +145,20 @@ body[data-training="true"] .footer{margin-top:24px;padding:14px 0;font-size:12px
 .tw-detail-actions{position:sticky;bottom:-20px;background:#fff;z-index:2;padding:12px 0 18px;box-shadow:0 -8px 12px #ffffffed}
 .tw-courses .tw-item:last-child:nth-child(odd){grid-column:1/-1;min-height:110px}
 .tw-courses .tw-item:last-child:nth-child(odd) .tw-cover{max-width:145px;min-height:100px}
+/* 无封面：业务类型图标占位，不使用示意照片 */
+.tw-cover.tw-cover-empty{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:6px;color:#7f97bd;background:#f2f6fc;border:1px dashed #d3def0}
+.tw-cover.tw-cover-empty .icon{width:34px;height:34px}
+.tw-cover.tw-cover-empty figcaption{position:static;background:none;padding:0;font-size:12px;color:#8a9ab3}
+.tw-item-head{display:flex;align-items:flex-start;justify-content:space-between;gap:10px}
+.tw-item-head h3{margin:0}
+.tw-code{display:inline-block;margin:6px 0 0;padding:1px 8px;border-radius:4px;background:#f2f6fc;color:#5d7090;font-size:12px}
+.tw-image-tools{display:flex;flex-wrap:wrap;align-items:center;gap:8px;margin:-4px 0 10px}
+.tw-image-tools .btn{font-size:12px;padding:5px 10px}
+.tw-image-tools .tw-note{flex-basis:100%;margin:2px 0 0}
+.tw-photos{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px;margin-bottom:10px}
+.tw-photos figure{margin:0;position:relative}
+.tw-photos img{width:100%;aspect-ratio:4/3;object-fit:cover;border-radius:5px;display:block}
+.tw-photos .btn{position:absolute;right:4px;bottom:4px;font-size:11px;padding:2px 6px;background:#ffffffe6}
+.tw-progress li.done span{background:#0059ff;color:#fff}
+.tw-progress li.current span{background:#fff;color:#f07b17;box-shadow:inset 0 0 0 3px #f07b17}
+.tw-progress li.current{color:#f07b17;font-weight:600}

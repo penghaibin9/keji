@@ -1,6 +1,6 @@
 // School business pages reuse the portal's forms, permissions, navigation and attachments.
 import {checkUploadFiles,uploadEntries,uploadSequential,uploadStatusHtml,failedEntries,MAX_ATTACHMENTS} from './approval-flow.js?v=20261017-multi-materials2';
-import {renderTrainingWorkspace,trainingChange} from './training-workspace.js?v=20261018-design1';
+import {renderTrainingWorkspace,trainingChange} from './training-workspace.js?v=20261018-claude1';
 import {progressHtml,AUDIENCE,TEACHING_MODES,IDEOLOGY} from './applications.js?v=20261018-design6&materials=20261017-preview2&approvalfix=20261018-1';
 const names={module:'模块式',person_day:'人天式',technical:'技术类',lecture:'讲座类',province:'省级',city:'市级或企业定制',school:'校级',dispatched:'统一委派异地送教',full_day:'全天实操或脱产',ordinary:'常规',subsidy:'补贴性培训',enterprise:'企业定制培训',community:'社区公益培训',rural:'乡村帮扶培训',other:'其他非学历培训',national:'国家级'};
 let workspace,context,opened,workspaceUser;
@@ -232,7 +232,8 @@ export async function socialPage(section,c){
  if(['teacher','dept','college'].includes(c.me?.role?.kind)&&section==='outcomes')content=rows.length?table(['成果名称','归属范围','认定级别','认定日期',dept||college?'查看':'操作'],items.filter(x=>x.kind==='achievement').map(x=>[esc(x.name),(dept||college)&&x.data.teacher_id?esc(c.teachers?.find(t=>t.id===x.data.teacher_id)?.name||'教师姓名待核对')+' · 教师贡献':esc(x.org_name||c.orgName(x.org_id))+' · 学院参考',esc(names[x.data.level]||'待确认'),esc(x.data.confirmed_on||'待补充'),resourceOpen(x)])):empty;
  if(c.me?.role?.kind==='teacher'&&section==='recognition')content=rows.length?table(['项目 / 周期','当前节点','下一步','操作'],workspace.claims.map(x=>[identity(workspace.projects.find(p=>p.id===x.project_id)?.data.name||'关联项目',c.periodName(x.period_id),'book'),statusBadge(x.state_label||workspace.states[x.state],x.state),esc({DRAFT:'核对材料及提交条件',RETURNED:'查看退回意见与待补内容',SUBMITTED:'等待院长初审',DEAN:'等待归口复审',COORDINATOR:'等待分管副校长审批',APPROVED:'等待教学秘书归档',ARCHIVED:'已归档，可查看认定依据'}[x.state]||'查看详情'),detail('social_claim',x.id)])):empty;
  const main='<div class="social-main"><section class="card social-panel"><div class="social-panel-head"><div><h2>'+config.label+'清单</h2></div></div>'+(['teacher','dept','college'].includes(c.me?.role?.kind)&&!p.total&&!listSearch?'':tools)+content+pager+'</section>'+resourceTable+ledger+followups+((['courses','recognition'].includes(section)&&workspace.resource_pagination.total>200)?'<p>资源与更正汇总第'+resourcePage+'页 '+(resourcePage>1?act('前一页明细','social-resource-page',String(resourcePage-1)):'')+(resourcePage*200<workspace.resource_pagination.total?act('后一页明细','social-resource-page',String(resourcePage+1)):'')+'</p>':'')+'</div>';
- if(['projects','courses','bases','outcomes'].includes(section)){
+ // 图文工作台按学校管理端原型设计，只给学校身份；教师、教研室、学院保留各自已优化的清单。
+ if(school&&['projects','courses','bases','outcomes'].includes(section)){
   const resourceAction=section==='courses'?buttons.find(b=>b.includes('data-id="course_resource"')):null,ordered=resourceAction?[buttons[0],resourceAction,...buttons.filter(b=>b!==buttons[0]&&b!==resourceAction)]:buttons;
   const actions=ordered.slice(0,2).join('')+(ordered.length>2?'<details class="tw-more"><summary>更多操作</summary><div>'+ordered.slice(2).join('')+'</div></details>':'');
   const supplementary='<details class="tw-supplement"><summary>完整清单与统计口径</summary>'+((c.me?.role?.kind==='teacher'&&['projects','outcomes'].includes(section))?'':summary)+content+resourceTable+(scopeNote?note(scopeNote,false,'查看范围'):'')+note('统计仅包含当前账号有权查看的记录；“本页”数量随分页与检索变化。',false,'统计口径')+'</details>';
@@ -590,7 +591,7 @@ function policyForm(x=null,copy=false){
  if(typeof document==='undefined')return;document.getElementById('policy-recommend')?.addEventListener('click',()=>{for(const [k,v] of Object.entries(RECOMMENDED_POLICY)){const el=document.getElementById('f-'+k);if(el&&el.value===''){el.value=String(v);el.dispatchEvent(new Event('change',{bubbles:true}))}}});
 }
 // 推荐口径：与《社会培训模块重新规划》第八节确认清单一致；学校书面确认前不得启用。
-const RECOMMENDED_POLICY={cap_mode:'ratio_cap',person_day_unit:'daily',precision:2,rounding:'half_up',step_mode:'full_steps',annual_model:'four_indicators',bonus_pool:'all_bonus_shared_ten',grade_mode:'four',satisfaction_inclusive:'false',achievement_dedup:'highest_per_reference',auxiliary_overlap:'exclusive',title_scope:'all',organization_basis:'project_units',date_basis:'closeout',title_precision:2,title_rounding:'half_up',resubmission_mode:'original_submission',total_cap:110,effective_date:'2026-08-01'};
+const RECOMMENDED_POLICY={cap_mode:'ratio_cap',person_day_unit:'daily',precision:2,rounding:'half_up',step_mode:'full_steps',annual_model:'four_indicators',bonus_pool:'all_bonus_shared_ten',grade_mode:'four',satisfaction_inclusive:'true',achievement_dedup:'highest_per_reference',auxiliary_overlap:'exclusive',title_scope:'all',organization_basis:'project_units',date_basis:'closeout',title_precision:2,title_rounding:'half_up',resubmission_mode:'original_submission',total_cap:110,effective_date:'2026-08-01'};
 
 async function dutiesForm(){
  const c=context,d=await c.api('/social/duties'),selected=Object.fromEntries(Object.keys(d.labels).map(k=>[k,new Set(d.assignments[k]||[])])),people=new Map((d.people||[]).map(p=>[p.id,p]));let sequence=0;

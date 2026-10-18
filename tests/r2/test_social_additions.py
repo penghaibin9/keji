@@ -53,7 +53,7 @@ def test_recommended_policy_draft_and_permissions(setup_social,client2,app2):
     r=recommended(client2);assert r.status_code==200,r.text
     item=r.json()['item'];assert item['state']=='DRAFT' and item['name']=='推荐口径（待学校书面确认）'
     assert item['data']==st.serial(PolicyData.model_validate(st.RECOMMENDED_POLICY).model_dump())
-    assert item['data']['interpretation_reference']=='' and item['data']['satisfaction_inclusive'] is False and item['data']['calendar_start'] is None
+    assert item['data']['interpretation_reference']=='' and item['data']['satisfaction_inclusive'] is True and item['data']['calendar_start'] is None
     assert Decimal(item['data']['total_cap'])==110
     assert r.json()['events'][0]['action']=='生成推荐口径草稿'
     assert recommended(client2,'no-such-period').status_code in {404,409,422}

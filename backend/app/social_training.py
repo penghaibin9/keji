@@ -28,10 +28,10 @@ DECISIONS = {'cap_mode':'单次基数封顶', 'person_day_unit':'人天式核算
              'auxiliary_overlap':'辅助工作是否重复计分', 'title_scope':'职称折算积分范围',
              'title_precision':'职称折算小数位','title_rounding':'职称折算舍入','resubmission_mode':'退回补正期限口径',
              'organization_basis':'学院年度人次口径','effective_date':'适用开始日期','date_basis':'跨年归属日期'}
-# 推荐口径仅用于生成待确认草稿；interpretation_reference 留空，学校书面确认前不能启用。
+# 推荐口径仅用于生成待确认草稿（满意度恰好95%计成果：2026-10-18 用户确认）；interpretation_reference 留空，学校书面确认前不能启用。
 RECOMMENDED_POLICY = {'cap_mode':'ratio_cap', 'person_day_unit':'daily', 'precision':2, 'rounding':'half_up', 'step_mode':'full_steps',
                       'annual_model':'four_indicators', 'bonus_pool':'all_bonus_shared_ten', 'total_cap':110, 'grade_mode':'four',
-                      'satisfaction_inclusive':False, 'achievement_dedup':'highest_per_reference', 'auxiliary_overlap':'exclusive',
+                      'satisfaction_inclusive':True, 'achievement_dedup':'highest_per_reference', 'auxiliary_overlap':'exclusive',
                       'title_scope':'all', 'title_precision':2, 'title_rounding':'half_up', 'resubmission_mode':'original_submission',
                       'organization_basis':'project_units', 'effective_date':'2026-08-01', 'date_basis':'closeout',
                       'calendar_start':None, 'calendar_end':None, 'holidays':[], 'workdays':[], 'calendar_reference':'', 'interpretation_reference':''}
@@ -669,7 +669,7 @@ def book_claim(db,actor,claim):
 def project_read_item(actor, project):
     item=serial(project)
     if actor.role.kind=='dept' or (actor.role.kind=='teacher' and project.owner_id!=actor.id):
-        item['data']={k:v for k,v in project.data.items() if k in {'code','name','cohort','org_id','category','start_date','end_date','mode','class_type','level','scene','service_types','teaching_methods','total_hours','base_count','video_minutes'}};item['closeout']={}
+        item['data']={k:v for k,v in project.data.items() if k in {'code','name','cohort','org_id','category','start_date','end_date','mode','class_type','level','scene','service_types','teaching_methods','total_hours','base_count','video_minutes','cover_id'}};item['closeout']={}
     elif project.state=='CLOSED' and D(str(project.closeout.get('actual_income',0)))>0:
         close=project.closeout;pending=[]
         if not close.get('funding_source'):pending.append('历史结项资金来源待补核验')
@@ -787,7 +787,7 @@ def detail(db,actor,kind,obj):
 def personal_claim_trial(trial, teacher_id):
     result=serial(trial);facts=result.get('basis',{}).get('facts')
     if not facts:return result
-    project=facts['project'];project['data']={k:v for k,v in project['data'].items() if k in {'code','name','cohort','org_id','category','start_date','end_date','mode','class_type','level','scene','service_types','teaching_methods','total_hours','base_count','video_minutes'}}
+    project=facts['project'];project['data']={k:v for k,v in project['data'].items() if k in {'code','name','cohort','org_id','category','start_date','end_date','mode','class_type','level','scene','service_types','teaching_methods','total_hours','base_count','video_minutes','cover_id'}}
     project['closeout']={k:v for k,v in project.get('closeout',{}).items() if k=='closed_on'}
     rows=[]
     for unit in facts.get('units',[]):

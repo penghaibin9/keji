@@ -16,5 +16,23 @@ test('只读师资不出现详情办理入口，封面与业务字段转义并�
  const c=context('safe');const html=renderTrainingWorkspace('trainers',{items:[{id:'x',name:'<script>',directions:[],can_view_detail:false}]},c);
  assert.match(html,/&lt;script&gt;/);assert.doesNotMatch(html,/data-action="app-detail"/);assert.match(html,/仅可查看基础信息/);
  const course=renderTrainingWorkspace('courses',{courses:[{code:'c',name:'零学时',cover_url:'javascript:alert(1)'}],course_info:{c:{hours:0}}},c);
- assert.match(course,/0 学时/);assert.doesNotMatch(course,/javascript:/);assert.match(course,/示意图/);
+ assert.match(course,/0 学时/);assert.doesNotMatch(course,/javascript:/);assert.match(course,/暂无封面/);assert.doesNotMatch(course,/示意图/);
+});
+test('待审批不含草稿和退回，结项后显示实际有效人次与到账收入，已结项四步均完成',()=>{
+ const school={...context('school-a'),me:{user:{id:'school-a'},role:{kind:'school'}},can:()=>true};
+ const w={projects:[{id:'d',state:'DRAFT',data:{name:'草稿项目'}},{id:'r',state:'RETURNED',data:{name:'退回项目'}},{id:'s',state:'SUBMITTED',data:{name:'待备案项目'}},
+  {id:'z',state:'CLOSED',version:3,owner_id:'t',data:{name:'已结项目',expected_participants:10,expected_income:500,total_hours:16,cover_id:'abcdefgh-1234'},closeout:{actual_income:'800'},metrics:{effective:30,actual_income:'800',courses:2,materials:4}}]};
+ trainingChange('projects',school,'tab','pending');let html=renderTrainingWorkspace('projects',w,school);
+ assert.match(html,/待备案项目/);assert.doesNotMatch(html,/草稿项目|退回项目/);assert.match(html,/办理备案/);
+ trainingChange('projects',school,'tab','CLOSED');html=renderTrainingWorkspace('projects',w,school);
+ assert.match(html,/有效人次<strong>30 人次/);assert.match(html,/到账收入<strong>800 元/);assert.match(html,/课程<strong>2 门/);assert.doesNotMatch(html,/预计人次/);
+ assert.equal((html.match(/<li class="done">/g)||[]).length,4);assert.match(html,/项目材料 · 4 份/);
+ assert.match(html,/src="\/api\/social\/images\/abcdefgh-1234"/);assert.match(html,/更换封面/);
+ const teacher=context('other-teacher');trainingChange('projects',teacher,'tab','CLOSED');assert.doesNotMatch(renderTrainingWorkspace('projects',w,teacher),/更换封面|上传封面/);
+});
+test('基地显示用途、级别、共建单位和场地照片，学院可维护照片',()=>{
+ const college={...context('college-a'),me:{user:{id:'college-a'},role:{kind:'college'}},can:()=>true};
+ const html=renderTrainingWorkspace('bases',{resources:[{id:'b',kind:'base',name:'校外基地',version:2,org_name:'甲学院',data:{onsite:false,partner:'共建企业',usages:['ideology'],level:'city',photo_ids:['photo-0001-a','photo-0002-b']}}]},college);
+ assert.match(html,/思政实践教学基地/);assert.match(html,/市级/);assert.match(html,/共建企业/);assert.match(html,/场地照片 · 2/);
+ assert.match(html,/添加场地照片/);assert.match(html,/training-image-remove" data-id="resource\|b\|photo\|photo-0001-a\|2"/);
 });

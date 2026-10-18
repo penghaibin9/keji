@@ -229,7 +229,7 @@ def course_edit(ident: str, data: CourseApplyIn, request: Request):
             _, name, values = teaching_values(db, a, applicant, data.data, obj)
         else:
             _, name, values = manual_values(db, applicant, data.data, obj)
-        keep = {k: obj.data.get(k) for k in ('application', 'teacher_id', 'teacher_name', 'created_by', 'returned_level', 'returned_flow')}
+        keep = {k: obj.data.get(k) for k in ('application', 'teacher_id', 'teacher_name', 'created_by', 'returned_level', 'returned_flow', 'cover_id', 'photo_ids')}
         obj.name = name
         obj.data = {**values, **keep}
         return record(db, a, obj, '补正申请资料', before, data.reason, {'flow': apps.flow_of(obj), 'decision': 'edit'})
@@ -291,7 +291,7 @@ def trainer_edit(ident: str, data: TrainerApplyIn, request: Request):
         applicant = apps.applicant_of(db, obj)
         before = serial(obj)
         _, name, values = trainer_values(db, a, applicant, data.data, obj)
-        keep = {k: obj.data.get(k) for k in ('application', 'teacher_id', 'teacher_name', 'created_by', 'returned_level', 'returned_flow')}
+        keep = {k: obj.data.get(k) for k in ('application', 'teacher_id', 'teacher_name', 'created_by', 'returned_level', 'returned_flow', 'cover_id', 'photo_ids')}
         obj.name = name
         obj.data = {**values, **keep}
         return record(db, a, obj, '补正申请资料', before, data.reason, {'flow': apps.flow_of(obj), 'decision': 'edit'})
@@ -346,7 +346,7 @@ def base_edit(ident: str, data: BaseApplyIn, request: Request):
         applicant = apps.applicant_of(db, obj)
         before = serial(obj)
         values = base_values(db, applicant, apps.college_for(db, applicant), data.data)
-        keep = {k: obj.data.get(k) for k in ('application', 'teacher_id', 'teacher_name', 'created_by', 'returned_level')}
+        keep = {k: obj.data.get(k) for k in ('application', 'teacher_id', 'teacher_name', 'created_by', 'returned_level', 'cover_id', 'photo_ids')}
         obj.name = data.data.name
         obj.data = {**values, **keep}
         return record(db, a, obj, '补正申请资料', before, data.reason, {'flow': 'base', 'decision': 'edit'})
@@ -388,6 +388,8 @@ def action(ident: str, data: ApplicationAction, request: Request):
         if data.courseware is not None:
             if data.action != 'approve' or flow not in ('course', 'teaching_course') or level not in ('college', 'school'):
                 raise HTTPException(422, '仅学院或学校审批课程时可补录课件审查记录')
+            if (obj.data.get('courseware') or {}).get('checked'):
+                raise HTTPException(409, '申请已有课件审查记录，审批时不能覆盖；如需更正请退回申请人补正')
             obj.data = {**obj.data, 'courseware': data.courseware.model_dump(mode='json')}
         if data.action == 'return':
             obj.state = 'RETURNED'

@@ -5,7 +5,7 @@ from fastapi import APIRouter, Request, HTTPException, Query
 from fastapi.responses import Response
 from sqlalchemy import select, func, or_
 from ..core import command, read_operation, serial, audit, workflow, check_version, require_open_period, digest
-from ..models import Org, User, Role, Setting, Period, PointEntry, Notice, WorkflowEvent
+from ..models import Org, User, Role, Setting, Period, PointEntry, Notice, WorkflowEvent, Attachment
 from ..reference_data import TrainingProjectMaster, TrainingCourseMaster, TrainingClassMaster
 from ..social_models import SocialProject, SocialUnit, SocialPolicy, SocialClaim, SocialAnnual, SocialResource
 from ..social_schemas import ReportInfoIn,review_done,PrepIn,ProjectIn, UnitsIn, SocialAction, PolicyIn, PolicyUpdate, RecommendedPolicyIn, PolicyCalendarIn, PolicyData, ClaimIn, AnnualIn, ResourceIn, ResourceUpdate, DutiesIn, CourseIn, CourseLinkIn, CourseBatchIn, CaseNoteIn, CorrectionIn, ReportIn, PointReviewIn
@@ -111,20 +111,31 @@ def workspace(request:Request,section:str=Query('projects',pattern='^(projects|c
         for r in db.scalars(select(SocialResource).where(st.course_resource_scope(db,a),SocialResource.kind=='course_resource')):
             stats=course_stats.setdefault(r.data['course_code'],{'resources':0,'videos':0,'minutes':st.D(0)});stats['resources']+=1
             if r.data['resource_type']=='video':stats['videos']+=st.resource_video_count(r.data);stats['minutes']+=st.D(r.data['duration_minutes'])
-        course_info={}
+        course_info={};course_orgs=dict(db.execute(select(Org.id,Org.name)).all())
         codes=[c.code for c in courses]
         for i in range(0,len(codes),500):
             for r in db.scalars(select(SocialResource).where(SocialResource.kind=='course_apply',SocialResource.state=='ACTIVE',SocialResource.data['course_code'].as_string().in_(codes[i:i+500]))):
                 d=r.data;course_info[d['course_code']]={**{k:d.get(k) for k in ('hours','teaching_mode','ideology','teacher_name','courseware','audience','intro','package','one_skill','target_groups')},
                     'application_id':r.id if d.get('application') else None,'source':d.get('source'),
-                    'org_id':r.org_id,'org_name':db.get(Org,r.org_id).name}
+                    'org_id':r.org_id,'org_name':course_orgs.get(r.org_id,''),'info_id':r.id,'cover_id':d.get('cover_id'),'version':r.version}
         resource_orgs=dict(db.execute(select(Org.id,Org.name).where(Org.id.in_({r.org_id for r in resources}|{r.org_id for r in annuals}))).all()) if resources or annuals else {}
         display=lambda rows:[{**serial(row),'state_label':st.state_label(row)} for row in rows]
         from ..social_schemas import application_blockers
         from ..social_report import course_facts
         minutes={}
         for f in course_facts(db,[p.data['code'] for p in projects]).values():minutes[f['project_code']]=minutes.get(f['project_code'],0)+float(f['minutes'])
-        project_items=[{**st.project_read_item(a,p),'state_label':st.state_label(p),'report_issues':application_blockers(p.data),'video_minutes':round(minutes.get(p.data['code'],0))} for p in projects]
+        from ..applications import flow_of
+        # 列表右侧摘要：项目阶段指标（结项后取实际有效人次、到账收入）、关联课程数与材料数，均来自原业务数据。
+        codes_=[p.data['code'] for p in projects];ids_=[p.id for p in projects]
+        course_counts=dict(db.execute(select(TrainingCourseMaster.project_code,func.count()).where(TrainingCourseMaster.project_code.in_(codes_),TrainingCourseMaster.active.is_(True)).group_by(TrainingCourseMaster.project_code)).all()) if codes_ else {}
+        material_counts=dict(db.execute(select(Attachment.object_id,func.count()).where(Attachment.object_type=='social_project',Attachment.object_id.in_(ids_)).group_by(Attachment.object_id)).all()) if ids_ else {}
+        def metrics(p,item):
+            out={'courses':course_counts.get(p.data['code'],0),'materials':material_counts.get(p.id,0)}
+            if p.state in {'CLOSE_COLLEGE','CLOSE_REVIEW','CLOSED'}:
+                out['effective']=st.project_facts(db,p)['effective']  # 含投诉作废期次等扣除
+                if (item.get('closeout') or {}).get('actual_income') is not None:out['actual_income']=item['closeout']['actual_income']
+            return out
+        project_items=[{**(item:=st.project_read_item(a,p)),'metrics':metrics(p,item),'state_label':'结项退回补正' if p.state=='FILED' and flow_of(p,db)=='project_close' else st.state_label(p),'report_issues':application_blockers(p.data),'video_minutes':round(minutes.get(p.data['code'],0))} for p in projects]
         claim_items=[st.claim_read_item(db,a,c) for c in claims]
         return {'projects':project_items,'claims':claim_items,'annuals':[{**st.annual_read_item(a,row),'org_name':resource_orgs.get(row.org_id,'—')} for row in annuals],'resources':[{**st.resource_read_item(a,row),'state_label':st.state_label(row),'org_name':resource_orgs[row.org_id]} for row in resources],
                 'policies':display(policies),'courses':serial(courses),'course_stats':serial(course_stats),'course_info':serial(course_info),'states':st.STATES,'decisions':st.DECISIONS,
@@ -220,7 +231,7 @@ def project_edit(ident:str,data:ProjectIn,request:Request):
             if data.data.mode_confirmed:source.pop('mode_pending',None)
             source['policy_pending']=[key for key in source.get('policy_pending',['level','scene'] if source.get('ledger_id') else []) if not values.get(key+'_confirmed')]
             values['source']=source
-        values={**values,**{k:obj.data[k] for k in ('returned_level','prep') if k in obj.data}}
+        values={**values,**{k:obj.data[k] for k in ('returned_level','prep','cover_id') if k in obj.data}}
         if values.get('quality') is None and obj.data.get('quality'):values['quality']=obj.data['quality']
         obj.data=values;obj.owner_id=data.data.owner_id
         return event(db,a,'social_project',obj,'修改申报草稿',before,data.reason)
