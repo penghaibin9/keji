@@ -1,5 +1,20 @@
 /* Selected business-first design; shared chrome and existing business components. */
 @media screen {
+.course-empty{padding:38px 20px 42px;text-align:center;color:#62758b}.course-empty>.icon{width:30px;height:30px;color:#7d94b1;margin-bottom:10px}.course-empty h3{font-size:17px;color:#253f5c;margin:0 0 10px}.course-empty p{font-size:14px;line-height:1.8;margin:0 auto 18px;max-width:560px}.course-empty .btn+.btn{margin-left:8px}
+.course-source{font-size:13px;line-height:1.8;color:#63758a;padding:14px 20px;margin:0;border-top:1px solid #edf1f6}.course-guide{margin:0 20px 16px}.course-guide p{padding:0 16px 14px;font-size:14px;line-height:1.8}
+body[data-role="teacher"] .content[data-page="credits"] .section-tabs{margin-bottom:18px}.teacher-course-list .card-pad:has(.course-empty){padding:0}.teacher-course-list .filterbar,.teacher-course-summary .filterbar{border-bottom:1px solid #edf1f6}
+.credit-year-list{padding:0 20px}.credit-year{padding:22px 0;border-bottom:1px solid #e5ebf2}.credit-year:last-child{border-bottom:0}.credit-year h3{font-size:17px;margin:0}.credit-year dl{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:20px;margin:20px 0 14px}.credit-year dt{font-size:13px;color:#63758a}.credit-year dd{font-size:27px;font-weight:700;color:#233e5a;margin:6px 0 0;font-variant-numeric:tabular-nums}.credit-year dd small{font-size:12px;font-weight:400;margin-left:6px;color:#63758a}.credit-year-source{font-size:13px;color:#63758a;line-height:1.8}.credit-year-tips{display:flex;flex-wrap:wrap;gap:6px}
+.mine-status{display:flex;align-items:center;justify-content:space-between;gap:16px;padding:16px 20px}.mine-status strong{font-size:16px}.mine-status p{font-size:13px;color:#63758a;margin:8px 0 0;line-height:1.7}.mine-status>.btn{flex:none}.mine-related{display:flex;gap:10px 18px;flex-wrap:wrap;padding:16px 0 0}.mine-related .btn{padding:4px 0!important;min-height:32px!important}.mine-page .mine-claim-blocked{margin:12px 0 0}.mine-page .mine-claim-blocked p{line-height:1.8}.mine-page .cell-sub{display:block}
+.qualification-summary{display:flex;gap:20px 34px;flex-wrap:wrap;margin:0 0 18px;padding:18px 20px;border:1px solid #e2e8f0;background:#fff;border-radius:10px}.qualification-summary span{display:flex;align-items:center;gap:16px;font-size:14px;color:#63758a}.qualification-summary strong{font-size:23px;color:#263f5b;font-variant-numeric:tabular-nums}.qualification-due{color:#9a5a13!important}.list-count{margin:0;padding:12px 20px;border-top:1px solid #edf1f6;font-size:13px;color:#63758a}
+body[data-role="teacher"] .teacher-qualification-list .table{table-layout:fixed;min-width:0;width:100%}body[data-role="teacher"] .teacher-qualification-list th:first-child{width:31%}body[data-role="teacher"] .teacher-qualification-list th:nth-child(2){width:24%}body[data-role="teacher"] .teacher-qualification-list th:last-child{width:104px}body[data-role="teacher"] .teacher-qualification-list td{overflow-wrap:anywhere;white-space:normal}
+@media(max-width:700px){
+.course-empty{padding:30px 16px}.course-empty .btn{min-height:44px}.course-empty .btn+.btn{margin:8px 0 0}.course-empty>div{display:flex;flex-direction:column;align-items:center}.course-source{padding:14px 16px}.course-guide{margin-left:16px;margin-right:16px}.credit-year-list{padding:0 16px}.credit-year .between{align-items:flex-start;gap:10px;flex-wrap:wrap}.credit-year dl{gap:10px}.credit-year dd{font-size:24px}.credit-year dd small{display:block;margin:4px 0 0}.credit-year-source{line-height:1.9}
+.mine-status{padding:16px;align-items:flex-start;flex-wrap:wrap}.mine-status>.btn{min-height:44px}.mine-related{gap:6px 18px}.mine-related .btn{min-height:44px!important}.qualification-summary{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px 18px;padding:14px 16px}.qualification-summary span{justify-content:space-between;gap:8px}
+body[data-role="teacher"] .mine-allocations .table-scroll{overflow:visible}body[data-role="teacher"] .mine-allocations .table{display:block;min-width:0!important;width:100%}body[data-role="teacher"] .mine-allocations thead{display:none}body[data-role="teacher"] .mine-allocations tbody{display:block}body[data-role="teacher"] .mine-allocations tr{display:block;padding:14px 16px;border-bottom:1px solid #e2e8f0}body[data-role="teacher"] .content .mine-allocations td{display:block;border:0;padding:7px 0!important;width:100%;white-space:normal;overflow-wrap:anywhere}body[data-role="teacher"] .mine-allocations td::before{content:attr(data-label);display:block;color:#63758a;font-size:12px;margin-bottom:4px}
+body[data-role="teacher"] .teacher-qualification-list .table-scroll{overflow:visible}body[data-role="teacher"] .teacher-qualification-list .table{display:block}.teacher-qualification-list thead{display:none}.teacher-qualification-list tbody{display:block}.teacher-qualification-list tr{display:block;padding:14px 16px;border-bottom:1px solid #e2e8f0}body[data-role="teacher"] .content .teacher-qualification-list td{display:block;border:0;padding:7px 0!important;width:100%}.teacher-qualification-list td::before{content:attr(data-label);display:block;color:#63758a;font-size:12px;margin-bottom:4px}.teacher-qualification-list td:first-child::before,.teacher-qualification-list td:last-child::before{display:none}.teacher-qualification-list td:last-child .btn{min-height:44px}
+}
+}
+@media screen {
 :root{--sidebar:224px;--ink:#193451;--muted:#637995;--line:#e1e9f3;--bg:#f5f8fc}
 body{font-family:"Microsoft YaHei","PingFang SC",sans-serif}
 .school-masthead{display:none}
@@ -235,3 +250,667 @@ body{font-family:"Microsoft YaHei","PingFang SC",sans-serif}
 
 .notice-scope-all{display:inline-flex;align-items:center;gap:6px;font-size:13px;color:#2457ce;margin-bottom:6px;cursor:pointer}.notice-scope-list{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:6px 12px;max-height:180px;overflow:auto;padding:10px 12px;border:1px solid #dce5f2;border-radius:8px;background:#fff}.notice-scope-item{display:flex;align-items:center;gap:8px;font-size:14px;min-width:0;cursor:pointer}.notice-scope-item span{overflow-wrap:anywhere}.notice-scope-item small{margin-left:auto;color:#7a8ba6;font-size:12px}@media(max-width:600px){.notice-scope-list{grid-template-columns:1fr}}
 .form-field .notice-scope-item,.form-field .notice-scope-all{display:flex;align-items:center;gap:8px;margin:0;font-weight:400;font-size:14px}.form-field .notice-scope-all{display:inline-flex;margin-bottom:8px;color:#2457ce;font-size:13px}.notice-scope-item input,.notice-scope-all input{width:auto;flex:0 0 auto;margin:0}.notice-scope-item small{margin-left:auto;padding-left:8px;white-space:nowrap}
+
+/* 教师逐页整改：保留业务布局，先明确结果、当前责任方和主要动作。 */
+body[data-role="teacher"] .teacher-points-summary{display:flex;align-items:center;gap:24px;background:#fff;border-block:1px solid #dce4ef;padding:22px 24px;margin:16px 0 20px}
+.teacher-points-summary>div{flex:none;min-width:150px}.teacher-points-summary>div>span{display:block;font-size:14px;color:#425b75}.teacher-points-summary strong{display:block;font-size:32px;line-height:1.4;color:#2458c4}.teacher-points-summary strong small{font-size:14px;margin-left:6px;font-weight:400}.teacher-points-summary>p{flex:1;margin:0;color:#52677e;font-size:14px;line-height:1.8}
+.claim-blockers{padding:16px 18px;margin:16px 0;border-left:3px solid #bd7b2d;background:#fff8ed;color:#674a27}.claim-blockers h3{margin:0 0 6px;font-size:17px}.claim-blockers p,.claim-blockers li{font-size:14px;line-height:1.8}.claim-blockers details{margin-top:12px}.claim-blockers summary{cursor:pointer;font-size:14px;font-weight:600}.claim-blockers ul{margin:8px 0;padding-left:22px}
+.application-status-filter{display:flex;gap:8px;flex-wrap:wrap;padding:14px 20px;border-bottom:1px solid #e5eaf0}.teacher-list-summary{padding:12px 0;margin:0;color:#405b79;font-size:14px}.teacher-download-empty{padding:24px}.teacher-download-empty h2{font-size:18px}.teacher-download-empty p{color:#52677e;font-size:14px}.teacher-download-empty .btn{margin-right:10px}
+body[data-role="teacher"] input::placeholder,body[data-role="teacher"] textarea::placeholder{color:#65758a;opacity:1}
+body[data-role="teacher"] .content .card{box-shadow:none}body[data-role="teacher"] .content .cell-sub{font-size:13px;line-height:1.7;color:#5c6e83}
+body[data-role="teacher"] .policy-text{max-width:70ch;font-size:16px;line-height:1.9;white-space:pre-wrap;overflow-wrap:anywhere}
+body[data-role="teacher"] .content[data-page="notices"] td:first-child{min-width:260px;width:45%;font-weight:600}body[data-role="teacher"] .content[data-page="notices"] td:first-child button{font-size:15px;white-space:normal;text-align:left;line-height:1.7}
+body[data-role="teacher"] .content[data-page="courses"] th:first-child{width:32%}body[data-role="teacher"] .content[data-page="courses"] th:last-child{width:110px}body[data-role="teacher"] .content[data-page="recognition"] th:first-child{width:35%}
+body[data-role="teacher"] .ledger-table td[data-label="授课学时"],body[data-role="teacher"] .ledger-table td[data-label="课程人次"],body[data-role="teacher"] .ledger-table td[data-label="归属培训收入（元）"]{text-align:right;font-variant-numeric:tabular-nums}
+@media(max-width:700px){.teacher-points-summary{flex-wrap:wrap;gap:12px!important;padding:18px!important}.teacher-points-summary>p{flex-basis:100%;order:2}.teacher-points-summary>.btn{margin-left:auto;min-height:44px}.application-status-filter{padding:12px 16px}.application-status-filter .btn{min-height:40px}body[data-role="teacher"] .teacher-home .teacher-hero-date{display:none}body[data-role="teacher"] .teacher-home .teacher-hero{padding:12px 16px!important;gap:8px}body[data-role="teacher"] .teacher-home .teacher-hero h1{font-size:20px;margin:2px 0}body[data-role="teacher"] .teacher-home .teacher-hero-actions{display:none}body[data-role="teacher"] .content .teacher-overview-metrics .kpi{min-height:92px;padding:10px 12px}body[data-role="teacher"] .teacher-overview-metrics .kpi-foot{margin-top:5px}body[data-role="teacher"] .content .teacher-overview-metrics .kpi-value{margin-top:7px}}
+
+/* 教师三页：沿用现有组件，收敛首屏层级，保证小屏操作始终可见。 */
+@media screen{
+body[data-role="teacher"] .teacher-home{gap:18px}
+body[data-role="teacher"] .teacher-home .card{border:1px solid #e2e8f0;border-radius:12px;box-shadow:none;background:#fff}
+body[data-role="teacher"] .teacher-home .teacher-hero{align-items:center;padding:20px 24px;border:1px solid #e2e8f0;border-radius:12px;background:#fff;color:var(--ink);box-shadow:none}
+body[data-role="teacher"] .teacher-home .teacher-hero::after{display:none}
+body[data-role="teacher"] .teacher-home .teacher-hero-date{padding:0;background:none;color:#63758a;font-size:13px;letter-spacing:0}
+body[data-role="teacher"] .teacher-home .teacher-hero h1{margin:7px 0;font-size:24px;color:var(--ink)}
+body[data-role="teacher"] .teacher-home .teacher-hero-sub{color:#52677e;font-size:14px}
+body[data-role="teacher"] .teacher-home .teacher-hero-sub b{color:#2458c4;font-size:17px}
+body[data-role="teacher"] .content .teacher-home .teacher-hero-actions .btn{padding:9px 14px;min-height:40px;border:1px solid #dbe3ed;border-radius:7px;box-shadow:none;background:#fff;color:#314b67}
+body[data-role="teacher"] .content .teacher-home .teacher-hero-actions .btn.primary{background:#2458c4;color:#fff;border-color:#2458c4}
+.teacher-overview-metrics{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:14px}
+body[data-role="teacher"] .content .teacher-overview-metrics .kpi{min-width:0;min-height:126px;padding:18px 20px;border:1px solid #e2e8f0;border-radius:10px;box-shadow:none;background:#fff;text-align:left}
+body[data-role="teacher"] .content .teacher-overview-metrics .kpi-value{font-size:26px;line-height:1.3;margin-top:14px;overflow-wrap:anywhere;color:#193451}
+.teacher-overview-metrics .kpi-value small{font-size:13px;margin-left:5px;font-weight:400}
+.teacher-overview-metrics .kpi-foot{margin:9px 0 0;font-size:12px;line-height:1.5;color:#61758d}
+.teacher-overview-metrics .kpi-label{padding-right:28px;font-size:13px}
+.teacher-overview-metrics .kpi-icon{width:28px;height:28px;top:14px;right:14px}
+body[data-role="teacher"] .teacher-home .card-head{padding:17px 20px;border-bottom:1px solid #edf1f6}
+body[data-role="teacher"] .teacher-home .card-head h2{font-size:17px}
+body[data-role="teacher"] .teacher-home .teacher-apply .card-head p{display:none}
+body[data-role="teacher"] .teacher-home .teacher-apply-grid{padding:14px 18px;gap:10px}
+body[data-role="teacher"] .teacher-home .teacher-apply-item{padding:12px;gap:10px;box-shadow:none;border-radius:8px}
+body[data-role="teacher"] .teacher-home .teacher-apply-item small{display:none}
+body[data-role="teacher"] .teacher-home .teacher-apply-item>.icon:first-child{width:32px;height:32px;padding:7px;border-radius:7px}
+.teacher-home .teacher-home-grid{gap:18px;grid-template-columns:1fr 1fr}
+.teacher-home .teacher-points-meta{font-size:14px;line-height:1.7;margin:0 0 8px;color:#53677f}
+.teacher-home .teacher-points-meta b{font-size:20px;color:#2458c4}
+.teacher-home .teacher-points .btn{margin-top:4px}
+.teacher-home .apply-home-row{grid-template-columns:minmax(0,1.2fr) minmax(0,1fr) auto;padding:14px 0;gap:18px}
+.apply-current{font-size:14px;font-weight:600;color:#314e70}
+.teacher-task-row{display:flex;align-items:center;gap:20px;padding:18px 20px;border-bottom:1px solid #edf1f6}
+.teacher-task-row:last-child{border-bottom:0}
+.teacher-task-copy{flex:1;min-width:0}.teacher-task-copy h3{font-size:15px;line-height:1.6;margin:0;overflow-wrap:anywhere}.teacher-task-copy p{font-size:13px;color:#63758a;line-height:1.7;margin:6px 0 0}
+.teacher-task-action{display:flex;gap:14px;align-items:center;flex:none}.teacher-task-action .badge,.teacher-task-action .btn{white-space:nowrap}
+.teacher-task-empty{padding:28px 20px;text-align:center;color:#63758a}.teacher-task-empty>.icon{width:24px;height:24px;color:#517694}.teacher-task-empty h3{font-size:16px;color:#314b67;margin:12px 0 6px}.teacher-task-empty p{margin:6px 0 16px;font-size:14px}
+.teacher-task-empty.compact{display:flex;align-items:center;gap:12px;text-align:left;padding:20px}.teacher-task-empty.compact p{margin:0;flex:1}.teacher-task-empty.compact>.icon{flex:none}
+.teacher-task-search{display:flex;gap:10px;padding:14px 20px;align-items:center;border-bottom:1px solid #edf1f6}.teacher-task-search input:not([type="hidden"]){width:360px;max-width:100%;min-width:0;min-height:40px;border:1px solid #d7e0eb;border-radius:7px;padding:8px 12px;font:inherit;background:#fff}.teacher-task-search input:focus-visible{outline:2px solid #2458c4;outline-offset:2px}
+body[data-role="teacher"] .content[data-page="todos"] .card{box-shadow:none;border:1px solid #e2e8f0;border-radius:12px}
+body[data-role="teacher"] .content[data-page="todos"] .card-head{padding:18px 20px}
+.teacher-waiting{margin-top:20px}
+.teacher-applications .table{width:100%;table-layout:fixed;min-width:0!important}.teacher-applications th:first-child{width:42%}.teacher-applications th:last-child{width:100px}.teacher-applications td{white-space:normal;overflow-wrap:anywhere}
+body[data-role="teacher"] .content[data-page="projects"] .social-panel .teacher-project-table{width:100%;table-layout:fixed;min-width:0}
+body[data-role="teacher"] .content[data-page="projects"] .social-panel .teacher-project-table th:first-child{width:34%}
+body[data-role="teacher"] .content[data-page="projects"] .social-panel .teacher-project-table th:nth-child(2){width:9%}
+body[data-role="teacher"] .content[data-page="projects"] .social-panel .teacher-project-table th:nth-child(3){width:17%}
+body[data-role="teacher"] .content[data-page="projects"] .social-panel .teacher-project-table th:nth-child(4){width:12%}
+body[data-role="teacher"] .content[data-page="projects"] .social-panel .teacher-project-table th:nth-child(5){width:18%}
+body[data-role="teacher"] .content[data-page="projects"] .social-panel .teacher-project-table th:last-child{width:10%}
+.teacher-project-table .social-identity>div{flex:1;min-width:0}.teacher-project-table .badge{white-space:nowrap}.teacher-project-table td{vertical-align:middle}.teacher-project-table .social-identity strong{line-height:1.6}
+@media(max-width:1000px){.teacher-overview-metrics{grid-template-columns:repeat(2,minmax(0,1fr))}.teacher-home .teacher-home-grid{grid-template-columns:1fr}}
+@media(max-width:700px){
+body[data-role="teacher"] .teacher-home .teacher-hero{padding:18px;gap:14px;align-items:stretch}.teacher-home .teacher-hero-actions{gap:8px}
+body[data-role="teacher"] .content .teacher-overview-metrics .kpi{padding:14px 12px;min-height:118px}.teacher-overview-metrics{gap:10px}.teacher-overview-metrics .kpi-icon{display:none}.teacher-overview-metrics .kpi-label{padding-right:0}.teacher-overview-metrics .kpi-value{font-size:24px!important}
+body[data-role="teacher"] .teacher-home .teacher-apply-grid{grid-template-columns:repeat(2,minmax(0,1fr));padding:12px;gap:8px}.teacher-home .teacher-apply-item>.icon:last-child{display:none}.teacher-home .teacher-apply-item b{font-size:13px}
+.teacher-task-row{align-items:stretch;flex-direction:column;gap:12px;padding:16px}.teacher-task-action{justify-content:space-between}.teacher-task-action .btn{min-height:44px}.teacher-task-search{padding:14px 16px;flex-wrap:wrap}.teacher-task-search input:not([type="hidden"]){flex:1;min-width:180px}.teacher-task-search .btn{min-height:44px}.teacher-task-empty.compact{flex-wrap:wrap}.teacher-task-empty.compact p{flex-basis:75%}
+.teacher-home .apply-home-row{grid-template-columns:1fr auto;gap:8px}.teacher-home .apply-home-row>div:nth-child(2){grid-row:2;grid-column:1}.teacher-home .apply-home-row>.btn{grid-column:2;grid-row:1/3;min-height:44px}
+body[data-role="teacher"] .content .teacher-applications .table-scroll,body[data-role="teacher"] .content[data-page="projects"] .social-panel .table-scroll{overflow:visible}
+body[data-role="teacher"] .content .teacher-applications .table,body[data-role="teacher"] .content[data-page="projects"] .social-panel .teacher-project-table{display:block;min-width:0!important;width:100%}
+.teacher-applications thead,.teacher-project-table thead{display:none}.teacher-applications tbody,.teacher-project-table tbody{display:block}.teacher-applications tr,.teacher-project-table tr{display:block;padding:14px 16px;border-bottom:1px solid #e2e8f0}
+body[data-role="teacher"] .content .teacher-applications td,body[data-role="teacher"] .content[data-page="projects"] .social-panel .teacher-project-table td{display:flex;align-items:flex-start;justify-content:space-between;gap:14px;width:100%;padding:7px 0!important;border:0;white-space:normal;overflow-wrap:anywhere;text-align:left}
+.teacher-applications td::before,.teacher-project-table td::before{content:attr(data-label);flex:0 0 64px;color:#63758a;font-size:13px}.teacher-applications td:first-child,.teacher-project-table td:first-child{display:block!important}.teacher-applications td:first-child::before,.teacher-project-table td:first-child::before{display:none}.teacher-applications td:last-child,.teacher-project-table td:last-child{align-items:center!important}.teacher-applications td:last-child .btn,.teacher-project-table td:last-child .btn{min-height:44px}
+}
+}
+
+@media screen{
+body[data-role="teacher"] .teacher-applications .apply-counts span:nth-child(1){background:#f0f3f7;color:#596b81}
+body[data-role="teacher"] .teacher-applications .apply-counts span:nth-child(2){background:#eaf1ff;color:#2458c4}
+body[data-role="teacher"] .teacher-applications .apply-counts span:nth-child(3){background:#fff4e5;color:#9a5a13}
+body[data-role="teacher"] .teacher-applications .apply-counts span:nth-child(4){background:#edf8f0;color:#28754a}
+.teacher-project-state .social-badge{display:inline-flex;width:auto;white-space:nowrap}
+@media(max-width:700px){.apply-progress-copy,.teacher-project-dates,.teacher-project-state{flex:1;min-width:0}.apply-progress-copy .cell-sub{margin-top:5px}.teacher-project-state .cell-sub{margin-top:6px}.teacher-task-empty{padding:22px 16px}
+body[data-role="teacher"] .content .teacher-overview-metrics .kpi-icon{display:none}
+body[data-role="teacher"] .content .teacher-overview-metrics .kpi-label{padding-right:0;white-space:normal;overflow:visible;line-height:1.5}
+}
+}
+
+/* 四类申报沿用现有列表、整页表单和审批接口。 */
+@media screen{
+.teacher-apply-page{display:grid;gap:18px}
+body[data-role="teacher"] .teacher-apply-page .card{border:1px solid #e2e8f0;border-radius:12px;background:#fff;box-shadow:none;margin:0}
+.teacher-apply-page .apply-entry-top{padding:20px 22px;gap:18px;align-items:center}
+.teacher-apply-page .apply-entry-top>div:first-child{flex:1;min-width:260px}
+.teacher-apply-page .apply-intro{font-size:15px;line-height:1.8;color:#314b67;max-width:700px}
+.teacher-apply-page .apply-entry-hint{margin-top:7px;color:#61758b;font-size:13px;line-height:1.7}
+.apply-entry-actions{display:flex;gap:10px;flex-wrap:wrap}
+.teacher-apply-page .apply-entry-actions .btn{padding:9px 14px;min-height:42px;font-size:14px;box-shadow:none;border-radius:7px}
+body[data-role="teacher"] .content .teacher-apply-page .apply-entry-actions .btn{box-shadow:none}
+.teacher-apply-page .teacher-applications th:last-child{width:132px}
+.teacher-apply-page .card-head{padding:17px 20px;border-bottom:1px solid #edf1f6}
+.teacher-apply-page .card-head h2{font-size:17px}
+.teacher-apply-page .apply-empty{padding:20px;margin:0;font-size:14px;line-height:1.7;color:#63758a}
+.apply-approved>summary{padding:17px 20px;cursor:pointer;font-size:15px;color:#314b67}
+.apply-approved>summary strong{font-size:16px;font-weight:600;margin-right:10px}.apply-approved>summary span{font-size:13px;color:#63758a}
+.apply-approved[open]>summary{border-bottom:1px solid #edf1f6}.apply-approved-note{font-size:13px;color:#61758b;margin:14px 20px 0}
+#modal-root .modal.page-form .modal-body{background:#f7f9fc;padding-top:18px;padding-bottom:20px}
+#modal-root .modal.page-form .modal-head{background:#fff;border-bottom:1px solid #e1e8f0;padding-top:16px;padding-bottom:16px}
+#modal-root .page-form .application-form{grid-column:1/-1;width:100%;min-width:0}
+#modal-root .page-form .application-form>.ui-note{margin-bottom:18px}
+#modal-root .modal.page-form .social-fieldset{padding:18px 20px;margin-bottom:18px;border-radius:10px;border-color:#e1e8f0;scroll-margin-top:86px}
+#modal-root .modal.page-form .social-fieldset:focus-visible{outline:2px solid #5c82cc;outline-offset:3px}
+#modal-root .page-form .social-fieldset legend{font-size:16px;color:#23415f;font-weight:650}
+#modal-root .page-form .social-fieldset-note{font-size:13px;line-height:1.7;margin-bottom:16px;color:#607086}
+#modal-root .page-form .social-form-fields{gap:16px 20px}
+#modal-root .page-form .form-field{min-width:0}#modal-root .page-form .form-field>label{font-size:14px;line-height:1.6;color:#344f6e}
+#modal-root .page-form .hint{font-size:13px;line-height:1.65;color:#607086}
+#modal-root .page-form input::placeholder,#modal-root .page-form textarea::placeholder{color:#65758a;opacity:1}
+.application-identity{display:flex;gap:12px;align-items:center;flex-wrap:wrap;padding:0 2px;margin-bottom:10px;font-size:13px;color:#536d8b}
+.application-identity strong{font-size:15px;color:#23415f}
+.application-section-nav{display:flex;gap:7px;flex-wrap:wrap;position:sticky;top:-18px;z-index:3;padding:10px 0;margin:0 0 12px;background:#f7f9fc;border-bottom:1px solid #e1e8f0}
+.application-section-nav .btn{background:#fff;box-shadow:none;border-color:#dce5ef;color:#3d5b7c;border-radius:6px;font-size:13px;min-height:36px}
+#modal-root .page-form .choice{display:inline-flex;align-items:center;gap:7px;padding:8px 11px;border:1px solid #dce5ef;border-radius:7px;background:#fff;min-height:40px}
+#modal-root .page-form .choice input{position:static;opacity:1;inset:auto;width:16px;height:16px;min-height:16px;max-height:16px;flex:none;margin:0;accent-color:#2458c4}
+#modal-root .page-form .choice span{border:0;background:none;padding:0;min-height:0;border-radius:0;font-size:14px;line-height:1.5}
+#modal-root .page-form .choice:has(input:checked){background:#eef4ff;border-color:#6f94dc}
+#modal-root .page-form .choice:has(input:focus-visible){outline:2px solid #2458c4;outline-offset:2px}
+#modal-root .page-form .choice input:focus-visible+span{outline:0}
+#modal-root .page-form .apply-tag-row label{border-radius:7px;min-height:40px;font-size:14px;gap:7px;padding:8px 11px;line-height:1.5}
+#modal-root .page-form .apply-tag-row input{width:16px;height:16px;margin:0;accent-color:#2458c4}
+.apply-qualification-list{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}
+.apply-qualification-list label{display:flex;align-items:flex-start;gap:10px;border:1px solid #dce5ef;border-radius:8px;padding:12px;cursor:pointer;background:#fff;min-width:0}
+.apply-qualification-list label:has(input:checked){border-color:#7399dd;background:#f1f6ff}
+.apply-qualification-list input{margin:4px 0 0;width:16px;height:16px;flex:none;accent-color:#2458c4}
+.apply-qualification-list label>span{min-width:0}.apply-qualification-list strong{font-size:14px;line-height:1.6;overflow-wrap:anywhere}.apply-qualification-list small{display:block;font-size:13px;line-height:1.6;color:#61758b;margin-top:4px;overflow-wrap:anywhere}
+#modal-root .page-form .mode-guide{grid-template-columns:repeat(2,minmax(0,1fr));font-size:13px;line-height:1.8;gap:10px 18px}
+#modal-root .page-form .mode-guide-note{grid-column:1/-1}
+#modal-root .page-form .modal-foot .btn{min-height:42px;border-radius:7px;box-shadow:none}
+@media(max-width:700px){
+.teacher-apply-page .apply-entry-top{padding:17px;gap:14px}.teacher-apply-page .apply-entry-top>div:first-child{min-width:0;flex-basis:100%}.apply-entry-actions{width:100%;gap:8px}.teacher-apply-page .apply-entry-actions .btn{flex:1;min-height:44px;padding:9px 10px;justify-content:center;white-space:normal}
+.teacher-apply-page .card-head{padding:16px}.teacher-apply-page .apply-empty{padding:16px}
+#modal-root .modal.page-form .modal-body{padding:12px 16px 18px}#modal-root .modal.page-form .modal-head,#modal-root .modal.page-form .modal-foot{padding-left:16px;padding-right:16px}
+#modal-root .modal.page-form .social-fieldset{padding:15px 14px;scroll-margin-top:74px}#modal-root .page-form .social-form-fields{grid-template-columns:1fr;gap:16px}
+.application-section-nav{top:-12px;flex-wrap:nowrap;overflow-x:auto;padding:8px 0;margin-bottom:12px}.application-section-nav .btn{flex:none;min-height:40px;font-size:12px;padding:7px 9px}
+.application-identity{padding:0 2px;gap:6px 10px}
+.apply-qualification-list{grid-template-columns:1fr}#modal-root .page-form .mode-guide{grid-template-columns:1fr}
+#modal-root .page-form .modal-foot .btn{min-height:44px}
+#modal-root .page-form .choice,#modal-root .page-form .apply-tag-row label{min-height:44px}
+}
+}
+
+/* 教师端视觉与办理效率：沿用公共抬头、菜单和业务组件。 */
+@media screen {
+body[data-role="teacher"]{--blue:#245ccc;--ink:#20364f;--muted:#5e7289;--line:#dfe7f0;--bg:#f3f6fa}
+body[data-role="teacher"] #content{padding:28px 32px 24px;background:#f3f6fa;color:#20364f;font-size:15px;line-height:1.65}
+body[data-role="teacher"] .sidebar{background:#fff;border-right:1px solid #dfe7f0}
+body[data-role="teacher"] .sidebar .nav-section{margin-bottom:20px}
+body[data-role="teacher"] .sidebar .nav-group{font-size:13px;font-weight:600;color:#698099}
+body[data-role="teacher"] .sidebar .nav-item{border-radius:7px;font-size:15px;color:#354d68;box-shadow:none;min-height:44px}
+body[data-role="teacher"] .sidebar .nav-item.active{background:#e9f1ff;color:#1d56ba;box-shadow:inset 3px 0 #245ccc;font-weight:650}
+body[data-role="teacher"] .sidebar .nav-item.active>.icon{color:#245ccc;stroke:currentColor}
+body[data-role="teacher"] .sidebar .nav-item:hover{background:#f0f5fc;color:#1d56ba;transform:none}
+body[data-role="teacher"] #content .pagehead{margin:0 0 24px;align-items:center;gap:20px}
+body[data-role="teacher"] #content .pagehead h1{font-size:28px;line-height:1.4;letter-spacing:0;font-weight:700;color:#20364f}
+body[data-role="teacher"] #content .page-title{gap:8px 14px}
+body[data-role="teacher"] #content .page-title .teacher-page-subtitle{flex-basis:100%;margin:0;line-height:1.7;font-size:14px;font-weight:400;color:#60738b}
+body[data-role="teacher"] #content .page-help{font-size:13px;color:#667d96}
+body[data-role="teacher"] #content .page-help-body,body[data-role="teacher"] #content .page-help>p{top:42px}
+body[data-role="teacher"] #content .btn{min-height:40px;font-size:14px;padding:8px 15px;border-radius:6px;font-weight:500;box-shadow:none;background-image:none;transition:background-color .15s,border-color .15s}
+body[data-role="teacher"] #content .btn.primary{background:#245ccc;color:#fff;border-color:#245ccc;box-shadow:none}
+body[data-role="teacher"] #content .btn.primary:hover{background:#194da9;box-shadow:none;transform:none}
+body[data-role="teacher"] #content .btn.text{background:transparent;color:#245ccc;padding:5px 8px;border-color:transparent}
+body[data-role="teacher"] #content .btn.text:hover{background:#edf3fd}
+body[data-role="teacher"] #content .btn.light{background:#eef4ff;color:#245ccc;border-color:#d7e4fa}
+body[data-role="teacher"] #content .card{border:1px solid #dfe7f0;border-radius:10px;box-shadow:none;overflow:visible}
+body[data-role="teacher"] #content .card-head,body[data-role="teacher"] #content .social-panel-head{padding:18px 22px;border-bottom:1px solid #e6edf4;min-height:0}
+body[data-role="teacher"] #content .card-head h2,body[data-role="teacher"] #content .social-panel-head h2{font-size:18px;font-weight:650;line-height:1.5;padding-left:0}
+body[data-role="teacher"] #content .card-head h2::before{display:none}
+body[data-role="teacher"] #content .card-head p{font-size:13px;margin-top:4px;color:#677c94}
+body[data-role="teacher"] #content .filterbar,body[data-role="teacher"] #content .social-tools{padding:16px 22px;background:#fff;border-bottom:1px solid #e6edf4;gap:12px;align-items:end}
+body[data-role="teacher"] #content .filterbar input,body[data-role="teacher"] #content .filterbar select,body[data-role="teacher"] #content .social-tools input{background:#fff;border:1px solid #cdd9e7;border-radius:6px;height:40px;font-size:14px;padding-inline:12px;color:#29435e;box-shadow:none}
+body[data-role="teacher"] #content .filter-primary{gap:14px;align-items:end}
+body[data-role="teacher"] #content .filter-primary>label>span{font-size:13px;color:#526b85;font-weight:500}
+body[data-role="teacher"] #content .table{font-size:14px}
+body[data-role="teacher"] #content .table th{background:#f1f5fa;color:#536c87;font-size:13px;font-weight:600;line-height:1.5;padding:13px 18px;border-bottom:1px solid #dfe7f0;letter-spacing:0}
+body[data-role="teacher"] #content .table td{padding:15px 18px;border-bottom:1px solid #e8edf4;line-height:1.7;color:#2d455f}
+body[data-role="teacher"] #content .table td:first-child strong{font-size:15px;font-weight:600;color:#243d5b}
+body[data-role="teacher"] #content .table tbody tr:hover>td{background:#f6f9fe}
+body[data-role="teacher"] #content .table tbody tr:last-child>td{border-bottom:0}
+body[data-role="teacher"] #content .table .cell-sub{font-size:13px;line-height:1.65;margin-top:5px;color:#687d94}
+body[data-role="teacher"] #content .table td:last-child .btn{white-space:nowrap;color:#245ccc;min-height:36px}
+body[data-role="teacher"] #content .table td:last-child .btn.primary{color:#fff}
+body[data-role="teacher"] #content .badge{border-radius:5px;padding:4px 8px;font-size:12px;font-weight:500;white-space:nowrap}
+body[data-role="teacher"] #content .list-count{padding:12px 22px;margin:0;color:#667c94;font-size:13px;border-top:1px solid #e7edf4}
+body[data-role="teacher"] #content .section-tabs{gap:6px;border-bottom:1px solid #d6e0ec;margin-bottom:20px}
+body[data-role="teacher"] #content .section-tabs>button{font-size:15px;min-height:46px;padding:10px 18px;font-weight:500;box-shadow:none;border-radius:6px 6px 0 0}
+body[data-role="teacher"] #content .section-tabs>button.active{color:#1e56ba;background:#eaf1fc;border-bottom:2px solid #245ccc}
+body[data-role="teacher"] #content .empty,body[data-role="teacher"] #content .course-empty,body[data-role="teacher"] #content .social-empty{padding:32px 22px;min-height:0}
+body[data-role="teacher"] #content .empty h3,body[data-role="teacher"] #content .course-empty h3,body[data-role="teacher"] #content .social-empty h3{font-size:17px;color:#354e69}
+body[data-role="teacher"] #content .footer{margin-top:24px;padding:16px 0 0;font-size:12px;border-top:1px solid #dfe7f0;color:#718398}
+/* 首页用一条概况、一个办理区和一个侧栏，压缩重复容器。 */
+body[data-role="teacher"] #content .teacher-home{display:grid;gap:22px}
+body[data-role="teacher"] #content .teacher-hero{padding:0;border:0;border-radius:0;background:transparent;box-shadow:none;gap:20px}
+body[data-role="teacher"] #content .teacher-hero-date{display:none}
+body[data-role="teacher"] #content .teacher-hero h1{font-size:28px;margin:0 0 8px;line-height:1.4}
+body[data-role="teacher"] #content .teacher-hero-sub{font-size:14px;margin:0;color:#5f748d;line-height:1.8}
+.teacher-greeting{margin-right:6px}
+body[data-role="teacher"] #content .teacher-hero-actions .btn{min-height:40px;padding:8px 14px}
+body[data-role="teacher"] #content .teacher-overview-metrics{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:0;background:#fff;border:1px solid #dfe7f0;border-radius:10px;padding:20px 0;overflow:hidden}
+body[data-role="teacher"] #content .teacher-overview-metrics .kpi{background:transparent;border:0;border-right:1px solid #e3eaf3;border-radius:0;padding:0 22px;min-height:106px;box-shadow:none;text-align:left;transform:none}
+body[data-role="teacher"] #content .teacher-overview-metrics .kpi:last-child{border-right:0}
+body[data-role="teacher"] #content .teacher-overview-metrics .kpi:hover{background:#f7faff}
+body[data-role="teacher"] #content .teacher-overview-metrics .kpi-label{font-size:14px;color:#5b728c;padding:0;white-space:normal}
+body[data-role="teacher"] #content .teacher-overview-metrics .kpi-icon{display:none}
+body[data-role="teacher"] #content .teacher-overview-metrics .kpi-value{font-size:30px!important;font-weight:700;line-height:1.3;margin:10px 0 7px;color:#1c4f99}
+body[data-role="teacher"] #content .teacher-overview-metrics .kpi-foot{font-size:12px;color:#697e96;line-height:1.6;margin:0}
+.teacher-dashboard{display:grid;grid-template-columns:minmax(0,1.7fr) minmax(310px,1fr);gap:22px;align-items:start}
+.teacher-workspace,.teacher-side{min-width:0;background:#fff;border:1px solid #dfe7f0;border-radius:10px;overflow:hidden}
+body:is([data-role="teacher"],[data-role="dept"],[data-role="college"]) #content .teacher-workspace>.card,body:is([data-role="teacher"],[data-role="dept"],[data-role="college"]) #content .teacher-side>.card{border:0;border-radius:0;background:transparent;box-shadow:none;margin:0}
+body:is([data-role="teacher"],[data-role="dept"],[data-role="college"]) #content .teacher-workspace>.card+.card,body:is([data-role="teacher"],[data-role="dept"],[data-role="college"]) #content .teacher-side>.card+.card{border-top:1px solid #dfe7f0}
+body:is([data-role="teacher"],[data-role="dept"],[data-role="college"]) #content .teacher-dashboard .card-head{padding:18px 22px;border-bottom:0}
+body:is([data-role="teacher"],[data-role="dept"],[data-role="college"]) #content .teacher-dashboard .card-pad{padding:0 22px 18px}
+body:is([data-role="teacher"],[data-role="dept"],[data-role="college"]) #content .teacher-workspace .teacher-task-row{padding:0 22px 22px;gap:16px;align-items:flex-start}
+body:is([data-role="teacher"],[data-role="dept"],[data-role="college"]) #content .teacher-workspace .teacher-task-row+.teacher-task-row{padding-top:18px}
+body:is([data-role="teacher"],[data-role="dept"],[data-role="college"]) #content .teacher-task-copy h3{font-size:15px;font-weight:600;color:#284460;line-height:1.7}
+body:is([data-role="teacher"],[data-role="dept"],[data-role="college"]) #content .teacher-task-copy p{font-size:13px;color:#667c94;line-height:1.8;margin-top:7px}
+.teacher-task-scope{margin:0;padding:0 22px 10px;font-size:13px;color:#68819a}
+body:is([data-role="teacher"],[data-role="dept"],[data-role="college"]) #content .teacher-workspace .teacher-task-action{flex-direction:column;align-items:flex-end;gap:9px}
+body:is([data-role="teacher"],[data-role="dept"],[data-role="college"]) #content .teacher-workspace .teacher-task-action .btn{border-color:#d0def1;background:#edf4ff;color:#225abb}
+body:is([data-role="teacher"],[data-role="dept"],[data-role="college"]) #content .teacher-workspace .apply-home-row{grid-template-columns:minmax(0,1fr) auto;gap:6px 18px;padding:16px 0;border-bottom:1px solid #e6edf4}
+body:is([data-role="teacher"],[data-role="dept"],[data-role="college"]) #content .teacher-workspace .apply-home-row>div:nth-child(2){grid-column:1}
+body:is([data-role="teacher"],[data-role="dept"],[data-role="college"]) #content .teacher-workspace .apply-home-row>.btn{grid-column:2;grid-row:1/3;align-self:center}
+body:is([data-role="teacher"],[data-role="dept"],[data-role="college"]) #content .teacher-workspace .apply-home-row:first-child{padding-top:0}
+body:is([data-role="teacher"],[data-role="dept"],[data-role="college"]) #content .teacher-workspace .apply-home-row:last-child{border-bottom:0;padding-bottom:0}
+body:is([data-role="teacher"],[data-role="dept"],[data-role="college"]) #content .teacher-workspace .apply-home-row strong{font-size:15px;font-weight:600}
+body:is([data-role="teacher"],[data-role="dept"],[data-role="college"]) #content .teacher-workspace .apply-home-row .apply-current{font-size:13px;color:#32609a;font-weight:500}
+body:is([data-role="teacher"],[data-role="dept"],[data-role="college"]) #content .teacher-workspace .apply-home-row .cell-sub{margin:3px 0;color:#677d96;line-height:1.7;font-size:13px}
+body:is([data-role="teacher"],[data-role="dept"],[data-role="college"]) #content .teacher-side .teacher-apply-grid{display:grid;grid-template-columns:1fr;gap:0;padding:0 18px 16px}
+body:is([data-role="teacher"],[data-role="dept"],[data-role="college"]) #content .teacher-side .teacher-apply-item{padding:11px 8px;border:0;border-radius:6px;gap:12px;box-shadow:none;background:transparent}
+body:is([data-role="teacher"],[data-role="dept"],[data-role="college"]) #content .teacher-side .teacher-apply-item:hover{background:#f0f5fd;transform:none}
+body:is([data-role="teacher"],[data-role="dept"],[data-role="college"]) #content .teacher-side .teacher-apply-item b{font-size:15px;color:#2b4664}
+body:is([data-role="teacher"],[data-role="dept"],[data-role="college"]) #content .teacher-side .teacher-apply-item>.icon:first-child{width:34px;height:34px;border-radius:7px;padding:7px}
+body:is([data-role="teacher"],[data-role="dept"],[data-role="college"]) #content .teacher-side .teacher-apply-item>.icon:last-child{display:block;width:16px;height:16px;color:#8498af}
+body:is([data-role="teacher"],[data-role="dept"],[data-role="college"]) #content .teacher-side .notice-row{display:flex;align-items:center;justify-content:space-between;gap:14px;padding:13px 0;border-bottom:1px solid #e8edf5;color:#344d68;font-size:14px}
+body:is([data-role="teacher"],[data-role="dept"],[data-role="college"]) #content .teacher-side .notice-row span{overflow-wrap:anywhere;min-width:0;text-align:left}
+body:is([data-role="teacher"],[data-role="dept"],[data-role="college"]) #content .teacher-side .notice-row time{font-size:12px;color:#758aa1;white-space:nowrap}
+body:is([data-role="teacher"],[data-role="dept"],[data-role="college"]) #content .teacher-side .notice-row:last-child{border-bottom:0}
+.teacher-points-note{border-top:1px solid #dce5ef;padding:15px 2px;color:#5d738c;font-size:13px}
+.teacher-points-note>summary{cursor:pointer;line-height:1.8}.teacher-points-note>summary span{margin-left:16px;color:#7b6a4b}
+body[data-role="teacher"] #content .teacher-points-note .card{margin-top:14px}.teacher-points-note .teacher-points-meta{font-size:14px}
+/* 申报和个人培训收拢为连续工作区，表格不再一块块悬浮。 */
+body[data-role="teacher"] #content .teacher-apply-page{display:block;background:#fff;border:1px solid #dfe7f0;border-radius:10px;overflow:hidden}
+body[data-role="teacher"] #content .teacher-apply-page>.card{border:0;border-radius:0;margin:0}
+body[data-role="teacher"] #content .teacher-apply-page .apply-entry{background:#edf4fd;border-bottom:1px solid #d8e5f5}
+body[data-role="teacher"] #content .teacher-apply-page .apply-entry-top{padding:24px;gap:24px}
+body[data-role="teacher"] #content .teacher-apply-page .apply-intro{font-size:15px;line-height:1.8;color:#294d77}
+body[data-role="teacher"] #content .teacher-apply-page .apply-entry-hint{font-size:13px;color:#637d9d;line-height:1.8}
+body[data-role="teacher"] #content .teacher-apply-page .apply-list .card-head{padding:22px 24px 16px}
+body[data-role="teacher"] #content .teacher-apply-page .apply-empty{padding:26px 24px 32px;margin:0;font-size:14px;color:#647c97}
+body[data-role="teacher"] #content .teacher-apply-page .apply-approved{border-top:1px solid #e1e9f3}
+body[data-role="teacher"] #content .teacher-apply-page .apply-approved>summary{padding:18px 24px;font-size:15px;color:#3f5b7d}
+body[data-role="teacher"] #content .mine-page>.mt20>.card{border:0;border-radius:0;background:transparent}
+body[data-role="teacher"] #content .mine-page>.mt20{background:#fff;border:1px solid #dfe7f0;border-radius:8px;margin-top:18px}
+body[data-role="teacher"] #content .mine-related{padding:14px 0 0;gap:8px 20px;font-size:14px}
+body[data-role="teacher"] #content .qualification-summary{background:#fff;border:1px solid #dfe7f0;border-radius:8px;padding:16px 22px;margin:0 0 20px;font-size:14px}
+body[data-role="teacher"] #content .qualification-summary strong{font-size:24px;color:#265895}
+body[data-role="teacher"] #content .mine-detail-workspace:not(:empty){margin-top:20px;border:1px solid #dfe7f0;border-radius:10px;background:#fff;overflow:hidden}
+body[data-role="teacher"] #content .mine-detail-workspace>.mt20{margin:0;border:0;border-radius:0}
+body[data-role="teacher"] #content .mine-detail-workspace>.mt20+.mt20{border-top:1px solid #dfe7f0}
+body[data-role="teacher"] #content .mine-detail-workspace .card{border:0;border-radius:0;background:transparent}
+body[data-role="teacher"] #content .my-assess-empty{display:flex;align-items:flex-start;gap:24px;padding:30px 26px}
+.assessment-empty-symbol{display:grid;place-items:center;flex:none;width:58px;height:58px;border-radius:12px;background:#edf3ff;color:#3568bb}.assessment-empty-symbol .icon{width:28px;height:28px}
+.assessment-empty-copy{min-width:0;max-width:720px}.assessment-empty-copy h3{font-size:20px;color:#294565;margin:0 0 8px}.assessment-empty-copy .cell-sub{font-size:14px!important;line-height:1.8!important}.assessment-next-label{font-size:14px;color:#60768e;margin:22px 0 10px}.assessment-empty-actions{display:flex;gap:10px;flex-wrap:wrap}
+.assessment-empty-copy p::before{display:none!important}
+/* 长表单桌面使用侧边分区定位，小屏仍保持单列和固定操作区。 */
+body:is([data-role="teacher"],[data-role="dept"],[data-role="college"]) #modal-root .modal.page-form .modal-head,body:is([data-role="teacher"],[data-role="dept"],[data-role="college"]) #modal-root .modal.page-form .modal-foot{padding-inline:max(24px,calc((100vw - 1160px)/2))}
+body:is([data-role="teacher"],[data-role="dept"],[data-role="college"]) #modal-root .modal.page-form .modal-body{padding:22px max(24px,calc((100vw - 1160px)/2));background:#f3f6fa}
+body:is([data-role="teacher"],[data-role="dept"],[data-role="college"]) #modal-root .modal.page-form .modal-head h2{font-size:24px;line-height:1.4}
+body:is([data-role="teacher"],[data-role="dept"],[data-role="college"]) #modal-root .modal.page-form #edit-form{display:grid;grid-template-columns:184px minmax(0,1fr);gap:0 24px;align-items:start}
+body:is([data-role="teacher"],[data-role="dept"],[data-role="college"]) #modal-root .page-form #form-error{grid-column:2}
+body:is([data-role="teacher"],[data-role="dept"],[data-role="college"]) #modal-root .page-form #edit-form>.form-grid{grid-column:2;margin-top:0;background:#fff;padding:24px 28px;border:1px solid #dfe7f0;border-radius:9px}
+body:is([data-role="teacher"],[data-role="dept"],[data-role="college"]) #modal-root .page-form .application-section-nav{grid-column:1;grid-row:1/3;position:sticky;top:0;display:flex;flex-direction:column;gap:6px;padding:0;border:0;margin:0;background:transparent}
+body:is([data-role="teacher"],[data-role="dept"],[data-role="college"]) #modal-root .page-form .application-section-nav .btn{display:block;min-height:44px;text-align:left;white-space:normal;border:0;border-left:3px solid transparent;border-radius:5px;background:transparent;padding:10px 12px;font-size:14px;line-height:1.6;color:#536c88}
+body:is([data-role="teacher"],[data-role="dept"],[data-role="college"]) #modal-root .page-form .application-section-nav .btn.is-current{background:#e6effe;color:#235bb9;border-left-color:#245ccc;font-weight:600}
+body:is([data-role="teacher"],[data-role="dept"],[data-role="college"]) #modal-root .page-form .social-fieldset{border:0;border-bottom:1px solid #e3eaf3;border-radius:0;background:#fff;padding:0 0 24px;margin:0 0 26px;scroll-margin-top:20px}
+body:is([data-role="teacher"],[data-role="dept"],[data-role="college"]) #modal-root .page-form .social-fieldset:last-child{margin-bottom:0;border-bottom:0;padding-bottom:0}
+body:is([data-role="teacher"],[data-role="dept"],[data-role="college"]) #modal-root .page-form .social-fieldset legend{font-size:18px;line-height:1.5;font-weight:650;padding:0;margin-bottom:18px;color:#2a4667}
+body:is([data-role="teacher"],[data-role="dept"],[data-role="college"]) #modal-root .page-form .social-form-fields{gap:20px 24px}
+body:is([data-role="teacher"],[data-role="dept"],[data-role="college"]) #modal-root .page-form .form-field>label{font-size:14px;font-weight:600;color:#38516e}
+body:is([data-role="teacher"],[data-role="dept"],[data-role="college"]) #modal-root .page-form .form-field input:not([type="checkbox"]):not([type="radio"]),body:is([data-role="teacher"],[data-role="dept"],[data-role="college"]) #modal-root .page-form .form-field select,body:is([data-role="teacher"],[data-role="dept"],[data-role="college"]) #modal-root .page-form .form-field textarea{background:#fff;border-color:#cdd9e7;border-radius:6px;font-size:15px;min-height:42px;box-shadow:none}
+body:is([data-role="teacher"],[data-role="dept"],[data-role="college"]) #modal-root .page-form .form-field textarea{min-height:104px}
+body:is([data-role="teacher"],[data-role="dept"],[data-role="college"]) #modal-root .page-form .modal-foot .btn{font-size:15px;min-height:42px;min-width:100px;box-shadow:none}
+@media(max-width:1100px){
+.teacher-dashboard{grid-template-columns:minmax(0,1.4fr) minmax(280px,1fr);gap:16px}
+body[data-role="teacher"] #content{padding-inline:22px}
+body[data-role="teacher"] #content .teacher-overview-metrics .kpi{padding-inline:16px}
+body:is([data-role="teacher"],[data-role="dept"],[data-role="college"]) #modal-root .modal.page-form #edit-form{grid-template-columns:160px minmax(0,1fr);gap:0 16px}
+}
+@media(max-width:900px){
+.teacher-dashboard{grid-template-columns:1fr}
+body:is([data-role="teacher"],[data-role="dept"],[data-role="college"]) #content .teacher-side{display:grid;grid-template-columns:1fr 1fr;align-items:start}
+body:is([data-role="teacher"],[data-role="dept"],[data-role="college"]) #content .teacher-side>.card+.card{border-top:0;border-left:1px solid #e0e8f2}
+}
+@media(max-width:700px){
+body[data-role="teacher"] #content{padding:20px 16px 24px}
+body[data-role="teacher"] #content .pagehead{align-items:flex-start;gap:12px;margin-bottom:20px}
+body[data-role="teacher"] #content .pagehead h1,body[data-role="teacher"] #content .teacher-hero h1{font-size:24px}
+body[data-role="teacher"] #content .page-title .teacher-page-subtitle{font-size:13px}
+body[data-role="teacher"] #content .teacher-home{gap:16px}
+body[data-role="teacher"] #content .my-assess-empty{padding:22px 18px;gap:14px}.assessment-empty-symbol{width:42px;height:42px;border-radius:8px}.assessment-empty-symbol .icon{width:23px;height:23px}.assessment-empty-copy h3{font-size:18px}.assessment-empty-actions{flex-direction:column;align-items:flex-start}
+body[data-role="teacher"] #content .teacher-hero{padding:0!important;gap:0}
+body[data-role="teacher"] #content .teacher-greeting{display:none}
+body[data-role="teacher"] #content .teacher-hero-actions{display:none}
+body[data-role="teacher"] #content .teacher-overview-metrics{grid-template-columns:1fr 1fr;padding:0}
+body[data-role="teacher"] #content .teacher-overview-metrics .kpi{padding:13px 14px;min-height:110px}
+body[data-role="teacher"] #content .teacher-overview-metrics .kpi:nth-child(2){border-right:0}
+body[data-role="teacher"] #content .teacher-overview-metrics .kpi:nth-child(n+3){border-top:1px solid #e3eaf3}
+body[data-role="teacher"] #content .teacher-overview-metrics .kpi-label{font-size:13px}
+body[data-role="teacher"] #content .teacher-overview-metrics .kpi-value{font-size:26px!important;margin:6px 0 3px}
+body[data-role="teacher"] #content .teacher-overview-metrics .kpi-foot{font-size:12px}
+body:is([data-role="teacher"],[data-role="dept"],[data-role="college"]) #content .teacher-dashboard .card-head{padding:16px}
+body:is([data-role="teacher"],[data-role="dept"],[data-role="college"]) #content .teacher-dashboard .card-pad{padding:0 16px 16px}
+body:is([data-role="teacher"],[data-role="dept"],[data-role="college"]) #content .teacher-workspace .teacher-task-row{padding:0 16px 18px;gap:12px}
+body:is([data-role="teacher"],[data-role="dept"],[data-role="college"]) #content .teacher-workspace .teacher-task-action{flex-direction:row;align-items:center;justify-content:space-between}
+body:is([data-role="teacher"],[data-role="dept"],[data-role="college"]) #content .teacher-side{display:block}
+body:is([data-role="teacher"],[data-role="dept"],[data-role="college"]) #content .teacher-side>.card+.card{border-left:0;border-top:1px solid #dfe7f0}
+body:is([data-role="teacher"],[data-role="dept"],[data-role="college"]) #content .teacher-side .teacher-apply-grid{grid-template-columns:1fr 1fr;padding:0 10px 14px;gap:4px}
+body:is([data-role="teacher"],[data-role="dept"],[data-role="college"]) #content .teacher-side .teacher-apply-item{padding:10px 5px;gap:7px}
+body:is([data-role="teacher"],[data-role="dept"],[data-role="college"]) #content .teacher-side .teacher-apply-item b{font-size:14px}
+body:is([data-role="teacher"],[data-role="dept"],[data-role="college"]) #content .teacher-side .teacher-apply-item>.icon:last-child{display:none}
+body[data-role="teacher"] #content .teacher-apply-page .apply-entry-top{padding:18px;gap:16px}
+body[data-role="teacher"] #content .teacher-apply-page .apply-entry-actions .btn{min-height:44px;padding-inline:8px}
+body[data-role="teacher"] #content .teacher-apply-page .apply-list .card-head,body[data-role="teacher"] #content .teacher-apply-page .apply-approved>summary{padding:16px 18px}
+body[data-role="teacher"] #content .teacher-apply-page .apply-empty{padding:20px 18px}
+body[data-role="teacher"] #content .filterbar,body[data-role="teacher"] #content .social-tools{padding:14px 16px}
+body[data-role="teacher"] #content .table td:last-child .btn{min-height:44px}
+.teacher-points-note>summary span{display:block;margin:5px 0 0}
+body:is([data-role="teacher"],[data-role="dept"],[data-role="college"]) #modal-root .modal.page-form .modal-body{padding:14px 12px}
+body:is([data-role="teacher"],[data-role="dept"],[data-role="college"]) #modal-root .modal.page-form #edit-form{display:block}
+body:is([data-role="teacher"],[data-role="dept"],[data-role="college"]) #modal-root .page-form #edit-form>.form-grid{padding:18px 16px}
+body:is([data-role="teacher"],[data-role="dept"],[data-role="college"]) #modal-root .page-form .application-section-nav{position:sticky;top:-14px;flex-direction:row;flex-wrap:nowrap;overflow:auto;background:#f3f6fa;padding:9px 0;margin-bottom:12px;border-bottom:1px solid #dce5ef;z-index:4}
+body:is([data-role="teacher"],[data-role="dept"],[data-role="college"]) #modal-root .page-form .application-section-nav .btn{flex:none;white-space:nowrap;border-left:0;min-height:40px;padding:8px 10px;font-size:13px}
+body:is([data-role="teacher"],[data-role="dept"],[data-role="college"]) #modal-root .page-form .social-fieldset{scroll-margin-top:80px;padding-bottom:22px;margin-bottom:22px}
+body:is([data-role="teacher"],[data-role="dept"],[data-role="college"]) #modal-root .page-form .social-fieldset legend{font-size:17px;margin-bottom:16px}
+body:is([data-role="teacher"],[data-role="dept"],[data-role="college"]) #modal-root .modal.page-form .modal-head,body:is([data-role="teacher"],[data-role="dept"],[data-role="college"]) #modal-root .modal.page-form .modal-foot{padding-inline:16px}
+body:is([data-role="teacher"],[data-role="dept"],[data-role="college"]) #modal-root .page-form .modal-foot .btn{min-height:44px;min-width:88px}
+}
+@media(prefers-reduced-motion:reduce){body[data-role="teacher"] #content .btn{transition:none}}
+}
+
+/* 教师业务明细页：操作贴近结果，分区可定位，详情使用统一阅读层级。 */
+@media screen {
+body[data-role="teacher"] #content .mine-tools-row{display:flex;align-items:center;justify-content:space-between;gap:16px;margin-top:4px}
+body[data-role="teacher"] #content .mine-tools-row .mine-related{flex:1;padding:12px 0;margin:0;gap:8px 16px}
+.mine-tools{position:relative;flex:none;color:#365a84;font-size:14px}
+.mine-tools>summary{cursor:pointer;padding:10px 12px;border:1px solid #d3dfed;border-radius:6px;background:#fff;min-height:40px}
+.mine-tools .mine-more{position:absolute;right:0;top:100%;z-index:20;display:grid;grid-template-columns:1fr 1fr;gap:4px;width:310px;max-width:calc(100vw - 40px);padding:12px;margin-top:7px;background:#fff;border:1px solid #d8e3f0;border-radius:8px;box-shadow:0 8px 24px #20364f14}
+.mine-tools .mine-more>span{display:none}.mine-tools .mine-more .btn{justify-content:flex-start!important;text-align:left;white-space:normal}
+.mine-section-nav{position:sticky;top:calc(var(--nd-h,88px) + 10px);z-index:9;display:flex;align-items:center;gap:8px;padding:10px 14px;margin:8px 0 0;background:#fff;border:1px solid #dfe7f0;border-radius:8px;box-shadow:0 2px 8px #20364f05}
+.mine-section-nav>span{font-size:13px;color:#71859d;padding-right:10px;border-right:1px solid #e1e8f2}
+body[data-role="teacher"] #content .mine-section-nav .btn{min-height:36px;padding:6px 11px;font-size:14px;white-space:nowrap}
+.mine-section{scroll-margin-top:calc(var(--nd-h,88px) + 84px)}.mine-section:focus{outline:none}.mine-section:focus-visible{outline:2px solid #4274cf;outline-offset:-2px}
+body[data-role="teacher"] #content .mine-detail-workspace .card-head p{max-width:740px;line-height:1.8}
+body[data-role="teacher"] #content .mine-detail-workspace .mine-mini{gap:0;border:1px solid #e0e8f2;border-radius:7px;padding:16px 0;margin:0}
+body[data-role="teacher"] #content .mine-detail-workspace .mine-mini>div{padding:0 20px;border-right:1px solid #e2e9f2;flex:1}
+body[data-role="teacher"] #content .mine-detail-workspace .mine-mini>div:last-child{border:0}
+body[data-role="teacher"] #content .mine-detail-workspace .mine-mini strong{font-size:24px;line-height:1.4;color:#275793}
+body[data-role="teacher"] #content .mine-detail-workspace .mine-mini label{font-size:13px;color:#647b94}
+/* 课程来源与申报分开表达，标题可以直接进入课程详情。 */
+body[data-role="teacher"] #content .teacher-course-list .card-head,body[data-role="teacher"] #content .teacher-course-summary .card-head{background:#f8fbff}
+body[data-role="teacher"] #content .teacher-course-list .filterbar,body[data-role="teacher"] #content .teacher-course-summary .filterbar{display:flex;align-items:center;justify-content:flex-start}
+body[data-role="teacher"] #content .teacher-course-list .filterbar select,body[data-role="teacher"] #content .teacher-course-summary .filterbar select{min-width:190px;max-width:300px}
+body[data-role="teacher"] #content .course-empty{display:flex;flex-direction:column;align-items:center;padding:34px 22px;gap:0;background:#fff}
+body[data-role="teacher"] #content .course-empty>.icon{width:38px;height:38px;padding:7px;background:#edf4ff;border-radius:9px;color:#3971c3;margin-bottom:14px}
+body[data-role="teacher"] #content .course-empty h3{font-size:19px;margin:0 0 10px}
+body[data-role="teacher"] #content .course-empty p{font-size:14px;line-height:1.85;max-width:610px;color:#607892;margin:0 0 18px}
+body[data-role="teacher"] #content .course-source{padding:13px 22px;font-size:13px;line-height:1.8;background:#f8fafd;color:#67809a}
+body[data-role="teacher"] #content .mc-cards{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:18px}
+body[data-role="teacher"] #content .mc-card{border:1px solid #dce6f1;border-radius:9px;box-shadow:none;overflow:hidden}
+body[data-role="teacher"] #content .mc-cover{aspect-ratio:16/9;height:auto;min-height:100px;background:#edf3fc}
+body[data-role="teacher"] #content .mc-cover.is-empty{display:grid;place-items:center;aspect-ratio:auto;height:110px;background:#f1f6fd}
+body[data-role="teacher"] #content .mc-cover.is-empty>.icon{width:36px;height:36px;color:#6b91c6}
+body[data-role="teacher"] #content .mc-body{padding:16px}
+body[data-role="teacher"] #content .mc-title{display:block;text-align:left;border:0;background:transparent;padding:0;color:#284e80;font-size:16px;line-height:1.7;font-weight:650;overflow-wrap:anywhere}
+body[data-role="teacher"] #content .mc-title:hover{text-decoration:underline}
+body[data-role="teacher"] #content .mc-stats{padding:12px 0;gap:12px;border-block:1px solid #e6edf5;margin:14px 0}
+body[data-role="teacher"] #content .mc-status{margin-top:12px;font-size:13px;line-height:1.6}
+body[data-role="teacher"] #content .teacher-course-list .table th:first-child{width:32%}
+body[data-role="teacher"] #content .teacher-course-list .table td:first-child .btn{white-space:normal;text-align:left;font-size:15px;line-height:1.7;padding-left:0}
+/* 资质概况突出有效期，工作流状态直接切换真实列表。 */
+.qualification-overview{display:flex;align-items:center;gap:30px;background:#fff;border:1px solid #dfe7f0;border-radius:9px;padding:22px 24px;margin-bottom:22px}
+.qualification-total{display:flex;align-items:center;gap:16px;min-width:220px}.qualification-total>div>span{font-size:14px;color:#5b738e;display:block}
+.qualification-total strong{display:block;font-size:32px;color:#285995;line-height:1.4;font-variant-numeric:tabular-nums}.qualification-total small{font-size:14px;font-weight:400;color:#6a8097;margin-left:8px}
+.qualification-symbol{display:grid;place-items:center;flex:none;width:50px;height:50px;border-radius:10px;background:#edf3ff;color:#386ec0}.qualification-symbol>.icon{width:25px;height:25px}
+.qualification-expiry-counts{border-left:1px solid #e0e8f2;padding-left:30px;display:flex;align-items:center;flex-wrap:wrap;gap:4px 28px;flex:1;color:#506985;font-size:14px}
+.qualification-expiry-counts b{font-size:22px;font-weight:600;color:#345b87;margin-inline:8px}.qualification-expiry-counts p{flex-basis:100%;font-size:13px;color:#6b8098;margin:6px 0 0}
+.qualification-state-tabs{display:flex;align-items:center;gap:8px;border-bottom:1px solid #dfe7f0;padding:6px 16px 0;overflow-x:auto;background:#f9fbfe;border-radius:9px 9px 0 0}
+.qualification-state-tabs button{display:flex;align-items:center;gap:8px;min-height:48px;padding:10px 14px;border:0;border-bottom:3px solid transparent;background:transparent;color:#617a94;font-size:14px;white-space:nowrap;cursor:pointer}
+.qualification-state-tabs button.active{color:#245ccc;border-bottom-color:#245ccc;font-weight:600}.qualification-state-tabs button:hover{background:#eef4ff}
+.qualification-state-tabs button>span{font-size:12px;padding:0 6px;background:#e9eff7;border-radius:4px;color:#5a7796}.qualification-state-tabs button.active>span{background:#dfeaff;color:#245ccc}
+body[data-role="teacher"] #content .teacher-qualification-list .table th:first-child{width:32%}
+body[data-role="teacher"] #content .teacher-qualification-list .table td:first-child .btn{font-size:15px;padding:0;text-align:left;white-space:normal;font-weight:600}
+/* 积分的主要任务在明细前，结果、确认与依据各自清楚。 */
+body[data-role="teacher"] #content .point-confirmation{margin-bottom:20px;border-left:3px solid #4878c9}
+body[data-role="teacher"] #content .point-ledger .table td[data-label="分值"]{font-variant-numeric:tabular-nums;text-align:right}
+.point-amount{color:#276999;font-size:16px;font-weight:650}.point-amount.negative{color:#9b5d2b}
+.teacher-result-empty{display:flex;align-items:flex-start;justify-content:center;gap:22px;padding:34px 24px;color:#60778f}
+.result-empty-icon{display:grid;place-items:center;flex:none;width:52px;height:52px;border-radius:11px;background:#edf4ff;color:#3e72bd}.result-empty-icon>.icon{width:27px;height:27px}
+.teacher-result-empty>div{max-width:620px}.teacher-result-empty h3{font-size:20px;margin:0 0 9px;color:#294866;font-weight:600}.teacher-result-empty p{font-size:14px;line-height:1.85;margin:0 0 16px}
+body[data-role="teacher"] #content .teacher-assess-list{background:#fff;border:1px solid #dfe7f0;border-radius:9px;margin:20px 0}
+body[data-role="teacher"] #content .teacher-assess-list>summary{padding:17px 22px;font-size:15px;font-weight:600;color:#385e8e;cursor:pointer}
+body[data-role="teacher"] #content .teacher-assess-list[open]>summary{border-bottom:1px solid #e3eaf3}
+body[data-role="teacher"] #content .teacher-assess-list>.card{border:0;border-radius:0}
+body[data-role="teacher"] #content .teacher-assess-list>.assessment-process{margin:12px 20px}
+/* 详情窗保持原操作与材料，压缩重复标题，字段成组阅读。 */
+.teacher-notice-list{padding:0 24px}.teacher-notice-item{display:flex;align-items:center;gap:18px;padding:22px 0;border-bottom:1px solid #e3eaf3}.teacher-notice-item:last-child{border:0}.teacher-notice-item>div{flex:1;min-width:0}
+.notice-list-icon{display:grid;place-items:center;align-self:flex-start;flex:none;width:40px;height:40px;border-radius:8px;background:#eef4fc;color:#4d79b8}.notice-list-icon .icon{width:21px;height:21px}
+body[data-role="teacher"] #content .teacher-notice-item h2{font-size:17px;line-height:1.7;margin:0}
+body[data-role="teacher"] #content .teacher-notice-item h2 .btn{font-size:17px;line-height:1.7;font-weight:600;white-space:normal;text-align:left;padding:0;min-height:0;color:#294e7d}
+.notice-meta{display:flex;align-items:center;flex-wrap:wrap;gap:8px 18px;margin:8px 0 0;font-size:13px;color:#6c829a}.notice-meta>span:first-child{background:#eef3fa;padding:2px 7px;border-radius:4px;color:#5a7696}
+.notice-excerpt{color:#718399;font-size:14px;line-height:1.7;margin:10px 0 0;overflow-wrap:anywhere}
+.teacher-notice-item>.btn{flex:none}
+body:is([data-role="teacher"],[data-role="dept"],[data-role="college"]) #modal-root .modal:not(.page-form){border:1px solid #dce5f0;border-radius:12px;overflow:hidden}
+body:is([data-role="teacher"],[data-role="dept"],[data-role="college"]) #modal-root .modal:not(.page-form) .modal-head{background:#fff;padding:20px 24px;border-bottom:1px solid #e2eaf3}
+body:is([data-role="teacher"],[data-role="dept"],[data-role="college"]) #modal-root .modal:not(.page-form) .modal-head h2{font-size:22px;line-height:1.5;color:#29435e}
+body:is([data-role="teacher"],[data-role="dept"],[data-role="college"]) #modal-root .modal:not(.page-form) .detail-location{font-size:13px;color:#6c839e;margin-bottom:6px}
+body:is([data-role="teacher"],[data-role="dept"],[data-role="college"]) #modal-root .modal:not(.page-form) .modal-body{background:#fff;padding:24px;color:#314a65;font-size:14px;line-height:1.8}
+body:is([data-role="teacher"],[data-role="dept"],[data-role="college"]) #modal-root .modal:not(.page-form) .modal-foot{background:#f8fafd;border-top:1px solid #dfe7f0;padding:14px 24px;gap:10px}
+body:is([data-role="teacher"],[data-role="dept"],[data-role="college"]) #modal-root .modal:not(.page-form) .modal-foot .btn{min-height:40px;font-size:14px;border-radius:6px;box-shadow:none}
+body:is([data-role="teacher"],[data-role="dept"],[data-role="college"]) #modal-root .modal:not(.page-form) h3{font-size:17px;line-height:1.6;color:#304e70}
+body:is([data-role="teacher"],[data-role="dept"],[data-role="college"]) #modal-root .modal:not(.page-form) .kv{gap:12px 22px;line-height:1.8;font-size:14px}
+body:is([data-role="teacher"],[data-role="dept"],[data-role="college"]) #modal-root .modal:not(.page-form) .kv dt{color:#6a8098;font-size:13px}
+body:is([data-role="teacher"],[data-role="dept"],[data-role="college"]) #modal-root .modal:not(.page-form) .kv dd{color:#294562;overflow-wrap:anywhere}
+body:is([data-role="teacher"],[data-role="dept"],[data-role="college"]) #modal-root .modal:not(.page-form) .detail-fold{margin-top:22px;border:1px solid #e0e8f2;border-radius:7px;padding:0}
+body:is([data-role="teacher"],[data-role="dept"],[data-role="college"]) #modal-root .modal:not(.page-form) .detail-fold>summary{padding:13px 16px;color:#41658e;font-weight:500;cursor:pointer}
+body:is([data-role="teacher"],[data-role="dept"],[data-role="college"]) #modal-root .modal:not(.page-form) .detail-fold>div,body:is([data-role="teacher"],[data-role="dept"],[data-role="college"]) #modal-root .modal:not(.page-form) .detail-fold>p{margin:0;padding:14px 16px;border-top:1px solid #e5ecf4}
+.qualification-detail-lead{display:flex;gap:16px;align-items:center;padding:0 0 20px;border-bottom:1px solid #e4ebf3}
+.qualification-detail-lead>div{flex:1;min-width:0}.qualification-detail-lead strong{font-size:17px;color:#2c4b6d}.qualification-detail-lead p{font-size:14px;color:#637b95;margin:5px 0 0}
+.qualification-facts{display:grid;grid-template-columns:1fr 1fr;gap:22px 34px;margin:24px 0;padding:0}
+.qualification-facts>div{padding:0 0 14px;border-bottom:1px solid #e7edf4;min-width:0}.qualification-facts dt{font-size:13px;color:#69829a;margin-bottom:6px}.qualification-facts dd{font-size:15px;margin:0;color:#2a4564;font-weight:500;overflow-wrap:anywhere}
+.detail-section-title{display:flex;align-items:center;justify-content:space-between;gap:16px;margin:24px 0 12px}.detail-section-title h3{margin:0!important}.detail-section-title>span{font-size:13px;color:#6d829b}
+body[data-role="teacher"] .record-value-strip{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:0;margin:20px 0;padding:17px 0;background:#eef4fc;border-radius:7px}
+.record-value-strip>div{padding:0 20px;border-right:1px solid #d7e3f2}.record-value-strip>div:last-child{border-right:0}.record-value-strip dt{font-size:13px;color:#607994}.record-value-strip dd{font-size:24px;color:#2e5c97;margin:7px 0 0;font-weight:650;font-variant-numeric:tabular-nums}.record-value-strip dd small{font-size:13px;font-weight:400;margin-left:6px;color:#6a8097}
+@media(max-width:1100px){body[data-role="teacher"] #content .mc-cards{grid-template-columns:repeat(2,minmax(0,1fr))}.qualification-overview{gap:20px}.qualification-expiry-counts{padding-left:20px;gap:4px 18px}}
+@media(max-width:760px){.mine-section-nav{top:0}.mine-section{scroll-margin-top:74px}}
+@media(max-width:700px){
+body[data-role="teacher"] #content .mine-tools-row{flex-wrap:wrap;gap:4px 12px;align-items:flex-start}
+body[data-role="teacher"] #content .mine-tools-row .mine-related{flex-basis:100%;gap:6px 14px;padding-bottom:6px}
+.mine-tools{margin-bottom:8px}.mine-tools .mine-more{right:auto;left:0}.mine-section-nav{gap:4px;padding:8px;overflow-x:auto;border-radius:6px}.mine-section-nav>span{display:none}
+body[data-role="teacher"] #content .mine-section-nav .btn{flex:none;font-size:13px;min-height:40px;padding:8px 10px}
+body[data-role="teacher"] #content .mine-detail-workspace .mine-mini{display:grid;grid-template-columns:1fr 1fr;gap:14px 0}.mine-mini>div:nth-child(2){border-right:0!important}
+body[data-role="teacher"] #content .mc-cards{grid-template-columns:1fr}.qualification-overview{align-items:flex-start;flex-direction:column;gap:16px;padding:18px;margin-bottom:18px}
+.qualification-total{gap:12px}.qualification-symbol{width:44px;height:44px}.qualification-total strong{font-size:28px}
+.qualification-expiry-counts{padding:14px 0 0;border-left:0;border-top:1px solid #e1e9f3;width:100%;gap:4px 18px}.qualification-expiry-counts b{font-size:20px;margin-inline:5px}
+.qualification-state-tabs{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:0;padding:4px 6px 0;overflow:visible}.qualification-state-tabs button{flex-direction:column;justify-content:center;gap:3px;min-height:60px;padding:8px 3px;font-size:13px;white-space:normal}
+.qualification-total>div{display:flex;align-items:baseline;gap:12px}.qualification-expiry-counts p{font-size:12px;line-height:1.7}
+body[data-role="teacher"] #content .teacher-qualification-list .table td:first-child{display:block!important}
+body[data-role="teacher"] #content .teacher-qualification-list .table td:first-child::before{display:none!important}
+body[data-role="teacher"] #content .teacher-qualification-list td:first-child .btn{min-height:40px;font-size:16px}
+.teacher-result-empty{padding:26px 18px;gap:14px}.result-empty-icon{width:40px;height:40px}.result-empty-icon>.icon{width:23px;height:23px}.teacher-result-empty h3{font-size:18px}.teacher-result-empty p{font-size:14px}
+body[data-role="teacher"] #content .teacher-assess-list>summary{padding:15px 16px}
+body:is([data-role="teacher"],[data-role="dept"],[data-role="college"]) #modal-root .modal:not(.page-form) .modal-head,body:is([data-role="teacher"],[data-role="dept"],[data-role="college"]) #modal-root .modal:not(.page-form) .modal-body{padding:18px 16px}
+body:is([data-role="teacher"],[data-role="dept"],[data-role="college"]) #modal-root .modal:not(.page-form) .modal-head h2{font-size:20px}
+body:is([data-role="teacher"],[data-role="dept"],[data-role="college"]) #modal-root .modal:not(.page-form) .modal-foot{padding:12px 16px;flex-wrap:wrap}
+body:is([data-role="teacher"],[data-role="dept"],[data-role="college"]) #modal-root .modal:not(.page-form) .modal-foot .btn{min-height:44px}
+.qualification-detail-lead{flex-wrap:wrap;gap:12px}.qualification-detail-lead>div{flex-basis:70%}.qualification-detail-lead>.badge{margin-left:56px}
+.qualification-facts{gap:18px 20px;margin:20px 0}.qualification-facts dd{font-size:14px}
+.teacher-notice-list{padding:0 16px}.teacher-notice-item{align-items:flex-start;gap:12px;padding:20px 0;flex-wrap:wrap}.notice-list-icon{width:32px;height:32px}.notice-list-icon .icon{width:18px;height:18px}.teacher-notice-item>div{flex-basis:calc(100% - 44px)}.teacher-notice-item>.btn{margin-left:44px;min-height:44px}.notice-meta{gap:5px 12px;font-size:12px}
+body[data-role="teacher"] .record-value-strip{gap:12px 0;padding:14px 0}.record-value-strip>div{padding:0 10px}.record-value-strip dd{font-size:20px}.record-value-strip dd small{display:block;margin:2px 0 0}
+body[data-role="teacher"] #content[data-page="records"] .record-summary{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px 14px;padding:16px;border-bottom:1px solid #dfe7f0}
+body[data-role="teacher"] #content[data-page="records"] .record-summary>td{display:block!important;width:auto!important;padding:0!important;border:0;min-width:0;text-align:left}
+body[data-role="teacher"] #content[data-page="records"] .record-summary>td::before{display:block;content:attr(data-label);font-size:12px;color:#6b8199;margin-bottom:5px}
+body[data-role="teacher"] #content[data-page="records"] .record-summary>td:nth-child(2){grid-row:1;grid-column:1/-1;font-size:16px;font-weight:600;color:#294e7a}
+body[data-role="teacher"] #content[data-page="records"] .record-summary>td:nth-child(2)::before{display:none}
+body[data-role="teacher"] #content[data-page="records"] .record-summary>td:first-child{grid-row:2;grid-column:1/-1;display:flex!important;align-items:center;gap:10px;font-size:13px;color:#6b8199}
+body[data-role="teacher"] #content[data-page="records"] .record-summary>td:first-child::before{margin:0}
+body[data-role="teacher"] #content[data-page="records"] .record-summary>td:nth-child(3),body[data-role="teacher"] #content[data-page="records"] .record-summary>td:nth-child(4),body[data-role="teacher"] #content[data-page="records"] .record-summary>td:nth-child(5){font-size:19px;font-variant-numeric:tabular-nums}
+body[data-role="teacher"] #content[data-page="records"] .record-summary>td:nth-child(n+3):nth-child(-n+5)::before{min-height:3.4em}
+body[data-role="teacher"] #content[data-page="records"] .record-summary .record-income{font-size:19px}
+body[data-role="teacher"] #content[data-page="records"] .record-summary>td:last-child{grid-column:1/-1;display:flex!important;align-items:center;justify-content:space-between;border-top:1px solid #e3ebf4;padding-top:12px!important}
+body[data-role="teacher"] #content[data-page="records"] .record-summary>td:last-child::before{margin:0}
+body[data-role="teacher"] #content .mine-detail-workspace .table td{padding:7px 0!important}
+}
+}
+
+/* 教师详情及三级操作沿用工作台的蓝白样式。 */
+body:is([data-role="teacher"],[data-role="dept"],[data-role="college"]) .detail-status-summary{display:flex;justify-content:space-between;align-items:flex-start;gap:20px;padding:18px 20px;background:#f2f7ff;border-left:3px solid #3e72db;border-radius:4px}
+body:is([data-role="teacher"],[data-role="dept"],[data-role="college"]) .detail-status-summary strong{font-size:19px;color:#24476e}
+body:is([data-role="teacher"],[data-role="dept"],[data-role="college"]) .detail-status-summary p{margin:8px 0;color:#506783;line-height:1.7}
+body:is([data-role="teacher"],[data-role="dept"],[data-role="college"]) .detail-status-summary small{color:#718399}
+body:is([data-role="teacher"],[data-role="dept"],[data-role="college"]) .application-flow{margin-top:14px}
+body:is([data-role="teacher"],[data-role="dept"],[data-role="college"]) .detail-section-nav{display:flex;gap:8px;border-bottom:1px solid #dce6f1;padding:12px 0;margin:12px 0 0;flex-wrap:wrap}
+body:is([data-role="teacher"],[data-role="dept"],[data-role="college"]) .detail-section-nav button{border:0;background:#f1f5fb;color:#34577d;padding:10px 16px;border-radius:6px;min-height:42px;font:inherit;cursor:pointer}
+body:is([data-role="teacher"],[data-role="dept"],[data-role="college"]) .detail-section-nav button:hover{background:#e5eeff;color:#2258bc}
+body:is([data-role="teacher"],[data-role="dept"],[data-role="college"]) .detail-section-nav button:focus-visible{outline:2px solid #376bd7;outline-offset:2px}
+body:is([data-role="teacher"],[data-role="dept"],[data-role="college"]) .detail-section{padding:22px 0;scroll-margin-top:18px;outline-offset:4px}
+body:is([data-role="teacher"],[data-role="dept"],[data-role="college"]) .application-detail>.detail-section+.detail-section{border-top:1px solid #e3eaf2}
+body:is([data-role="teacher"],[data-role="dept"],[data-role="college"]) .detail-section h3{font-size:16px;margin:0 0 18px;color:#274568}
+body:is([data-role="teacher"],[data-role="dept"],[data-role="college"]) .detail-section-title{display:flex;justify-content:space-between;align-items:baseline}
+body:is([data-role="teacher"],[data-role="dept"],[data-role="college"]) .detail-section-title>span,.detail-empty{font-size:14px;color:#708098}
+body:is([data-role="teacher"],[data-role="dept"],[data-role="college"]) .detail-facts-grid{display:grid;grid-template-columns:1fr 1fr;gap:20px 36px;margin:0}
+body:is([data-role="teacher"],[data-role="dept"],[data-role="college"]) .detail-facts-grid .wide{grid-column:1/-1}
+body:is([data-role="teacher"],[data-role="dept"],[data-role="college"]) .detail-facts-grid dt{color:#718095;font-size:13px;margin-bottom:7px}
+body:is([data-role="teacher"],[data-role="dept"],[data-role="college"]) .detail-facts-grid dd{margin:0;color:#29435e;font-size:15px;line-height:1.8;white-space:pre-wrap;overflow-wrap:anywhere}
+body:is([data-role="teacher"],[data-role="dept"],[data-role="college"]) .detail-action-note{padding:12px 0;border-top:1px solid #e3eaf2;color:#78879a;font-size:13px;line-height:1.7}
+body:is([data-role="teacher"],[data-role="dept"],[data-role="college"],[data-role="school"]) .detail-action-context{grid-column:1/-1;padding:15px 18px;background:#f2f7ff;border-left:3px solid #5e85d6;margin-bottom:8px}
+body:is([data-role="teacher"],[data-role="dept"],[data-role="college"],[data-role="school"]) .detail-action-context>span{display:block;font-size:12px;color:#71839a;margin-bottom:6px}
+body:is([data-role="teacher"],[data-role="dept"],[data-role="college"],[data-role="school"]) .detail-action-context strong{display:block;font-size:16px;color:#29486e;overflow-wrap:anywhere}
+body:is([data-role="teacher"],[data-role="dept"],[data-role="college"],[data-role="school"]) .detail-action-context p{margin:6px 0 0;font-size:13px;color:#657b94;line-height:1.7}
+body:is([data-role="teacher"],[data-role="dept"],[data-role="college"]) #modal-root .teacher-action-form:has(#edit-form){width:min(700px,calc(100vw - 32px))}
+body:is([data-role="teacher"],[data-role="dept"],[data-role="college"]) #edit-form input[type="file"]{height:auto;min-height:74px;padding:14px;background:#f8faff;border:1px dashed #a7bbda;color:#5c718c;width:100%}
+body:is([data-role="teacher"],[data-role="dept"],[data-role="college"]) #edit-form input[type="file"]::file-selector-button{border:1px solid #ccd9ec;background:#fff;border-radius:5px;padding:9px 13px;color:#315d9c;margin-right:12px;font:inherit;cursor:pointer}
+body:is([data-role="teacher"],[data-role="dept"],[data-role="college"]) .file-selection-status{white-space:pre-wrap;overflow-wrap:anywhere;font-size:13px;line-height:1.8;color:#58718e;margin:8px 0 0}
+@media(max-width:700px){
+ body:is([data-role="teacher"],[data-role="dept"],[data-role="college"]) .detail-status-summary{padding:16px;flex-wrap:wrap;gap:12px}
+ body:is([data-role="teacher"],[data-role="dept"],[data-role="college"]) .detail-facts-grid{grid-template-columns:1fr;gap:18px}
+ body:is([data-role="teacher"],[data-role="dept"],[data-role="college"]) .detail-section-nav{gap:6px}
+ body:is([data-role="teacher"],[data-role="dept"],[data-role="college"]) .detail-section-nav button{padding:9px 12px;font-size:14px}
+ body:is([data-role="teacher"],[data-role="dept"],[data-role="college"],[data-role="school"]) .detail-action-context{padding:14px}
+}
+
+body:is([data-role="teacher"],[data-role="dept"],[data-role="college"]) .application-detail>.detail-section,body:is([data-role="teacher"],[data-role="dept"],[data-role="college"]) .social-detail>#social-info{border:0;border-radius:0;background:transparent}
+body:is([data-role="teacher"],[data-role="dept"],[data-role="college"]) .application-detail>.detail-section+.detail-section{border-top:1px solid #e3eaf2}
+
+body:is([data-role="teacher"],[data-role="dept"],[data-role="college"]) .application-correction{background:#fff8ee;border-left:3px solid #d5a24b;padding:16px 20px;margin:0 0 20px;grid-column:1/-1}
+body:is([data-role="teacher"],[data-role="dept"],[data-role="college"]) .application-correction h3{font-size:16px;color:#805b28;margin:0 0 8px}
+body:is([data-role="teacher"],[data-role="dept"],[data-role="college"]) .application-correction p{font-size:14px;line-height:1.8;white-space:pre-wrap;margin:0 0 8px;color:#725b3d}
+body:is([data-role="teacher"],[data-role="dept"],[data-role="college"]) .application-correction small{font-size:13px;color:#8b7b67}
+
+/* 教师深层页面：一个内容面板，状态、分区与正文保持清楚的层次。 */
+body:is([data-role="teacher"],[data-role="dept"],[data-role="college"]) #modal-root .assessment-result-heading{align-items:flex-start;padding-bottom:20px;border-bottom:1px solid #e4ebf3;margin-bottom:18px}
+body:is([data-role="teacher"],[data-role="dept"],[data-role="college"]) #modal-root .assessment-result-heading h2{font-size:18px;line-height:1.6;color:#2c486a}
+body:is([data-role="teacher"],[data-role="dept"],[data-role="college"]) #modal-root .assessment-result-heading .assessment-total{font-size:40px;line-height:1.15;font-weight:650;letter-spacing:-.025em}
+body[data-role="teacher"] .teacher-blocker-summary{margin:18px 0;padding:15px 18px;background:#fff9ef;border-left:3px solid #d4ac5f;border-radius:3px;color:#795f39}
+body[data-role="teacher"] .teacher-blocker-summary>strong{font-size:15px;font-weight:600}
+body[data-role="teacher"] .teacher-blocker-summary>p{font-size:13px;line-height:1.8;margin:5px 0 0;color:#8b785c}
+body[data-role="teacher"] .teacher-blocker-summary details{margin-top:10px;font-size:13px}
+body[data-role="teacher"] .teacher-blocker-summary summary{cursor:pointer;color:#8a6735}
+body:is([data-role="teacher"],[data-role="dept"],[data-role="college"]) #modal-root .detail-section-nav{gap:0;padding:0;margin:20px 0 0;border-bottom:1px solid #dce5f0}
+body:is([data-role="teacher"],[data-role="dept"],[data-role="college"]) #modal-root .detail-section-nav button{border-radius:0;background:transparent;border-bottom:2px solid transparent;padding:12px 16px;color:#61778e;font-size:14px}
+body:is([data-role="teacher"],[data-role="dept"],[data-role="college"]) #modal-root .detail-section-nav button:hover,body:is([data-role="teacher"],[data-role="dept"],[data-role="college"]) #modal-root .detail-section-nav button:focus-visible{color:#2c61bd;border-bottom-color:#376ed2;background:#f6f9ff}
+body:is([data-role="teacher"],[data-role="dept"],[data-role="college"]) #modal-root .social-detail-status{padding:0 0 17px;border:0;border-bottom:1px solid #e1e8f1;border-radius:0;background:transparent}
+body:is([data-role="teacher"],[data-role="dept"],[data-role="college"]) #modal-root .social-detail-status>strong{font-size:14px;font-weight:500;color:#718299}
+body:is([data-role="teacher"],[data-role="dept"],[data-role="college"]) #modal-root .social-detail-section>h3{border-bottom:0;padding-bottom:0;margin-bottom:14px;font-size:16px}
+@media(max-width:700px){
+ body:is([data-role="teacher"],[data-role="dept"],[data-role="college"]) #modal-root .assessment-result-heading .assessment-total{font-size:32px}
+ body:is([data-role="teacher"],[data-role="dept"],[data-role="college"]) #modal-root .detail-section-nav button{padding:11px 12px;font-size:13px;min-height:44px}
+ body[data-role="teacher"] .teacher-blocker-summary{padding:14px;margin:16px 0}
+}
+
+body:is([data-role="teacher"],[data-role="dept"],[data-role="college"]) .detail-more-actions{position:relative;margin-right:auto;align-self:center}
+body:is([data-role="teacher"],[data-role="dept"],[data-role="college"]) .detail-more-actions>summary{padding:10px 8px;color:#68819d;cursor:pointer;font-size:14px;list-style:none;min-height:40px}
+body:is([data-role="teacher"],[data-role="dept"],[data-role="college"]) .detail-more-actions>div{position:absolute;bottom:calc(100% + 12px);left:0;display:grid;gap:4px;min-width:170px;padding:7px;background:#fff;border:1px solid #dce5f1;border-radius:7px;box-shadow:0 6px 20px #183c6820;z-index:8}
+body:is([data-role="teacher"],[data-role="dept"],[data-role="college"]) .detail-more-actions>div .btn{justify-content:flex-start;border:0;white-space:nowrap}
+body:is([data-role="teacher"],[data-role="dept"],[data-role="college"]) .detail-more-actions>div .btn:hover{background:#f2f6fd}
+@media(max-width:700px){body:is([data-role="teacher"],[data-role="dept"],[data-role="college"]) .detail-more-actions>summary{font-size:13px;padding-inline:3px}}
+
+@media(max-width:700px){body:is([data-role="teacher"],[data-role="dept"],[data-role="college"]) #modal-root .modal:not(:has(#edit-form)) .modal-foot>.btn[data-action="close"]{display:none}}
+
+@media(max-width:700px){body:is([data-role="teacher"],[data-role="dept"],[data-role="college"]) #modal-root .material-list:not(.qualification-image-gallery .material-list) .upload-meta{align-items:flex-start}body:is([data-role="teacher"],[data-role="dept"],[data-role="college"]) #modal-root .material-list:not(.qualification-image-gallery .material-list) .upload-meta>.grow{flex:1 1 140px}body:is([data-role="teacher"],[data-role="dept"],[data-role="college"]) #modal-root .material-list:not(.qualification-image-gallery .material-list) .upload-meta>.btn{flex:none;margin-left:auto}}
+
+/* 教研室沿用教师端的蓝白基础，保留管理列表需要的教师与组织列。 */
+body:is([data-role="dept"],[data-role="college"]) #content .pagehead h1{font-size:28px;line-height:1.45;letter-spacing:.01em;color:#253e5a}
+body:is([data-role="dept"],[data-role="college"]) #content .teacher-page-subtitle{font-size:14px;line-height:1.8;color:#71859b;margin-top:8px}
+body:is([data-role="dept"],[data-role="college"]) #content .card{border-color:#dfe7f1;box-shadow:none;border-radius:9px}
+body:is([data-role="dept"],[data-role="college"]) #content .card-head{padding:20px 24px;background:#fff}
+body:is([data-role="dept"],[data-role="college"]) #content .card-head h2{font-size:18px;color:#2a4566;line-height:1.6}
+body:is([data-role="dept"],[data-role="college"]) #content .table{font-size:14px;color:#334f6c}
+body:is([data-role="dept"],[data-role="college"]) #content .table th{font-size:13px;color:#61778e;font-weight:600;background:#f1f5fb}
+body:is([data-role="dept"],[data-role="college"]) #content .table th,body:is([data-role="dept"],[data-role="college"]) #content .table td{padding:15px 18px}
+body:is([data-role="dept"],[data-role="college"]) #content .table td{line-height:1.8;vertical-align:middle}
+body:is([data-role="dept"],[data-role="college"]) #content .table .btn{min-height:38px;font-size:13px;box-shadow:none;border-radius:6px}
+body:is([data-role="dept"],[data-role="college"]) #content .table input[type="checkbox"]{width:17px;height:17px;accent-color:#2e63ca}
+body:is([data-role="dept"],[data-role="college"]) #content .page-actions .btn{min-height:42px;box-shadow:none;border-radius:6px;font-size:14px}
+body:is([data-role="dept"],[data-role="college"]) #content .social-summary{display:flex;gap:0;margin-bottom:20px;background:#fff;border:1px solid #dfe7f1;border-radius:9px;overflow:hidden}
+body:is([data-role="dept"],[data-role="college"]) #content .social-stat{flex:1;min-width:0;border:0;border-right:1px solid #e4eaf2;border-radius:0;padding:16px 20px;box-shadow:none}
+body:is([data-role="dept"],[data-role="college"]) #content .social-stat:last-child{border-right:0}
+body:is([data-role="dept"],[data-role="college"]) #content .social-stat strong{font-size:26px;color:#2d527d}
+body:is([data-role="dept"],[data-role="college"]) .role-scope-line{font-size:13px;color:#788ba0;margin:-2px 0 22px}
+body:is([data-role="dept"],[data-role="college"]) .role-home{display:block}
+body:is([data-role="dept"],[data-role="college"]) .role-home .home-indicators{margin-bottom:20px}
+body:is([data-role="dept"],[data-role="college"]) .role-home .home-indicators .kpis{margin-bottom:0}
+body:is([data-role="dept"],[data-role="college"]) #content[data-page="organization"]>.kpis{gap:0;background:#fff;border:1px solid #dfe7f1;border-radius:9px;overflow:hidden}
+body:is([data-role="dept"],[data-role="college"]) #content[data-page="organization"]>.kpis>.kpi{border:0;border-right:1px solid #e4eaf2;border-radius:0;box-shadow:none}
+body:is([data-role="dept"],[data-role="college"]) #content[data-page="organization"]>.kpis>.kpi:last-child{border-right:0}
+body:is([data-role="dept"],[data-role="college"]) .role-home .task-row{padding:19px 24px;gap:14px;border-bottom:1px solid #e6ecf3}
+body:is([data-role="dept"],[data-role="college"]) .role-home .task-row:last-child{border-bottom:0}
+body:is([data-role="dept"],[data-role="college"]) .role-home .task-title{font-size:15px;font-weight:600;line-height:1.7;color:#2f4c6e}
+body:is([data-role="dept"],[data-role="college"]) .role-home .task-sub{font-size:13px;color:#7a8ea4;line-height:1.8;margin-top:6px}
+body:is([data-role="dept"],[data-role="college"]) .role-home .task-icon{background:#edf3fd;color:#4878bc;border-radius:7px;width:36px;height:36px;flex:none}
+body:is([data-role="dept"],[data-role="college"]) .role-home .workbench-quick-grid{grid-template-columns:1fr;padding:6px 18px 14px;gap:0}
+body:is([data-role="dept"],[data-role="college"]) .role-home .workbench-quick{display:flex;align-items:center;gap:12px;min-height:58px;background:#fff;border:0;border-bottom:1px solid #edf1f6;border-radius:0;padding:10px 2px;text-align:left;box-shadow:none}
+body:is([data-role="dept"],[data-role="college"]) .role-home .workbench-quick:last-child{border-bottom:0}
+body:is([data-role="dept"],[data-role="college"]) .role-home .workbench-quick>.icon{margin-left:auto;width:15px;color:#92a0b3}
+body:is([data-role="dept"],[data-role="college"]) .role-home .notice-row{padding:14px 0;gap:16px;border-bottom:1px solid #edf1f6;font-size:14px;text-align:left}
+body:is([data-role="dept"],[data-role="college"]) .role-home .notice-row:last-child{border-bottom:0}
+body:is([data-role="dept"],[data-role="college"]) .role-home .notice-row time{font-size:12px;color:#8b9bb0;white-space:nowrap}
+body:is([data-role="dept"],[data-role="college"]) .dept-points-page .detail-fold{padding:14px 18px;background:#fff;border:1px solid #e0e8f1;border-radius:7px;color:#607791}
+body:is([data-role="dept"],[data-role="college"]) .dept-points-page .detail-fold summary{cursor:pointer}
+body:is([data-role="dept"],[data-role="college"]) .dept-points-page .detail-fold p{margin:12px 0 0;line-height:1.8;font-size:14px}
+body:is([data-role="dept"],[data-role="college"]) #modal-root .assessment-blockers{border:0;border-left:3px solid #d7af66;border-radius:3px;background:#fff9ee;padding:15px 18px}
+body:is([data-role="dept"],[data-role="college"]) #modal-root .assessment-blockers>.info-banner{border:0;background:transparent;padding:0;margin:0}
+body:is([data-role="dept"],[data-role="college"]) #modal-root .assessment-blockers .table{margin-top:14px}
+@media(max-width:700px){
+ body:is([data-role="dept"],[data-role="college"]) #content .pagehead h1{font-size:24px}
+ body:is([data-role="dept"],[data-role="college"]) #content .card-head{padding:17px 16px}
+ body:is([data-role="dept"],[data-role="college"]) #content .social-summary{flex-wrap:wrap}
+ body:is([data-role="dept"],[data-role="college"]) #content .social-stat{min-width:50%;padding:14px}
+ body:is([data-role="dept"],[data-role="college"]) .role-home .home-indicators .kpis{grid-template-columns:repeat(2,minmax(0,1fr))}
+ body:is([data-role="dept"],[data-role="college"]) .role-home .home-indicators .kpi{padding:16px 13px;min-height:110px}
+ body:is([data-role="dept"],[data-role="college"]) .role-home .task-row{padding:17px 16px;gap:10px;flex-wrap:wrap}
+ body:is([data-role="dept"],[data-role="college"]) .role-home .task-row>.grow{flex-basis:calc(100% - 50px)}
+ body:is([data-role="dept"],[data-role="college"]) .role-home .task-row>.btn{margin-left:46px;min-height:44px}
+ body:is([data-role="dept"],[data-role="college"]) #content .table .btn{min-height:44px}
+}
+
+body:is([data-role="dept"],[data-role="college"]) .role-scope-note{font-size:12px;line-height:1.8;color:#8292a6;padding:12px 24px;margin:0;border-top:1px solid #edf1f6}
+
+body:is([data-role="dept"],[data-role="college"]) #content .page-title{flex-wrap:wrap;align-items:baseline;gap:0 12px}
+body:is([data-role="dept"],[data-role="college"]) #content .teacher-page-subtitle{flex-basis:100%;margin:8px 0 0}
+body:is([data-role="dept"],[data-role="college"]) .role-home .workbench-quick{flex-direction:row}
+body:is([data-role="dept"],[data-role="college"]) .role-home .workbench-quick .qicon{margin:0;width:34px;height:34px;flex:none}
+body:is([data-role="dept"],[data-role="college"]) .role-home .workbench-quick>span:nth-child(2){flex:1;text-align:left}
+body:is([data-role="dept"],[data-role="college"]) #content .list-count{padding:12px 18px;font-size:13px;color:#7c8fa3;margin:0}
+body:is([data-role="dept"],[data-role="college"]) .dept-project-table th:first-child{width:34%}
+
+body:is([data-role="dept"],[data-role="college"],[data-role="school"]) .import-row-preview{min-width:220px;max-width:720px;overflow-wrap:anywhere}
+body:is([data-role="dept"],[data-role="college"],[data-role="school"]) .import-row-preview>strong{font-size:14px;line-height:1.8;color:#2f4d70}
+body:is([data-role="dept"],[data-role="college"],[data-role="school"]) .import-row-preview>p{font-size:13px;line-height:1.8;color:#73859b;margin:5px 0 9px}
+body:is([data-role="dept"],[data-role="college"],[data-role="school"]) .import-row-preview details>summary{font-size:13px;color:#426b9f;cursor:pointer}
+body:is([data-role="dept"],[data-role="college"],[data-role="school"]) .import-row-preview .detail-facts-grid{margin:12px 0;gap:12px 24px}
+body:is([data-role="dept"],[data-role="college"],[data-role="school"]) .modal .table:has(.import-row-preview){min-width:0;width:100%}
+
+@media(min-width:701px){
+ .content[data-page="trainers"] .table{table-layout:fixed;width:100%;min-width:0}
+ .content[data-page="trainers"] .table th:first-child{width:20%}
+ .content[data-page="trainers"] .table th:nth-child(2){width:7%}
+ .content[data-page="trainers"] .table th:nth-child(5){width:26%}
+ .content[data-page="trainers"] .table th:last-child{width:116px}
+ .content[data-page="trainers"] .table td{white-space:normal;overflow-wrap:anywhere;line-height:1.7}
+ .content[data-page="trainers"] .table td:last-child .btn{display:block;white-space:nowrap}
+}
+
+.modal .social-disputes .table{min-width:0;width:100%;table-layout:fixed}
+.modal .social-disputes .table th,.modal .social-disputes .table td{white-space:normal;overflow-wrap:anywhere;vertical-align:top}
+.approval-scope{margin:-6px 0 18px;color:var(--muted,#64748b);font-size:14px}
+.approval-tabs span{margin-left:6px;font-size:12px}.approval-center{overflow:hidden}
+.approval-filters{display:flex;align-items:end;gap:12px;flex-wrap:wrap;padding:20px;border-bottom:1px solid #e7edf5}
+.approval-filters label{display:grid;gap:6px;font-size:13px;color:#64748b;min-width:130px;flex:1}
+.approval-filters .approval-keyword{flex:2;min-width:220px}.approval-filters input,.approval-filters select{width:100%;min-height:40px}
+.approval-center .table td{vertical-align:top;white-space:normal;overflow-wrap:anywhere}.approval-center .table th{white-space:nowrap}
+.approval-center .table td:nth-child(2){max-width:310px}.approval-center .cell-sub{line-height:1.65}
+.approval-center td[data-label="期限"],.approval-center td[data-label="操作"]{white-space:nowrap}.approval-center th:last-child{width:96px}
+.approval-center .batch-bar[hidden]{display:none}.approval-selected-count{font-weight:600;white-space:nowrap}
+.approval-waiting{padding:12px 20px;border-top:1px solid #e7edf5;color:#64748b;font-size:13px}
+.modal .approval-object-summary{padding:16px 0;margin:0 0 18px;border-bottom:1px solid #e7edf5}
+.modal .approval-object-summary .detail-facts{margin:0;gap:12px 28px}.modal .approval-object-summary .detail-facts>div{padding:0}
+.modal .social-handle{background:#f8fafc;border:1px solid #e7edf5;padding:18px;margin-top:20px}
+.modal-foot .social-handle-actions{display:flex;gap:8px;margin:0}.modal-foot .social-handle-actions .btn{white-space:nowrap}
+@media(max-width:760px){.approval-filters{padding:16px;gap:10px}.approval-filters label{min-width:calc(50% - 10px)}.approval-filters .approval-keyword{min-width:100%}.approval-center .responsive-table .table td{max-width:none}.approval-center .responsive-table .table tr{margin:0;border-radius:0;border-width:0 0 1px}.modal .approval-object-summary .detail-facts{grid-template-columns:1fr}}

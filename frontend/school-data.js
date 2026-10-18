@@ -17,7 +17,7 @@ export async function loadCodeTables(api) {
   return schoolCodes;
 }
 
-// 有对照显示中文；没有对照显示原代码并标“待码表”。
+// 有对照显示中文；没有对照提示学校补充说明，不展示内部代码。
 export function codeLabel(c, type, code) {
   const v = String(code ?? '').trim();
   if (!v) return '<span class="muted small">—</span>';
@@ -25,8 +25,8 @@ export function codeLabel(c, type, code) {
   if (school) return c.esc(school);
   const hit = CODE_TABLES[type]?.[v];
   if (hit) return c.esc(hit);
-  // 学校直接给了中文的，原样显示；只有代码才提示待码表。
-  return /[\u4e00-\u9fa5]/.test(v) ? c.esc(v) : `${c.esc(v)}<span class="muted small">（待码表）</span>`;
+  // 学校直接给了中文的，原样显示；未匹配的代码不能猜测含义。
+  return /[\u4e00-\u9fa5]/.test(v) ? c.esc(v) : '<span class="muted small">待学校补充说明</span>';
 }
 
 const problemBadges = (c, row) => row.problems.length
@@ -159,7 +159,7 @@ function onlineCard(c, o, i) {
   const cover = cxCover(o.cover_url), url = safeUrl(o.course_url), period = cxPeriod(o);
   const nature = o.nature ? codeLabel(c, 'nature', o.nature) : '';
   const tags = [cxLabel(CX_TYPE, o.course_type), cxLabel(CX_SOURCE, o.course_source) && '来源：' + cxLabel(CX_SOURCE, o.course_source)].filter(Boolean).map(t => `<span class="badge blue-b">${e(t)}</span>`)
-    .concat(nature && !nature.includes('待码表') ? [`<span class="badge gray-b">${nature}</span>`] : [])
+    .concat(nature && !nature.includes('待学校补充说明') ? [`<span class="badge gray-b">${nature}</span>`] : [])
     .concat(String(o.archived) === '1' ? ['<span class="badge gray-b">已归档</span>'] : []).join(' ');
   const credit = o.credit == null ? '<span class="badge orange-b">缺学分</span>' : `<b>${c.number(o.credit, 2)}</b> 学分`;
   const meta = [credit, period && e(period) + ' 学时', o.chapters && e(o.chapters) + ' 章'].filter(Boolean).join(' · ');

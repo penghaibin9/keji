@@ -2,7 +2,8 @@
 const escapeHtml=value=>String(value??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const fields={
  qualification:[['name','证书名称'],['category','资质类别'],['certificate_no','证书编号'],['issuer','发证机构'],['obtained','取得日期'],['expires','有效期至'],['state','留存时状态']],
- record:[['project','培训项目'],['project_code','项目编号'],['course','课程名称'],['course_code','课程编号'],['class_name','班级名称'],['class_code','班级编号'],['event_date','培训日期'],['hours','授课学时'],['participants','课程人次'],['income','归属培训收入'],['source','数据来源'],['external_key','来源业务编号'],['state','留存时状态']]
+ record:[['project','培训项目'],['project_code','项目编号'],['course','课程名称'],['course_code','课程编号'],['class_name','班级名称'],['class_code','班级编号'],['event_date','培训日期'],['hours','授课学时'],['participants','课程人次'],['income','归属培训收入'],['source','数据来源'],['external_key','来源业务编号'],['state','留存时状态']],
+ participation:[['project','参训项目'],['project_code','项目编号'],['course','参训课程'],['course_code','课程编号'],['event_date','参训日期'],['hours','参训学时'],['source','数据来源'],['external_key','来源业务编号'],['state','留存时状态']]
 };
 const equal=(a,b)=>String(a??'')===String(b??'');
 function display(key,value,labels){

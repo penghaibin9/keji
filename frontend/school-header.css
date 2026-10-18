@@ -109,6 +109,16 @@
 /* 长姓名、长角色名截断，鼠标悬停看全称。 */
 .nd-header__person strong,.nd-header__person small{display:block;max-width:180px;overflow:hidden;text-overflow:ellipsis}
 .nd-header .demo-identity-control{margin-top:2px}
+@media(max-width:900px){
+ .nd-header__person:has(.demo-identity-control){display:flex}
+ .nd-header__identity:has(.demo-identity-control)>.nd-header__avatar,
+ .nd-header__person:has(.demo-identity-control)>strong,
+ .nd-header__person:has(.demo-identity-control)>small,
+ .nd-header .demo-identity-control>span{display:none}
+ .nd-header .demo-identity-control{margin-top:0}
+ .nd-header .demo-identity-control select{max-width:120px;min-height:36px}
+}
+@media(max-width:370px){.nd-header .demo-identity-control select{max-width:90px}}
 
 /* ---- 接入公共壳：抬头高度统一用 --nd-h ---- */
 :root{--nd-h:88px}

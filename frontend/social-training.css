@@ -615,6 +615,9 @@ body[data-role="teacher"] .apply-counts span:nth-child(3){background:#e9f9ef;col
 .choice input:checked+span{border-color:#2563eb;background:#eaf1ff;color:#1d4ed8;font-weight:600}
 .choice input:focus-visible+span{outline:2px solid #2563eb;outline-offset:2px}
 .choice input:required:invalid+span{border-color:var(--line)}
+.mode-guide{display:grid;gap:8px;margin-top:4px;padding:12px 14px;border-left:3px solid #7098ea;border-radius:6px;background:#f3f7fd;color:#4d6380;font-size:14px;line-height:1.8}
+.mode-guide strong{color:#233f64;font-weight:600}
+.mode-guide-note{padding-top:6px;border-top:1px solid #dfe7f2;color:#60738c;font-size:13px}
 /* 申报表单整页：铺满窗口，内容居中，底部按钮固定 */
 #modal-root .modal.page-form{width:100vw!important;max-width:none!important;height:100vh!important;max-height:none!important;border-radius:0;display:flex;flex-direction:column}
 #modal-root .modal.page-form .modal-body{flex:1;overflow:auto;max-width:none;width:100%;padding:24px max(24px,calc((100vw - 1040px)/2))}

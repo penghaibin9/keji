@@ -25,7 +25,7 @@ async function fileDigest(file){
  try{if(!globalThis.crypto?.subtle||!file.arrayBuffer)return '';const hash=await globalThis.crypto.subtle.digest('SHA-256',await file.arrayBuffer());return [...new Uint8Array(hash)].map(b=>b.toString(16).padStart(2,'0')).join('')}catch{return ''}
 }
 
-// 后端每传一份 version+1，所以只能一份接一份传，绝不并发。失败的那份标记出来，其余照常继续；
+// 业务材料每份使版本加一，考核和同步佐证不改业务版本；逐份上传，失败标明，其余照常继续。
 // 失败后重新读取最新版本，并按文件校验值确认“看似失败、实际已入库”的情况，避免补传时重复。
 export async function uploadSequential({api,kind,id,version,entries,reason,latest,onProgress=()=>{}}){
  let current=version;
@@ -33,7 +33,7 @@ export async function uploadSequential({api,kind,id,version,entries,reason,lates
   if(entry.status==='done')continue;
   entry.status='uploading';entry.error='';onProgress(entries);
   const fd=new FormData();fd.set('file',entry.file);fd.set('reason',reason||'补充佐证材料');fd.set('expected_version',String(current));
-  try{await api('/attachments/'+kind+'/'+id,{method:'POST',body:fd});entry.status='done';current+=1}
+  try{await api('/attachments/'+kind+'/'+id,{method:'POST',body:fd});entry.status='done';current+=['assessment','org_assessment','sync_task'].includes(kind)?0:1}
   catch(error){
    entry.status='failed';entry.error=String(error?.message||'上传没有完成').split('\n')[0];
    if(latest){
@@ -45,6 +45,23 @@ export async function uploadSequential({api,kind,id,version,entries,reason,lates
   onProgress(entries);
  }
  return {version:current,entries,failed:failedEntries(entries)};
+}
+
+// 共用材料表单：保留已上传结果，再次提交只重试失败文件；重新选文件则按最新附件数校验。
+export function materialUploadForm(c,{kind,id,title,intro='',contextLabel='',latest,after}){
+ let entries=null;
+ const max=kind==='qualification'?20:MAX_ATTACHMENTS;
+ return c.formModal(title,intro+c.field('file','材料文件（可一次选择多张图片或多份文件）','file','',{multiple:true,accept:'.pdf,.png,.jpg,.jpeg',full:true,hint:'支持照片或扫描件，单个最大 10 兆字节。电脑可按住控制键多选，手机可在相册勾选多张。'})+'<div id="upload-progress" class="form-field full"></div>'+c.field('reason','材料说明','textarea','补充申请材料',{full:true}),async(v,f)=>{
+  const chosen=Array.from(f.querySelector('#f-file').files||[]);
+  if(!chosen.length)throw Error('请选择要上传的材料，可一次选择多份。');
+  const fresh=await latest(),selected=chosen.map(file=>entries?.find(entry=>entry.file===file)||uploadEntries([file])[0]);
+  checkUploadFiles(failedEntries(selected).map(entry=>entry.file),(fresh.attachments||[]).length,{max});
+  entries=selected;
+  const box=f.querySelector('#upload-progress');
+  const result=await uploadSequential({api:c.api,kind,id,version:fresh.version,entries,reason:v.reason,latest,onProgress:list=>{if(box)box.innerHTML=uploadStatusHtml(list,c.esc)}});
+  if(result.failed.length)throw Error('已上传 '+(entries.length-result.failed.length)+' 份，另有 '+result.failed.length+' 份未完成。请查看每份结果，再次点击“上传材料”只补传失败文件；已上传的不会重复上传。');
+  c.closeModal();c.toast('已上传 '+entries.length+' 份材料');await after();
+ },{submit:'上传材料',returnTo:after,contextLabel,stepper:false,hint:'支持一次多选，确认后逐份上传；选好文件后不会立即上传。'});
 }
 
 // 批量办理＝前端按勾选顺序逐条调用现有单条接口。每条单独请求、单独留痕，失败条目附原因，不混进成功。
