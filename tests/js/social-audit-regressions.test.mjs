@@ -180,7 +180,7 @@ test('教研室从无名称的积分认定发起核对时显示被核对教师�
  const d={item:{id:'claim-context',teacher_id:'teacher-context',state:'ARCHIVED',data:{}},state_label:'已入账',attachments:[],events:[]};
  const c=context({'/social/objects':d});c.me.role.kind='dept';c.periodName=esc;c.teacherName=()=>'<被核对教师>';
  await socialAction('social-detail','social_claim|claim-context',c);await socialAction('social-review-new','',c);
- assert.match(c.formData.body,/&lt;被核对教师&gt;的积分认定/);assert.doesNotMatch(c.formData.body,/<被核对教师>/);assert.equal(c.formData.options.contextLabel,'积分认定 / 发起积分核对');assert.ok(c.requests.every(r=>!r.options));
+ assert.match(c.formData.body,/&lt;被核对教师&gt; · 个人积分认定/);assert.doesNotMatch(c.formData.body,/<被核对教师>/);assert.equal(c.formData.options.contextLabel,'积分认定 / 发起积分核对');assert.ok(c.requests.every(r=>!r.options));
 });
 
 
