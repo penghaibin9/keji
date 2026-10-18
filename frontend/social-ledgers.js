@@ -409,7 +409,7 @@ export function mineReminders(c, m, limit = m.reminders.length) {
 // 个人培训：老师手写菜单“个人培训 → 系统打开显示个人”。只放本人的东西，按“先办事、再看数”排列。
 export async function minePage(c) {
   let m;
-  try { m = await c.api('/social/mine?year=' + new Date().getFullYear()); } catch (err) { return c.pageHead('只显示本人的培训、积分和资质。') + c.note('个人培训读取失败：' + err.message, true); }
+  try { m = await c.api('/social/mine?year=' + new Date().getFullYear()); } catch (err) { return c.pageHead('只显示本人的培训、积分和资质。') + c.note('个人数据看板读取失败：' + err.message, true); }
   const e = c.esc;
   const sections = {records: c.can('records.read'), points: c.can('points.read'), qualifications: c.can('qualification.read'), ...m.sections};
   const ready = m.claim_ready, blocked = sections.points && ready?.reason && c.me.user?.staff_no;
@@ -448,6 +448,6 @@ export async function minePage(c) {
   const more = [['projects', '培训项目'], ['courses', '培训课程'], ['bases', '培训基地'], ['outcomes', '培训成果'], ['disputes', '我提出的核对'], ['exports', '导出下载']].filter(([p]) => c.pageAllowed(p) && (p !== 'qualifications' || sections.qualifications));
   const moreLinks = more.length ? `<nav class="mine-more" aria-label="更多入口"><span>更多：</span>${more.map(([p, l]) => c.link(l, 'nav', p)).join('')}</nav>` : '';
   const jumps=[['projects','培训项目',projectHtml],['claims','积分申报',claimHtml],['allocations','分配人次',allocationHtml],['resources','资源与成果',extraHtml]].filter(([, ,content])=>content);
-  const jumpNav=jumps.length>1?`<nav class="mine-section-nav" aria-label="个人培训分区定位"><span>快速定位</span>${jumps.map(([key,label])=>c.act(label,'mine-section',key,'text')).join('')}</nav>`:'';
+  const jumpNav=jumps.length>1?`<nav class="mine-section-nav" aria-label="个人数据看板分区定位"><span>快速定位</span>${jumps.map(([key,label])=>c.act(label,'mine-section',key,'text')).join('')}</nav>`:'';
   return `<div class="mine-page">${head}${todo}<div class="mine-tools-row">${related}${moreLinks?`<details class="mine-tools"><summary>更多业务入口</summary>${moreLinks}</details>`:''}</div>${jumpNav}<div class="mine-detail-workspace">${projectHtml}${claimHtml}${allocationHtml}${extraHtml}</div>${emptyLine}<div class="mt20">${c.note(m.note, false, '数据与申报说明')}</div></div>`;
 }

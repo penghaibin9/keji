@@ -1,7 +1,7 @@
 // School business pages reuse the portal's forms, permissions, navigation and attachments.
 import {checkUploadFiles,uploadEntries,uploadSequential,uploadStatusHtml,failedEntries,MAX_ATTACHMENTS} from './approval-flow.js?v=20261017-multi-materials2';
-import {renderTrainingWorkspace,trainingChange} from './training-workspace.js?v=20261018-claude5';
-import {progressHtml,AUDIENCE,TEACHING_MODES,IDEOLOGY} from './applications.js?v=20261018-design6&materials=20261017-preview2&approvalfix=20261018-1&duty=claude5';
+import {renderTrainingWorkspace,trainingChange} from './training-workspace.js?v=20261018-claude6';
+import {progressHtml,AUDIENCE,TEACHING_MODES,IDEOLOGY} from './applications.js?v=20261018-design6&materials=20261017-preview2&approvalfix=20261018-1&duty=claude6';
 const names={module:'模块式',person_day:'人天式',technical:'技术类',lecture:'讲座类',province:'省级',city:'市级或企业定制',school:'校级',dispatched:'统一委派异地送教',full_day:'全天实操或脱产',ordinary:'常规',subsidy:'补贴性培训',enterprise:'企业定制培训',community:'社区公益培训',rural:'乡村帮扶培训',other:'其他非学历培训',national:'国家级'};
 let workspace,context,opened,workspaceUser;
 let listSection='',listPage=1,listSearch='',resourcePage=1;
@@ -160,7 +160,7 @@ async function deadlinesModal(){
  const STATE={open:'申报中',reopened:'补报中',closed:'已截止'},tone={open:'green-b',reopened:'blue-b',closed:'gray-b'};
  const ops=x=>d.can_set?c.act('改截止日','social-deadline-edit',x.school_year,'text'):d.can_reopen?(x.state==='closed'?c.act('开放补报','social-deadline-reopen',x.school_year,'text'):x.state==='reopened'?c.act('改补报日期','social-deadline-reopen',x.school_year,'text')+c.act('关闭补报','social-deadline-close',x.school_year,'text'):''):'';
  const rows=d.items.map(x=>[e(x.school_year+' 学年'),e(x.deadline)+(x.custom?' <span class="muted small">（已调整，默认 '+e(x.default_deadline)+'）</span>':''),'<span class="badge '+tone[x.state]+'">'+STATE[x.state]+'</span>'+(x.days_left!=null?' <span class="muted small">还剩 '+x.days_left+' 天</span>':''),e(x.reopen_until||'—'),ops(x)]);
- const tip=c.note('从“我的课程”申报的课，每学年的课在学年结束后的 9 月 30 日前申报，到期前 '+d.remind_days+' 天在老师的“我的课程”和工作总览里提醒。'+(d.can_set?'学校可以调整截止日；':'')+'截止后由学院负责人为本院开放补报，最长 '+d.reopen_max_days+' 天。退回补正的申报不受截止日限制。'+(d.college?'当前学院：'+d.college+'。':''));
+ const tip=c.note('从“我的课程”申报的课，每学年的课在学年结束后的 9 月 30 日前申报，到期前 '+d.remind_days+' 天在老师的“我的课程”和教师工作台里提醒。'+(d.can_set?'学校可以调整截止日；':'')+'截止后由学院负责人为本院开放补报，最长 '+d.reopen_max_days+' 天。退回补正的申报不受截止日限制。'+(d.college?'当前学院：'+d.college+'。':''));
  return c.modal('培训课程申报期限',tip+c.table(['学年','申报截止日','状态','本院补报截止','操作'],rows),c.act('关闭','close'),true);
 }
 
@@ -216,7 +216,7 @@ export async function socialPage(section,c){
  const summary=p.total?'<div class="social-summary">'+stats.map(([label,value,hint,ico])=>'<article class="social-stat"><div class="social-stat-icon">'+c.icon(ico)+'</div><div><span>'+esc(label)+'</span><strong>'+esc(value)+'</strong></div></article>').join('')+'</div>':'';
  const pager=(c.me?.role?.kind==='teacher'&&p.total<=p.size||(dept||college)&&p.page===1&&p.total<=p.size)?'':'<div class="social-pager"><span>共 '+p.total+' 项 · 第 '+p.page+' 页</span>'+(p.page>1?act('上一页','social-list-page',String(p.page-1)):'')+(p.page*p.size<p.total?act('下一页','social-list-page',String(p.page+1)):'')+'</div>';
  const tools='<form id="social-search-form" class="social-tools" role="search" aria-label="检索'+config.label+'"><input id="social-query" type="search" aria-label="检索关键词" placeholder="输入关键词检索" value="'+esc(listSearch)+'" maxlength="100"><button class="btn" type="submit">'+c.icon('search')+'查询</button>'+(listSearch?act('清空检索','social-list-reset'):'')+'</form>';
- const scopeNote={teacher:{projects:'这里只显示你负责或参与授课的项目。项目由二级学院申报、学校备案；你在“个人培训”申报本人积分。',courses:'这里只显示你参与项目关联的课程，以及登记在你名下的课程资源。',bases:'这里显示所属学院的培训基地，供申报和授课时查阅。',outcomes:'这里显示所属学院已登记的培训成果。'},dept:{projects:'这里显示本教研室教师负责或参与的项目，只能查看和导出；申报、备案、结项由学院和学校办理。',courses:'这里显示本教研室项目关联的课程和学院课程资源；可查看课程资料，也可通过“申报培训课程”提交申请。',bases:'这里显示所属学院的培训基地；可查阅已有基地，也可通过“申请培训基地”提交申请。',outcomes:'这里显示所属学院的培训成果，只能查看。'}}[c.me?.role?.kind]?.[section];
+ const scopeNote={teacher:{projects:'这里只显示你负责或参与授课的项目。项目由二级学院申报、学校备案；你在“个人数据看板”申报本人积分。',courses:'这里只显示你参与项目关联的课程，以及登记在你名下的课程资源。',bases:'这里显示所属学院的培训基地，供申报和授课时查阅。',outcomes:'这里显示所属学院已登记的培训成果。'},dept:{projects:'这里显示本教研室教师负责或参与的项目，只能查看和导出；申报、备案、结项由学院和学校办理。',courses:'这里显示本教研室项目关联的课程和学院课程资源；可查看课程资料，也可通过“申报培训课程”提交申请。',bases:'这里显示所属学院的培训基地；可查阅已有基地，也可通过“申请培训基地”提交申请。',outcomes:'这里显示所属学院的培训成果，只能查看。'}}[c.me?.role?.kind]?.[section];
  const empty='<div class="social-empty"><div class="social-empty-art">'+c.icon(listSearch?'search':config.icon)+'</div><h3>'+(listSearch?'没有找到匹配的记录':'还没有'+config.label)+'</h3><p>'+(listSearch?'换个关键词试试。':'')+'</p><div class="social-empty-action">'+(listSearch?act('查看全部','social-list-reset'):['teacher','dept','college'].includes(c.me?.role?.kind)?'':buttons[0]||'')+'</div></div>';
  let content=rows.length?table(headers,rows):empty;
  if(section==='projects'&&c.me?.role?.kind==='teacher'){
