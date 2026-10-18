@@ -169,17 +169,17 @@ test('补正时一份材料没传上去：不提交，详情只补传失败那�
  const submit=state.posts.at(-1);assert.equal(submit.url,'/social/claims/c1/actions');assert.equal(submit.options.body.expected_version,7);
 });
 
-test('审核办理区预填常规意见，须本人点击确认；“通过并查看下一条”只办理当前条并打开下一条',async()=>{
+test('审核意见保留在资料后，底部确认只办理当前条，下一条只导航',async()=>{
  const claim=()=>returned({teacher_id:'t9',state:'SUBMITTED',version:8});
  const {c,state}=socialContext({me:'dean',duties:['dean'],claim,next:'social_claim|c2',handler:()=>({})});
  await socialAction('social-detail','social_claim|c1',c);
- assert.match(state.modal.body,/本环节办理/);assert.match(state.modal.body,/核对无误，审核通过/);assert.match(state.modal.body,/通过并查看下一条/);
+ assert.match(state.modal.body,/本环节办理/);assert.match(state.modal.body,/核对无误，审核通过/);assert.doesNotMatch(state.modal.body,/通过并查看下一条/);assert.match(state.modal.foot,/data-action="social-handle"/);assert.ok(state.modal.body.indexOf('id="social-materials"')<state.modal.body.indexOf('id="approval-opinion"'));
  assert.match(state.modal.body,/教师t9/);assert.match(state.modal.body,/合计 7/);assert.match(state.modal.foot,/退回补正/);assert.match(state.modal.foot,/查看下一条/);
  assert.equal(state.posts.length,0,'打开详情不办理');
  globalThis.document={getElementById:id=>({'handle-reason':{value:'核对无误，审核通过'},'handle-basis':{value:''}})[id]||null,querySelectorAll:()=>[]};
- try{await socialAction('social-handle','approve-next',c)}finally{delete globalThis.document}
+ try{await socialAction('social-handle','approve',c)}finally{delete globalThis.document}
  assert.equal(state.posts.length,1);assert.deepEqual([state.posts[0].url,state.posts[0].options.body.action,state.posts[0].options.body.expected_version],['/social/claims/c1/actions','approve',8]);
- assert.deepEqual(state.opened,['social_claim|c2']);
+ assert.deepEqual(state.opened,[]);await socialAction('social-next','',c);assert.equal(state.posts.length,1);assert.deepEqual(state.opened,['social_claim|c2']);
 });
 
 test('本人申报不出现办理区；退回、作废等意见不预填，须具体填写',async()=>{

@@ -180,9 +180,48 @@ def test_unconfirmed_policy_never_books_formal_points(setup_social,client2,app2)
     auth(client2,'teacher');r=post(client2,'/api/social/claims',{'project_id':pid,'period_id':'period2026','policy_id':pol,'recognition_form_reference':'学校制式认定表与佐证附件','reason':'本人隔离申报'});assert r.status_code==200,r.text
     claim=r.json()['item'];assert any('封顶' in b for b in r.json()['trial']['blockers'])
     assert r.json()['trial']['total'] is None
+    assert client2.get('/api/todos?attention=waiting&type=social_claim').json()['total']==1
+    assert client2.get('/api/todos?attention=handle&type=social_claim').json()['total']==0
     proof(client2,'social_claim',claim['id'],claim['version'])
     assert action(client2,'claims','social_claim',claim['id'],'submit').status_code==409
     with app2.state.sessions() as db:assert db.scalar(select(func_count(PointEntry.id)).where(PointEntry.kind=='SOCIAL'))==0
+
+
+def test_teacher_draft_waits_for_policy_but_returned_claim_stays_actionable(setup_social,client2,app2):
+    from app.social_models import SocialPolicy, SocialClaim
+    pid=setup_social
+    assert import_rows(client2,pid,[row()]).status_code==200
+    close_project(client2,pid)
+    pol=policy(client2,complete=True)
+    auth(client2,'teacher')
+    response=post(client2,'/api/social/claims',{'project_id':pid,'period_id':'period2026','policy_id':pol,
+                  'recognition_form_reference':'学校制式认定表与佐证附件','reason':'本人隔离申报'})
+    assert response.status_code==200,response.text
+    ident=response.json()['item']['id']
+    with app2.state.sessions.begin() as db:db.get(SocialPolicy,pol).state='DRAFT'
+    pending=client2.get('/api/todos?attention=handle&type=social_claim').json()
+    waiting=client2.get('/api/todos?attention=waiting&type=social_claim').json()
+    assert pending['total']==0 and waiting['total']==1
+    assert waiting['items'][0]['id']==ident and '等待学校' in waiting['items'][0]['action_hint']
+    assert action(client2,'claims','social_claim',ident,'submit').status_code==409
+    with app2.state.sessions.begin() as db:db.get(SocialClaim,ident).state='RETURNED'
+    returned=client2.get('/api/todos?attention=handle&type=social_claim').json()
+    assert returned['total']==1 and returned['items'][0]['action_required'] is True
+    auth(client2,'otherteacher')
+    assert client2.get('/api/todos?attention=waiting&type=social_claim').json()['total']==0
+
+
+def test_teacher_owned_project_draft_is_actionable_without_management_permission(setup_social,client2,app2):
+    pid=setup_social
+    with app2.state.sessions.begin() as db:db.get(SocialProject,pid).state='DRAFT'
+    auth(client2,'teacher')
+    data=client2.get('/api/todos?attention=handle&type=social_project').json()
+    assert data['total']==1 and data['items'][0]['id']==pid
+    assert data['items'][0]['action_label']=='完善项目申报'
+    with app2.state.sessions.begin() as db:db.get(SocialProject,pid).state='RETURNED'
+    assert client2.get('/api/todos?attention=handle&type=social_project').json()['total']==1
+    auth(client2,'otherteacher')
+    assert client2.get('/api/todos?attention=handle&type=social_project').json()['total']==0
 
 
 def func_count(column):
@@ -299,12 +338,19 @@ def test_correction_is_reviewed_append_only_and_summary_tracks_it(recognized,cli
 
 def test_bimonth_and_annual_reports_use_recognized_snapshot(recognized,client2,app2,monkeypatch):
     _,pol=recognized
+    monkeypatch.setattr(st,'today',lambda:date(2026,10,18))
     with app2.state.sessions.begin() as db:
         setting=db.get(Setting,'social_training_duties');setting.value={**setting.value,'secretary':['vice']}
     auth(client2,'vice')
     r=post(client2,'/api/social/reports',{'org_id':'college1','policy_id':pol,'year':2026,'start_month':9,'end_month':10,'reason':'双月积分梳理报送'})
     assert r.status_code==200,r.text
     report=r.json()['item'];assert report['data']['rows'][0]['total']=='1.56'
+    assert any(x['type']=='social_report' for x in client2.get('/api/todos').json()['items'])
+    school=post(client2,'/api/social/reports',{'org_id':'school','policy_id':pol,'year':2026,'start_month':9,'end_month':10,'reason':'当前学校范围双月合成汇总'})
+    assert school.status_code==200,school.text
+    tasks=client2.get('/api/todos').json()['items']
+    assert not any(x['type']=='social_report' for x in tasks)
+    assert any(x['type']=='social_resource' and x['id']==school.json()['item']['id'] for x in tasks)
     assert action(client2,'reports','social_resource',report['id'],'submit').status_code==200
     assert detail(client2,'social_resource',report['id'])['events'][-1]['action']=='积分汇总：待归口复核'
     with app2.state.sessions.begin() as db:
@@ -323,6 +369,11 @@ def test_bimonth_and_annual_reports_use_recognized_snapshot(recognized,client2,a
     auth(client2,'vice');assert action(client2,'reports','social_resource',ident,'archive').status_code==409
     monkeypatch.setattr(st,'today',lambda:date(2027,1,10));assert action(client2,'reports','social_resource',ident,'archive').status_code==409
     auth(client2,'reviewer');assert action(client2,'reports','social_resource',ident,'resolve').status_code==200
+    previous=detail(client2,'social_resource',ident)['item']['data']['disputes'][0].copy()
+    auth(client2,'teacher');assert action(client2,'reports','social_resource',ident,'dispute',reason='第二次合成公示异议').status_code==200
+    auth(client2,'reviewer');assert action(client2,'reports','social_resource',ident,'resolve',basis='仅处理第二次合成异议的新结论').status_code==200
+    resolved=detail(client2,'social_resource',ident)['item']['data']['disputes']
+    assert resolved[0]==previous and resolved[1]['resolution']=='仅处理第二次合成异议的新结论'
     auth(client2,'vice');assert action(client2,'reports','social_resource',ident,'archive').status_code==200
 
 
@@ -433,13 +484,15 @@ def test_course_import_atomicity_project_todos_and_export(setup_social,client2):
     book=load_workbook(BytesIO(exported.content));assert book['有效人次依据'].max_row==31
 
 
-@pytest.mark.parametrize('count,cap,expected',[(30,'ratio_cap','1.56'),(31,'ratio_cap','1.61'),(31,'over_standard_two','3.12'),(60,'ratio_cap','3.12'),(61,'ratio_cap','3.12')])
+@pytest.mark.parametrize('count,cap,expected',[(2,'ratio_cap','0.10'),(30,'ratio_cap','1.56'),(31,'ratio_cap','1.61'),(31,'over_standard_two','3.12'),(60,'ratio_cap','3.12'),(61,'ratio_cap','3.12')])
 def test_cap_boundaries_and_weights(setup_social,client2,monkeypatch,count,cap,expected):
     monkeypatch.setattr(st,'today',lambda:date(2026,9,3));pid=setup_social
     assert import_rows(client2,pid,[row(count=count)]).status_code==200;close_project(client2,pid);pol=policy(client2,True,cap_mode=cap)
     auth(client2,'teacher');r=post(client2,'/api/social/claims',{'project_id':pid,'period_id':'period2026','policy_id':pol,'recognition_form_reference':'学校制式认定表与佐证附件','reason':'边界候选试算'})
     assert r.status_code==200,r.text
     assert r.json()['trial']['teaching']==expected
+    formula=r.json()['trial']['details'][0]['formula']
+    assert ('取较小值（'+str(count)+'÷30，2）') in formula if cap=='ratio_cap' else '基数 2 ×' in formula
 
 
 def test_auxiliary_daily_cap_and_legacy_overlap_block_formal_results(setup_social,client2,app2,monkeypatch):
@@ -474,6 +527,23 @@ def test_missing_closeout_materials_and_chinese_project_search(setup_social,clie
     r=action(client2,'projects','social_project',pid,'close_submit',closeout={'closed_on':'2026-09-02','outcome_report':'材料待补','satisfaction':84,'rectification':'补齐材料并整改','actual_income':0,'finance_reference':'零收入核验','location':'onsite'})
     assert r.status_code==200,r.text
     assert action(client2,'projects','social_project',pid,'close').status_code==409
+    returned=action(client2,'projects','social_project',pid,'return')
+    assert returned.status_code==200,returned.text
+    assert returned.json()['item']['state']=='FILED'
+    assert returned.json()['state_label']=='结项退回补正'
+    assert returned.json()['progress']['tone']=='red'
+    assert returned.json()['progress']['flow']=='project_close'
+    assert '隔离业务确认' in returned.json()['progress']['headline']
+    auth(client2,'teacher')
+    mine=client2.get('/api/applications/mine').json()
+    summary=next(x for x in mine['items'] if x['id']==pid)
+    assert summary['label']=='培训项目结项' and summary['state_label']=='结项退回补正'
+    assert summary['progress']['needs_applicant'] is True and mine['counts']['returned']==1
+    current=detail(client2,'social_project',pid)
+    assert current['progress']['tone']=='red' and current['item']['closeout']['actual_income']=='0'
+    submitted=action(client2,'projects','social_project',pid,'close_submit',closeout=current['item']['closeout'])
+    assert submitted.status_code==200,submitted.text
+    assert submitted.json()['item']['state']=='CLOSE_COLLEGE' and submitted.json()['progress']['tone']=='blue'
     result=client2.get('/api/social/workspace?section=projects&q=隔离技能').json()
     assert result['pagination']['total']==1;assert result['projects'][0]['id']==pid
 

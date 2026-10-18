@@ -65,9 +65,13 @@ def test_archive_freezes_identity_period_rule_and_final_event(client2,app2):
     proof=c.get(f"/api/assessments/{x['id']}/evidence");assert proof.status_code==200
     assert digest(proof.json()['archive'])==proof.json()['archive_sha256']
     assert 'storage_key' not in proof.text
-    wb=load_workbook(io.BytesIO(export(c,app2,'assessments')),read_only=True)
-    rows=list(wb.active.values);wb.close()
+    wb=load_workbook(io.BytesIO(export(c,app2,'assessments')))
+    ws=wb.active;rows=list(ws.values)
     assert rows[1][1]=='测试教师一' and isinstance(rows[1][3],(int,float)) and rows[1][3]==100
+    assert rows[0][2]=='考核周期' and rows[1][2]==before['period']['name'] and rows[1][2]!='更名后的周期'
+    assert rows[1][6]==x['rule_id'] and rows[1][8]==x['archive_sha256'] and rows[1][9]==x['period_id']
+    for col in ('G','I','J'):assert ws.column_dimensions[col].hidden
+    assert not ws.column_dimensions['C'].hidden;wb.close()
 
 
 @pytest.mark.parametrize('mutation',['hash','score','detail','payload','source'])
@@ -195,7 +199,13 @@ def test_organization_export_uses_frozen_target_not_current_name(client2,app2):
     c=client2;auth(c,'schooladmin');make_rule(c,'dept','dept1');x=calculate(c,'dept','dept1')
     auth(c,'depthead');x=action(c,x,'review').json()
     auth(c,'schooladmin');x=action(c,x,'school_audit').json();r=action(c,x,'archive');assert r.status_code==200,r.text
-    with app2.state.sessions.begin() as db:db.get(Org,'dept1').name='新部门名'
-    wb=load_workbook(io.BytesIO(export(c,app2,'organization_assessments')),read_only=True)
-    rows=list(wb.active.values);wb.close()
+    with app2.state.sessions.begin() as db:
+        db.get(Org,'dept1').name='新部门名'
+        db.get(Period,'period2026').name='不能补写归档的当前周期名'
+    wb=load_workbook(io.BytesIO(export(c,app2,'organization_assessments')))
+    ws=wb.active;rows=list(ws.values)
     assert rows[1][0]=='测试教研室一'
+    assert rows[0][2]=='考核周期' and rows[1][2]=='2026隔离测试周期'
+    assert rows[1][5]==x['rule_id'] and rows[1][7]==r.json()['archive_sha256'] and rows[1][8]==x['period_id']
+    for col in ('F','H','I'):assert ws.column_dimensions[col].hidden
+    assert not ws.column_dimensions['C'].hidden;wb.close()

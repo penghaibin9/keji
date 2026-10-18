@@ -30,6 +30,15 @@ test('超星封面只用 chaoxing.com 的图片',async()=>{
  assert.match(c.html,/<img src="https:\/\/p\.ananas\.chaoxing\.com\/a\.png"/);assert.equal((c.html.match(/<img/g)||[]).length,1);
 });
 
+test('超星课程未知性质不显示原代码徽标，详情保留中文待补说明',async()=>{
+ await loadCodeTables(async()=>({tables:{}}));
+ const c=context([course(0,{nature:'INTERNAL_NATURE_88'})]);await showStaffDetail(c,'J001');
+ assert.doesNotMatch(c.html,/INTERNAL_NATURE_88|待学校补充说明|待码表/);
+ await onlineHandlers['online-detail']('0',c);assert.match(c.html,/课程性质<\/dt><dd><span class="muted small">待学校补充说明/);assert.doesNotMatch(c.html,/INTERNAL_NATURE_88|待码表/);
+ await loadCodeTables(async()=>({tables:{nature:{INTERNAL_NATURE_88:{label:'学校确认的课程性质'}}}}));await showStaffDetail(c,'J001');assert.match(c.html,/学校确认的课程性质/);assert.doesNotMatch(c.html,/INTERNAL_NATURE_88/);
+ await loadCodeTables(async()=>({tables:{}}));
+});
+
 test('超星课程详情：字段齐全、空字段不显示、简介转义、可返回',async()=>{
  const c=context([course(0),course(1,{credit:3,hours:48,course_type:'9',description:'',score:null,team_names:'',team_staff_nos:'',jw_course_code:'',major:''})]);await showStaffDetail(c,'J001');
  await onlineHandlers['online-detail']('0',c);

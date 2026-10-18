@@ -10,7 +10,7 @@ function context(answers,permissions=['records.read','points.read','qualificatio
   act:(l,a,id='')=>`<button data-action="${a}" data-id="${esc(id)}">${esc(l)}</button>`,link:(l,a,id='')=>`<a data-action="${a}" data-id="${esc(id)}">${esc(l)}</a>`,
   field:(n,l,t='text',v='',o={})=>`<label>${esc(l)}<input name="${n}" value="${esc(v)}">${(o.options||[]).map(x=>esc(x[1])).join('')}</label>`,
   note:esc,pageHead:esc,table:(h,r)=>h.join(' ')+' '+r.map(x=>x.join(' ')).join(' '),orgName:esc,teacherName:esc,downloads:()=>'',eventsHtml:()=>'',reasonFields:()=>'',
-  modal:(title,body,buttons)=>{c.modalData={title,body,buttons}},formModal:(title,body,save)=>{c.formData={title,body,save}},
+  modal:(title,body,buttons,wide,contextLabel)=>{c.modalData={title,body,buttons,wide,contextLabel}},formModal:(title,body,save,options)=>{c.formData={title,body,save,options}},
   closeModal(){},toast(){},render:async()=>{},
   api:async(url,options)=>{c.requests.push({url,options});if(url==='/social/workspace')return workspace;for(const[k,v]of Object.entries(answers))if(url.startsWith(k))return v;throw Error('无匹配测试响应：'+url)}};
  return c;
@@ -139,4 +139,54 @@ test('教研室摘要使用本室名称及教师岗位，保留导出且没有�
  const c=context({'/social/objects/social_project/p1':d});c.me.role.kind='dept';
  await socialAction('social-detail','social_project|p1',c);
  assert.match(c.modalData.body,/本教研室核算单元/);assert.match(c.modalData.body,/t2 · 主讲/);assert.match(c.modalData.buttons,/导出本教研室参与摘要/);assert.doesNotMatch(c.modalData.buttons,/social-upload|social-transition/);
+});
+
+
+test('教研室只读参与摘要保留关闭入口，导出仍取决于权限且没有业务写入',async()=>{
+ const d={readonly:true,readonly_reason:'仅本教研室摘要',item:{id:'p-close',data:{name:'合成<项目>'},state:'FILED'},state_label:'已备案',facts:{units:[{external_key:'unit-close',data:{module:'本室课程',teachers:[{teacher_id:'t2',role:'instructor'}]}}]}};
+ for(const exported of [true,false]){
+  const c=context({'/social/objects':d},exported?['records.read','export']:['records.read']);c.me.role.kind='dept';
+  await socialAction('social-detail','social_project|p-close',c);
+  assert.match(c.modalData.body,/本教研室核算单元/);assert.match(c.modalData.body,/t2 · 实训指导/);assert.match(c.modalData.buttons,/data-action="close"/);
+  assert.equal(c.modalData.buttons.includes('social-export'),exported);assert.equal(c.modalData.buttons.includes('detail-more-actions'),exported);
+  assert.doesNotMatch(c.modalData.buttons,/social-upload|social-transition|social-project-edit/);assert.equal(c.modalData.contextLabel,'培训项目 / 本教研室参与摘要');
+  assert.ok(c.requests.every(r=>!r.options));
+ }
+});
+
+test('教研室只读资源详情按资料材料记录分区，返回课程仍保留原分页',async()=>{
+ const d={view_only:true,view_only_reason:'本室可查阅资源',item:{id:'resource-readonly',kind:'course_resource',code:'R1',name:'资源<一>',state:'ACTIVE',data:{recognition:'核验依据'}},state_label:'已生效',attachments:[],events:[]};
+ const c=context({'/social/objects':d});c.me.role.kind='dept';
+ await socialAction('social-detail','social_resource|resource-readonly|C1|2',c);
+ for(const id of ['social-info','social-materials','social-history']){assert.ok(c.modalData.body.includes('data-detail-section="'+id+'"'));assert.ok(c.modalData.body.includes('id="'+id+'"'))}
+ assert.match(c.modalData.buttons,/social-course-resources" data-id="C1\|2"/);assert.match(c.modalData.buttons,/data-action="close"/);assert.match(c.modalData.buttons,/detail-more-actions/);
+ assert.doesNotMatch(c.modalData.buttons,/social-upload|social-transition|social-resource-edit/);assert.equal(c.modalData.contextLabel,'课程资源 / 业务详情');assert.ok(c.requests.every(r=>!r.options));
+});
+
+test('教研室积分核对详情和三级确认表单显示办理对象，保存保留原版本和动作',async()=>{
+ const d={item:{id:'review-context',kind:'point_review',name:'积分核对<一>',state:'DRAFT',version:7,data:{created_by:'t1',teacher_id:'t2',teaching:'-0.5',auxiliary:'0',period_id:'p1'}},state_label:'待发送教师',review_context:{teacher_name:'被核对教师',project:'合成项目'},workflow_blockers:[],attachments:[{id:'material'}],events:[]};
+ const c=context({'/social/objects':d,'/social/point-reviews':d});c.me.role.kind='dept';c.periodName=esc;
+ await socialAction('social-detail','social_resource|review-context',c);
+ assert.match(c.modalData.body,/data-detail-section="social-info"/);assert.match(c.modalData.buttons,/detail-more-actions/);assert.equal(c.modalData.contextLabel,'积分核对 / 业务详情');
+ await socialAction('social-transition','send',c);
+ assert.match(c.formData.body,/本次办理对象/);assert.match(c.formData.body,/积分核对&lt;一&gt;/);assert.match(c.formData.body,/待发送教师/);assert.equal(c.formData.options.contextLabel,'积分核对 / 发给教师回应');
+ assert.ok(c.requests.every(r=>!r.options));
+ await c.formData.save({reason:'请核对授课积分',basis:'签到表'});
+ const write=c.requests.find(r=>r.options?.method==='POST');assert.equal(write.url,'/social/point-reviews/review-context/actions');assert.equal(write.options.body.expected_version,7);assert.equal(write.options.body.action,'send');
+});
+
+
+test('教研室从无名称的积分认定发起核对时显示被核对教师，不沿用空业务名称',async()=>{
+ const d={item:{id:'claim-context',teacher_id:'teacher-context',state:'ARCHIVED',data:{}},state_label:'已入账',attachments:[],events:[]};
+ const c=context({'/social/objects':d});c.me.role.kind='dept';c.periodName=esc;c.teacherName=()=>'<被核对教师>';
+ await socialAction('social-detail','social_claim|claim-context',c);await socialAction('social-review-new','',c);
+ assert.match(c.formData.body,/&lt;被核对教师&gt;的积分认定/);assert.doesNotMatch(c.formData.body,/<被核对教师>/);assert.equal(c.formData.options.contextLabel,'积分认定 / 发起积分核对');assert.ok(c.requests.every(r=>!r.options));
+});
+
+
+test('学院年度自评三级办理条使用原学院和周期，名称安全转义且不写业务',async()=>{
+ const d={item:{id:'annual-subject',org_id:'college1',period_id:'period1',owner_id:'t1',state:'DRAFT',version:3,data:{},snapshot:{}},state_label:'待提交学院自评',attachments:[{id:'annual-file'}],events:[]};
+ const c=context({'/social/objects':d},['records.read','assessment.read','assessment.review','file.write']);c.me.role.kind='college';c.orgName=()=>'<所属学院>';c.periodName=()=>'<年度周期>';
+ await socialAction('social-detail','social_annual|annual-subject',c);await socialAction('social-transition','submit',c);
+ assert.match(c.formData.body,/本次办理对象/);assert.match(c.formData.body,/&lt;所属学院&gt; · &lt;年度周期&gt;/);assert.doesNotMatch(c.formData.body,/<所属学院>|<年度周期>|当前业务/);assert.equal(c.formData.options.contextLabel,'学院年度考核 / 提交学院自评');assert.ok(c.requests.every(r=>!r.options));
 });

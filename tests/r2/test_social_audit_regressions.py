@@ -455,17 +455,29 @@ def test_teacher_annual_public_summary_hides_evidence_and_attachment(recognized,
     with app2.state.sessions.begin() as db:
         annual=db.get(SocialAnnual,ident);annual.state=state
         annual.snapshot={**st.freeze(st.annual_trial(db,annual)),'public_start':'2026-09-03','public_end':'2026-09-10'}
+        annual.snapshot={**annual.snapshot,'disputes':[{'actor':'teacher','reason':'本人合成公示异议','resolved':True,'resolution':'本人收到的核实结论','resolved_by':'schooladmin'},
+            {'actor':'otherteacher','reason':'OTHER-ANNUAL-DISPUTE-SECRET','resolved':False}]}
         original=annual.snapshot
         attachment=db.scalar(select(Attachment).where(Attachment.object_type=='social_annual',Attachment.object_id==ident));file_id=attachment.id
+    if state=='PUBLIC':
+        previous=deepcopy(original['disputes'][0]);auth(client2,'reviewer')
+        assert action(client2,'annuals','social_annual',ident,'resolve',basis='另一人异议本次合成结论').status_code==200
+        with app2.state.sessions() as db:
+            original=deepcopy(db.get(SocialAnnual,ident).snapshot)
+            assert original['disputes'][0]==previous and original['disputes'][1]['resolution']=='另一人异议本次合成结论'
     auth(client2,'teacher')
     detail_response=client2.get('/api/social/objects/social_annual/'+ident)
     assert detail_response.status_code==200,detail_response.text
     public=detail_response.json();assert public['public_summary'] and public['item']['data']=={}
+    assert public['org_name']=='测试学院一'
+    assert public['item']['snapshot']['disputes']==[{'reason':'本人合成公示异议','resolved':True,'resolution':'本人收到的核实结论'}]
+    assert 'OTHER-ANNUAL-DISPUTE-SECRET' not in detail_response.text
     assert public['attachments']==[] and public['events']==[] and 'basis' not in public['trial']
     assert not {'points_total','points_average','cost_details','veto_basis'} & public['trial'].keys()
     workspace=client2.get('/api/social/workspace?section=annual');assert workspace.status_code==200,workspace.text
     shown=next(x for x in workspace.json()['annuals'] if x['id']==ident)
     assert shown['data']=={} and 'basis' not in shown['snapshot']['trial']
+    assert shown['snapshot']['disputes']==public['item']['snapshot']['disputes']
     assert 'OTHER-LEARNER-SECRET' not in detail_response.text
     assert client2.get('/api/attachments/'+file_id+'/download').status_code==403
     exported=client2.get('/api/social/objects/social_annual/'+ident+'/export');assert exported.status_code==200,exported.text

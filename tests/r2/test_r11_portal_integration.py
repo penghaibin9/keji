@@ -142,13 +142,13 @@ def test_nginx_asset_contract_is_included_in_source_and_image_guards():
     root=Path(__file__).resolve().parents[2]
     from check_assembly import REQUIRED
     assert 'deploy/nginx.conf' in REQUIRED
-    config=(root/'deploy/nginx.conf').read_text()
+    config=(root/'deploy/nginx.conf').read_text(encoding='utf-8')
     assert 'location ^~ /assets/' in config and 'alias /usr/share/nginx/html/;' in config
     assert 'Cache-Control "no-store" always' in config
     assets=config.split('location ^~ /assets/',1)[1].split('}',1)[0]
     assert 'Cache-Control "no-cache" always' in assets and 'X-Content-Type-Options nosniff always' in assets and 'X-Frame-Options DENY always' in assets
     assert 'gzip on;' in config and 'application/javascript' in config
-    docker=(root/'deploy/Dockerfile.api').read_text()
+    docker=(root/'deploy/Dockerfile.api').read_text(encoding='utf-8')
     assert 'deploy/compose.yml deploy/nginx.conf /opt/nondegree/deploy/' in docker
-    compose=(root/'deploy/compose.yml').read_text()
+    compose=(root/'deploy/compose.yml').read_text(encoding='utf-8')
     assert compose.count('2026.09.19-r11')==2

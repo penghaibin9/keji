@@ -52,6 +52,10 @@ def test_internal_trainer_goes_four_levels_and_enters_library(app2, client2):
     assert d['item']['state'] == 'ACTIVE' and d['state_label'] == '已入师资库' and d['item']['data']['filing_basis'] == '湘科人认〔2026〕12号'
     lib = c.get('/api/applications/trainers').json()
     assert [x['name'] for x in lib['items']] == ['测试教师一'] and lib['items'][0]['directions'] == ['社区公益培训', '“一人一技”专项']
+    for user in ('depthead', 'collegehead', 'reviewer'):
+        auth(c, user)
+        assert c.get('/api/applications/trainers').json()['items'][0]['can_view_detail'] is True
+        assert c.get('/api/applications/' + ident).status_code == 200
 
 
 def test_internal_trainer_can_only_cite_own_approved_qualifications(app2, client2):
@@ -94,6 +98,13 @@ def test_external_trainer_registered_by_college_filed_by_academic_office(app2, c
     auth(c, 'schooladmin')
     lib = c.get('/api/applications/trainers').json()
     assert [(x['name'], x['unit'], x['source']) for x in lib['items']] == [('陈外聘', '湘茶集团', 'external')]
+    assert lib['items'][0]['can_view_detail'] is True
+    auth(c, 'collegehead')
+    assert c.get('/api/applications/trainers').json()['items'][0]['can_view_detail'] is True
+    assert c.get('/api/applications/' + ident).status_code == 200
+    auth(c, 'depthead')
+    assert c.get('/api/applications/trainers').json()['items'][0]['can_view_detail'] is False
+    assert c.get('/api/applications/' + ident).status_code == 403
 
 
 def test_return_resumes_at_hr_and_province_recommendation_is_logged(app2, client2):
@@ -134,3 +145,76 @@ def test_new_duties_configurable_and_library_closed_to_teachers(app2, client2):
     # 老师不能读师资库（含认定依据），也不能配置职责
     auth(client2, 'teacher')
     assert client2.get('/api/applications/trainers').status_code == 403
+
+
+def test_trainer_materials_use_application_scope_version_and_live_file_permission(app2, client2):
+    import uuid
+    from app.models import Role
+    from test_api import png
+    c = client2
+    setup(app2)
+    auth(c, 'teacher')
+    item = internal(c).json()['item']
+    ident = item['id']
+    def upload(version):
+        return c.post('/api/attachments/social_resource/' + ident,
+            files={'file': ('trainer-evidence.png', png(), 'image/png')},
+            data={'expected_version': version, 'reason': '隔离培训师材料授权核验'},
+            headers={'Idempotency-Key': str(uuid.uuid4())})
+    response = upload(item['version'])
+    assert response.status_code == 200, response.text
+    attachment = response.json()['id']
+    detail = c.get('/api/social/objects/social_resource/' + ident)
+    assert detail.status_code == 200, detail.text
+    assert detail.json()['state_label'] == '待教研室审核'
+    assert detail.json()['item']['version'] == item['version'] + 1
+    assert upload(item['version']).status_code == 409
+    assert c.get('/api/attachments/' + attachment + '/download').content == png()
+    for actor in ('otherteacher', 'otherdept'):
+        auth(c, actor)
+        assert c.get('/api/social/objects/social_resource/' + ident).status_code == 403
+        assert c.get('/api/attachments/' + attachment + '/download').status_code == 403
+        assert upload(item['version'] + 1).status_code == 403
+    auth(c, 'depthead')
+    assert c.get('/api/attachments/' + attachment + '/download').status_code == 200
+    assert upload(item['version'] + 1).status_code == 409  # 本级审核人不代申请人补材料。
+    with app2.state.sessions.begin() as db:
+        role = db.get(Role, 'role-teacher')
+        role.permissions = [p for p in role.permissions if p != 'file.write']
+    auth(c, 'teacher')
+    assert upload(item['version'] + 1).status_code == 403
+
+
+def test_completed_trainer_materials_stay_readable_but_cannot_be_appended(app2, client2):
+    import uuid
+    from test_api import png
+    from test_social_training import proof
+    c = client2
+    setup(app2)
+    auth(c, 'teacher')
+    item = internal(c).json()['item']
+    ident = item['id']
+    proof(c, 'social_resource', ident, item['version'])
+    for actor in ('depthead', 'collegehead', 'reviewer'):
+        auth(c, actor)
+        assert approve(c, ident).status_code == 200
+    auth(c, 'teacher')
+    detail = c.get('/api/social/objects/social_resource/' + ident)
+    assert detail.status_code == 200 and detail.json()['state_label'] == '待组织人事部认定'
+    auth(c, 'hruser')
+    completed = approve(c, ident, '隔离人事认定依据').json()
+    assert completed['item']['state'] == 'ACTIVE'
+    auth(c, 'teacher')
+    before = c.get('/api/social/objects/social_resource/' + ident).json()
+    assert before['state_label'] == '已入师资库' and len(before['attachments']) == 1
+    original = c.get('/api/attachments/' + before['attachments'][0]['id'] + '/download').content
+    assert original.startswith(b'\x89PNG')
+    response = c.post('/api/attachments/social_resource/' + ident,
+        files={'file': ('frozen-trainer.png', png(), 'image/png')},
+        data={'expected_version': before['item']['version'], 'reason': '已办结申请不能追加'},
+        headers={'Idempotency-Key': str(uuid.uuid4())})
+    assert response.status_code == 409
+    after = c.get('/api/social/objects/social_resource/' + ident).json()
+    assert after['item']['version'] == before['item']['version']
+    assert after['attachments'] == before['attachments']
+    assert c.get('/api/attachments/' + before['attachments'][0]['id'] + '/download').content == original

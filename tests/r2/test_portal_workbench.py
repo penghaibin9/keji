@@ -1,7 +1,7 @@
 """Home workbench contract, using isolated synthetic fixtures only."""
 from datetime import date, timedelta
 import pytest
-from app.models import Qualification, Role
+from app.models import Qualification, Role, Dispute
 from conftest import auth
 
 
@@ -94,4 +94,27 @@ def test_home_rechecks_revoked_permission(client2,app2):
     with app2.state.sessions.begin() as db:
         db.get(Role,'role-teacher').permissions=[]
     assert client2.get('/api/portal/workbench').status_code==403
+
+
+def test_teacher_attention_counts_filter_before_paging_and_keep_scope(client2,app2):
+    with app2.state.sessions.begin() as db:
+        add_qualification(db,'needs-action',state='RETURNED')
+        for i in range(23):
+            db.add(Dispute(id='waiting-'+str(i),teacher_id='teacher',object_type='record',
+                           object_id='rec1',period_id='period2026',reason='隔离核对'+str(i)))
+        db.add(Dispute(id='outside',teacher_id='otherteacher',object_type='record',
+                       object_id='rec2',period_id='period2026',reason='范围外核对'))
+    auth(client2,'teacher')
+    pending=client2.get('/api/todos?attention=handle&size=1').json()
+    waiting=client2.get('/api/todos?attention=waiting&page=2&size=20').json()
+    assert pending['total']==1 and pending['items'][0]['id']=='needs-action'
+    assert pending['attention_counts']=={'handle':1,'waiting':23}
+    assert waiting['total']==23 and len(waiting['items'])==3
+    assert all(x['action_required'] is False and x['teacher_id']=='teacher' for x in waiting['items'])
+    filtered=client2.get('/api/todos?attention=waiting&type=qualification').json()
+    assert filtered['total']==0 and filtered['attention_counts']['waiting']==23
+    assert client2.get('/api/todos?attention=invalid').status_code==422
+    auth(client2,'schooladmin')
+    manager=client2.get('/api/todos?type=dispute').json()
+    assert manager['total']==24 and all(x['action_required'] for x in manager['items'])
 

@@ -4,7 +4,7 @@
 """
 from sqlalchemy import select
 from sqlalchemy.orm import Session
-from app.models import User, Setting, PointEntry
+from app.models import User, Setting, PointEntry, WorkflowEvent
 from app.reference_data import TeacherCourseTerm, TrainingCourseMaster
 from conftest import auth, post, put
 from test_social_training import HASH
@@ -43,6 +43,77 @@ def todo_ids(c):
     return [x['id'] for x in r.json()['items']]
 
 
+def test_authorized_course_approval_records_courseware_without_rewriting_application(app2, client2):
+    c = client2
+    setup(app2)
+    auth(c, 'teacher')
+    created = post(c, '/api/applications/courses', {'data': {'source': 'manual', 'code': 'REVIEW-COURSE',
+        'name': '隔离课件待审课程', 'hours': '8', 'teaching_mode': 'practice', 'ideology': 'course_ideology'}, **REASON})
+    assert created.status_code == 200, created.text
+    ident = created.json()['item']['id']
+    review = {'checked': True, 'reviewer': '学院课件审查组', 'reviewed_on': '2026-10-18', 'reference': 'KJ-001', 'percent': 0}
+
+    def decide(operation='approve', courseware=None, version=None):
+        current = c.get('/api/applications/' + ident).json()['item']
+        return post(c, '/api/applications/' + ident + '/actions', {'action': operation,
+            'expected_version': version or current['version'], **({'courseware': courseware} if courseware is not None else {}), **REASON})
+
+    assert decide(courseware=review).status_code == 403
+    auth(c, 'depthead')
+    assert decide(courseware=review).status_code == 422
+    assert c.get('/api/applications/' + ident).json()['item']['state'] == 'DEPT'
+    assert decide().status_code == 200
+    auth(c, 'collegehead')
+    previous = c.get('/api/applications/' + ident).json()['item']['version']
+    assert decide(courseware={**review, 'reviewer': ''}).status_code == 422
+    assert decide('return', review).status_code == 422
+    approved = decide(courseware=review)
+    assert approved.status_code == 200, approved.text
+    item = approved.json()['item']
+    assert item['state'] == 'SCHOOL' and item['data']['courseware'] == review
+    assert dict(approved.json()['fields'])['课件审查记录编号'] == 'KJ-001'
+    assert dict(approved.json()['fields'])['课件审查覆盖比例'] == '0%'
+    assert item['data']['hours'] == '8' and item['data']['code'] == 'REVIEW-COURSE'
+    assert decide(courseware=review, version=previous).status_code == 409
+    with Session(app2.state.engine) as db:
+        history = db.scalar(select(WorkflowEvent).where(WorkflowEvent.object_id == ident,
+            WorkflowEvent.action == '学院通过培训课程申报'))
+        assert history.before['data']['courseware']['checked'] is False
+        assert history.after['data']['courseware'] == review
+    auth(c, 'reviewer')
+    final = decide()
+    assert final.status_code == 200, final.text
+    assert final.json()['item']['state'] == 'ACTIVE'
+    assert final.json()['item']['data']['courseware'] == review
+    auth(c, 'teacher')
+    info = c.get('/api/social/workspace?section=courses').json()['course_info']['REVIEW-COURSE']
+    assert info['org_id'] == 'college1' and info['org_name'] == '测试学院一'
+
+
+def test_duplicate_online_course_keeps_source_credit_without_changing_totals(app2, client2):
+    setup(app2)
+    auth(client2, 'teacher')
+    result = client2.get('/api/applications/teaching-courses')
+    assert result.status_code == 200, result.text
+    data = result.json()
+    online = next(row for row in data['courses'] if row['course_code'] == 'X1')
+    assert (online['credit'], online['hours'], online['problems']) == ('2.00', '32.00', [])
+    assert online['terms'][0]['counted'] is False and online['terms'][0]['review'] is None
+    current = next(row for row in data['years'] if row['school_year'] == '2025-2026')
+    assert (current['courses'], current['pending_credit'], current['total_credit']) == (1, '2.00', '0.00')
+
+
+def test_course_detail_keeps_explicit_zero_hours_and_credit():
+    from types import SimpleNamespace
+    from app.applications import fields
+    item = SimpleNamespace(kind='course_apply', name='零值课程', data={
+        'source': 'teaching', 'hours': 0, 'course': {'credit': 0, 'hours': 64}})
+    details = dict(fields(None, item))
+    assert details['培训学时'] == '0' and details['原课程学分'] == '0' and details['原课程学时'] == '64'
+    item.data = {'source': 'manual', 'hours': 0}
+    assert dict(fields(None, item))['学时'] == '0'
+
+
 def test_teaching_course_goes_dept_college_school_and_resumes_at_returned_level(app2, client2):
     c = client2
     ids = setup(app2)
@@ -69,9 +140,11 @@ def test_teaching_course_goes_dept_college_school_and_resumes_at_returned_level(
     assert ident in todo_ids(c)
     assert act(c, ident, 'approve').status_code == 200
     auth(c, 'collegehead')
-    r = act(c, ident, 'return', '请补充面向对象和课件审查')
+    r = act(c, ident, 'return', '请补充面向对象和课件审查。')
     assert r.status_code == 200, r.text
     assert r.json()['progress']['text'] == '学院退回，待你补正'
+    assert '课件审查。请补正' in r.json()['progress']['headline']
+    assert '。。' not in r.json()['progress']['headline']
     auth(c, 'teacher')
     assert ident in todo_ids(c)
     d = c.get('/api/applications/' + ident).json()

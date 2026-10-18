@@ -42,3 +42,16 @@ def test_blocker_scope_matches_guard_and_hides_unauthorized_details(client2,app2
     auth(client2,'depthead')
     b=client2.get(f'/api/assessments/{ident}').json()['confirmation_blockers']
     assert b=={'count':2,'items':[],'can_view':False,'can_resolve':False}
+
+
+def test_balance_list_marks_archived_period_read_only(client2):
+    from test_api import rule, activate
+    x=make_assessment(client2)
+    auth(client2,'schooladmin');points=rule(client2,'points');assert activate(client2,points).status_code==200
+    assert post(client2,'/api/points/calculate',{'period_id':'period2026','teacher_ids':['teacher'],**REASON}).status_code==200
+    for user,action in [('teacher','confirm'),('depthead','confirm'),('collegehead','confirm'),('schooladmin','confirm'),('schooladmin','archive')]:
+        auth(client2,user);current=client2.get('/api/assessments/'+x['id']).json()['assessment']
+        assert post(client2,'/api/assessments/'+x['id']+'/actions',{'action':action,'expected_version':current['version'],**REASON}).status_code==200
+    auth(client2,'teacher');balance=client2.get('/api/point-balances').json()['items'][0]
+    assert balance['locked'] is True and '归档' in balance['lock_reason']
+    assert post(client2,'/api/point-balances/'+balance['id']+'/actions',{'action':'confirm','expected_version':balance['version'],**REASON}).status_code==409

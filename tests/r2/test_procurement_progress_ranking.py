@@ -6,6 +6,7 @@ from app.models import Audit,Assessment,TrainingRecord,Qualification
 from conftest import auth,post
 from test_api import make_assessment,REASON,rule,activate
 from test_r3_org_assessment import make_rule,calculate,action
+from test_social_training import proof
 
 
 def test_teacher_progress_filters_follow_role_stage(client2):
@@ -39,6 +40,23 @@ def test_org_returned_flag_progress_and_print(client2,app2):
     obj=action(client2,obj,'return').json()
     listed=client2.get('/api/organization-assessments?progress=returned').json();assert listed['total']==1 and listed['items'][0]['returned'] is True
     auth(client2,'depthead');assert client2.get('/api/organization-assessments').json()['items'][0]['returned'] is True
+    assert client2.get('/api/organization-assessments/'+obj['id']).json()['returned'] is True
+    proof(client2,'org_assessment',obj['id'],obj['version'])
+    listed=client2.get('/api/organization-assessments?progress=returned').json()
+    assert listed['total']==1 and listed['items'][0]['returned'] is True
+    detail=client2.get('/api/organization-assessments/'+obj['id']).json()
+    assert detail['returned'] is True and detail['events'][-1]['action']=='上传组织考核佐证材料'
+    from io import BytesIO
+    from openpyxl import load_workbook
+    from test_r6_evidence_chain import export
+    filters={'period_id':'period2026','target_kind':'dept','progress':'returned'}
+    wb=load_workbook(BytesIO(export(client2,app2,'organization_assessments',filters)),read_only=True)
+    assert len(list(wb.active.values))==2;wb.close()
+    response=action(client2,obj,'review');assert response.status_code==200,response.text
+    assert client2.get('/api/organization-assessments/'+obj['id']).json()['returned'] is False
+    assert client2.get('/api/organization-assessments?progress=returned').json()['total']==0
+    wb=load_workbook(BytesIO(export(client2,app2,'organization_assessments',filters)),read_only=True)
+    assert len(list(wb.active.values))==1;wb.close()
     auth(client2,'schooladmin')
     p=client2.get('/api/organization-assessment-ranking/print',params={'period_id':'period2026','target_kind':'dept','rule_id':rule_obj['id']});assert p.status_code==200,p.text
     assert p.json()['items'][0]['rank']==1 and p.json()['rule_version']==rule_obj['version_no']
