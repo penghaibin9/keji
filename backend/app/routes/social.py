@@ -130,14 +130,14 @@ def workspace(request:Request,section:str=Query('projects',pattern='^(projects|c
         material_counts=dict(db.execute(select(Attachment.object_id,func.count()).where(Attachment.object_type=='social_project',Attachment.object_id.in_(ids_)).group_by(Attachment.object_id)).all()) if ids_ else {}
         closing_ids=[p.id for p in projects if p.state in {'CLOSE_COLLEGE','CLOSE_REVIEW','CLOSED'}]
         effective=st.closing_effective_counts(db,closing_ids)
-        close_returned=st.close_returned_project_ids(db,[p.id for p in projects if p.state=='FILED'])
+        special_labels=st.project_special_labels(db,[p for p in projects if p.state in {'FILED','RETURNED'}])
         def metrics(p,item):
             out={'courses':course_counts.get(p.data['code'],0),'materials':material_counts.get(p.id,0)}
             if p.id in effective and (a.role.kind in ('school','college') or p.owner_id==a.id):
                 out['effective']=effective[p.id]
                 if (item.get('closeout') or {}).get('actual_income') is not None:out['actual_income']=item['closeout']['actual_income']
             return out
-        project_items=[{**(item:=st.project_read_item(a,p)),'metrics':metrics(p,item),'state_label':'结项退回补正' if p.id in close_returned else st.state_label(p),'report_issues':application_blockers(p.data),'video_minutes':round(minutes.get(p.data['code'],0))} for p in projects]
+        project_items=[{**(item:=st.project_read_item(a,p)),'metrics':metrics(p,item),'state_label':special_labels.get(p.id) or st.state_label(p),'report_issues':application_blockers(p.data),'video_minutes':round(minutes.get(p.data['code'],0))} for p in projects]
         claim_items=[st.claim_read_item(db,a,c) for c in claims]
         return {'projects':project_items,'claims':claim_items,'annuals':[{**st.annual_read_item(a,row),'org_name':resource_orgs.get(row.org_id,'—')} for row in annuals],'resources':[{**st.resource_read_item(a,row),'state_label':st.state_label(row),'org_name':resource_orgs[row.org_id]} for row in resources],
                 'policies':display(policies),'courses':serial(courses),'course_stats':serial(course_stats),'course_info':serial(course_info),'states':st.STATES,'decisions':st.DECISIONS,
@@ -343,6 +343,7 @@ def project_action(ident:str,data:SocialAction,request:Request):
         elif data.action=='refile':
             if obj.state!='FILED':raise HTTPException(409,'仅已备案项目可申请重新备案')
             obj.state='RETURNED';obj.data={**obj.data,'returned_level':None}
+            handling={'flow':'project','decision':'refile'}  # 自己申请重新备案，不是被退回：进度和状态要如实说明
         elif data.action=='close_submit':
             if obj.state!='FILED' or not data.closeout:raise HTTPException(409,'请提交已备案项目的完整结项材料')
             st.require_project_confirmed(obj)
@@ -421,17 +422,17 @@ def project_report_info(ident:str,data:ReportInfoIn,request:Request):
 
 def satisfaction_achievement(db,a,project,reason):
     value=st.D(project.closeout['satisfaction'])
-    if value<=95:return None
+    if value<95:return None  # 恰好95%也计成果（用户 2026-10-18 确认）
     existing=db.scalars(select(SocialResource).where(SocialResource.kind=='achievement',SocialResource.org_id==project.org_id,SocialResource.data['project_id'].as_string()==project.id)).first()
     if existing or db.scalar(select(SocialResource.id).where(SocialResource.code=='SAT-'+project.id)):return None
     shown=format(value.normalize(),'f');suffix='（满意度 '+shown+'%）'
     name=project.data['name'][:160-len(suffix)]+suffix
     obj=SocialResource(kind='achievement',org_id=project.org_id,code='SAT-'+project.id,name=name,
         data={'kind':'achievement','org_id':project.org_id,'code':'SAT-'+project.id,'name':name,'location':'','onsite':True,
-              'recognition':'项目结项满意度'+shown+'%，超过95%，按学校规定自动登记校级（C等）培训成果','level':'school','course_code':'',
+              'recognition':'项目结项满意度'+shown+'%，达到95%以上，按学校规定自动登记校级（C等）培训成果','level':'school','course_code':'',
               'resource_type':'document','resource_url':None,'duration_minutes':None,'auto':True,'source':'satisfaction',
               'project_id':project.id,'reference':project.data['code']+' · '+project.cohort,'satisfaction':shown,'confirmed_on':project.closeout['closed_on']})
-    db.add(obj);db.flush();event(db,a,'social_resource',obj,'满意度超过95%自动登记校级培训成果',{},reason)
+    db.add(obj);db.flush();event(db,a,'social_resource',obj,'满意度达到95%以上自动登记校级培训成果',{},reason)
     return obj
 
 

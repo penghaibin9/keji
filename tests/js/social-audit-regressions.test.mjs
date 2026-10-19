@@ -201,3 +201,34 @@ test('项目申报表有封面、一人一技和报省字段，保存后再上�
  const create=c.requests.find(r=>r.url==='/social/projects'&&r.options);assert.equal(create.options.body.data.one_skill,true);assert.equal(create.options.body.data.province_report,true);assert.equal(create.options.body.data.province_basis,'省文件');assert.ok(!('cover_file' in create.options.body.data));
  const upload=c.requests.find(r=>r.url==='/social/images/project/p-new');assert.ok(upload&&upload.options.method==='POST');assert.equal(upload.options.body.get('expected_version'),'1');assert.equal(upload.options.body.get('purpose'),'cover');
 });
+
+test('项目申报表可直接附方案材料，先传封面再按最新版本号传材料，失败只提示补传',async()=>{
+ const item={id:'p-new',version:1};
+ const c=context({'/social/projects':{item},'/social/images/project/p-new':{refs:{cover_id:'img'},version:2},'/attachments/social_project/p-new':{id:'a1'},'/social/objects/social_project/p-new':{item:{id:'p-new',version:4,state:'DRAFT',cohort:'一期',closeout:{},data:{name:'带材料项目',start_date:'2026-10-01',end_date:'2026-10-02'}},state_label:'草稿',attachments:[],events:[],facts:{units:[],followups:[],effective:0,excluded:0},report_issues:[]}},['records.read','records.write']);
+ c.me={role:{kind:'college'},user:{id:'t1'},org:{id:'college1',kind:'college'}};c.teacherField=()=>'';c.orgs=[{id:'college1',name:'学院',kind:'college'}];c.orgName=esc;
+ await socialAction('social-project-new','',c);
+ assert.match(c.formData.body,/name="proof_files"|id="f-proof_files"/);assert.match(c.formData.body,/项目方案材料/);
+ const files=[new File(['a'],'方案.pdf',{type:'application/pdf'}),new File(['b'],'名册.png',{type:'image/png'})];
+ await c.formData.save({code:'P-NEW',name:'带材料项目',cohort:'一期',org_id:'college1',owner_id:'t1',category:'community',expected_income:'0',expected_participants:'10',expected_outcomes:'成果',start_date:'2026-10-01',end_date:'2026-10-02',cover_file:{name:'封面.jpg',size:2048},reason:'申报'},{querySelector:()=>({files})});
+ const urls=c.requests.filter(r=>r.options).map(r=>r.url);assert.deepEqual(urls,['/social/projects','/social/images/project/p-new','/attachments/social_project/p-new','/attachments/social_project/p-new']);
+ const uploads=c.requests.filter(r=>r.url==='/attachments/social_project/p-new');assert.equal(uploads[0].options.body.get('expected_version'),'2');assert.equal(uploads[1].options.body.get('expected_version'),'3');
+ // 不合格文件在保存前就被拦住，不产生项目。
+ const bad=context({},['records.read','records.write']);bad.me=c.me;bad.teacherField=()=>'';bad.orgs=c.orgs;bad.orgName=esc;await socialAction('social-project-new','',bad);
+ await assert.rejects(()=>bad.formData.save({code:'X',name:'X',cohort:'一期',org_id:'college1',owner_id:'t1',category:'community',expected_income:'0',expected_participants:'1',expected_outcomes:'x',start_date:'2026-10-01',end_date:'2026-10-02',reason:'x'},{querySelector:()=>({files:[new File(['x'],'坏.exe')]})}),/只能是/);
+ assert.equal(bad.requests.filter(r=>r.options).length,0);
+});
+
+test('复制为新一期带入上一期资料但不带编号、期次和日期；结项表默认带出结束日期和场地类型；草稿详情给出提交前清单',async()=>{
+ const src={id:'old',version:5,state:'CLOSED',cohort:'一期',closeout:{},data:{code:'OLD-1',name:'茶艺培训',cohort:'一期',org_id:'college1',owner_id:'t1',category:'community',expected_income:'100',expected_participants:20,expected_outcomes:'成果',start_date:'2026-03-01',end_date:'2026-03-02',mode:'module',class_type:'technical',level:'school',scene:'dispatched',total_hours:16,audiences:['社区居民'],venue:{type:'offsite',place:'茶园',offsite_reason:'合作',offsite_ref:'会议〔1〕号'},cover_id:'img-old',one_skill:true,target_groups:'退役军人'}};
+ const c=context({'/social/objects/social_project/old':{item:src,state_label:'已结项',attachments:[{id:'a'}],events:[],facts:{units:[],followups:[],effective:0,excluded:0},report_issues:[]},'/social/project-options':{items:[],total:0,page:1,size:20}},['records.read','records.write']);
+ c.me={role:{kind:'college'},user:{id:'t1'},org:{id:'college1',kind:'college'}};c.teacherField=()=>'';c.orgs=[{id:'college1',name:'学院',kind:'college'}];c.orgName=esc;
+ await socialAction('social-detail','social_project|old',c);
+ assert.match(c.modalData.buttons,/复制为新一期/);
+ await socialAction('social-project-copy','',c);
+ assert.equal(c.formData.title,'复制为新一期项目');assert.match(c.formData.body,/value="茶艺培训"/);assert.match(c.formData.body,/茶园/);
+ assert.doesNotMatch(c.formData.body,/OLD-1|2026-03-01|value="一期"/);assert.doesNotMatch(c.formData.body,/img-old/);
+ assert.match(c.formData.options.hint,/新的项目编号、期次和培训日期/);
+ // 结项表：按培训结束日期和培训场地带出默认值
+ await socialAction('social-close','',c);
+ assert.match(c.formData.body,/name="closed_on" value="2026-03-02"/);assert.match(c.formData.body,/name="location" value="offsite"/);
+});

@@ -471,7 +471,7 @@ def summary(db, obj, applicant=None):
     info = {k: d.get(k) for k in ('usages', 'level', 'established_on', 'effective_on', 'onsite', 'partner')} if kind_of == 'base' else \
         {k: d.get(k) for k in ('unit', 'title', 'directions', 'effective_on')} if kind_of == 'trainer' else None
     return {'type': kind, 'id': obj.id, 'name': name, 'code': getattr(obj, 'code', None), 'course': course, 'info': info, 'flow': flow, 'label': ap.FLOWS[flow]['label'], 'state': obj.state,
-            'state_label': '结项退回补正' if flow == 'project_close' and p['tone'] == 'red' else state_label(obj), 'progress': {k: p[k] for k in ('text', 'headline', 'step', 'total', 'tone', 'needs_applicant')},
+            'state_label': '结项退回补正' if flow == 'project_close' and p['tone'] == 'red' else '重新备案补正' if p.get('refiled') else state_label(obj), 'progress': {k: p[k] for k in ('text', 'headline', 'step', 'total', 'tone', 'needs_applicant')},
             'nodes': [{k: n.get(k) for k in ('label', 'state')} for n in p['nodes']], 'updated_at': last_event_at(db, obj) or obj.created_at}
 
 

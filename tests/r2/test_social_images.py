@@ -116,7 +116,7 @@ def test_workspace_metrics_hidden_from_unrelated_teacher_and_counts_voided_cohor
     from app import social_training as st
     with app2.state.sessions.begin() as db:
         assert st.closing_effective_counts(db,[pid])=={pid:0}
-        assert st.close_returned_project_ids(db,[pid])==set()
+        assert st.project_special_labels(db,[db.get(SocialProject,pid)])=={}
 
 
 def test_closed_project_metrics_actual_values_and_visibility(setup_social,client2):
@@ -155,3 +155,19 @@ def test_project_one_skill_and_province_fields_validate_and_roundtrip(setup_soci
     # 旧项目没有这些字段时仍能读取，默认为否。
     old=detail(client2,'social_project',setup_social)['item']['data']
     assert not old.get('one_skill') and not old.get('province_report')
+
+
+def test_refile_request_is_not_described_as_an_approver_return(setup_social,client2):
+    from test_social_training import action
+    pid=setup_social
+    auth(client2,'teacher');r=action(client2,'projects','social_project',pid,'refile');assert r.status_code==200,r.text
+    d=detail(client2,'social_project',pid)
+    assert d['item']['state']=='RETURNED' and d['state_label']=='重新备案补正'
+    p=d['progress'];assert p['refiled'] is True and '申请重新备案' in p['text'] and '审批人退回' not in p['headline'] and '重新备案' in p['headline']
+    w=client2.get('/api/social/workspace?section=projects').json()
+    assert next(x for x in w['projects'] if x['id']==pid)['state_label']=='重新备案补正'
+    mine=client2.get('/api/applications/mine').json()['items']
+    assert next(x for x in mine if x['id']==pid)['state_label']=='重新备案补正'
+    # 学院、学校真正退回的项目仍显示“退回补正”，不受影响。
+    auth(client2,'schooladmin')
+    assert next(x for x in client2.get('/api/social/workspace?section=projects').json()['projects'] if x['id']==pid)['state_label']=='重新备案补正'

@@ -81,7 +81,7 @@ function preview(row,section,c){
  let body=section==='records'?'':cover(row,section,c,true)+imageTools(row,section,c);
  body+=`<div class="tw-detail-name"><h3>${e(row.name)}</h3>${badge(row,c)}</div>`;
  if(section==='projects'){
-  body+=facts([['项目编号',row.code],['承办学院',row.org],['负责人',c.teacherName(x.owner_id)],['培训类别',categoryLabels[d.category]],['培训时间',row.date],['项目期次',x.cohort],['“一人一技”专项',d.one_skill?'是':'否'],['需要报省',d.province_report?'是':'否']],c);
+  body+=facts([['项目编号',row.code],['承办学院',row.org],['负责人',c.teacherName(x.owner_id)],['培训类别',categoryLabels[d.category]],['培训时间',row.date],['项目期次',x.cohort],['一人一技',d.one_skill?'是':'否'],['需要报省',d.province_report?'是':'否']],c);
   const stage=projectStage(x);
   body+=`<ol class="tw-progress">${['申报','学院审批','学校备案',x.state==='CLOSED'?'已结项':CLOSING.includes(x.state)?'结项核验':'培训与结项'].map((l,i)=>`<li class="${i<stage?'done':i===stage?'current':''}"><span>${i<stage?'✓':i+1}</span>${l}</li>`).join('')}</ol>`;
   // 结项前显示申报时的预计值，进入结项后显示核算出的有效人次和到账收入，并标明口径。

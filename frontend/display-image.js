@@ -26,7 +26,8 @@ export async function saveImageAfter(c, target, result, file, purpose = 'cover')
     form.append('file', file);
     form.append('purpose', purpose);
     form.append('expected_version', String(result.item.version));
-    await c.api('/social/images/' + target + '/' + result.item.id, {method: 'POST', body: form});
+    const out = await c.api('/social/images/' + target + '/' + result.item.id, {method: 'POST', body: form});
+    if (out?.version) result.item.version = out.version;  // 后面接着上传材料时要用最新版本号
   } catch (err) {
     c.toast('记录已保存，但图片上传失败：' + err.message + '。可打开详情后点“上传封面”重试。', true);
   }
