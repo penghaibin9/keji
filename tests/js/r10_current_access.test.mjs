@@ -10,9 +10,9 @@ async function render(method,items){
   assert.ok(line,'actual page renderer exists');
   const body=line.trim().replace('async '+method+'(){','async function render(){').replace(/,$/,'');
   const state={rows:null,links:[]};
-  const ctx=vm.createContext({view:null,assessmentTab:'dept',periodId:'p1',filter:{},tablePage:1,me:{role:{kind:'dept'}},businessConfig:{import_max_rows:500},
+  const ctx=vm.createContext({view:null,assessmentTab:'dept',periodId:'p1',filter:{tab:'dept'},tablePage:1,me:{role:{kind:'dept'}},businessConfig:{import_max_rows:500},
     api:async()=>({items,total:items.length,page:1,size:20}),listQuery:()=>'',query:()=>'',can:()=>false,
-    pageHead:()=>'',act:()=>'',note:()=>'',icon:()=>'',filtersBar:()=>'',pager:()=>'',esc,number:Number,badge:esc,
+    pageHead:()=>'',act:()=>'',note:()=>'',icon:()=>'',filtersBar:()=>'',pager:()=>'',esc,number:Number,badge:esc,workflowContext:()=>'',teacherName:()=>'测试教师',
     table:(_head,rows)=>{state.rows=rows;return rows.flat().join('|')},link:(label,type,id)=>{state.links.push(id);return label},
     orgName:()=>{throw Error('live organization fallback forbidden for archived row')},
     periodName:()=>{throw Error('live period fallback forbidden for archived row')}});

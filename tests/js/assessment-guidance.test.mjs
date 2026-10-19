@@ -6,7 +6,7 @@ const source=fs.readFileSync(new URL('../../frontend/app.js',import.meta.url),'u
 const body=source.slice(source.indexOf('async function assessmentAction(code){'),source.indexOf('async function showOrgAssessment(id){'));
 function harness({blocked=false,race=false}={}){
  const state={writes:0,blocked:0,shown:0,form:null};
- const context=vm.createContext({me:{role:{kind:'teacher'}},labels:{TEACHER:'教师确认'},note:x=>x,reasonFields:()=>'',closeModal(){},render:async()=>{},showAssessment:async()=>state.shown++,showAssessmentBlockers:async()=>state.blocked++,formModal:(title,body,callback)=>state.form={title,body,callback},api:async(path,options)=>{
+ const context=vm.createContext({esc:x=>String(x??''),number:x=>String(x??0),teacherName:()=>'测试教师',periodName:()=>'测试周期',orgName:()=>'测试组织',me:{role:{kind:'teacher'}},labels:{TEACHER:'教师确认'},note:x=>x,reasonFields:()=>'',closeModal(){},render:async()=>{},showAssessment:async()=>state.shown++,showAssessmentBlockers:async()=>state.blocked++,formModal:(title,body,callback)=>state.form={title,body,callback},api:async(path,options)=>{
   if(options){state.writes++;if(race)throw Error('存在未解决数据核对，请先处理');return {}}
   return {assessment:{id:'a1',version:7,state:'TEACHER'},confirmation_blockers:{count:blocked||(race&&state.writes)?1:0}};
  }});
