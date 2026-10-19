@@ -42,9 +42,10 @@ def test_satisfaction_above_95_records_one_school_achievement(setup_social,clien
     assert [r['code'] for r in workspace['resources']]==['SAT-'+pid]
 
 
-def test_exactly_95_satisfaction_does_not_qualify(setup_social,client2,app2):
+def test_exactly_95_satisfaction_qualifies_but_below_95_does_not(setup_social,client2,app2):
+    # 满意度恰好95%也计成果（用户 2026-10-18 确认）；低于95%不计。
     pid=setup_social;assert import_rows(client2,pid,[row()]).status_code==200;close_with(client2,pid,'95')
-    assert achievements(app2)==[]
+    assert len(achievements(app2))==1
 
 
 def test_recommended_policy_draft_and_permissions(setup_social,client2,app2):
@@ -132,3 +133,8 @@ def test_zero_other_bonus_does_not_require_positive_bonus_evidence(setup_social,
     response=put(client2,'/api/social/annuals/'+item['id'],body)
     assert response.status_code==200,response.text
     assert '其他加分缺少正式依据' in response.json()['trial']['blockers']
+
+
+def test_below_95_satisfaction_does_not_qualify(setup_social,client2,app2):
+    pid=setup_social;assert import_rows(client2,pid,[row()]).status_code==200;close_with(client2,pid,'94.99')
+    assert achievements(app2)==[]

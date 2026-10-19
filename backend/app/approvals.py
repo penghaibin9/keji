@@ -229,6 +229,7 @@ def progress(db, flow, obj, applicant, *, returned_level=None):
     finished = obj.state == f['done'] and last_submit is not None
     close_returned = flow == 'project_close' and obj.state == 'FILED' and bool(evs) and _handling(evs[-1]).get('decision') == 'return'
     returned = obj.state == 'RETURNED' or close_returned
+    refiled = obj.state == 'RETURNED' and flow == 'project' and returned_level is None and bool(evs) and _handling(evs[-1]).get('decision') == 'refile'
     if close_returned:
         returned_level = _handling(evs[-1]).get('level')
     nodes = [{'key': 'submit', 'label': '提交', 'state': 'done' if last_submit else 'current',
@@ -287,6 +288,9 @@ def progress(db, flow, obj, applicant, *, returned_level=None):
         headline = who + '退回' + reason_text + '请补正后重新提交，会从' + who + '这一级接着审。'
         if close_returned:
             headline = who + '退回结项' + reason_text + '请核对原结项资料后重新提交结项核验。'
+        if refiled:
+            text = '已申请重新备案，待你补正后提交'
+            headline = '你已申请重新备案：请修改项目资料后重新提交，会重新经学院审批、学校备案。'
     elif current:
         text = LEVEL_LABEL[current] + LEVEL_VERB[current] + '中 · 第 %d 步 / 共 %d 步' % (step, total)
     else:
@@ -296,4 +300,4 @@ def progress(db, flow, obj, applicant, *, returned_level=None):
     tone = 'green' if finished else 'red' if returned else 'blue' if current else 'gray'
     return {'flow': flow, 'label': f['label'], 'nodes': nodes, 'text': text, 'headline': headline, 'step': step, 'total': total,
             'tone': tone, 'needs_applicant': returned or not current and not finished,
-            'unassigned': any(n.get('unassigned') for n in nodes)}
+            'unassigned': any(n.get('unassigned') for n in nodes), 'refiled': refiled}

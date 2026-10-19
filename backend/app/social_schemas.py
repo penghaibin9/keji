@@ -136,12 +136,17 @@ class ProjectData(Input):
     teaching_methods: list[Literal['classroom','case','onsite','field','seminar','lab','internship','peer','other']] = Field(default_factory=list, max_length=9)
     video_minutes: Nonnegative | None = None
     base_count: int | None = Field(default=None, ge=0, le=1000)
+    # 管理办法第十一条：项目须写明一人一技专项、重点群体及行动对接、报省要求。
+    one_skill: bool = False
+    province_report: bool = False
+    province_basis: str = Field(default='', max_length=2000)
     quality: ProjectQuality | None = None
     venue: ProjectVenue | None = None
     @model_validator(mode='after')
     def valid_dates(self):
         if self.end_date < self.start_date: raise ValueError('结束日期不能早于开始日期')
-        if self.category == 'subsidy' and not self.target_groups.strip(): raise ValueError('补贴项目须说明重点群体和行动对接内容')
+        if (self.category == 'subsidy' or self.one_skill) and not self.target_groups.strip(): raise ValueError('补贴项目或“一人一技”专项须说明重点群体和行动对接内容')
+        if self.province_report and not self.province_basis.strip(): raise ValueError('需要报省的项目请填写报省要求与依据')
         return self
 
 
@@ -369,6 +374,8 @@ class ResourceIn(Reason):
     usages: list[Literal['practice', 'ideology']] = Field(default_factory=list, max_length=2)
     established_on: date | None = None
     partner: str = Field(default='', max_length=200)
+    manager_name: str = Field(default='', max_length=80)
+    recognized_on: date | None = None
     @model_validator(mode='after')
     def course_resource(self):
         if self.kind=='achievement' and self.level=='city':raise ValueError('成果等级只能选国家级、省级或校级')
@@ -563,6 +570,9 @@ class BaseApplyData(Input):
     usages: list[Literal['practice', 'ideology']] = Field(min_length=1, max_length=2)
     established_on: date
     partner: str = Field(default='', max_length=200)
+    # 基地负责人（校外基地可填共建单位联系人）与认定日期，和设立日期、审批生效日期分开记录。
+    manager_name: str = Field(default='', max_length=80)
+    recognized_on: date | None = None
     project_id: Ident | None = None
     # 管理办法第十七条鼓励申报省级及以上培训基地。
     level: Literal['school', 'city', 'province'] = 'school'
@@ -588,6 +598,7 @@ class TrainerApplyData(Input):
     name: str = Field(default='', max_length=80)
     unit: str = Field(default='', max_length=160)
     title: str = Field(default='', max_length=100)
+    specialty: str = Field(default='', max_length=200)  # 专业特长；与“培训业务类别”(directions) 分开记录
     directions: list[Literal['subsidy', 'enterprise', 'community', 'rural', 'other', 'one_skill']] = Field(min_length=1, max_length=6)
     qualification_ids: list[Ident] = Field(default_factory=list, max_length=10)
     qualification_basis: str = Field(min_length=1, max_length=2000)

@@ -409,15 +409,20 @@ def closing_effective_counts(db, project_ids):
     return totals
 
 
-def close_returned_project_ids(db, project_ids):
-    """已备案项目中，最近一次办理是“结项被学校退回”的项目编号（与 applications.flow_of 同口径，一次查询）。"""
-    ids=list(project_ids)
-    if not ids:return set()
+def project_special_labels(db, projects):
+    """列表状态的特殊说明（一次查询）：已备案且最近一次办理是“结项被学校退回” → 结项退回补正；
+    退回补正状态但最近一次办理是项目自己“申请重新备案” → 重新备案补正。其余按普通状态显示。"""
+    ids=[p.id for p in projects]
+    if not ids:return {}
     latest={}
     for pid,after in db.execute(select(WorkflowEvent.object_id,WorkflowEvent.after).where(WorkflowEvent.object_type=='social_project',WorkflowEvent.object_id.in_(ids)).order_by(WorkflowEvent.created_at,WorkflowEvent.id)):
         handling=(after or {}).get('handling') or {}
         if handling.get('flow') in ('project','project_close'):latest[pid]=handling
-    return {pid for pid,h in latest.items() if h.get('flow')=='project_close' and h.get('decision')=='return'}
+    states={p.id:p.state for p in projects};labels={}
+    for pid,h in latest.items():
+        if states.get(pid)=='FILED' and h.get('flow')=='project_close' and h.get('decision')=='return':labels[pid]='结项退回补正'
+        elif states.get(pid)=='RETURNED' and h.get('flow')=='project' and h.get('decision')=='refile':labels[pid]='重新备案补正'
+    return labels
 
 
 def project_followups(db,ident):
@@ -779,6 +784,7 @@ def detail(db,actor,kind,obj):
         level=ap.level_of(flow,obj.state)
         result['progress']=ap.progress(db,flow,obj,owner,returned_level=obj.data.get('returned_level'))
         if flow=='project_close' and result['progress']['tone']=='red':result['state_label']='结项退回补正'
+        if result['progress'].get('refiled'):result['state_label']='重新备案补正'
         result['college_handle']=level=='college' and ap.can_handle(db,actor,owner,'college',obj.org_id)
         result['report_issues']=application_blockers(obj.data)
     if isinstance(obj,(SocialProject,SocialResource,SocialAnnual)):

@@ -6,6 +6,7 @@ const states={DRAFT:'草稿',RETURNED:'退回补正',COLLEGE:'待学院审批',S
 const modes={lecture:'讲授',practice:'实训实操',case:'案例研讨',onsite:'现场教学',online:'线上自学'};
 const categoryLabels={subsidy:'补贴性培训',enterprise:'企业定制培训',community:'社区公益培训',rural:'乡村帮扶培训',other:'其他非学历培训'};
 const levels={national:'国家级',province:'省级',school:'校级'};
+const ideology={ideology_course:'思政课程',course_ideology:'课程思政',none:'无'};
 const baseLevels={school:'校级',city:'市级',province:'省级及以上'};
 const usages={practice:'实践教学基地',ideology:'思政实践教学基地'};
 const CLOSING=['CLOSE_COLLEGE','CLOSE_REVIEW','CLOSED'];
@@ -80,7 +81,7 @@ function preview(row,section,c){
  let body=section==='records'?'':cover(row,section,c,true)+imageTools(row,section,c);
  body+=`<div class="tw-detail-name"><h3>${e(row.name)}</h3>${badge(row,c)}</div>`;
  if(section==='projects'){
-  body+=facts([['项目编号',row.code],['承办学院',row.org],['负责人',c.teacherName(x.owner_id)],['培训类别',categoryLabels[d.category]],['培训时间',row.date],['项目期次',x.cohort]],c);
+  body+=facts([['项目编号',row.code],['承办学院',row.org],['负责人',c.teacherName(x.owner_id)],['培训类别',categoryLabels[d.category]],['培训时间',row.date],['项目期次',x.cohort],['一人一技',d.one_skill?'是':'否'],['需要报省',d.province_report?'是':'否']],c);
   const stage=projectStage(x);
   body+=`<ol class="tw-progress">${['申报','学院审批','学校备案',x.state==='CLOSED'?'已结项':CLOSING.includes(x.state)?'结项核验':'培训与结项'].map((l,i)=>`<li class="${i<stage?'done':i===stage?'current':''}"><span>${i<stage?'✓':i+1}</span>${l}</li>`).join('')}</ol>`;
   // 结项前显示申报时的预计值，进入结项后显示核算出的有效人次和到账收入，并标明口径。
@@ -91,13 +92,13 @@ function preview(row,section,c){
   body+=`<h4>项目材料</h4><div class="tw-resource">${c.icon('file')}${c.act('项目材料 · '+(m.materials??0)+' 份（方案、参训与结业材料）',row.detailAction,row.detailId,'text')}</div>`;
  }else if(section==='courses'){
   const i=row.info,st=row.stats;
-  body+=facts([['所属学院',row.org],['关联项目',row.subtitle]],c);
+  body+=facts([['所属学院',row.org],['课程编号',row.code],['关联项目',row.subtitle],['面向对象',i.audience],['思政属性',ideology[i.ideology]],['专项属性',[i.package?'培训包':'',i.one_skill?'“一人一技”':''].filter(Boolean).join('、')||'无'],...(i.one_skill?[['重点群体与行动对接',i.target_groups]]:[]),['课程简介',i.intro]],c);
   body+=`<div class="tw-fact-grid">${[['clock','学时',i.hours==null?'待补充':i.hours+' 学时'],['book','教学方式',modes[i.teaching_mode]||'待补充'],['users','主讲教师',i.teacher_name||'待补充'],['file','课件审查',i.courseware?.checked?'已审查':'待审查']].map(([ico,k,v])=>`<div>${c.icon(ico)}<span>${k}<strong>${e(v)}</strong></span></div>`).join('')}</div><h4>课程资源</h4>`;
   body+=[['video','视频',st.videos||0],['file','全部课程资源',st.resources||0]].map(([i,k,n])=>`<div class="tw-resource">${c.icon(i)}${c.act(k+' · '+n,'social-course-resources',row.id,'text')}</div>`).join('');
   if(!i.info_id&&canMaintainImage({...row,imageTarget:['resource','x',1]},c))body+=`<p class="tw-note">课程资料尚未补充，补充后可上传封面。</p>`;
- }else if(section==='bases'){body+=facts([['所属学院',row.org],['基地编号',row.code],['场地类型',d.onsite===false?'校外共建':d.onsite===true?'校内基地':'类型待补充'],['基地用途',(d.usages||[]).map(u=>usages[u]||u).join('、')||'待补充'],['基地级别',baseLevels[d.level]||'未标注'],['具体地点',d.location],['设立日期',d.established_on],['共建单位',d.partner||(d.onsite===false?'待补充':'—')],['认定依据',d.recognition]],c);body+=photoStrip(row,c)}
+ }else if(section==='bases'){body+=facts([['所属学院',row.org],['基地编号',row.code],['场地类型',d.onsite===false?'校外共建':d.onsite===true?'校内基地':'类型待补充'],['基地用途',(d.usages||[]).map(u=>usages[u]||u).join('、')||'待补充'],['基地级别',baseLevels[d.level]||'未标注'],['具体地点',d.location],['基地负责人',d.manager_name||d.teacher_name],['设立日期',d.established_on],['认定日期',d.recognized_on],['审批生效日期',d.effective_on||'尚未生效'],['共建单位',d.partner||(d.onsite===false?'待补充':'—')],['认定依据',d.recognition]],c);body+=photoStrip(row,c)}
  else if(section==='outcomes')body+=facts([['所属学院',row.org],...(c.me?.role?.kind==='school'&&!/^(SAT-|AUTO-)/.test(row.code||'')?[['成果编号',row.code]]:[]),['认定级别',levels[d.level]],['认定日期',d.confirmed_on],['认定依据',d.recognition]],c)+`<p class="tw-note">登记成果不直接计分，以年度考核核验结果为准。</p>`;
- else if(section==='trainers')body+=facts([['职称或岗位',x.title],[x.source==='external'?'工作单位':'所属学院',row.org],...(x.source==='external'?[['登记学院',x.org_name]]:[]),['专业方向',(x.directions||[]).join('、')],['来源',x.source==='external'?'外聘培训师':'校内教师'],['认定或备案日期',x.effective_on],['认定或备案依据',x.filing_basis],['省级推荐',x.recommended_province_on||'尚未推荐']],c);
+ else if(section==='trainers')body+=facts([['职称或岗位',x.title],[x.source==='external'?'工作单位':'所属学院',row.org],...(x.source==='external'?[['登记学院',x.org_name]]:[]),['专业特长',x.specialty],['培训业务类别',(x.directions||[]).join('、')],['授课课程',(x.courses||[]).join('、')||(x.source==='external'?'外聘培训师暂无关联课程':'暂无已入库的授课课程')],['来源',x.source==='external'?'外聘培训师':'校内教师'],['认定或备案日期',x.effective_on],['认定或备案依据',x.filing_basis],['省级推荐',x.recommended_province_on||'尚未推荐']],c);
  else body+=facts([['课程',x.course],['教师',c.teacherName(x.teacher_id)],['培训日期',x.event_date],['授课学时',text(x.hours)+' 学时'],['课程人次',text(x.participants)+' 人次'],['归属培训收入',text(x.income)+' 元'],['数据来源',x.source==='Excel导入'?'表格导入':x.source]],c)+`<p class="tw-note">课程人次用于数据核对，个人积分以审核归档为准。</p>`;
  const action=section==='projects'?projectPrimary(row,c):row.detailAction?c.act(section==='records'?'查看完整明细':section==='trainers'?'查看认定资料':'查看完整资料',row.detailAction,row.detailId,'primary'):'<p class="tw-note">当前身份仅可查看基础信息</p>';
  const extra=section==='courses'?c.act('查看资源','social-course-resources',row.id,''):section==='trainers'&&c.me.role.kind==='school'&&!x.recommended_province_on?c.act('推荐省级','trainer-recommend',row.id):'';
@@ -114,7 +115,7 @@ export function renderTrainingWorkspace(section,w,c,options={}){
  const categories=tabs(section),tabbar=categories.length?`<nav class="tw-tabs" aria-label="${labels[section]}分类">${categories.map(([v,l])=>`<button type="button" data-action="training-tab" data-id="${v}" aria-pressed="${s.tab===v}" class="${s.tab===v?'active':''}">${l}</button>`).join('')}</nav>`:'';
  let list='';
  if(section==='trainers'||section==='records'){
-  const headers=section==='trainers'?['教师','所属学院或单位','专业方向','资格状态','操作']:['培训日期','项目 / 课程','教师','学时','课程人次','归属收入','来源','操作'];
+  const headers=section==='trainers'?['教师','所属学院或单位','培训业务类别','资格状态','操作']:['培训日期','项目 / 课程','教师','学时','课程人次','归属收入','来源','操作'];
   list=`<div class="tw-table-wrap"><table class="tw-table"><thead><tr>${headers.map(h=>`<th>${h}</th>`).join('')}</tr></thead><tbody>${filtered.map(r=>{const x=r.raw;const cells=section==='trainers'?[`<div class="tw-person">${cover(r,section,c)}<span><strong>${e(r.name)}</strong><small>${e(x.title||'')}</small></span></div>`,e(r.org),e((x.directions||[]).join('、')),badge(r,c),pick(r)+(x.can_view_detail?'':'<small>仅基础信息</small>')]:[e(x.event_date),`<strong>${e(r.name)}</strong><small>${e(r.subtitle)}</small>`,e(c.teacherName(x.teacher_id)),e(text(x.hours)),e(text(x.participants)),e(text(x.income))+'元',e(x.source==='Excel导入'?'表格导入':x.source),pick(r,'查看')];return `<tr class="${r.id===s.selected?'selected':''}">${cells.map((v,i)=>`<td data-label="${headers[i]}">${v}</td>`).join('')}</tr>`}).join('')}</tbody></table></div>`;
  }else list=`<div class="tw-list tw-${section}">${filtered.map(r=>{const d=r.raw.data||{};return `<article class="tw-item${r.id===s.selected?' selected':''}">${cover(r,section,c)}<div class="tw-item-copy"><div class="tw-item-head"><h3>${c.act(r.name,'training-pick',r.id,'text')}</h3>${badge(r,c)}</div>${meta('org',r.org,c)}${section==='courses'?meta('file',r.subtitle,c):section==='projects'?meta('clock',r.date,c)+(r.code?`<p class="tw-code">编号：${e(r.code)}</p>`:''):section==='bases'?meta('map',d.location,c)+meta('clock','设立日期：'+text(d.established_on),c):`<p class="tw-meta">${e(levels[d.level]||'级别待确认')} · ${e(d.confirmed_on||'日期待补充')}</p><p class="tw-description">${e(d.recognition||'认定依据待补充')}</p>`}<div class="tw-item-actions">${pick(r,section==='courses'?'查看课程':'查看详情')}${section==='courses'?c.act('查看资源','social-course-resources',r.id,''):''}</div></div></article>`}).join('')}</div>`;
  if(!filtered.length)list=`<div class="tw-empty">${c.icon(section==='trainers'?'users':'file')}<h3>${s.q?'没有找到匹配的记录':rows.length?'没有符合条件的记录':'暂无'+labels[section].replace('管理','')+'记录'}</h3><p>${rows.length?'调整筛选条件后再试':'新增或审核通过后，资料将显示在这里。'}</p>${s.q?c.act('查看全部','social-list-reset'):rows.length?c.act('清除筛选','training-reset'):''}</div>`;

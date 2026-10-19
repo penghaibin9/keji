@@ -383,7 +383,9 @@ def fields(db, obj):
     if obj.kind == 'base':
         rows = [('基地名称', obj.name), ('来源编号', obj.code), ('校内 / 校外', '校内' if d.get('onsite') else '校外'),
                 ('基地用途', '、'.join(BASE_USAGES.get(x, x) for x in d.get('usages', [])) or '待补充'), ('基地级别', BASE_LEVELS.get(d.get('level'), '未标注')),
-                ('设立日期', d.get('established_on') or '待补充'), ('共建单位', d.get('partner') or ('—' if d.get('onsite') else '待补充')),
+                ('基地负责人', d.get('manager_name') or d.get('teacher_name') or '待补充'),
+                ('设立日期', d.get('established_on') or '待补充'), ('认定日期', d.get('recognized_on') or '待补充'), ('审批生效日期', d.get('effective_on') or '尚未生效'),
+                ('共建单位', d.get('partner') or ('—' if d.get('onsite') else '待补充')),
                 ('地点', d.get('location') or '待补充'), ('认定依据', d.get('recognition') or '')]
         if d.get('project_id'):
             p = db.get(SocialProject, d['project_id'])
@@ -391,10 +393,12 @@ def fields(db, obj):
         return rows
     if obj.kind == 'trainer':
         rows = [('姓名', obj.name), ('来源', '外聘培训师' if d.get('source') == 'external' else '校内教师'), ('工作单位', d.get('unit') or ''),
-                ('职称或职务', d.get('title') or ''), ('培训方向', '、'.join(TRAINER_DIRECTIONS.get(x, x) for x in d.get('directions', []))),
+                ('职称或职务', d.get('title') or ''), ('专业特长', d.get('specialty') or ''), ('培训业务类别', '、'.join(TRAINER_DIRECTIONS.get(x, x) for x in d.get('directions', []))),
                 ('资格依据', d.get('qualification_basis') or ''), ('授课经历', d.get('experience') or '')]
         for q in d.get('qualifications') or []:
             rows.append(('资质', q['name'] + ' · 证书编号 ' + _mask(q['certificate_no']) + ' · ' + q['issuer'] + (' · 有效期至 ' + q['expires'] if q.get('expires') else '')))
+        if d.get('effective_on'):
+            rows.append(('认定或备案日期', d['effective_on']))
         if d.get('filing_basis'):
             rows.append(('认定或备案依据', d['filing_basis']))
         return [(k, v) for k, v in rows if v]
@@ -421,6 +425,8 @@ def fields(db, obj):
     else:
         rows[0:0] = [('课程编号', d.get('code') or '')]
         rows.append(('关联项目', d.get('project_code') or '不关联项目'))
+        if d.get('audience'):
+            rows.append(('面向对象', d['audience']))
     if d.get('intro'):
         rows.append(('课程简介', d['intro']))
     return [(k, '' if v is None else str(v)) for k, v in rows]
@@ -465,7 +471,7 @@ def summary(db, obj, applicant=None):
     info = {k: d.get(k) for k in ('usages', 'level', 'established_on', 'effective_on', 'onsite', 'partner')} if kind_of == 'base' else \
         {k: d.get(k) for k in ('unit', 'title', 'directions', 'effective_on')} if kind_of == 'trainer' else None
     return {'type': kind, 'id': obj.id, 'name': name, 'code': getattr(obj, 'code', None), 'course': course, 'info': info, 'flow': flow, 'label': ap.FLOWS[flow]['label'], 'state': obj.state,
-            'state_label': '结项退回补正' if flow == 'project_close' and p['tone'] == 'red' else state_label(obj), 'progress': {k: p[k] for k in ('text', 'headline', 'step', 'total', 'tone', 'needs_applicant')},
+            'state_label': '结项退回补正' if flow == 'project_close' and p['tone'] == 'red' else '重新备案补正' if p.get('refiled') else state_label(obj), 'progress': {k: p[k] for k in ('text', 'headline', 'step', 'total', 'tone', 'needs_applicant')},
             'nodes': [{k: n.get(k) for k in ('label', 'state')} for n in p['nodes']], 'updated_at': last_event_at(db, obj) or obj.created_at}
 
 
@@ -577,6 +583,14 @@ def trainer_library(db, a):
         scope = {a.org.parent_id} if a.role.kind == 'dept' else set(a.org_ids)
         rows = [r for r in rows if r.org_id in scope]
     orgs = dict(db.execute(select(Org.id, Org.name)).all())
+    # 授课课程按真实关系展示：校内培训师所关联教师作为主讲教师的、已入库的培训课程（外聘培训师没有对应教师账号，不显示）。
+    taught = {}
+    teacher_ids = {r.data.get('teacher_id') for r in rows if r.data.get('teacher_id')}
+    if teacher_ids:
+        for c_ in db.scalars(select(SocialResource).where(SocialResource.kind == 'course_apply', SocialResource.state == 'ACTIVE')):
+            tid = c_.data.get('teacher_id')
+            if tid in teacher_ids and len(taught.setdefault(tid, [])) < 20:
+                taught[tid].append(c_.name)
     def can_read_details(obj):
         try:
             read_check(db, a, obj)
@@ -586,7 +600,7 @@ def trainer_library(db, a):
                 raise
             return False
     return {'items': [{'id': r.id, 'code': r.code, 'name': r.name, 'source': r.data.get('source'), 'unit': r.data.get('unit') or '',
-                       'title': r.data.get('title') or '', 'directions': [TRAINER_DIRECTIONS.get(x, x) for x in r.data.get('directions', [])],
+                       'title': r.data.get('title') or '', 'specialty': r.data.get('specialty') or '', 'courses': taught.get(r.data.get('teacher_id'), []), 'directions': [TRAINER_DIRECTIONS.get(x, x) for x in r.data.get('directions', [])],
                        'org_name': orgs.get(r.org_id, ''), 'effective_on': r.data.get('effective_on'), 'filing_basis': r.data.get('filing_basis') or '',
                        'recommended_province_on': r.data.get('recommended_province_on'), 'can_view_detail': can_read_details(r),
                        'photo_id': r.data.get('cover_id'), 'version': r.version, 'teacher_id': r.data.get('teacher_id')} for r in rows], 'total': len(rows),
