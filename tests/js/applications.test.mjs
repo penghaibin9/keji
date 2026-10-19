@@ -330,3 +330,19 @@ test('补正表保留原审核意见并安全显示，基地提交提示与学�
  let toast;c.toast=value=>{toast=value};await applicationAction('app-base-new','',c);
  await c.form.save({usage_practice:true,code:'BASE',name:'基地',onsite:'yes',established_on:'2026-10-01',recognition:'隔离依据'});assert.equal(toast,'已提交，等待学院审批');
 });
+
+test('基地、课程、培训师申请表都有选填封面，保存成功后才上传，上传失败不重复建单',async()=>{
+ for(const [open,id,label] of [['app-base-new','','基地封面'],['app-course-new','','课程封面'],['app-trainer-new','internal','培训师头像']]){
+  const c=formContext();await applicationAction(open,id,c);assert.match(c.form.body,new RegExp('name="cover_file"'));assert.match(c.form.body,new RegExp(label));
+ }
+ const toasts=[],c=formContext();c.toast=(m,bad)=>toasts.push([m,bad]);
+ const file={name:'封面.png',size:1024};
+ let uploads=0;const api=c.api;c.api=async(url,options)=>{if(url.startsWith('/social/images/')){uploads++;throw Error('服务暂不可用')}return api(url,options)};
+ await applicationAction('app-base-new','',c);
+ await c.form.save({code:'B2',name:'带封面基地',usage_practice:true,onsite:'yes',established_on:'2026-10-01',recognition:'依据',cover_file:file});
+ assert.equal(uploads,1);assert.ok(toasts.some(([m,bad])=>/图片上传失败/.test(m)&&bad));
+ assert.equal(c.requests.filter(r=>r.url==='/applications/bases'&&r.options).length,1);
+ const bad=formContext();await applicationAction('app-base-new','',bad);
+ await assert.rejects(()=>bad.form.save({code:'B3',name:'坏图',usage_practice:true,onsite:'yes',established_on:'2026-10-01',recognition:'依据',cover_file:{name:'a.gif',size:10}}),/PNG、JPG/);
+ assert.equal(bad.requests.filter(r=>r.options).length,0);
+});

@@ -190,3 +190,14 @@ test('学院年度自评三级办理条使用原学院和周期，名称安全�
  await socialAction('social-detail','social_annual|annual-subject',c);await socialAction('social-transition','submit',c);
  assert.match(c.formData.body,/本次办理对象/);assert.match(c.formData.body,/&lt;所属学院&gt; · &lt;年度周期&gt;/);assert.doesNotMatch(c.formData.body,/<所属学院>|<年度周期>|当前业务/);assert.equal(c.formData.options.contextLabel,'学院年度考核 / 提交学院自评');assert.ok(c.requests.every(r=>!r.options));
 });
+
+test('项目申报表有封面、一人一技和报省字段，保存后再上传封面，一人一技与报省按条件必填',async()=>{
+ const c=context({'/social/project-options':{items:[],total:0,page:1,size:20},'/social/projects':{item:{id:'p-new',version:1}},'/social/images/project/p-new':{refs:{cover_id:'img-1'},version:2},'/social/objects/social_project/p-new':{item:{id:'p-new',version:2,state:'DRAFT',cohort:'一期',closeout:{},data:{name:'带封面项目',code:'P-NEW',cover_id:'img-1',one_skill:true,province_report:true,province_basis:'省文件',target_groups:'退役军人',start_date:'2026-10-01',end_date:'2026-10-02'}},state_label:'草稿',attachments:[],events:[],facts:{units:[],followups:[],effective:0,excluded:0},report_issues:[]}},['records.read','records.write']);
+ c.me={role:{kind:'college'},user:{id:'t1'},org:{id:'college1',kind:'college'}};c.teacherField=()=>'';c.orgs=[{id:'college1',name:'学院',kind:'college'}];c.orgName=esc;
+ await socialAction('social-project-new','',c);
+ for(const name of ['cover_file','one_skill','province_report','province_basis','target_groups'])assert.match(c.formData.body,new RegExp('name="'+name+'"'));
+ const file={name:'封面.jpg',size:2048};
+ await c.formData.save({code:'P-NEW',name:'带封面项目',cohort:'一期',org_id:'college1',owner_id:'t1',category:'community',expected_income:'0',expected_participants:'10',expected_outcomes:'成果',start_date:'2026-10-01',end_date:'2026-10-02',one_skill:true,province_report:true,province_basis:'省文件',target_groups:'退役军人',cover_file:file,reason:'申报'});
+ const create=c.requests.find(r=>r.url==='/social/projects'&&r.options);assert.equal(create.options.body.data.one_skill,true);assert.equal(create.options.body.data.province_report,true);assert.equal(create.options.body.data.province_basis,'省文件');assert.ok(!('cover_file' in create.options.body.data));
+ const upload=c.requests.find(r=>r.url==='/social/images/project/p-new');assert.ok(upload&&upload.options.method==='POST');assert.equal(upload.options.body.get('expected_version'),'1');assert.equal(upload.options.body.get('purpose'),'cover');
+});

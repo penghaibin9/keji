@@ -136,12 +136,17 @@ class ProjectData(Input):
     teaching_methods: list[Literal['classroom','case','onsite','field','seminar','lab','internship','peer','other']] = Field(default_factory=list, max_length=9)
     video_minutes: Nonnegative | None = None
     base_count: int | None = Field(default=None, ge=0, le=1000)
+    # 管理办法第十一条：项目须写明一人一技专项、重点群体及行动对接、报省要求。
+    one_skill: bool = False
+    province_report: bool = False
+    province_basis: str = Field(default='', max_length=2000)
     quality: ProjectQuality | None = None
     venue: ProjectVenue | None = None
     @model_validator(mode='after')
     def valid_dates(self):
         if self.end_date < self.start_date: raise ValueError('结束日期不能早于开始日期')
-        if self.category == 'subsidy' and not self.target_groups.strip(): raise ValueError('补贴项目须说明重点群体和行动对接内容')
+        if (self.category == 'subsidy' or self.one_skill) and not self.target_groups.strip(): raise ValueError('补贴项目或“一人一技”专项须说明重点群体和行动对接内容')
+        if self.province_report and not self.province_basis.strip(): raise ValueError('需要报省的项目请填写报省要求与依据')
         return self
 
 

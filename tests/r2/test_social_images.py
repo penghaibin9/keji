@@ -140,3 +140,18 @@ def test_closed_project_metrics_actual_values_and_visibility(setup_social,client
     w=client2.get('/api/social/workspace?section=projects').json()
     p=next((x for x in w['projects'] if x['id']==pid),None)
     assert p is None or ('effective' not in p['metrics'] and 'actual_income' not in p['metrics'])
+
+
+def test_project_one_skill_and_province_fields_validate_and_roundtrip(setup_social,client2):
+    from test_social_training import payload,detail
+    auth(client2,'schooladmin')
+    base=payload();base['data']['code']='SOC-P-NEW';base['data']['name']='新增字段项目'
+    bad=post(client2,'/api/social/projects',{**base,'data':{**base['data'],'one_skill':True}});assert bad.status_code==422
+    bad=post(client2,'/api/social/projects',{**base,'data':{**base['data'],'province_report':True}});assert bad.status_code==422
+    ok=post(client2,'/api/social/projects',{**base,'data':{**base['data'],'one_skill':True,'target_groups':'退役军人；对接一人一技','province_report':True,'province_basis':'省文件〔2026〕12号'}})
+    assert ok.status_code==200,ok.text
+    d=detail(client2,'social_project',ok.json()['item']['id'])['item']['data']
+    assert d['one_skill'] is True and d['province_report'] is True and d['province_basis']=='省文件〔2026〕12号' and d['target_groups']
+    # 旧项目没有这些字段时仍能读取，默认为否。
+    old=detail(client2,'social_project',setup_social)['item']['data']
+    assert not old.get('one_skill') and not old.get('province_report')

@@ -1,7 +1,8 @@
 // 老师发起的申请（培训课程申报、培训基地申请）：进度、详情与办理、我的申请、申请表。
 // 只调用 /api/applications；谁能办、回避、代办、版本和材料都由后端核对，这里按后端给的 permissions 显示按钮。
 import {materialUploadForm} from './approval-flow.js?v=20261017-multi-materials2';
-import {renderTrainingWorkspace} from './training-workspace.js?v=20261018-claude8';
+import {renderTrainingWorkspace} from './training-workspace.js?v=20261019-img1';
+import {imageField, takeImage, saveImageAfter, coverButton} from './display-image.js?v=20261019-img1';
 let c = null, opened = null;
 
 export const AUDIENCE = ['企业职工', '社区居民', '退役军人', '新型职业农民', '中小学教师', '机关事业单位人员', '待业及转岗人员', '老年学员'];
@@ -50,8 +51,11 @@ export async function showApplication(id) {
   const headline = progress.headline + (d.applicant?.id === c.me.user.id && progress.tone === 'blue' ? '无需你操作。' : '');
   const status = `<span class="badge ${d.progress.tone==='green'?'green-b':d.progress.tone==='red'?'red-b':'blue-b'}">${e(d.state_label)}</span>`;
   const navigation = `<nav class="detail-section-nav" aria-label="申请详情分区"><button type="button" data-detail-section="application-info">申请资料</button><button type="button" data-detail-section="application-materials">材料 · ${d.attachments.length}</button><button type="button" data-detail-section="application-history">办理记录</button></nav>`;
-  const body = sectioned ? `<div class="application-detail"><section class="detail-status-summary"><div><strong>${e(progress.text)}</strong><p>${e(headline)}</p><small>申请人 ${e(d.applicant?.name||'')} · ${e(d.org_name)}</small></div>${status}</section><details class="detail-fold application-flow"><summary>查看完整审批流程</summary>${progressHtml({...progress,headline},e)}</details>${navigation}<section id="application-info" class="detail-section"><h3>申请资料</h3><dl class="detail-facts-grid">${rows}</dl></section><section id="application-materials" class="detail-section"><div class="detail-section-title"><h3>申请材料</h3><span>${d.attachments.length} 份</span></div>${files}</section><section id="application-history" class="detail-section"><h3>办理记录</h3>${events(d.events)}</section>${p.withdraw?'<p class="detail-action-note">撤回后申请暂停审核；修改并重新提交时，将从第一级重新审核。</p>':''}</div>` : `<div class="between"><p class="muted small">${e(d.label)} · 申请人 ${e(d.applicant?.name||'')} · ${e(d.org_name)}</p>${status}</div>${progressHtml({...progress,headline},e)}<dl class="kv mt16">${rows}</dl><h3 class="mt16">申请材料</h3>${files}<h3 class="mt16">办理记录</h3>${events(d.events)}`;
-  const foot = [p.approve?c.act('通过','app-approve',x.id,'primary'):'',p.return?c.act('退回','app-return',x.id,'danger'):'',p.edit?c.act('补正资料','app-edit',x.id,'primary'):'',p.submit?c.act('重新提交','app-submit',x.id,p.edit?'':'primary'):'',p.upload?c.act('上传材料','app-upload',x.id):'',p.withdraw?c.act('撤回','app-withdraw',x.id,'light'):'',c.act('关闭','close')].join('');
+  const mayImage = [x.data?.created_by, x.data?.teacher_id].includes(c.me.user.id) || (['college', 'school'].includes(c.me.role.kind) && c.can('records.write'));
+  const imageLabel = d.flow === 'trainer' || d.flow === 'trainer_external' ? '头像' : '封面';
+  const cover = x.data?.cover_id ? `<figure class="detail-cover"><img src="/api/social/images/${e(x.data.cover_id)}" alt="${e(x.name)}${imageLabel}" loading="lazy"></figure>` : '';
+  const body = sectioned ? `<div class="application-detail"><section class="detail-status-summary"><div><strong>${e(progress.text)}</strong><p>${e(headline)}</p><small>申请人 ${e(d.applicant?.name||'')} · ${e(d.org_name)}</small></div>${status}</section><details class="detail-fold application-flow"><summary>查看完整审批流程</summary>${progressHtml({...progress,headline},e)}</details>${navigation}<section id="application-info" class="detail-section"><h3>申请资料</h3>${cover}<dl class="detail-facts-grid">${rows}</dl></section><section id="application-materials" class="detail-section"><div class="detail-section-title"><h3>申请材料</h3><span>${d.attachments.length} 份</span></div>${files}</section><section id="application-history" class="detail-section"><h3>办理记录</h3>${events(d.events)}</section>${p.withdraw?'<p class="detail-action-note">撤回后申请暂停审核；修改并重新提交时，将从第一级重新审核。</p>':''}</div>` : `<div class="between"><p class="muted small">${e(d.label)} · 申请人 ${e(d.applicant?.name||'')} · ${e(d.org_name)}</p>${status}</div>${progressHtml({...progress,headline},e)}<dl class="kv mt16">${rows}</dl><h3 class="mt16">申请材料</h3>${files}<h3 class="mt16">办理记录</h3>${events(d.events)}`;
+  const foot = [mayImage ? coverButton(c, 'resource', x, imageLabel) : '', p.approve?c.act('通过','app-approve',x.id,'primary'):'',p.return?c.act('退回','app-return',x.id,'danger'):'',p.edit?c.act('补正资料','app-edit',x.id,'primary'):'',p.submit?c.act('重新提交','app-submit',x.id,p.edit?'':'primary'):'',p.upload?c.act('上传材料','app-upload',x.id):'',p.withdraw?c.act('撤回','app-withdraw',x.id,'light'):'',c.act('关闭','close')].join('');
   c.modal(d.label+' · '+x.name,body,foot,true,sectioned?d.label+' / 申请详情':'');
 }
 
@@ -156,12 +160,14 @@ export function teachingCourseForm(course, existing = null) {
     applicationSection('二、培训内容与面向对象', audienceFields(d.audience) + c.field('intro', '课程简介', 'textarea', d.intro || course.description || '', {required: false, full: true, hint: '说明培训对象、主要内容，以及学员完成后能掌握的技能。'})) +
     applicationSection('三、专项属性', packageFields(d)) +
     applicationSection('四、已有课件审查记录', coursewareFields(d.courseware), '有正式的学院课件审查记录时再勾选；未审查时保持未勾选，由审批环节核验。') +
-    applicationSection('五、申报说明', c.field('reason', '本次申报说明', 'textarea', '', {required: false, full: true, hint: existing ? '说明按审核意见补充了哪些内容。保存后仍需重新提交。' : '可简要说明课程适用人群或申报依据。'})) + '</div>';
+    applicationSection('五、封面与申报说明', imageField(c, 'cover_file', '课程封面（选填）') + c.field('reason', '本次申报说明', 'textarea', '', {required: false, full: true, hint: existing ? '说明按审核意见补充了哪些内容。保存后仍需重新提交。' : '可简要说明课程适用人群或申报依据。'})) + '</div>';
   const result = c.formModal(existing ? '补正培训课程申报' : '申报为培训课程', body, async v => {
+    const image = takeImage(v, 'cover_file');
     const data = {source: 'teaching', course_term_id: course.id, hours: v.hours, teaching_mode: v.teaching_mode, ideology: v.ideology, audience: audienceValue(v), intro: v.intro || '', courseware: coursewareValue(v), ...packageValue(v)};
     if (!data.audience) throw Error('请至少选择一类面向对象');
     const r = existing ? await c.api('/applications/courses/' + existing.item.id, {method: 'PUT', body: {data, reason: v.reason || (existing ? '按意见补正' : '申报为培训课程'), expected_version: existing.item.version}})
       : await c.api('/applications/courses', {method: 'POST', body: {data, reason: v.reason || (existing ? '按意见补正' : '申报为培训课程')}});
+    await saveImageAfter(c, 'resource', r, image);
     c.closeModal(); c.toast(existing ? '已保存，请点“重新提交”' : '已提交，等待教研室审核'); await c.renderKeep(); await showApplication(r.item.id);
   }, {wide: true, page: true, contextLabel: existing ? '我的申请 / 补正资料' : '我要申报 / 填写资料', submit: existing ? '保存补正' : '提交申报', returnTo: existing ? () => showApplication(existing.item.id) : null});
   bindApplicationConditions(); return result;
@@ -183,12 +189,14 @@ export async function manualCourseForm(existing = null, projectCode = '') {
     applicationSection('二、课程内容与关联项目', c.field('intro', '课程简介', 'textarea', d.intro || '', {required: false, full: true, hint: '说明面向哪些社会学员、培训内容和预期学习效果。'}) + project) +
     applicationSection('三、专项属性', packageFields(d)) +
     applicationSection('四、已有课件审查记录', coursewareFields(d.courseware), '有正式的学院课件审查记录时再勾选；未审查时保持未勾选，由审批环节核验。') +
-    applicationSection('五、申报说明', c.field('reason', '本次申报说明', 'textarea', '', {required: false, full: true, hint: existing ? '说明本次补正内容；保存后仍需重新提交。' : '可填写申报依据或需要审核人员了解的情况。'})) + '</div>';
+    applicationSection('五、封面与申报说明', imageField(c, 'cover_file', '课程封面（选填）') + c.field('reason', '本次申报说明', 'textarea', '', {required: false, full: true, hint: existing ? '说明本次补正内容；保存后仍需重新提交。' : '可填写申报依据或需要审核人员了解的情况。'})) + '</div>';
   const result = c.formModal(existing ? '补正培训课程申报' : '新填一门培训课程', body, async v => {
+    const image = takeImage(v, 'cover_file');
     const data = {source: 'manual', code: v.code, name: v.name, project_code: v.project_code || '', teacher_id: v.teacher_id || null, hours: v.hours,
       teaching_mode: v.teaching_mode, ideology: v.ideology, intro: v.intro || '', courseware: coursewareValue(v), ...packageValue(v)};
     const r = existing ? await c.api('/applications/courses/' + existing.item.id, {method: 'PUT', body: {data, reason: v.reason || (existing ? '按意见补正' : '申报培训课程'), expected_version: existing.item.version}})
       : await c.api('/applications/courses', {method: 'POST', body: {data, reason: v.reason || (existing ? '按意见补正' : '申报培训课程')}});
+    await saveImageAfter(c, 'resource', r, image);
     c.closeModal(); c.toast(existing ? '已保存，请点“重新提交”' : college ? '已提交，等待学校审批' : c.me.role.kind === 'dept' ? '已提交，等待学院审批' : '已提交，等待教研室审核'); await c.renderKeep(); await showApplication(r.item.id);
   }, {wide: true, page: true, contextLabel: existing ? '我的申请 / 补正资料' : college ? '培训课程 / 填写资料' : '我要申报 / 填写资料', submit: existing ? '保存补正' : '提交申报', returnTo: existing ? () => showApplication(existing.item.id) : null});
   bindApplicationConditions(); return result;
@@ -207,14 +215,16 @@ export function baseForm(existing = null) {
     applicationSection('二、地点与共建信息', c.field('onsite', '校内 / 校外（单选）', 'select', d.onsite === false ? 'no' : 'yes', {options: [['yes', '校内'], ['no', '校外']], chips: true}) +
       c.field('partner', '共建单位', 'text', d.partner || '', {required: d.onsite === false, hint: '选择校外基地时必须填写；请使用共建单位全称。'}) + c.field('established_on', '设立日期', 'date', d.established_on || '') +
       c.field('location', '具体地点', 'text', d.location || '', {required: false, hint: '可填写基地所在校区、楼宇或校外地址。'})) +
-    applicationSection('三、认定依据与申请说明', c.field('recognition', '基地认定依据', 'textarea', d.recognition || '', {full: true, hint: '填写共建协议、学校发文或学院会议纪要等正式依据。'}) +
+    applicationSection('三、认定依据与申请说明', imageField(c, 'cover_file', '基地封面（选填）', '选填，PNG 或 JPG，不超过 5MB；场地照片可在基地详情里继续添加。仅用于展示，不能代替认定材料。') + c.field('recognition', '基地认定依据', 'textarea', d.recognition || '', {full: true, hint: '填写共建协议、学校发文或学院会议纪要等正式依据。'}) +
       c.field('reason', '本次申请说明', 'textarea', '', {full: true, required: false, hint: existing ? '说明本次补正内容；保存后仍需重新提交。' : '补充说明设立用途或本次申请事项，与上面的认定依据分开填写。'})) + '</div>';
   const result = c.formModal(existing ? '补正培训基地申请' : '申请培训基地', body, async v => {
+    const image = takeImage(v, 'cover_file');
     const data = {code: v.code, name: v.name, teacher_id: v.teacher_id || null, usages: BASE_USAGES.map(([k]) => k).filter(k => v['usage_' + k]), onsite: v.onsite === 'yes',
       partner: v.partner || '', level: v.level || 'school', established_on: v.established_on, location: v.location || '', recognition: v.recognition};
     if (!data.usages.length) throw Error('请选择基地用途');
     const r = existing ? await c.api('/applications/bases/' + existing.item.id, {method: 'PUT', body: {data, reason: v.reason || (existing ? '按意见补正' : '申请培训基地'), expected_version: existing.item.version}})
       : await c.api('/applications/bases', {method: 'POST', body: {data, reason: v.reason || (existing ? '按意见补正' : '申请培训基地')}});
+    await saveImageAfter(c, 'resource', r, image);
     c.closeModal(); c.toast(existing ? '已保存，请点“重新提交”' : college ? '已提交，等待学校审批' : '已提交，等待学院审批'); await c.renderKeep(); await showApplication(r.item.id);
   }, {wide: true, page: true, contextLabel: existing ? '我的申请 / 补正资料' : college ? '培训基地 / 填写资料' : '我要申报 / 填写资料', submit: existing ? '保存补正' : '提交申报', returnTo: existing ? () => showApplication(existing.item.id) : null});
   bindApplicationConditions(); return result;
@@ -249,14 +259,16 @@ export async function trainerForm(existing = null, source = '') {
       c.field('title', '职称或职务', 'text', d.title || '', {required: false, hint: '填写本人现有职称、职业技能等级或岗位。'}) +
       `<fieldset class="form-field full apply-tags"><legend>培训方向（可多选） <b>*</b></legend><div class="apply-tag-row">${TRAINER_DIRECTIONS.map(([k, l]) => `<label><input type="checkbox" name="dir_${k}" ${picked.has(k) ? 'checked' : ''}>${e(l)}</label>`).join('')}</div></fieldset>`) +
     applicationSection('二、资质与资格依据', quals + c.field('qualification_basis', '资格依据', 'textarea', d.qualification_basis || '', {full: true, hint: '说明职称、职业资格或行业经历，以及它们能够支持的培训方向。'})) +
-    applicationSection('三、授课经历与申报说明', c.field('experience', '授课经历', 'textarea', d.experience || '', {required: false, full: true, hint: '可填写近年授课项目、培训期数和学员人次。'}) +
+    applicationSection('三、授课经历与申报说明', imageField(c, 'cover_file', '培训师头像（选填）') + c.field('experience', '授课经历', 'textarea', d.experience || '', {required: false, full: true, hint: '可填写近年授课项目、培训期数和学员人次。'}) +
       c.field('reason', '本次申报说明', 'textarea', '', {full: true, required: false, hint: existing ? '说明本次补正内容；保存后仍需重新提交。' : '可补充说明本次申报的专业特长与相关依据。'})) + '</div>';
   return c.formModal(existing ? '补正培训师申报' : external ? '登记外聘培训师' : '申报培训师', body, async (v, f) => {
+    const image = takeImage(v, 'cover_file');
     const data = {source: external ? 'external' : 'internal', name: v.name || '', unit: v.unit || '', title: v.title || '', directions: TRAINER_DIRECTIONS.map(([k]) => k).filter(k => v['dir_' + k]),
       qualification_ids: [...f.querySelectorAll('input[name^="qual_"]:checked')].map(i => i.name.slice(5)), qualification_basis: v.qualification_basis, experience: v.experience || ''};
     if (!data.directions.length) throw Error('请至少选择一个培训方向');
     const r = existing ? await c.api('/applications/trainers/' + existing.item.id, {method: 'PUT', body: {data, reason: v.reason || (existing ? '按意见补正' : external ? '登记外聘培训师' : '申报培训师'), expected_version: existing.item.version}})
       : await c.api('/applications/trainers', {method: 'POST', body: {data, reason: v.reason || (existing ? '按意见补正' : external ? '登记外聘培训师' : '申报培训师')}});
+    await saveImageAfter(c, 'resource', r, image);
     c.closeModal(); c.toast(existing ? '已保存，请点“重新提交”' : external ? '已提交，等待教务处备案审核' : '已提交，等待教研室审核'); await c.renderKeep(); await showApplication(r.item.id);
   }, {wide: true, page: true, contextLabel: existing ? '我的申请 / 补正资料' : c.me.role.kind==='college' ? '培训师资库 / 填写资料' : '我要申报 / 填写资料', submit: existing ? '保存补正' : '提交申报', returnTo: existing ? () => showApplication(existing.item.id) : null});
 }
