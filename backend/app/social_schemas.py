@@ -374,6 +374,8 @@ class ResourceIn(Reason):
     usages: list[Literal['practice', 'ideology']] = Field(default_factory=list, max_length=2)
     established_on: date | None = None
     partner: str = Field(default='', max_length=200)
+    manager_name: str = Field(default='', max_length=80)
+    recognized_on: date | None = None
     @model_validator(mode='after')
     def course_resource(self):
         if self.kind=='achievement' and self.level=='city':raise ValueError('成果等级只能选国家级、省级或校级')
@@ -568,6 +570,9 @@ class BaseApplyData(Input):
     usages: list[Literal['practice', 'ideology']] = Field(min_length=1, max_length=2)
     established_on: date
     partner: str = Field(default='', max_length=200)
+    # 基地负责人（校外基地可填共建单位联系人）与认定日期，和设立日期、审批生效日期分开记录。
+    manager_name: str = Field(default='', max_length=80)
+    recognized_on: date | None = None
     project_id: Ident | None = None
     # 管理办法第十七条鼓励申报省级及以上培训基地。
     level: Literal['school', 'city', 'province'] = 'school'
@@ -593,6 +598,7 @@ class TrainerApplyData(Input):
     name: str = Field(default='', max_length=80)
     unit: str = Field(default='', max_length=160)
     title: str = Field(default='', max_length=100)
+    specialty: str = Field(default='', max_length=200)  # 专业特长；与“培训业务类别”(directions) 分开记录
     directions: list[Literal['subsidy', 'enterprise', 'community', 'rural', 'other', 'one_skill']] = Field(min_length=1, max_length=6)
     qualification_ids: list[Ident] = Field(default_factory=list, max_length=10)
     qualification_basis: str = Field(min_length=1, max_length=2000)

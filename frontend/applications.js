@@ -1,8 +1,8 @@
 // 老师发起的申请（培训课程申报、培训基地申请）：进度、详情与办理、我的申请、申请表。
 // 只调用 /api/applications；谁能办、回避、代办、版本和材料都由后端核对，这里按后端给的 permissions 显示按钮。
 import {materialUploadForm} from './approval-flow.js?v=20261017-multi-materials2';
-import {renderTrainingWorkspace} from './training-workspace.js?v=20261019-img1';
-import {imageField, takeImage, saveImageAfter, coverButton} from './display-image.js?v=20261019-img1';
+import {renderTrainingWorkspace} from './training-workspace.js?v=20261019-img2';
+import {imageField, takeImage, saveImageAfter, coverButton} from './display-image.js?v=20261019-img2';
 let c = null, opened = null;
 
 export const AUDIENCE = ['企业职工', '社区居民', '退役军人', '新型职业农民', '中小学教师', '机关事业单位人员', '待业及转岗人员', '老年学员'];
@@ -210,17 +210,18 @@ export function baseForm(existing = null) {
   const body = `<div class="application-form">${applicantInfo()}${applicationCorrection(existing)}${c.note(college ? '学院登记后提交学校审批，通过后进入基地清单。' : '提交后由学院、学校依次审批，通过后进入基地清单。')}` +
     applicationSection('一、基地基本资料', who +
       c.field('code', '来源编号', 'text', existing?.item?.code || '', {readonly: !!existing, hint: '填写共建协议编号或学院登记编号。', placeholder: '例：JD-2026-001'}) + c.field('name', '基地名称', 'text', existing?.item?.name || '', {placeholder: '例：湘茶思政实践教学基地'}) +
+      c.field('manager_name', '基地负责人', 'text', d.manager_name || '', {required: false, hint: '校内基地填学校负责人，校外基地填共建单位联系人；不填则按申请人显示。', placeholder: '例：张老师'}) +
       `<fieldset class="form-field full apply-tags"><legend>基地用途（可多选） <b>*</b></legend><div class="apply-tag-row">${BASE_USAGES.map(([k, l]) => `<label><input type="checkbox" name="usage_${k}" ${used.has(k) ? 'checked' : ''}>${c.esc(l)}</label>`).join('')}</div></fieldset>` +
       c.field('level', '基地级别（单选）', 'select', d.level || 'school', {options: [['school', '校级'], ['city', '市级'], ['province', '省级及以上']], chips: true})) +
     applicationSection('二、地点与共建信息', c.field('onsite', '校内 / 校外（单选）', 'select', d.onsite === false ? 'no' : 'yes', {options: [['yes', '校内'], ['no', '校外']], chips: true}) +
-      c.field('partner', '共建单位', 'text', d.partner || '', {required: d.onsite === false, hint: '选择校外基地时必须填写；请使用共建单位全称。'}) + c.field('established_on', '设立日期', 'date', d.established_on || '') +
+      c.field('partner', '共建单位', 'text', d.partner || '', {required: d.onsite === false, hint: '选择校外基地时必须填写；请使用共建单位全称。'}) + c.field('established_on', '设立日期', 'date', d.established_on || '') + c.field('recognized_on', '认定日期', 'date', d.recognized_on || '', {required: false, hint: '学校或上级正式认定的日期；与设立日期、审批生效日期分开记录，没有认定可不填。'}) +
       c.field('location', '具体地点', 'text', d.location || '', {required: false, hint: '可填写基地所在校区、楼宇或校外地址。'})) +
     applicationSection('三、认定依据与申请说明', imageField(c, 'cover_file', '基地封面（选填）', '选填，PNG 或 JPG，不超过 5MB；场地照片可在基地详情里继续添加。仅用于展示，不能代替认定材料。') + c.field('recognition', '基地认定依据', 'textarea', d.recognition || '', {full: true, hint: '填写共建协议、学校发文或学院会议纪要等正式依据。'}) +
       c.field('reason', '本次申请说明', 'textarea', '', {full: true, required: false, hint: existing ? '说明本次补正内容；保存后仍需重新提交。' : '补充说明设立用途或本次申请事项，与上面的认定依据分开填写。'})) + '</div>';
   const result = c.formModal(existing ? '补正培训基地申请' : '申请培训基地', body, async v => {
     const image = takeImage(v, 'cover_file');
     const data = {code: v.code, name: v.name, teacher_id: v.teacher_id || null, usages: BASE_USAGES.map(([k]) => k).filter(k => v['usage_' + k]), onsite: v.onsite === 'yes',
-      partner: v.partner || '', level: v.level || 'school', established_on: v.established_on, location: v.location || '', recognition: v.recognition};
+      partner: v.partner || '', level: v.level || 'school', established_on: v.established_on, manager_name: v.manager_name || '', recognized_on: v.recognized_on || null, location: v.location || '', recognition: v.recognition};
     if (!data.usages.length) throw Error('请选择基地用途');
     const r = existing ? await c.api('/applications/bases/' + existing.item.id, {method: 'PUT', body: {data, reason: v.reason || (existing ? '按意见补正' : '申请培训基地'), expected_version: existing.item.version}})
       : await c.api('/applications/bases', {method: 'POST', body: {data, reason: v.reason || (existing ? '按意见补正' : '申请培训基地')}});
@@ -254,18 +255,19 @@ export async function trainerForm(existing = null, source = '') {
     quals = choices.length ? `<fieldset class="form-field full apply-tags"><legend>引用本人已审核资质（可多选）</legend><div class="apply-qualification-list">${choices.map(q => `<label><input type="checkbox" name="qual_${e(q.id)}" ${chosen.has(q.id) ? 'checked' : ''}><span><strong>${e(q.name)}</strong><small>${e(q.issuer || '发证机构待核实')} · ${e(validity(q))}${q.retained ? ' · 原引用，当前状态请核实' : ''}</small></span></label>`).join('')}</div><p class="hint">保留原引用；若资质审核状态发生变化，请核实或取消该引用后再保存。</p></fieldset>` : '<p class="hint form-field full">暂无可引用的已审核资质，可在下方填写职称、行业经历等资格依据。</p>';
   }
   const body = `<div class="application-form">${applicantInfo()}${applicationCorrection(existing)}${c.note(external ? '由学院登记，教务处审核备案后进入培训师资库。' : '教研室、学院、学校审核后，由组织人事部认定并进入培训师资库。')}` +
-    applicationSection('一、基本信息与培训方向',
+    applicationSection('一、基本信息与培训业务类别',
       (external ? c.field('name', '姓名', 'text', existing?.item?.name || '') + c.field('unit', '工作单位', 'text', d.unit || '') : '') +
       c.field('title', '职称或职务', 'text', d.title || '', {required: false, hint: '填写本人现有职称、职业技能等级或岗位。'}) +
-      `<fieldset class="form-field full apply-tags"><legend>培训方向（可多选） <b>*</b></legend><div class="apply-tag-row">${TRAINER_DIRECTIONS.map(([k, l]) => `<label><input type="checkbox" name="dir_${k}" ${picked.has(k) ? 'checked' : ''}>${e(l)}</label>`).join('')}</div></fieldset>`) +
+      c.field('specialty', '专业特长', 'text', d.specialty || '', {required: false, hint: '例：茶艺、电商运营、家政服务；与下面的“培训业务类别”分开填写。'}) +
+      `<fieldset class="form-field full apply-tags"><legend>培训业务类别（可多选） <b>*</b></legend><div class="apply-tag-row">${TRAINER_DIRECTIONS.map(([k, l]) => `<label><input type="checkbox" name="dir_${k}" ${picked.has(k) ? 'checked' : ''}>${e(l)}</label>`).join('')}</div></fieldset>`) +
     applicationSection('二、资质与资格依据', quals + c.field('qualification_basis', '资格依据', 'textarea', d.qualification_basis || '', {full: true, hint: '说明职称、职业资格或行业经历，以及它们能够支持的培训方向。'})) +
     applicationSection('三、授课经历与申报说明', imageField(c, 'cover_file', '培训师头像（选填）') + c.field('experience', '授课经历', 'textarea', d.experience || '', {required: false, full: true, hint: '可填写近年授课项目、培训期数和学员人次。'}) +
       c.field('reason', '本次申报说明', 'textarea', '', {full: true, required: false, hint: existing ? '说明本次补正内容；保存后仍需重新提交。' : '可补充说明本次申报的专业特长与相关依据。'})) + '</div>';
   return c.formModal(existing ? '补正培训师申报' : external ? '登记外聘培训师' : '申报培训师', body, async (v, f) => {
     const image = takeImage(v, 'cover_file');
-    const data = {source: external ? 'external' : 'internal', name: v.name || '', unit: v.unit || '', title: v.title || '', directions: TRAINER_DIRECTIONS.map(([k]) => k).filter(k => v['dir_' + k]),
+    const data = {source: external ? 'external' : 'internal', name: v.name || '', unit: v.unit || '', title: v.title || '', specialty: v.specialty || '', directions: TRAINER_DIRECTIONS.map(([k]) => k).filter(k => v['dir_' + k]),
       qualification_ids: [...f.querySelectorAll('input[name^="qual_"]:checked')].map(i => i.name.slice(5)), qualification_basis: v.qualification_basis, experience: v.experience || ''};
-    if (!data.directions.length) throw Error('请至少选择一个培训方向');
+    if (!data.directions.length) throw Error('请至少选择一个培训业务类别');
     const r = existing ? await c.api('/applications/trainers/' + existing.item.id, {method: 'PUT', body: {data, reason: v.reason || (existing ? '按意见补正' : external ? '登记外聘培训师' : '申报培训师'), expected_version: existing.item.version}})
       : await c.api('/applications/trainers', {method: 'POST', body: {data, reason: v.reason || (existing ? '按意见补正' : external ? '登记外聘培训师' : '申报培训师')}});
     await saveImageAfter(c, 'resource', r, image);

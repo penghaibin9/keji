@@ -247,3 +247,49 @@ def test_unassigned_filing_duty_is_explained_and_resumes_after_configuration(app
     # 教师不看到学校管理员的职责缺口。
     auth(c, 'collegehead')
     assert c.get('/api/applications/trainers').json()['duty_gaps'] == []
+
+
+def test_trainer_specialty_separate_from_business_category_and_taught_courses_follow_real_relation(app2, client2):
+    from app.social_models import SocialResource
+    c = client2
+    setup(app2)
+    auth(c, 'teacher')
+    r = internal(c, specialty='茶艺、社区公益课程设计')
+    assert r.status_code == 200, r.text
+    ident = r.json()['item']['id']
+    fields = dict(map(tuple, c.get('/api/applications/' + ident).json()['fields']))
+    assert fields['专业特长'] == '茶艺、社区公益课程设计' and fields['培训业务类别'] == '社区公益培训、“一人一技”专项' and '培训方向' not in fields
+    for user in ('depthead', 'collegehead', 'reviewer'):
+        auth(c, user); assert approve(c, ident).status_code == 200
+    auth(c, 'hruser'); assert approve(c, ident, '湘科人认〔2026〕12号').status_code == 200
+    with app2.state.sessions.begin() as db:
+        db.add(SocialResource(kind='course_apply', org_id='college1', code='CI-TAUGHT-1', name='茶艺实操课', state='ACTIVE',
+                              data={'course_code': 'TAUGHT-1', 'teacher_id': 'teacher', 'teacher_name': '测试教师一', 'application': True}))
+        db.add(SocialResource(kind='course_apply', org_id='college1', code='CI-OTHER-1', name='别人的课', state='ACTIVE',
+                              data={'course_code': 'OTHER-1', 'teacher_id': 'otherteacher', 'application': True}))
+    auth(c, 'collegehead')
+    item = c.get('/api/applications/trainers').json()['items'][0]
+    assert item['specialty'] == '茶艺、社区公益课程设计' and item['courses'] == ['茶艺实操课']
+    # 外聘培训师没有对应教师账号，不显示授课课程。
+    data = {'source': 'external', 'name': '特长外聘', 'unit': '合成机构', 'specialty': '家政服务', 'directions': ['rural'], 'qualification_basis': '行业证书'}
+    r = post(c, '/api/applications/trainers', {'data': data, **REASON}); assert r.status_code == 200, r.text
+    auth(c, 'jwcuser'); assert approve(c, r.json()['item']['id'], '教务处备案依据').status_code == 200
+    auth(c, 'collegehead')
+    ext = next(x for x in c.get('/api/applications/trainers').json()['items'] if x['name'] == '特长外聘')
+    assert ext['specialty'] == '家政服务' and ext['courses'] == []
+
+
+def test_base_manager_and_recognized_date_are_kept_apart_from_established_and_effective(app2, client2):
+    c = client2
+    auth(c, 'teacher')
+    data = {'code': 'MGR-B1', 'name': '负责人基地', 'onsite': False, 'partner': '合成共建单位', 'usages': ['practice'], 'established_on': '2026-02-01',
+            'recognized_on': '2026-03-05', 'manager_name': '共建单位联系人王', 'recognition': '共建协议'}
+    r = post(c, '/api/applications/bases', {'data': data, **REASON}); assert r.status_code == 200, r.text
+    ident = r.json()['item']['id']
+    fields = dict(map(tuple, c.get('/api/applications/' + ident).json()['fields']))
+    assert fields['基地负责人'] == '共建单位联系人王' and fields['设立日期'] == '2026-02-01' and fields['认定日期'] == '2026-03-05' and fields['审批生效日期'] == '尚未生效'
+    # 旧申请没有这两项时显示“待补充”。
+    old = {**data, 'code': 'MGR-B2', 'name': '旧基地'}; old.pop('recognized_on'); old.pop('manager_name')
+    r = post(c, '/api/applications/bases', {'data': old, **REASON}); assert r.status_code == 200, r.text
+    fields = dict(map(tuple, c.get('/api/applications/' + r.json()['item']['id']).json()['fields']))
+    assert fields['认定日期'] == '待补充' and fields['基地负责人'] in ('待补充', '测试教师一')

@@ -1,7 +1,7 @@
 // School business pages reuse the portal's forms, permissions, navigation and attachments.
 import {checkUploadFiles,uploadEntries,uploadSequential,uploadStatusHtml,failedEntries,MAX_ATTACHMENTS} from './approval-flow.js?v=20261017-multi-materials2';
-import {renderTrainingWorkspace,trainingChange} from './training-workspace.js?v=20261019-img1';
-import {imageField,takeImage,saveImageAfter,coverButton} from './display-image.js?v=20261019-img1';
+import {renderTrainingWorkspace,trainingChange} from './training-workspace.js?v=20261019-img2';
+import {imageField,takeImage,saveImageAfter,coverButton} from './display-image.js?v=20261019-img2';
 import {progressHtml,AUDIENCE,TEACHING_MODES,IDEOLOGY} from './applications.js?v=20261018-design6&materials=20261017-preview2&approvalfix=20261018-1&duty=claude8';
 const names={module:'模块式',person_day:'人天式',technical:'技术类',lecture:'讲座类',province:'省级',city:'市级或企业定制',school:'校级',dispatched:'统一委派异地送教',full_day:'全天实操或脱产',ordinary:'常规',subsidy:'补贴性培训',enterprise:'企业定制培训',community:'社区公益培训',rural:'乡村帮扶培训',other:'其他非学历培训',national:'国家级'};
 let workspace,context,opened,workspaceUser;
@@ -13,7 +13,7 @@ const path=(kind,id)=>'/social/objects/'+kind+'/'+id;
 const REVIEW_STATES={DRAFT:'待发送教师',TEACHER:'待教师回应',COLLEGE:'待学院裁定',CLOSED:'已办结'};
 const BASE_USAGE_OPTIONS=[['practice','实践教学基地'],['ideology','思政实践教学基地']],BASE_LEVEL_OPTIONS=[['school','校级'],['city','市级'],['province','省级及以上']];
 // 基地修改表单带全用途、级别、设立日期和共建单位；其他类型不提交这几项，后端只合并提交的字段。
-export function resourceFormValue(kind,raw){const v={...raw};for(const [k] of BASE_USAGE_OPTIONS)delete v['usage_'+k];if(kind==='base'){v.usages=BASE_USAGE_OPTIONS.map(([k])=>k).filter(k=>raw['usage_'+k]);v.established_on=raw.established_on||null;v.partner=raw.partner||''}return v}
+export function resourceFormValue(kind,raw){const v={...raw};for(const [k] of BASE_USAGE_OPTIONS)delete v['usage_'+k];if(kind==='base'){v.usages=BASE_USAGE_OPTIONS.map(([k])=>k).filter(k=>raw['usage_'+k]);v.established_on=raw.established_on||null;v.recognized_on=raw.recognized_on||null;v.manager_name=raw.manager_name||'';v.partner=raw.partner||''}return v}
 const selectable=(values,blank=false)=>[...(blank?[['','待学校确认']]:[]),...values.map(v=>[v,names[v]||v])];
 const blankNull=v=>Object.fromEntries(Object.entries(v).map(([k,x])=>[k,x===''?null:x]));
 const tone=state=>['ARCHIVED','CLOSED','ACTIVE'].includes(state)?'green':['RETURNED','DRAFT'].includes(state)?'amber':'blue';
@@ -678,7 +678,7 @@ export async function socialAction(action,id,c){
   const edit=action==='social-resource-edit',x=edit?opened.item:null,old=x?{...x.data,name:x.name,code:x.code}:{},courseList=edit?opened.courseList:null;id=x?.kind||id;
   const f=(key,label,type='text',options={})=>c.field(key,label,type,old[key]??'',options);
   let body=(x?c.field('org_id','承办学院','select',x.org_id,{options:[[x.org_id,c.orgName(x.org_id)]]}):collegeField())+f('code','来源唯一编号','text',{readonly:edit})+f('name','名称')+f('location','地点或资源说明','textarea',{required:false})+f('recognition','认定或登记依据','textarea');
-  if(id==='base'){const used=new Set(old.usages||[]);body+=c.field('onsite','基地类型','checkbox',old.onsite??true,{checkLabel:'校内基地（不勾选表示校外）'})+'<fieldset class="form-field full apply-tags"><legend>基地用途（可多选）</legend><div class="apply-tag-row">'+BASE_USAGE_OPTIONS.map(([k,l])=>'<label><input type="checkbox" name="usage_'+k+'"'+(used.has(k)?' checked':'')+'>'+c.esc(l)+'</label>').join('')+'</div></fieldset>'+c.field('level','基地级别','select',old.level||'school',{options:BASE_LEVEL_OPTIONS})+f('established_on','设立日期','date',{required:false})+f('partner','共建单位','text',{required:false,hint:'校外基地必填。'});}
+  if(id==='base'){const used=new Set(old.usages||[]);body+=c.field('onsite','基地类型','checkbox',old.onsite??true,{checkLabel:'校内基地（不勾选表示校外）'})+'<fieldset class="form-field full apply-tags"><legend>基地用途（可多选）</legend><div class="apply-tag-row">'+BASE_USAGE_OPTIONS.map(([k,l])=>'<label><input type="checkbox" name="usage_'+k+'"'+(used.has(k)?' checked':'')+'>'+c.esc(l)+'</label>').join('')+'</div></fieldset>'+c.field('level','基地级别','select',old.level||'school',{options:BASE_LEVEL_OPTIONS})+f('established_on','设立日期','date',{required:false})+f('recognized_on','认定日期','date',{required:false,hint:'正式认定的日期，与设立日期、审批生效日期分开。'})+f('manager_name','基地负责人','text',{required:false})+f('partner','共建单位','text',{required:false,hint:'校外基地必填。'});}
   if(id==='achievement')body+=c.field('level','成果等级','select',old.level||'school',{options:selectable(['national','province','school'])})+f('confirmed_on','成果正式认定日期','date',{required:false,hint:'日期待补时，不计年度分数'});
   if(id==='course_resource')body+=c.field('course_code','关联课程','select',old.course_code||'',{options:[['','请选择关联课程'],...(old.course_code?[[old.course_code,'原关联课程 · '+old.course_code]]:[])]})+c.field('resource_type','资源类型','select',old.resource_type||'video',{options:[['video','视频'],['document','文档'],['link','其他链接']]})+f('resource_url','资源地址','url',{required:false})+f('duration_minutes','视频总时长（分钟）','number',{required:false,min:0,step:0.01})+c.field('teacher_id','归属教师及工号','select',old.teacher_id||'',{required:false,options:[['','尚未确认人员'],...(old.teacher_id?[[old.teacher_id,'原关联教师（保留）']]:[])]})+'<p id="course-resource-status" class="hint full" role="status"></p>';
   if(['base','achievement'].includes(id))body+=imageField(c,'cover_file',(id==='base'?'基地':'成果')+'封面（选填）');

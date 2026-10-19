@@ -36,3 +36,14 @@ test('基地显示用途、级别、共建单位和场地照片，学院可维�
  assert.match(html,/思政实践教学基地/);assert.match(html,/市级/);assert.match(html,/共建企业/);assert.match(html,/场地照片 · 2/);
  assert.match(html,/添加场地照片/);assert.match(html,/training-image-remove" data-id="resource\|b\|photo\|photo-0001-a\|2"/);
 });
+test('课程、基地、师资详情按规划展示完整字段，外聘培训师不显示授课课程',()=>{
+ const c=context('fields');
+ const course=renderTrainingWorkspace('courses',{courses:[{code:'C1',name:'茶艺课',project_code:'P1'}],projects:[{id:'p',org_id:'o',data:{code:'P1',name:'茶艺项目'}}],course_info:{C1:{hours:6,teaching_mode:'practice',ideology:'course_ideology',audience:'社区居民',package:true,one_skill:true,target_groups:'退役军人',intro:'课程简介文字',teacher_name:'王老师'}}},c);
+ for(const t of ['面向对象','社区居民','课程思政','培训包、“一人一技”','重点群体与行动对接','退役军人','课程简介文字','课程编号','C1'])assert.ok(course.includes(t),t);
+ const base=renderTrainingWorkspace('bases',{resources:[{id:'b',kind:'base',name:'基地',org_name:'学院',data:{onsite:false,partner:'共建',manager_name:'王联系人',established_on:'2026-02-01',recognized_on:'2026-03-05',effective_on:'2026-03-10',usages:['practice'],level:'city'}}]},c);
+ for(const t of ['基地负责人','王联系人','设立日期','2026-02-01','认定日期','2026-03-05','审批生效日期','2026-03-10'])assert.ok(base.includes(t),t);
+ const trainers=renderTrainingWorkspace('trainers',{items:[{id:'t1',name:'李老师',source:'internal',directions:['社区公益培训'],specialty:'茶艺',courses:['茶艺实操课'],can_view_detail:true},{id:'t2',name:'外聘',source:'external',unit:'机构',directions:[],specialty:'家政'}]},c);
+ for(const t of ['专业特长','茶艺','培训业务类别','授课课程','茶艺实操课'])assert.ok(trainers.includes(t),t);
+ const external=renderTrainingWorkspace('trainers',{items:[{id:'t2',name:'外聘',source:'external',unit:'机构',directions:[],specialty:'家政'}]},context('fields2'));
+ assert.match(external,/外聘培训师暂无关联课程/);
+});
