@@ -30,7 +30,7 @@ test('returned node shows the reason', () => {
   assert.match(html, /退回原因：补课件审查/);
 });
 
-const ctx = data => ({esc, icon:()=>'<svg></svg>', api: async () => data, note: t => `<div class="note">${esc(t)}</div>`, table: (h, rows, empty) => rows.length ? rows.map(r => r.join('|')).join('\n') : empty,
+const ctx = data => ({esc, number:(v,d=0)=>Number(v).toFixed(d),link:(label,action,id)=>`<button data-action="${action}" data-id="${esc(id)}">${esc(label)}</button>`, icon:()=>'<svg></svg>', api: async () => data, note: t => `<div class="note">${esc(t)}</div>`, table: (h, rows, empty) => rows.length ? rows.map(r => r.join('|')).join('\n') : empty,
   act: (label, action, id = '') => `<button data-action="${action}" data-id="${esc(id)}">${esc(label)}</button>`});
 
 test('入库师资复用申请详情入口，仅按服务端读权限提供，省级推荐权限不扩展',async()=>{
@@ -62,14 +62,14 @@ test('首页超星已认定学分复用本学年汇总，不累加重复待认�
  }
 });
 
-test('超星课一门课一张卡，写学期数，没申报的可以直接申报，封面只用超星图片', async () => {
+test('超星课程列表按课程归集，保留学期数、申报及课程详情入口', async () => {
   const html = await myCoursesHtml(ctx({courses: [card(), card({identity: 'CX|机械制图', course_name: '机械制图', credit: null, problems: ['超星没填学分'], terms: [{term_name: '2025-1', school_year: '2025-2026'}], years: ['2025-2026'],
     application: {id: 'a1', state: 'RETURNED', state_label: '退回补正'}})]}), 'cx', '');
-  assert.equal([...html.matchAll(/class="mc-card"/g)].length, 2);
+  assert.equal([...html.matchAll(/class="my-course-name"/g)].length, 2);
   assert.match(html, /3 个学期/);
-  assert.match(html, /data-action="mc-apply" data-id="0">申报为培训课程/);
+  assert.match(html, /data-action="mc-apply" data-id="0">申报课程/);
   assert.match(html, /退回补正.*去补正/s);
-  assert.match(html, /超星没填学分/);
+  assert.match(html, /学分未填写/);
   assert.doesNotMatch(html, /<img/);
 });
 
@@ -80,9 +80,20 @@ test('课程详情按服务端认定状态显示中文，重复课程保留不�
  }
 });
 
+test('课程列表学年和学期分行，未知学期转义保留且零学分学时不丢失',async()=>{
+ const terms=['2026-1','2026-2027-2','2026-2027 学年第一学期','2026—2027学年第2学期','<未知学期>'];
+ const html=await myCoursesHtml(ctx({courses:[card({credit:0,hours:0,chapters:0,terms:terms.map(term_name=>({term_name,school_year:'2026-2027'}))})]}),'all','');
+ assert.equal([...html.matchAll(/<span>2026—2027 学年<\/span>/g)].length,4);
+ assert.equal([...html.matchAll(/<span>第1学期<\/span>/g)].length,2);
+ assert.equal([...html.matchAll(/<span>第2学期<\/span>/g)].length,2);
+ assert.match(html,/&lt;未知学期&gt;/);assert.doesNotMatch(html,/<未知学期>/);
+ assert.match(html,/<strong>0\.00<\/strong> 学分<p class="cell-sub">0 学时 · 0 章/);
+ assert.match(html,/5 个学期/);assert.match(html,/申报后审核/);
+});
+
 test('按学年筛选：只列这个学年开过的课；教务课在教务课页签', async () => {
   const data = {courses: [card(), card({identity: 'JW|K1', origin: 'JW', course_name: '高等数学', years: ['2025-2026'], terms: [{term_name: '2025-2026-1', school_year: '2025-2026'}]})]};
-  assert.equal([...(await myCoursesHtml(ctx(data), 'cx', '2023-2024')).matchAll(/class="mc-card"/g)].length, 1);
+  assert.equal([...(await myCoursesHtml(ctx(data), 'cx', '2023-2024')).matchAll(/class="my-course-name"/g)].length, 1);
   const jw = await myCoursesHtml(ctx(data), 'jw', '');
   assert.match(jw, /高等数学/);
   assert.doesNotMatch(jw, /二维绘图/);
@@ -104,9 +115,9 @@ test('申报期限：截止的课不出申报按钮，补报中改成补报，�
     deadline_reminders: [{school_year: '2025-2026', state: 'open', deadline: '2026-09-30', days_left: 5}]};
   const html = await myCoursesHtml(ctx(data), 'cx', '');
   assert.match(html, /已于 2025-09-30 截止/);
-  assert.doesNotMatch(html, /data-id="0">申报为培训课程/);
+  assert.doesNotMatch(html, /data-id="0">申报课程/);
   assert.match(html, /data-id="1">补报为培训课程/);
-  assert.match(html, /data-id="2">申报为培训课程/);
+  assert.match(html, /data-id="2">申报课程/);
   assert.match(html, /2025-2026 学年的课程申报将于 2026-09-30 截止，还剩 5 天/);
 });
 
@@ -233,7 +244,7 @@ test('我的申请筛选与统计一致，识别已生效基地、结项退回�
  const items=[['base','已生效基地','DRAFT','green'],['returned','结项待补正','FILED','red'],['filed','已备案项目','FILED','green'],['withdrawn','已撤回申请','WITHDRAWN','gray'],['draft','未提交申请','DRAFT','gray'],['review','待学院审批','COLLEGE','blue']].map(([id,name,state,tone])=>({id,name,state,progress:{...p,tone}}));
  const c=ctx({counts:{draft:2,pending:1,returned:1,done:2},items});c.me={role:{kind:'teacher'}};c.render=async()=>{};
  try{
-  for(const [filter,expected] of [['draft',['withdrawn','draft']],['pending',['review']],['returned',['returned']],['',items.map(x=>x.id)]]){
+  for(const [filter,expected] of [['draft',['withdrawn','draft']],['pending',['review']],['returned',['returned']],['done',['base','filed']],['',items.map(x=>x.id)]]){
    await applicationAction('app-mine-filter',filter,c);
    const html=await myApplicationsHtml(c);
    for(const item of items)assert.equal(html.includes(`<strong>${item.name}</strong>`),expected.includes(item.id),`${filter}: ${item.name}`);
@@ -245,6 +256,28 @@ test('课程按来源与学年筛选后，名称查看仍指向原始课程索�
  const data={courses:[card({origin:'CX',years:['2025-2026']}),card({origin:'JW',identity:'JW|k2',course_name:'<教务课>',credit:0,hours:0,years:['2025-2026']})]};
  const html=await myCoursesHtml(ctx(data),'jw','2025-2026');
  assert.match(html,/data-action="mc-detail" data-id="1"/);assert.match(html,/&lt;教务课&gt;/);assert.doesNotMatch(html,/data-action="mc-detail" data-id="0"/);
+});
+
+test('课程详情衔接列表中的同一课程，保留原始缺值和申报前置条件',async()=>{
+ const data={courses:[card({origin:'JW',course_name:'其他课程'}),card({course_name:'机械制图',course_code:'265641882',credit:2,source_credit:null,source_hours:0,source_term_name:'2026-1',years:['2026-2027'],team_names:'皮杰',team_staff_nos:'2084',created_at_source:'2026-08-05 09:35:53',edited_at_source:'2026-10-06 07:50:20',terms:[{term_name:'2026-1',school_year:'2026-2027',credit:2,hours:0,review:'approved',counted:false}]})]};
+ const c=ctx(data);let rendered;c.modal=(title,body,foot)=>{rendered={title,body,foot}};
+ const html=await myCoursesHtml(c,'all','2026-2027','265641882');assert.match(html,/data-action="mc-detail" data-id="1">课程详情/);assert.doesNotMatch(html,/其他课程/);assert.match(html,/学分未填写/);
+ await courseAction('mc-detail','1',c);assert.equal(rendered.title,'我的课程 · 课程详情');assert.match(rendered.body,/mc-course-workspace/);assert.match(rendered.body,/皮杰（2084）/);assert.match(rendered.body,/2026-08-05 09:35:53/);assert.match(rendered.body,/超星未填写学分/);assert.match(rendered.body,/核算学分已按学校课程记录补齐/);assert.match(rendered.body,/2026-1\|2026-2027\|2\|0\|不重复计算/);assert.match(rendered.foot,/data-action="mc-apply" data-id="1">申报这门课程/);assert.match(rendered.foot,/返回课程列表/);assert.doesNotMatch(rendered.body,/其他课程|已认定积分|暂不计入授课学分/);
+ const previous=rendered;await courseAction('mc-detail','99',c);assert.equal(rendered,previous);
+});
+
+test('已入库只显示真实申报结果，不伪造积分到账或重复申报',async()=>{
+ const data={courses:[card({application:{id:'approved',state:'ACTIVE',state_label:'已生效'}})]};
+ const c=ctx(data);let foot;c.modal=(_title,_body,value)=>{foot=value};
+ const html=await myCoursesHtml(c,'cx','');assert.match(html,/已入库/);assert.match(html,/积分另行认定/);assert.match(html,/积分以实际培训业务认定结果为准/);assert.doesNotMatch(html,/已认定积分|待认定积分|data-action="mc-apply"/);
+ await courseAction('mc-detail','0',c);assert.match(foot,/data-action="app-detail" data-id="approved"/);assert.doesNotMatch(foot,/data-action="mc-apply"/);
+});
+
+test('申报进度晚返回时，已离开课程页面不会重新弹出旧课程',async()=>{
+ const c=ctx({courses:[card({application:{id:'pending',state:'DEPT',state_label:'待教研室审核'}})]});
+ let page='credits',resolve,opened=0;c.currentPage=()=>page;c.currentUser=()=> 'teacher';c.modal=()=>opened++;
+ await myCoursesHtml(c,'cx','');c.api=()=>new Promise(done=>{resolve=done});
+ const loading=courseAction('mc-detail','0',c);page='home';resolve({progress:p});await loading;assert.equal(opened,0);
 });
 
 

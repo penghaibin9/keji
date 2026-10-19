@@ -419,7 +419,7 @@ body[data-role="teacher"] .sidebar .nav-item:hover{background:#f0f5fc;color:#1d5
 body[data-role="teacher"] #content .pagehead{margin:0 0 24px;align-items:center;gap:20px}
 body[data-role="teacher"] #content .pagehead h1{font-size:28px;line-height:1.4;letter-spacing:0;font-weight:700;color:#20364f}
 body[data-role="teacher"] #content .page-title{gap:8px 14px}
-body[data-role="teacher"] #content .page-title .teacher-page-subtitle{flex-basis:100%;margin:0;line-height:1.7;font-size:14px;font-weight:400;color:#60738b}
+body[data-role="teacher"] #content .page-title .teacher-page-subtitle{flex-basis:100%;margin:0;line-height:1.7;font-size:15px;font-weight:400;color:#60738b}
 body[data-role="teacher"] #content .page-help{font-size:13px;color:#667d96}
 body[data-role="teacher"] #content .page-help-body,body[data-role="teacher"] #content .page-help>p{top:42px}
 body[data-role="teacher"] #content .btn{min-height:40px;font-size:14px;padding:8px 15px;border-radius:6px;font-weight:500;box-shadow:none;background-image:none;transition:background-color .15s,border-color .15s}
@@ -432,21 +432,21 @@ body[data-role="teacher"] #content .card{border:1px solid #dfe7f0;border-radius:
 body[data-role="teacher"] #content .card-head,body[data-role="teacher"] #content .social-panel-head{padding:18px 22px;border-bottom:1px solid #e6edf4;min-height:0}
 body[data-role="teacher"] #content .card-head h2,body[data-role="teacher"] #content .social-panel-head h2{font-size:18px;font-weight:650;line-height:1.5;padding-left:0}
 body[data-role="teacher"] #content .card-head h2::before{display:none}
-body[data-role="teacher"] #content .card-head p{font-size:13px;margin-top:4px;color:#677c94}
+body[data-role="teacher"] #content .card-head p{font-size:14px;margin-top:4px;color:#586d85}
 body[data-role="teacher"] #content .filterbar,body[data-role="teacher"] #content .social-tools{padding:16px 22px;background:#fff;border-bottom:1px solid #e6edf4;gap:12px;align-items:end}
 body[data-role="teacher"] #content .filterbar input,body[data-role="teacher"] #content .filterbar select,body[data-role="teacher"] #content .social-tools input{background:#fff;border:1px solid #cdd9e7;border-radius:6px;height:40px;font-size:14px;padding-inline:12px;color:#29435e;box-shadow:none}
 body[data-role="teacher"] #content .filter-primary{gap:14px;align-items:end}
 body[data-role="teacher"] #content .filter-primary>label>span{font-size:13px;color:#526b85;font-weight:500}
-body[data-role="teacher"] #content .table{font-size:14px}
-body[data-role="teacher"] #content .table th{background:#f1f5fa;color:#536c87;font-size:13px;font-weight:600;line-height:1.5;padding:13px 18px;border-bottom:1px solid #dfe7f0;letter-spacing:0}
+body[data-role="teacher"] #content .table{font-size:15px}
+body[data-role="teacher"] #content .table th{background:#f1f5fa;color:#536c87;font-size:14px;font-weight:600;line-height:1.5;padding:13px 18px;border-bottom:1px solid #dfe7f0;letter-spacing:0}
 body[data-role="teacher"] #content .table td{padding:15px 18px;border-bottom:1px solid #e8edf4;line-height:1.7;color:#2d455f}
-body[data-role="teacher"] #content .table td:first-child strong{font-size:15px;font-weight:600;color:#243d5b}
+body[data-role="teacher"] #content .table td:first-child strong{font-size:16px;font-weight:600;color:#243d5b}
 body[data-role="teacher"] #content .table tbody tr:hover>td{background:#f6f9fe}
 body[data-role="teacher"] #content .table tbody tr:last-child>td{border-bottom:0}
-body[data-role="teacher"] #content .table .cell-sub{font-size:13px;line-height:1.65;margin-top:5px;color:#687d94}
-body[data-role="teacher"] #content .table td:last-child .btn{white-space:nowrap;color:#245ccc;min-height:36px}
+body[data-role="teacher"] #content .table .cell-sub{font-size:14px;line-height:1.65;margin-top:5px;color:#586d85}
+body[data-role="teacher"] #content .table td:last-child .btn{white-space:nowrap;color:#245ccc;min-height:40px}
 body[data-role="teacher"] #content .table td:last-child .btn.primary{color:#fff}
-body[data-role="teacher"] #content .badge{border-radius:5px;padding:4px 8px;font-size:12px;font-weight:500;white-space:nowrap}
+body[data-role="teacher"] #content .badge{border-radius:5px;padding:4px 8px;font-size:13px;font-weight:500;white-space:nowrap}
 body[data-role="teacher"] #content .list-count{padding:12px 22px;margin:0;color:#667c94;font-size:13px;border-top:1px solid #e7edf4}
 body[data-role="teacher"] #content .section-tabs{gap:6px;border-bottom:1px solid #d6e0ec;margin-bottom:20px}
 body[data-role="teacher"] #content .section-tabs>button{font-size:15px;min-height:46px;padding:10px 18px;font-weight:500;box-shadow:none;border-radius:6px 6px 0 0}
@@ -469,7 +469,7 @@ body[data-role="teacher"] #content .teacher-overview-metrics .kpi:hover{backgrou
 body[data-role="teacher"] #content .teacher-overview-metrics .kpi-label{font-size:14px;color:#5b728c;padding:0;white-space:normal}
 body[data-role="teacher"] #content .teacher-overview-metrics .kpi-icon{display:none}
 body[data-role="teacher"] #content .teacher-overview-metrics .kpi-value{font-size:30px!important;font-weight:700;line-height:1.3;margin:10px 0 7px;color:#1c4f99}
-body[data-role="teacher"] #content .teacher-overview-metrics .kpi-foot{font-size:12px;color:#697e96;line-height:1.6;margin:0}
+body[data-role="teacher"] #content .teacher-overview-metrics .kpi-foot{font-size:13px;color:#697e96;line-height:1.6;margin:0}
 .teacher-dashboard{display:grid;grid-template-columns:minmax(0,1.7fr) minmax(310px,1fr);gap:22px;align-items:start}
 .teacher-workspace,.teacher-side{min-width:0;background:#fff;border:1px solid #dfe7f0;border-radius:10px;overflow:hidden}
 body:is([data-role="teacher"],[data-role="dept"],[data-role="college"]) #content .teacher-workspace>.card,body:is([data-role="teacher"],[data-role="dept"],[data-role="college"]) #content .teacher-side>.card{border:0;border-radius:0;background:transparent;box-shadow:none;margin:0}
@@ -510,7 +510,7 @@ body[data-role="teacher"] #content .teacher-apply-page>.card{border:0;border-rad
 body[data-role="teacher"] #content .teacher-apply-page .apply-entry{background:#edf4fd;border-bottom:1px solid #d8e5f5}
 body[data-role="teacher"] #content .teacher-apply-page .apply-entry-top{padding:24px;gap:24px}
 body[data-role="teacher"] #content .teacher-apply-page .apply-intro{font-size:15px;line-height:1.8;color:#294d77}
-body[data-role="teacher"] #content .teacher-apply-page .apply-entry-hint{font-size:13px;color:#637d9d;line-height:1.8}
+body[data-role="teacher"] #content .teacher-apply-page .apply-entry-hint{font-size:14px;color:#637d9d;line-height:1.8}
 body[data-role="teacher"] #content .teacher-apply-page .apply-list .card-head{padding:22px 24px 16px}
 body[data-role="teacher"] #content .teacher-apply-page .apply-empty{padding:26px 24px 32px;margin:0;font-size:14px;color:#647c97}
 body[data-role="teacher"] #content .teacher-apply-page .apply-approved{border-top:1px solid #e1e9f3}
@@ -914,3 +914,107 @@ body:is([data-role="dept"],[data-role="college"],[data-role="school"]) .modal .t
 .modal .social-handle{background:#f8fafc;border:1px solid #e7edf5;padding:18px;margin-top:20px}
 .modal-foot .social-handle-actions{display:flex;gap:8px;margin:0}.modal-foot .social-handle-actions .btn{white-space:nowrap}
 @media(max-width:760px){.approval-filters{padding:16px;gap:10px}.approval-filters label{min-width:calc(50% - 10px)}.approval-filters .approval-keyword{min-width:100%}.approval-center .responsive-table .table td{max-width:none}.approval-center .responsive-table .table tr{margin:0;border-radius:0;border-width:0 0 1px}.modal .approval-object-summary .detail-facts{grid-template-columns:1fr}}
+
+/* 教师端逐页精修：沿用现有页面与菜单，仅统一阅读和操作细节。 */
+body[data-role="teacher"] #content :is(.teacher-task-copy h3,.apply-home-row>div:first-child strong){font-size:16px;line-height:1.6}
+body[data-role="teacher"] #content :is(.teacher-task-copy p,.apply-home-row .cell-sub,.apply-home-row .apply-current){font-size:14px;line-height:1.7}
+body[data-role="teacher"] #content :is(.empty p,.apply-counts span,.apply-entry-hint,.qualification-lifecycle p,.qualification-lifecycle span){font-size:14px;line-height:1.7}
+body[data-role="teacher"] #content .table .apply-current{font-size:15px;line-height:1.6}
+body[data-role="teacher"] #content .teacher-task-copy p{color:#586d85}
+body[data-role="teacher"] #content .teacher-workspace .apply-home-row .cell-sub{font-size:14px;color:#586d85}
+body[data-role="teacher"] #content .footer{font-size:13px;color:#586d85}
+body[data-role="teacher"] #content .biz-flow-steps p{font-size:14px;line-height:1.7}
+body[data-role="teacher"] #content .biz-flow-steps small{font-size:13px}
+body[data-role="teacher"] #content .biz-flow-head .subtle{font-size:14px;line-height:1.6}
+body[data-role="teacher"] #content :is(.teacher-applications,.mine-page) .table th:last-child{width:140px}
+body[data-role="teacher"] #content :is(.mine-related,.mine-section-nav) .btn{min-height:40px;font-size:14px}
+body[data-role="teacher"] #content .mine-related .btn{padding:6px 10px;border:1px solid #e0e8f2;border-radius:6px;background:#fff}
+body[data-role="teacher"] #content .mine-related .btn:hover{background:#edf3fd;border-color:#c8d9f6}
+body[data-role="teacher"] #content .assessment-empty-actions{margin-top:12px}
+body[data-role="teacher"] #content[data-page="notices"] .filter-actions,body[data-role="teacher"] #content[data-page="qualifications"] .filter-actions{margin-left:0}
+body[data-role="teacher"] #content[data-page="notices"] .filter-primary,body[data-role="teacher"] #content[data-page="qualifications"] .filter-primary{justify-content:flex-start}
+body[data-role="teacher"] #content[data-page="notices"] .filter-keyword,body[data-role="teacher"] #content[data-page="qualifications"] .filter-keyword{flex:0 1 420px}
+body[data-role="teacher"] #content .my-course-filters input[name="q"]{max-width:440px}
+body[data-role="teacher"] #content .my-course-sources .btn{min-height:40px}
+body[data-role="teacher"] #content .teacher-course-table .badge{font-size:14px}
+body[data-role="teacher"] #modal-root :is(.hint,.cx-credit-warning,.cx-counting-note,.cx-detail-note){font-size:14px;line-height:1.7}
+body[data-role="teacher"] #modal-root .cx-credit-warning{align-items:center}
+body[data-role="teacher"] #modal-root .cx-course-workspace :is(.badge,.online-actions .btn){font-size:14px}
+body[data-role="teacher"] #modal-root .cx-course-workspace .online-actions .btn{min-height:40px;padding:6px 4px}
+body[data-role="teacher"] #modal-root .cx-info-pair{grid-template-columns:104px minmax(0,1fr);min-height:48px}
+body[data-role="teacher"] #modal-root .cx-info-section:nth-last-of-type(-n+2) .cx-info-pair{grid-template-columns:140px minmax(0,1fr)}
+body[data-role="teacher"] #modal-root :is(input,select,textarea){font-size:16px}
+body[data-role="teacher"] :is(#content,#modal-root) :is(button,input,select,textarea,summary):focus-visible{outline:3px solid #80a8ed;outline-offset:2px}
+@media(max-width:760px){
+ body[data-role="teacher"] #content .my-course-filters input[name="q"]{max-width:none;flex-basis:100%}
+ body[data-role="teacher"] #content .table td:last-child .btn{min-height:44px}
+ body[data-role="teacher"] #modal-root .cx-info-section .cx-info-pair{grid-template-columns:110px minmax(0,1fr)}
+ body[data-role="teacher"] #modal-root .cx-course-workspace .online-card{height:auto;min-height:0}
+ body[data-role="teacher"] #modal-root .cx-course-scroll{grid-auto-rows:max-content}
+ body[data-role="teacher"] #content .mine-related{gap:8px}
+}
+
+/* 二三级详情与表单精修：保留分区、材料、历史版本和原办理动作。 */
+body[data-role="teacher"] #modal-root .modal:not(.page-form) .modal-body{font-size:15px;line-height:1.75}
+body[data-role="teacher"] #modal-root .modal:not(.page-form) .badge{font-size:13px;line-height:1.5;white-space:normal}
+body[data-role="teacher"] #modal-root .modal-body .btn.text{max-width:100%;white-space:normal;overflow-wrap:anywhere;text-align:left}
+body[data-role="teacher"] #modal-root .modal-body code{max-width:100%;white-space:pre-wrap;overflow-wrap:anywhere;word-break:break-all}
+body[data-role="teacher"] #modal-root .modal-head>div{min-width:0}
+body[data-role="teacher"] #modal-root .modal-head h2{overflow-wrap:anywhere;line-height:1.5}
+body[data-role="teacher"] #modal-root .modal-head>.btn{flex-shrink:0}
+body[data-role="teacher"] #modal-root .detail-section-nav{position:sticky;top:-24px;z-index:5;background:#fff;box-shadow:0 -2px 0 #fff;isolation:isolate;flex-wrap:wrap;margin:0;padding:16px 0 0}
+body[data-role="teacher"] #modal-root .detail-section-nav button{min-height:44px;font-size:14px}
+body[data-role="teacher"] #modal-root [id]:is(.detail-section,.assessment-detail-section,.detail-fold){scroll-margin-top:76px}
+body[data-role="teacher"] #modal-root .detail-facts-grid{gap:16px 32px}
+body[data-role="teacher"] #modal-root .detail-facts-grid>div{min-width:0;padding-bottom:12px;border-bottom:1px solid #edf1f6}
+body[data-role="teacher"] #modal-root :is(.detail-facts-grid,.detail-facts,.qualification-facts) dt{font-size:14px;line-height:1.6;color:#586d85}
+body[data-role="teacher"] #modal-root :is(.detail-facts-grid,.detail-facts,.qualification-facts) dd{min-width:0;font-size:16px;line-height:1.7;overflow-wrap:anywhere}
+body[data-role="teacher"] #modal-root .modal:not(.page-form) .kv{font-size:15px;line-height:1.7}
+body[data-role="teacher"] #modal-root .modal:not(.page-form) .kv dt{font-size:14px;color:#586d85}
+body[data-role="teacher"] #modal-root .modal:not(.page-form) :is(.table td,.table th){line-height:1.7;overflow-wrap:anywhere}
+body[data-role="teacher"] #modal-root .modal:not(.page-form) .table td{font-size:15px}
+body[data-role="teacher"] #modal-root .modal:not(.page-form) .table th{font-size:14px}
+body[data-role="teacher"] #modal-root :is(.detail-status-summary p,.detail-status-summary small,.detail-action-context p,.detail-empty,.detail-action-note){font-size:14px;line-height:1.7}
+body[data-role="teacher"] #modal-root :is(.apply-steps li,.flow-step){font-size:14px;line-height:1.6}
+body[data-role="teacher"] #modal-root .apply-steps small{font-size:13px;line-height:1.6;color:#586d85}
+body[data-role="teacher"] #modal-root .apply-steps li:not(.current):not(.done):not(.returned){color:#65758a}
+body[data-role="teacher"] #modal-root :is(.detail-fold>summary,.assessment-process>summary){font-size:14px;line-height:1.6}
+body[data-role="teacher"] #modal-root .detail-columns>.detail-section{padding:18px 20px;min-width:0}
+body[data-role="teacher"] #modal-root :is(.upload-meta,.business-history-body,.events){min-width:0;font-size:14px;line-height:1.7;overflow-wrap:anywhere}
+body[data-role="teacher"] #modal-root .upload-meta :is(p,strong,.small){font-size:14px;line-height:1.7;overflow-wrap:anywhere}
+body[data-role="teacher"] #modal-root .business-history-body :is(h4,.history-change){font-size:14px}
+body[data-role="teacher"] #modal-root .application-form .form-field>legend,body[data-role="teacher"] #modal-root .social-form .form-field>legend{font-size:14px;line-height:1.6;font-weight:600;color:#405b77;margin-bottom:10px}
+body[data-role="teacher"] #modal-root :is(.form-choice-options,.apply-tag-row,.report-option-list) label{min-height:40px;font-size:14px;line-height:1.6;white-space:normal}
+body[data-role="teacher"] #modal-root .modal-foot{flex-wrap:wrap}
+body[data-role="teacher"] #modal-root .modal-foot .btn{min-width:0;white-space:normal;overflow-wrap:anywhere}
+body[data-role="teacher"] .material-viewer>header>div{min-width:0}
+body[data-role="teacher"] .material-viewer h2{overflow-wrap:anywhere;line-height:1.5}
+body[data-role="teacher"] .material-viewer>header .btn{flex-shrink:0}
+body[data-role="teacher"] #content[data-page="records"] .tw-detail h2{font-size:20px;line-height:1.5}
+body[data-role="teacher"] #content[data-page="records"] .tw-detail h3{font-size:18px;line-height:1.6}
+@media(max-width:760px){
+ body[data-role="teacher"] #modal-root .detail-section-nav{top:-18px;gap:0}
+ body[data-role="teacher"] #modal-root .detail-section-nav button{flex:1;min-width:88px;padding:10px 8px}
+ body[data-role="teacher"] #modal-root :is(.detail-facts-grid,.detail-columns,.equal2){grid-template-columns:minmax(0,1fr)}
+ body[data-role="teacher"] #modal-root .qualification-detail-data .qualification-facts{grid-template-columns:1fr}
+ body[data-role="teacher"] #modal-root .modal:not(.page-form) .kv{grid-template-columns:105px minmax(0,1fr);gap:10px 14px}
+ body[data-role="teacher"] #modal-root .modal:not(.page-form) .kv .kv{grid-template-columns:1fr;gap:4px}
+ body[data-role="teacher"] #modal-root .modal:not(.page-form) .kv .kv dd{margin-bottom:8px}
+ body[data-role="teacher"] #modal-root .detail-columns>.detail-section{padding:16px}
+ body[data-role="teacher"] #modal-root .assessment-detail-section .table{width:100%;min-width:0;table-layout:fixed}
+ body[data-role="teacher"] #modal-root .assessment-detail-section .table :is(th,td){padding:10px 6px;white-space:normal}
+ body[data-role="teacher"] #modal-root .assessment-detail-section .table th:nth-child(1){width:21%}
+ body[data-role="teacher"] #modal-root .assessment-detail-section .table th:nth-child(2){width:18%}
+ body[data-role="teacher"] #modal-root .assessment-detail-section .table th:nth-child(3){width:43%}
+ body[data-role="teacher"] #modal-root .assessment-detail-section .table th:nth-child(4){width:18%}
+ body[data-role="teacher"] #modal-root .assessment-detail-section .table .small{white-space:normal;overflow-wrap:anywhere}
+ body[data-role="teacher"] #modal-root .social-detail .table:has(th:nth-child(2)):not(:has(th:nth-child(3))){width:100%;min-width:0;table-layout:fixed}
+ body[data-role="teacher"] #modal-root .social-detail .table:has(th:nth-child(2)):not(:has(th:nth-child(3))) th:first-child{width:35%}
+ body[data-role="teacher"] #modal-root .social-detail .table:has(th:nth-child(2)):not(:has(th:nth-child(3))) :is(th,td){white-space:normal;padding:10px 8px}
+
+ body[data-role="teacher"] #modal-root :is(.form-choice-options,.apply-tag-row,.report-option-list) label{min-height:44px}
+ body[data-role="teacher"] #modal-root .modal:not(.page-form) .modal-foot{gap:8px;padding:12px 16px}
+ body[data-role="teacher"] #modal-root .modal-foot .btn{min-height:44px;flex:1 1 auto}
+ body[data-role="teacher"] #modal-root .modal-foot .detail-more-actions{flex-basis:100%}
+ body[data-role="teacher"] .material-viewer>footer .btn{min-height:44px;font-size:14px}
+}

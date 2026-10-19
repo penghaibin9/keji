@@ -112,7 +112,7 @@ export const rosterHandlers = {
 
 // ---------- 教师详情 ----------
 // 最近打开的教师详情里的超星课程，供“显示全部”和“超星课程详情”用。
-let cxOpen = {staffNo: '', items: []};
+let cxOpen = {staffNo: '', staffName: '', items: []};
 export async function showStaffDetail(c, staffNo) {
   const d = await c.api('/reference/staff-roster/' + encodeURIComponent(staffNo));
   const x = d.staff, e = c.esc;
@@ -126,7 +126,7 @@ export async function showStaffDetail(c, staffNo) {
     x.problems.includes('unit_mismatch') ? c.note(`人事单位“${x.hr_org_name}”和本系统组织不一致，请学校管理员核对组织设置。`, true) : '',
     x.problems.includes('inactive_teaching') ? c.note('人事状态为不在职，但本学年还有授课记录，请核对。', true) : ''].join('');
   const years = c.table(['学年', '教务学分', '超星学分', '已认定合计', '课程数', '提示', ''], d.years.map(y => [e(y.school_year), c.number(y.jw_credit, 2), c.number(y.cx_credit, 2), `<strong>${c.number(y.total_credit, 2)}</strong>`, c.number(y.courses), [y.pending_courses ? `<span class="badge orange-b">${y.pending_courses} 门待认定</span>` : '', y.excluded_courses ? `<span class="badge gray-b">${y.excluded_courses} 门不计分</span>` : '', y.missing_credit.length ? `<span class="badge orange-b">${y.missing_credit.length} 门缺学分</span>` : ''].join(' ') || '<span class="muted small">—</span>', c.link('两学期明细', 'credit-detail', x.staff_no + '|' + y.school_year+'|staff')]), '还没有授课记录', '教务排课和超星课程同步后显示。');
-  cxOpen = {staffNo: x.staff_no, items: d.online_courses};
+  cxOpen = {staffNo: x.staff_no, staffName: x.name, items: d.online_courses};
   const online = d.online_courses.length ? `<div id="online-cards">${onlineCards(c, false)}</div>` : '<p class="muted small">没有作为建课人的超星课程。</p>';
   c.modal(`${x.name} · 教师信息`, `<dl class="kv">${kv.map(([k, v]) => `<dt>${k}</dt><dd>${v}</dd>`).join('')}</dl>${warn ? '<div class="mt16">' + warn + '</div>' : ''}<h3 class="mt20">各学年授课学分</h3>${years}<h3 class="mt20">超星课程（作为建课人${d.online_courses.length ? "，共 " + d.online_courses.length + " 门" : ""}）</h3>${online}<p class="small muted mt16">${x.hr_updated_at ? '人事系统更新于 ' + e(x.hr_updated_at.slice(0, 10)) + ' · ' : ''}信息有误请到人事处更正，下次同步自动更新。${'edu' in x || self ? '' : '性别、学历、学位默认只有本人和学校能看到。'}</p>`, '', true);
 }
@@ -142,7 +142,7 @@ const safeUrl = u => /^https?:\/\//i.test(String(u || '')) ? String(u) : '';
 const cxCover = u => { const v = safeUrl(u); try { return v && /(^|\.)chaoxing\.com$/i.test(new URL(v).hostname) ? v.replace(/^http:/i, 'https:') : ''; } catch { return ''; } };
 // 学时：数值学时优先；超星的 coursePeriod 常是“64/32”这种写法，存在 period_text 里，原样显示。
 const cxPeriod = o => o.hours != null ? String(Number(o.hours)) : String(o.period_text || '').trim();
-const cxLabel = (map, v) => v == null || v === '' ? '' : (map[v] ?? String(v));
+const cxLabel = (map, v) => v == null || v === '' ? '' : (map[v] ?? '待学校补充说明');
 // 统计只认超星的 credit（见 reference_data.annual_teaching_credits）；score 只在详情里原样展示，不顶替学分。
 // 教学团队：姓名和工号个数对得上时配成“姓名（工号）”，否则分别原样显示。
 const cxSplit = v => (Array.isArray(v) ? v : String(v || '').split(/[,，、;；]/)).map(x => String(x).trim()).filter(Boolean);
@@ -154,7 +154,7 @@ function onlineCards(c, all) {
   return `<div class="online-cards">${list.map((o, i) => onlineCard(c, o, i)).join('')}</div>${more}`;
 }
 
-function onlineCard(c, o, i) {
+export function onlineCard(c, o, i, selected = false, action = 'online-detail') {
   const e = c.esc;
   const cover = cxCover(o.cover_url), url = safeUrl(o.course_url), period = cxPeriod(o);
   const nature = o.nature ? codeLabel(c, 'nature', o.nature) : '';
@@ -162,34 +162,53 @@ function onlineCard(c, o, i) {
     .concat(nature && !nature.includes('待学校补充说明') ? [`<span class="badge gray-b">${nature}</span>`] : [])
     .concat(String(o.archived) === '1' ? ['<span class="badge gray-b">已归档</span>'] : []).join(' ');
   const credit = o.credit == null ? '<span class="badge orange-b">缺学分</span>' : `<b>${c.number(o.credit, 2)}</b> 学分`;
-  const meta = [credit, period && e(period) + ' 学时', o.chapters && e(o.chapters) + ' 章'].filter(Boolean).join(' · ');
-  return `<div class="online-card${String(o.archived) === '1' ? ' archived' : ''}"><div class="online-cover">${cover ? `<img src="${e(cover)}" alt="" loading="lazy" referrerpolicy="no-referrer">` : ''}<span>超星</span></div><div class="online-body"><strong title="${e(o.course_name)}">${e(o.course_name)}</strong><p class="cell-sub">${e(termText(o.term_name) || '学期未填')}${o.group_name ? ' · ' + e(o.group_name) : ''}</p>${tags ? `<p class="online-tags">${tags}</p>` : ''}<p>${meta}</p>${o.jw_course_code ? `<p class="cell-sub">对应教务课 ${e(o.jw_course_code)}，同学年教务已有时只算一次</p>` : ''}${cxTeam(o).length ? '<p class="cell-sub">有教学团队，学分只算给建课人</p>' : ''}<div class="online-actions">${c.act('详情', 'online-detail', String(i), 'sm light')}${url ? `<a class="btn sm" href="${e(url)}" target="_blank" rel="noopener noreferrer">去超星看课</a>` : ''}</div></div></div>`;
+  const meta = [credit, period && e(period) + ' 学时', o.chapters != null && String(o.chapters).trim() !== '' ? e(o.chapters) + ' 章' : ''].filter(Boolean).join(' · ');
+  return `<div class="online-card${String(o.archived) === '1' ? ' archived' : ''}${selected ? ' selected' : ''}" data-course-index="${i}" aria-current="${selected}"><div class="online-cover">${cover ? `<img src="${e(cover)}" alt="" loading="lazy" referrerpolicy="no-referrer">` : ''}<span>超星</span></div><div class="online-body"><strong title="${e(o.course_name)}">${e(o.course_name)}</strong><p class="cell-sub">${e(termText(o.term_name) || '学期未填')}${o.group_name ? ' · ' + e(o.group_name) : ''}</p>${tags ? `<p class="online-tags">${tags}</p>` : ''}<p>${meta}</p>${o.jw_course_code ? `<p class="cell-sub">对应教务课 ${e(o.jw_course_code)}，同学年教务已有时只算一次</p>` : ''}${cxTeam(o).length ? '<p class="cell-sub online-team-note">有教学团队，学分只算给建课人</p>' : ''}<div class="online-actions">${c.act('查看详情', action, String(i), 'sm light')}${url ? `<a class="btn sm" href="${e(url)}" target="_blank" rel="noopener noreferrer">去超星看课</a>` : ''}</div></div></div>`;
 }
 
 // ---------- 超星课程详情（字段全部展示，只读） ----------
-function showOnlineDetail(c, i) {
-  const o = cxOpen.items[Number(i)];
-  if (!o) return;
-  const e = c.esc, url = safeUrl(o.course_url), team = cxTeam(o), period = cxPeriod(o);
+export function courseFactsHtml(c, o, back = '', declaration = '') {
+  const e = c.esc, team = cxTeam(o), period = cxPeriod(o), source = o.origin === 'JW' ? '教务' : '超星';
   const day = v => v ? e(String(v).slice(0, 19).replace('T', ' ')) : '';
   const has = v => v != null && String(v).trim() !== '';
   // 值为空（null、''、false）的行不显示，避免一屏“—”。
-  const rows = list => list.filter(([, v]) => v).map(([k, v]) => `<dt>${k}</dt><dd>${v}</dd>`).join('');
-  const base = rows([['课程名称', e(o.course_name)], ['超星课程号', o.course_code && `<span class="mono">${e(o.course_code)}</span>`], ['学期', e(termText(o.term_name) || '学期未填')],
-    ['学分', o.credit == null ? '<span class="badge orange-b">缺学分</span> <span class="muted small">超星没有填学分，这门课暂时不计学分</span>' : `<strong>${c.number(o.credit, 2)}</strong>`],
-    ['超星 score 字段', has(o.score) && `${e(o.score)} <span class="muted small">仅供参考，不计入学分</span>`],
+  const rows = list => list.filter(([, v]) => v).map(([k, v]) => `<div class="cx-info-pair"><dt>${k}</dt><dd>${v}</dd></div>`).join('');
+  const base = rows([[source + '课程号', o.course_code && `<span class="mono">${e(o.course_code)}</span>`], ['学期', e(termText(o.term_name) || '学期未填')],
+    ['学分', o.credit == null ? '' : `<strong>${c.number(o.credit, 2)}</strong>`],
     ['学时', period && e(period)], ['章节数', has(o.chapters) && e(o.chapters)],
     ['课程类型', e(cxLabel(CX_TYPE, o.course_type))], ['课程来源', e(cxLabel(CX_SOURCE, o.course_source))],
-    ['课程性质', o.nature && codeLabel(c, 'nature', o.nature)], ['所属专业', o.major && e(o.major)], ['课程分组', o.group_name && e(o.group_name)],
-    ['状态', String(o.archived) === '1' ? '<span class="badge gray-b">已归档</span>' : '<span class="badge green-b">使用中</span>']]);
+    ['课程性质', o.nature && codeLabel(c, 'nature', o.nature)], ['所属专业', o.major && e(o.major)], ['课程分组', o.group_name && e(o.group_name)]]);
   const who = rows([['课程归属', o.course_owner && e(o.course_owner)], ['教学团队', team.length ? e(team.join(' / ')) : ''],
-    ['对应教务课', o.jw_course_code && `${c.link(o.jw_course_code, 'course-detail', encodeURIComponent(o.jw_course_code) + '|cx:' + i)} <span class="muted small">同一学年教务已有这门课时只算一次</span>`]]);
+    ['对应教务课', o.jw_course_code && `${c.link(o.jw_course_code, 'course-detail', encodeURIComponent(o.jw_course_code) + '|' + back)} <span class="muted small">同一学年教务已有这门课时只算一次</span>`]]);
   const when = rows([['超星建课时间', day(o.created_at_source)], ['超星最后修改', day(o.edited_at_source)]]);
   const desc = String(o.description || '').trim();
   const intro = desc ? `<details class="cx-intro-box mt16"${desc.length <= 160 ? ' open' : ''}><summary>课程简介</summary><div class="cx-intro small">${e(desc)}</div></details>` : '';
-  const block = (title, html) => html ? `<h3 class="mt20">${title}</h3><dl class="kv">${html}</dl>` : '';
-  c.modal(`${o.course_name} · 超星课程`, `<dl class="kv">${base}</dl>${block('归属与计分', who)}${block('超星记录', when)}${intro}<p class="small muted mt16">来自超星课程库，只读，每周自动同步。学分只算给建课老师，教学团队其他成员不重复计算。信息有误请在超星平台修改，下次同步后这里自动更新。</p>`,
-    `${cxOpen.staffNo ? c.act('返回教师信息', 'staff-detail', cxOpen.staffNo) : ''}${url ? ` <a class="btn primary" href="${e(url)}" target="_blank" rel="noopener noreferrer">去超星看课</a>` : ''}`, true);
+  const block = (title, html, extra = '') => html || extra ? `<section class="cx-info-section"><h3>${title}</h3><dl class="cx-info-grid">${html}</dl>${extra}</section>` : '';
+  const status = String(o.archived) === '1' ? '<span class="badge gray-b">已归档</span>' : '<span class="badge green-b">使用中</span>';
+  const warning = o.credit == null ? `<div class="cx-credit-warning">${c.icon?.('warning') || ''}<strong>缺学分</strong><span>${source === '超星' ? '超星未填写' : '教务未提供'}学分，${o.calculated_credit != null ? '核算学分已按学校课程记录补齐，详见逐学期认定。' : '暂不计入授课学分。'}</span></div>` : '';
+  return `<div class="cx-detail-heading"><h3>${e(o.course_name)}</h3><span class="badge blue-b">${source}课程</span>${status}${declaration}</div>${warning}${block('基本信息', base)}${block('归属与计分', who, `<p class="cx-counting-note">${source==='超星'?'学分仅计入建课人，教学团队成员不重复计算。':'教务课程按本人授课记录及学校认定结果核算学分。'}</p>`)}${block('超星记录', when)}${intro}${has(o.score) ? `<details class="implementation-details mt16"><summary>实施人员使用：参考数据</summary><p>超星参考分值：${e(o.score)}；仅供参考，不计入学分。</p></details>` : ''}`;
+}
+
+function showOnlineDetail(c, i) {
+  if (!/^\d+$/.test(String(i))) return;
+  const o = cxOpen.items[Number(i)];
+  if (!o) return;
+  const e = c.esc, url = safeUrl(o.course_url), detail = courseFactsHtml(c, o, 'cx:' + i);
+  const foot = `<span class="cx-detail-note">信息有误请在超星修改，待学校同步后更新。</span>${url ? `<a class="btn primary" href="${e(url)}" target="_blank" rel="noopener noreferrer">去超星看课</a>` : ''}${cxOpen.staffNo ? c.act('返回教师信息', 'staff-detail', cxOpen.staffNo) : ''}`;
+  const workspace = typeof document !== 'undefined' && document.getElementById('cx-course-workspace');
+  if (workspace) {
+    const panel = workspace.querySelector('.cx-course-detail');
+    panel.innerHTML = detail;
+    panel.scrollTop = 0;
+    workspace.querySelectorAll('[data-course-index]').forEach(card => {
+      const selected = card.dataset.courseIndex === String(Number(i));
+      card.classList.toggle('selected', selected);
+      card.setAttribute('aria-current', String(selected));
+    });
+    document.getElementById('cx-course-footer').innerHTML = foot;
+    return;
+  }
+  c.modal(`${cxOpen.staffName || o.course_name} · ${cxOpen.staffName ? '教师信息' : '超星课程'}`, `<div id="cx-course-workspace" class="cx-course-workspace"><section class="cx-course-list" aria-label="超星课程列表"><h3>超星课程 · 共 ${cxOpen.items.length} 门</h3><div class="cx-course-scroll">${cxOpen.items.map((item, index) => onlineCard(c, item, index, index === Number(i))).join('')}</div></section><section class="cx-course-detail" aria-label="课程详情">${detail}</section></div>`, `<div id="cx-course-footer">${foot}</div>`, true, '个人培训 / 教师信息 / 超星课程');
 }
 
 export const onlineHandlers = {
@@ -200,7 +219,7 @@ export const onlineHandlers = {
 // ---------- 课程总库详情（所有角色可看单门课） ----------
 export async function showCourseDetail(c, code, back='') {
   // back：学年明细的 id，或“cx:序号”表示从超星课程详情点进来的。
-  const backBtn = !back ? '' : back.startsWith('cx:') ? c.act('返回超星课程', 'online-detail', back.slice(3)) : c.act('返回学年明细', 'credit-detail', back);
+  const backBtn = !back ? '' : back.startsWith('mc:') ? c.act('返回课程详情', 'mc-detail', back.slice(3)) : back.startsWith('cx:') ? c.act('返回超星课程', 'online-detail', back.slice(3)) : c.act('返回学年明细', 'credit-detail', back);
   const d = await c.api('/reference/school-courses?' + new URLSearchParams({code, size: 20}));
   const e = c.esc;
   if (!d.items.length) return c.modal(`课程 ${code}`, c.note('课程总库里没有这门课，所以教务授课取不到学分。请联系教务处核对课程号。', true),backBtn);

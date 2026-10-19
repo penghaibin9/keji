@@ -648,7 +648,7 @@ test('教师积分保存与提交按钮分开，保存不调用提交接口且�
 
 test('课程资源返回原课程，只在当前课程可读取时展示返回按钮',async()=>{
  for(const listed of [true,false]){
-  const c=renderContext({courses:listed?[{code:'C1',name:'合成课程'}]:[]});await renderSocial('courses',c);let footer;c.modal=(_t,_b,f)=>{footer=f};c.api=async()=>({items:[],page:1,size:20,total:0});
+  const c=renderContext({courses:listed?[{code:'C1',name:'合成课程'}]:[]});await renderSocial('courses',c);let footer,detailContext;c.modal=(_t,_b,f,_wide,contextLabel)=>{footer=f;detailContext=contextLabel};c.api=async()=>({items:[],page:1,size:20,total:0});
   await socialAction('social-course-resources','C1',c);assert.equal(footer.includes('返回课程资料'),listed);if(listed)assert.match(footer,/data-id="C1"/);
  }
 });
@@ -814,8 +814,8 @@ test('学院年度自评复用整页分区，补正保持原组织周期与版�
 test('学院学校共用项目次要动作折叠，教师原动作不变且无导出权限也不丢动作',async()=>{
  for(const [role,exported] of [['college',true],['college',false],['teacher',true],['school',true]]){
   const c=renderContext({},['records.read','records.write','file.write',...(exported?['export']:[])]);c.me={user:{id:role==='teacher'?'teacher':'footer-'+role+'-'+exported},role:{kind:role}};await renderSocial('projects',c);
-  let footer;c.modal=(_t,_b,f)=>{footer=f};c.downloads=()=>'';c.eventsHtml=()=>'';c.api=async()=>({item:{id:'footer-project',owner_id:'teacher',state:'FILED',data:{name:'页脚合成项目',code:'FOOTER-P1',category:'community'},closeout:{}},state_label:'已备案',facts:{units:[],followups:[],effective:0,excluded:0},attachments:[{id:'file'}],events:[]});
-  await socialAction('social-detail','social_project|footer-project',c);
+  let footer,detailContext;c.modal=(_t,_b,f,_wide,contextLabel)=>{footer=f;detailContext=contextLabel};c.downloads=()=>'';c.eventsHtml=()=>'';c.api=async()=>({item:{id:'footer-project',owner_id:'teacher',state:'FILED',data:{name:'页脚合成项目',code:'FOOTER-P1',category:'community'},closeout:{}},state_label:'已备案',facts:{units:[],followups:[],effective:0,excluded:0},attachments:[{id:'file'}],events:[]});
+  await socialAction('social-detail','social_project|footer-project',c);assert.equal(detailContext,'培训项目 / 业务详情');
   const more=footer.match(/<details class="detail-more-actions">[\s\S]*?<\/details>/)?.[0]||'',main=footer.replace(more,'');
   if(['college','school'].includes(role)){
    assert.equal((footer.match(/class="detail-more-actions"/g)||[]).length,1);

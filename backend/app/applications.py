@@ -182,7 +182,7 @@ def cards_for(db, rows, details, apps_by_code, owner_id):
         if card is None:
             extra = r.extra or {}
             card = cards[key] = {'identity': ident, 'origin': r.origin, 'id': r.id, 'course_code': r.course_code, 'course_name': r.course_name,
-                                 'credit': d.get('credit', r.credit), 'hours': d.get('hours', r.hours), 'description': str(extra.get('description') or '')[:2000],
+                                 'credit': d.get('credit', r.credit), 'hours': d.get('hours', r.hours), 'source_credit': r.credit, 'source_hours': r.hours, 'source_term_name': r.term_name, 'description': str(extra.get('description') or '')[:2000],
                                  **{k: extra.get(k) for k in ONLINE_KEYS if extra.get(k) not in (None, '')}, 'terms': [],
                                  'application': app_brief(apps_by_code.get(application_code(owner_id, ident))) if owner_id else None}
         card['terms'].append({'id': r.id, 'term_name': r.term_name, 'school_year': d.get('school_year') or school_year_of(r.term_name) or UNKNOWN_YEAR,

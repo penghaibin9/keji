@@ -836,10 +836,10 @@ test('selected design keeps all authorized navigation and Chinese group headings
  for(const title of ['培训项目管理','培训课程管理','培训基地管理','培训数据'])assert.ok(business.includes(title),title);
  assert.doesNotMatch(business,/data-id="points"|data-id="assessment"/);
 });
-test('教师菜单保留全部入口，积分和考核归入我的业务，共三个分组',()=>{
+test('教师菜单我的业务紧随政策通知，保留全部入口和三个分组',()=>{
  const e=engine(undefined,'teacher');e.t.setUser({user:{id:'u',name:'教师'},role:{kind:'teacher'},permissions:['portal.read','records.read','qualification.read','qualification.write','points.read','assessment.read','dispute.write','notice.read','export']});
  const html=e.t.sidebarNavigation(),ids=[...html.matchAll(/data-action="nav" data-id="(\w+)"/g)].map(m=>m[1]);
- assert.deepEqual(ids,['home','todos','notices','apply_course','apply_project','apply_base','apply_trainer','credits','mine','qualifications','points','assessment']);
+ assert.deepEqual(ids,['home','todos','notices','credits','mine','qualifications','points','assessment','apply_course','apply_project','apply_base','apply_trainer']);
  assert.match(html,/>我要申报</);assert.match(html,/>申报培训课程</);assert.match(html,/>申报培训师</);assert.match(html,/>我的工作</);assert.match(html,/>我的业务</);assert.doesNotMatch(html,/>我的结果</);assert.match(html,/>我的课程</);
  assert.equal((html.match(/class="nav-section"/g)||[]).length,3);const business=html.slice(html.indexOf('>我的业务<'));assert.match(business,/data-id="points"/);assert.match(business,/data-id="assessment"/);
  assert.match(html,/>教师资质管理</);assert.match(html,/>教师积分激励</);assert.match(html,/>三级考核管理</);assert.doesNotMatch(html,/>我的资质<|>我的积分<|>我的考核<|培训项目管理/);
@@ -1266,7 +1266,7 @@ test('资质图片返回时已切换页面，不弹出旧页面的图片',async(
 test('教师学分汇总保留每学年认定与待认定口径，空记录不出现无效分页',async()=>{
  const item={staff_no:'T1',school_year:'2025-2026',jw_credit:'2',cx_credit:'0',total_credit:'2',hours:'32',pending_credit:'1',pending_courses:1,courses:2,missing_credit:[],in_staff_table:true,user_id:'u'};
  for(const items of [[],[item]]){
-  const e=engine(async()=>({items,years:['2025-2026'],total:items.length,page:1,size:20}),'teacher');const html=await e.t.pages.credits();assert.doesNotMatch(html,/pagination/);assert.match(html,/社会培训项目积分在“教师积分激励”查看/);
+  const e=engine(async()=>({items,years:['2025-2026'],total:items.length,page:1,size:20}),'teacher');e.t.setState('credits',{tab:'summary'});const html=await e.t.pages.credits();assert.doesNotMatch(html,/pagination/);assert.match(html,/社会培训项目积分在“教师积分激励”查看/);
   if(items.length){assert.match(html,/已认定学分/);assert.match(html,/待认定学分/);assert.match(html,/1 门待认定/);assert.match(html,/credit-detail/);}else assert.match(html,/暂无授课学分记录/);
  }
 });
@@ -1824,4 +1824,10 @@ test('审批批量条默认收起，等待公示期限单独展示且不冒称�
 
 test('直接进入审批中心默认待我办理，不继承前一账号已办分区',async()=>{
  const e=engine(()=>({items:[],total:0,page:1,size:20,counts:{},stages:[]}),'college');vm.runInContext("todoTab='handled'",e.ctx);e.t.setState('todos');await e.t.pages.todos();assert.match(e.requests[0].url,/tab=handle(?:&|$)/);assert.doesNotMatch(e.requests[0].url,/tab=handled/);
+});
+
+
+test('业务依据的时间用统一本地格式，业务日期、名称和零值保持原样',()=>{
+ const html=engine().t.evidenceHtml({period:{name:'2026-10-18T15:37:42Z',created_at:'2026-10-18T15:37:42.926330',start_date:'2026-01-01'},hours:0,id:'hidden-id'});
+ assert.match(html,/2026\/10\/18 23:37:42/);assert.match(html,/2026-01-01/);assert.match(html,/2026-10-18T15:37:42Z/);assert.match(html,/>0</);assert.doesNotMatch(html,/926330|hidden-id/);assert.match(engine().t.evidenceHtml({created_at:'2026-99-18T15:37:42'}),/2026-99-18T15:37:42/);
 });

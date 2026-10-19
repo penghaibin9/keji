@@ -649,3 +649,120 @@ body[data-role="teacher"] .apply-counts span:nth-child(3){background:#e9f9ef;col
 
 .biz-flow{margin:0 0 16px;padding:16px 20px;background:#f5f9fd}.biz-flow-head{display:flex;align-items:baseline;justify-content:space-between;gap:12px;flex-wrap:wrap}.biz-flow-steps{list-style:none;margin:14px 0 0;padding:0;display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:12px}.biz-flow-steps li{padding:12px 14px;border-radius:10px;background:#fff;border:1px dashed #b7c6d4}.biz-flow-steps li.done{border:1px solid #d7e3ee}.biz-flow-steps li.here{border:2px solid var(--blue,#2563eb)}.biz-flow-steps small{display:block;font-size:12px;color:#8a97a5}.biz-flow-steps li.done small{color:#2f7d4f}.biz-flow-steps li.here small{color:var(--blue,#2563eb)}.biz-flow-steps p{font-size:13px;color:#5b6b7b;margin:4px 0 8px}@media(max-width:900px){.biz-flow-steps{grid-template-columns:1fr 1fr}}@media(max-width:560px){.biz-flow-steps{grid-template-columns:1fr}}
 .biz-flow-head h2{font-size:16px;margin:0}.biz-flow-head .subtle{font-size:12px}.biz-flow-steps .btn.text{padding-left:0}
+
+/* 超星课程详情：沿用教师信息弹窗，在同一窗口切换课程。 */
+#modal-root .modal:has(.cx-course-workspace){width:min(1640px,calc(100vw - 48px));height:min(800px,calc(100dvh - 48px));max-height:calc(100dvh - 48px)}
+#modal-root .modal:has(.cx-course-workspace) .modal-head{padding:20px 32px;flex-shrink:0}
+#modal-root .modal:has(.cx-course-workspace) .modal-head h2{font-size:24px}
+#modal-root .modal:has(.cx-course-workspace) .modal-body{flex:1;min-height:0;overflow:hidden;padding:18px 28px;background:#f8faff}
+.cx-course-workspace{display:grid;grid-template-columns:minmax(0,1.04fr) minmax(0,1fr);gap:24px;height:100%;min-height:0}
+.cx-course-list{display:flex;flex-direction:column;min-width:0;min-height:0}
+.cx-course-list>h3{font-size:20px;margin:0 0 14px}
+.cx-course-scroll{overflow:auto;min-height:0;padding:2px 5px 4px 2px;display:grid;align-content:start;gap:12px;overscroll-behavior:contain}
+.cx-course-workspace .online-card{position:relative;padding:12px;gap:16px;min-height:150px;flex-shrink:0;border-radius:10px}
+.cx-course-workspace .online-card.selected{border-color:var(--blue);box-shadow:inset 3px 0 var(--blue);background:#f3f7ff}
+.cx-course-workspace .online-card.archived{opacity:1}
+.cx-course-workspace .online-cover{width:160px;flex-basis:160px;aspect-ratio:4/3;align-self:center;border-radius:7px;background:#eef3fa}
+.cx-course-workspace .online-cover img{position:static;display:block;width:100%;height:100%;object-fit:contain}
+.cx-course-workspace .online-cover:has(img)>span,.cx-course-workspace .online-cover:not(:has(img)),.cx-course-workspace .online-team-note,.cx-course-workspace .online-actions a[target]{display:none}
+.cx-course-workspace .online-body{display:block;padding:0 96px 0 0;font-size:16px}
+.cx-course-workspace .online-body>strong{font-size:20px;white-space:normal;line-height:1.5}
+.cx-course-workspace .online-body .cell-sub{font-size:15px;line-height:1.6}
+.cx-course-workspace .mono{font-family:inherit;font-size:inherit}
+.cx-course-workspace .online-actions{position:absolute;right:16px;top:50%;transform:translateY(-50%);padding:0;margin-top:0}
+.cx-course-workspace .online-actions .btn{min-height:36px;background:transparent;padding:4px 0;color:var(--blue)}
+.cx-course-detail{min-width:0;overflow:auto;padding-left:24px;border-left:1px solid var(--line);overscroll-behavior:contain}
+.cx-detail-heading{display:flex;align-items:center;gap:12px;flex-wrap:wrap;margin:0 0 16px}
+.cx-detail-heading>h3{font-size:28px;line-height:1.4;margin:0;overflow-wrap:anywhere}
+.cx-credit-warning{display:flex;align-items:flex-start;gap:10px;flex-wrap:wrap;padding:12px 14px;margin-bottom:18px;background:#fff4df;color:#985500;border-radius:8px;font-size:14px;line-height:1.6}
+.cx-credit-warning .icon{flex-shrink:0;margin-top:2px}
+.cx-info-section{margin-top:12px;background:#fff;border-radius:8px}
+.cx-info-section>h3{font-size:20px;margin:0 0 6px}
+.cx-info-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:0 16px;margin:0}
+.cx-info-pair{display:grid;grid-template-columns:minmax(78px,.78fr) minmax(0,1.2fr);gap:10px;padding:6px 0;border-top:1px solid var(--line);font-size:17px;line-height:1.55;min-width:0;align-items:center}
+.cx-info-pair dt{color:#657b9b;background:#f2f6fc;padding:4px 8px;border-radius:4px}
+.cx-info-pair dd{margin:0;overflow-wrap:anywhere}
+.cx-info-section:nth-last-of-type(-n+2) .cx-info-grid{grid-template-columns:1fr}
+.cx-info-section:nth-last-of-type(-n+2) .cx-info-pair{grid-template-columns:140px minmax(0,1fr)}
+.cx-counting-note{padding:9px 12px;background:#edf4ff;border-radius:6px;font-size:14px;color:#526e97;line-height:1.7}
+#modal-root .modal:has(.cx-course-workspace) .modal-foot{padding:12px 28px;background:#fff;flex-shrink:0}
+#modal-root .modal:has(.cx-course-workspace) .modal-foot>.foot-note{display:none}
+:is(#cx-course-footer,#mc-course-footer){display:flex;align-items:center;justify-content:flex-end;gap:12px;width:100%;flex-wrap:wrap}
+:is(#cx-course-footer,#mc-course-footer) .btn{min-height:44px;font-size:16px;padding:10px 18px}
+.cx-detail-note{margin-right:auto;color:#657b9b;font-size:14px;line-height:1.6}
+@media(max-width:1150px){.cx-course-workspace .online-cover{width:110px;flex-basis:110px}.cx-info-grid{grid-template-columns:1fr}.cx-detail-heading>h3{font-size:24px}}
+@media(max-width:760px){
+ #modal-root:has(.cx-course-workspace){padding:12px}
+ #modal-root .modal:has(.cx-course-workspace){width:calc(100vw - 24px);height:calc(100dvh - 32px);max-height:calc(100dvh - 32px)}
+ #modal-root .modal:has(.cx-course-workspace) .modal-head{padding:16px 18px}
+ #modal-root .modal:has(.cx-course-workspace) .modal-body{padding:14px 16px;overflow:auto}
+ .cx-course-workspace{grid-template-columns:1fr;height:auto;gap:20px}
+ .cx-course-scroll{max-height:240px}
+ .cx-course-workspace .online-card{min-height:120px;gap:12px}
+ .cx-course-workspace .online-cover{width:100px;flex-basis:100px}
+ .cx-course-workspace .online-body{padding-right:0}
+ .cx-course-workspace .online-actions{position:static;transform:none;margin-top:6px}
+ .cx-course-detail{padding-left:0;padding-top:18px;border-left:0;border-top:1px solid var(--line);overflow:visible}
+ .cx-info-pair,.cx-info-section:nth-last-of-type(-n+2) .cx-info-pair{grid-template-columns:110px minmax(0,1fr)}
+ #modal-root .modal:has(.cx-course-workspace) .modal-foot{padding:12px 16px}
+ .cx-detail-note{width:100%;font-size:12px}
+}
+
+/* 教师本人课程列表：申报主操作和课程详情分别显示。 */
+.my-courses-workspace{margin-top:20px}
+.my-course-flow{display:flex;justify-content:center;gap:64px;list-style:none;padding:4px 20px 20px;margin:0;color:#657b9b}
+.my-course-flow li{display:flex;align-items:center;gap:12px;font-size:16px}
+.my-course-flow .icon{width:24px;height:24px}
+.my-course-filters{display:flex;align-items:center;gap:12px;background:#fff;border:1px solid var(--line);border-radius:10px;padding:18px 22px}
+.my-course-filters label{font-size:16px;font-weight:600}
+.my-course-filters select{min-height:44px;max-width:220px;font-size:15px}
+.my-course-filters input[name=q]{flex:1;min-width:180px;max-width:none;min-height:44px;font-size:15px}
+.my-course-sources{display:flex;gap:4px;background:#f2f6fd;border-radius:8px;padding:3px}
+.my-course-sources .btn{min-height:40px;padding:9px 18px;font-size:15px}
+.my-course-count{font-size:15px;color:#657b9b;margin:20px 0 14px}
+.teacher-course-table table{table-layout:fixed;width:100%;font-size:15px}
+.teacher-course-table th{font-size:15px;padding:16px 12px;background:#f5f8fd;color:var(--ink);white-space:normal}
+.teacher-course-table td{padding:18px 12px;vertical-align:middle;overflow-wrap:anywhere;white-space:normal;line-height:1.6}
+.teacher-course-table th:nth-child(1){width:22%}.teacher-course-table th:nth-child(2){width:11%}.teacher-course-table th:nth-child(3){width:16%}.teacher-course-table th:nth-child(4){width:14%}.teacher-course-table th:nth-child(5){width:15%}.teacher-course-table th:nth-child(6){width:12%}.teacher-course-table th:nth-child(7){width:10%}
+.my-course-term{display:block;line-height:1.65}.my-course-term>span{display:block}.my-course-term>span+span{font-size:14px;color:#657b9b}.my-course-term+.my-course-term{margin-top:8px}
+.my-course-name strong{display:block;font-size:18px;line-height:1.5;color:var(--ink)}
+.my-course-name>span{display:block;font-size:13px;color:#7184a3;margin-top:5px}
+.teacher-course-table .badge{font-size:14px}.teacher-course-table .cell-sub{font-size:13px;margin-top:6px;color:#7184a3}
+.teacher-course-table .btn{font-size:14px;min-height:40px;white-space:normal}
+.teacher-course-table tbody tr:hover{background:#f5f8ff}
+.teacher-course-table tr:has(.my-course-name[aria-current="true"]){background:#f2f6ff;box-shadow:inset 0 0 0 1px var(--blue)}
+#content[data-page="credits"] .my-courses-workspace :is(.teacher-course-table,.my-course-filters) .btn.primary,#modal-root #mc-course-footer .btn.primary{background:var(--blue);border-color:var(--blue);color:#fff}
+#content[data-page="credits"] .my-courses-workspace .teacher-course-table th{font-size:15px;padding:16px 12px}
+#content[data-page="credits"] .my-courses-workspace .teacher-course-table td{font-size:15px;padding:18px 12px}
+#content[data-page="credits"] .my-courses-workspace .teacher-course-table .my-course-name strong{font-size:18px}
+#content[data-page="credits"] .my-courses-workspace .teacher-course-table .cell-sub{font-size:14px}
+#content[data-page="credits"] .my-courses-workspace .teacher-course-table .btn{font-size:15px;white-space:nowrap;padding:9px 12px}
+#content[data-page="credits"] .my-courses-workspace .teacher-course-table .btn.text{padding:9px 0}
+#content[data-page="credits"] .my-courses-workspace .my-course-filters :is(input,select,.btn){font-size:16px}
+.my-course-policy{background:#edf4ff;color:#657b9b;border:1px solid var(--line);border-radius:8px;padding:12px 18px;margin-top:12px;font-size:14px;line-height:1.7}
+.my-course-declaration{background:#edf4ff;color:#526e97;padding:12px 14px;border-radius:6px;line-height:1.7;margin-top:14px}
+#mc-course-workspace .cx-course-detail>.cx-intro-box{margin-top:16px}
+#modal-root .modal:has(#mc-course-workspace){width:min(1380px,calc(100vw - 48px));height:min(840px,calc(100dvh - 48px))}
+#mc-course-workspace{grid-template-columns:minmax(0,.94fr) minmax(0,1fr)}
+@media(max-width:1150px){.my-course-filters{flex-wrap:wrap}.my-course-flow{gap:28px}.teacher-course-table th,.teacher-course-table td{padding:14px 10px}}
+@media(max-width:1200px){
+ #content .teacher-course-table .table-scroll{overflow:visible}
+ #content .teacher-course-table .table-scroll table,#content .teacher-course-table .table-scroll tbody{display:block;min-width:0;width:100%}
+ #content .teacher-course-table .table-scroll thead{position:absolute;width:1px;height:1px;overflow:hidden;clip-path:inset(50%)}
+ #content .teacher-course-table .table-scroll tr{display:block;padding:16px;border-bottom:1px solid #e3ebf6}
+ #content[data-page="credits"] .my-courses-workspace .teacher-course-table td{display:grid;grid-template-columns:105px minmax(0,1fr);gap:4px 12px;white-space:normal;border:0;padding:8px 0}
+ #content .teacher-course-table .table-scroll td:before{content:attr(data-label);color:#657a99;font-size:13px;grid-column:1;grid-row:1 / span 4}
+ #content .teacher-course-table .table-scroll td>*{grid-column:2;min-width:0}
+ #content .teacher-course-table .table-scroll td>.badge{justify-self:start}
+ #content .teacher-course-table .table-scroll td .btn{justify-self:start;min-height:44px}
+}
+@media(max-width:760px){.my-course-flow{display:grid;grid-template-columns:1fr 1fr;gap:14px;padding:0 4px 16px}.my-course-flow li{font-size:14px}.my-course-filters{padding:14px}.my-course-sources{order:3;width:100%}.my-course-sources .btn{flex:1;padding:8px;font-size:14px}.my-course-filters input[name=q]{width:100%;min-width:0}.teacher-course-table table{table-layout:auto}.teacher-course-table td{padding:10px 14px}.my-course-name strong{font-size:16px}}
+@media(max-width:760px){#mc-course-workspace{grid-template-columns:1fr}#modal-root .modal:has(#mc-course-workspace){width:calc(100vw - 24px);height:calc(100dvh - 32px)}}
+
+#modal-root #mc-course-footer .btn{font-size:16px;min-height:44px;padding:10px 18px}
+
+#content[data-page="credits"] .pagehead .page-title h1{font-size:32px}
+#modal-root #mc-course-workspace .cx-detail-heading>h3{font-size:28px}
+#modal-root #mc-course-workspace .cx-info-section>h3{font-size:20px}
+#modal-root #mc-course-workspace .online-body>strong{font-size:20px}
+#modal-root #mc-course-workspace .cx-detail-heading .badge{font-size:14px;padding:5px 9px}
