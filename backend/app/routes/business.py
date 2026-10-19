@@ -336,7 +336,9 @@ def portal_workbench(request:Request):
             from ..approval_center import pending
             approvals=pending(db,a,items)
             waiting=sum(not x.get('action_required',True) for x in approvals)
-            items=[x for x in approvals if x.get('action_required',True)]+reminders_source
+            # 审批中心只收业务审批；数据同步异常、安全提示仍要出现在首页待办里（招标第1、12项：消息待办覆盖同步异常）。
+            system_items=[x for x in items if x['type'] in {'sync','security'}]
+            items=[x for x in approvals if x.get('action_required',True)]+system_items+reminders_source
         names=dict(db.execute(select(User.id,User.name).where(a.scope(User.id))).all())
         for item in items:
             if item.get('teacher_id'):
