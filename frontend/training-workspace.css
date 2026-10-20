@@ -186,3 +186,9 @@ body[data-training="true"] .training-workspace .btn.primary:hover{background:#00
 .more-actions-menu>.btn{justify-content:flex-start;width:100%;min-height:38px;border:0;background:transparent;color:#1f2d45;font-weight:500;text-align:left;white-space:nowrap}
 .more-actions-menu>.btn:hover,.more-actions-menu>.btn:focus-visible{background:#eef4ff;color:#1d4ed8}
 @media(max-width:560px){.more-actions-menu{right:auto;left:0}}
+/* 其他页面的标题栏向培训业务页统一：同样的字号、颜色和副标题样式。 */
+body:not(.no-shell) #content .pagehead{margin:0 0 20px;align-items:center;gap:20px}
+body:not(.no-shell) #content .pagehead h1{font-size:28px;line-height:1.4;font-weight:750;letter-spacing:0;color:#07194c}
+body:not(.no-shell) #content .page-title .teacher-page-subtitle{font-size:15px;line-height:1.5;color:#536b98}
+@media(max-width:1400px){body:not(.no-shell) #content .pagehead h1{font-size:26px}body:not(.no-shell) #content .page-title .teacher-page-subtitle{font-size:13px}}
+@media(max-width:900px){body:not(.no-shell) #content .pagehead{align-items:flex-start}body:not(.no-shell) #content .pagehead h1{font-size:24px}}
