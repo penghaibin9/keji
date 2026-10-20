@@ -1,7 +1,7 @@
 // 老师发起的申请（培训课程申报、培训基地申请）：进度、详情与办理、我的申请、申请表。
 // 只调用 /api/applications；谁能办、回避、代办、版本和材料都由后端核对，这里按后端给的 permissions 显示按钮。
 import {materialUploadForm} from './approval-flow.js?v=20261017-multi-materials2';
-import {renderTrainingWorkspace} from './training-workspace.js?v=20261019-walk3&nav=20261020-m2';
+import {renderTrainingWorkspace} from './training-workspace.js?v=20261019-walk3&nav=20261020-m6';
 import {courseFactsHtml, onlineCard} from './school-data.js?v=20261019-merge1&display=20261019-clean2';
 import {imageField, takeImage, saveImageAfter, coverButton} from './display-image.js?v=20261019-img3';
 let c = null, opened = null;
