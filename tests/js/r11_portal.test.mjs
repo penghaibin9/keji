@@ -953,7 +953,7 @@ test('secondary shortcuts are preserved in a native disclosure, not removed',asy
  const e=engine(homeResponse);const html=await e.t.pages.home();
  assert.match(html,/<details class="workbench-more"><summary>更多常用操作/);
  assert.match(html,/data-id="points"/);assert.match(html,/data-id="cockpit"/);
- assert.match(html,/进入审批中心/);assert.doesNotMatch(html,/设计预览|合成示例/);
+ assert.match(html,/data-action="nav" data-id="todos"/);assert.doesNotMatch(html,/进入审批中心|刷新工作台/);assert.doesNotMatch(html,/设计预览|合成示例/);
 });
 
 test('驾驶舱未运行同步时不显示空图，有零条结果的真实任务仍保留图表',async()=>{
