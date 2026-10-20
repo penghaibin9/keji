@@ -912,6 +912,12 @@ test('navigation does not expose unauthorized items or empty groups',()=>{
  const e=engine();e.t.setUser({user:{id:'u',name:'教师'},role:{kind:'teacher'},permissions:['portal.read']});
  const html=e.t.sidebarNavigation();assert.match(html,/教师工作台/);assert.doesNotMatch(html,/系统管理|数据与分析|业务办理|data-id="settings"|data-id="organization"/);
 });
+test('学校审核账号不是系统管理员时不显示账号与权限，系统管理员仍显示',()=>{
+ for(const [admin,shown] of [[false,false],[true,true]]){
+  const e=engine();e.t.setUser({user:{id:'u',name:'学校',is_admin:admin},role:{kind:'school'},permissions:['portal.read','users.manage','records.read']});
+  assert.equal(e.t.sidebarNavigation().includes('data-id="permissions"'),shown);
+ }
+});
 test('desktop rail toggle updates accessible name and expanded state without network',()=>{
  const e=engine();e.t.handlers['collapse-sidebar']();assert.equal(e.node('#sidebar').classList.contains('collapsed'),true);
  assert.equal(e.node('.sidebar-collapse').getAttribute('aria-label'),'展开侧边栏');
