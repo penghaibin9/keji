@@ -1,6 +1,7 @@
 // 申请进度组件：详情、我的申请、首页三处共用同一份后端进度数据。
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import {readFileSync} from 'node:fs';
 import {progressHtml, myCoursesHtml, myApplicationsHtml, homeApplicationsHtml, homeCoursesHtml, applyPageHtml, applicationAction, teachingCourseForm, bindApplicationConditions, trainersHtml, courseAction} from '../../frontend/applications.js';
 
 const esc = s => String(s ?? '').replace(/[&<>"]/g, ch => ({'&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;'})[ch]);
@@ -32,6 +33,20 @@ test('returned node shows the reason', () => {
 
 const ctx = data => ({esc, number:(v,d=0)=>Number(v).toFixed(d),link:(label,action,id)=>`<button data-action="${action}" data-id="${esc(id)}">${esc(label)}</button>`, icon:()=>'<svg></svg>', api: async () => data, note: t => `<div class="note">${esc(t)}</div>`, table: (h, rows, empty) => rows.length ? rows.map(r => r.join('|')).join('\n') : empty,
   act: (label, action, id = '') => `<button data-action="${action}" data-id="${esc(id)}">${esc(label)}</button>`});
+
+test('师资分类点击与列表共享状态，校内外筛选和重置正确且不扩大资料权限',async()=>{
+ const app=readFileSync(new URL('../../frontend/app.js',import.meta.url),'utf8');
+ const specifier=app.match(/import \{renderTrainingWorkspace,trainingChange\} from '([^']+)'/)[1];
+ const {trainingChange}=await import(new URL('../../frontend/'+specifier,import.meta.url));
+ const c=ctx({total:2,items:[{id:'internal',name:'校内合成教师',source:'internal',can_view_detail:true},{id:'external',name:'校外合成教师',source:'external',can_view_detail:false}]});
+ c.me={user:{id:'trainer-category-regression'},role:{kind:'college'}};
+ let html=await trainersHtml(c);assert.match(html,/校内合成教师/);assert.match(html,/校外合成教师/);
+ trainingChange('trainers',c,'tab','internal');html=await trainersHtml(c);
+ assert.match(html,/data-action="training-tab" data-id="internal" aria-pressed="true"/);assert.match(html,/校内合成教师/);assert.doesNotMatch(html,/校外合成教师/);
+ trainingChange('trainers',c,'tab','external');html=await trainersHtml(c);
+ assert.match(html,/data-action="training-tab" data-id="external" aria-pressed="true"/);assert.match(html,/校外合成教师/);assert.doesNotMatch(html,/校内合成教师|data-action="app-detail"/);
+ trainingChange('trainers',c,'reset');html=await trainersHtml(c);assert.match(html,/data-id="" aria-pressed="true"/);assert.match(html,/校内合成教师/);assert.match(html,/校外合成教师/);
+});
 
 test('入库师资复用申请详情入口，仅按服务端读权限提供，省级推荐权限不扩展',async()=>{
  for(const kind of ['dept','college','school']){

@@ -1,6 +1,6 @@
 // School business pages reuse the portal's forms, permissions, navigation and attachments.
 import {checkUploadFiles,uploadEntries,uploadSequential,uploadStatusHtml,failedEntries,MAX_ATTACHMENTS} from './approval-flow.js?v=20261017-multi-materials2';
-import {renderTrainingWorkspace,trainingChange} from './training-workspace.js?v=20261019-img3';
+import {renderTrainingWorkspace,trainingChange} from './training-workspace.js?v=20261019-walk3';
 import {imageField,takeImage,saveImageAfter,coverButton} from './display-image.js?v=20261019-img3';
 const COPY_KEYS=['name','org_id','owner_id','category','high_risk','expected_income','expected_participants','expected_outcomes','mode','class_type','level','level_basis','scene','target_groups','one_skill','province_report','province_basis','auxiliary_standard','auxiliary_daily_cap','total_hours','audiences','audience_other','service_types','teaching_methods','video_minutes','base_count','venue','quality'];
 import {progressHtml,AUDIENCE,TEACHING_MODES,IDEOLOGY} from './applications.js?v=20261019-merge1';
