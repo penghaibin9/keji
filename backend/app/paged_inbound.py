@@ -80,12 +80,17 @@ def process_page(db, task, connection, actor, schedule, adapter, registry):
         if total is not None and (type(total) is not int or total < 0):
             raise AdapterContractError('PULL_RESPONSE_TOTAL_MISMATCH')
         prior_total = state.get('source_total')
+        # The school hub's live tables can change while a long FULL pull runs (teacher_course: 281 pages, over an
+        # hour). A total that moves between pages is recorded as drift instead of failing the whole run; the run
+        # still commits every page it received, but _reconcile withdraws nothing because completeness is unproven.
+        drift = bool(state.get('total_drift'))
         if prior_total is not None and total is not None and prior_total != total:
-            raise AdapterContractError('PULL_RESPONSE_TOTAL_MISMATCH')
+            drift = True
         total = prior_total if total is None else total
         received = state['records'] + len(records)
-        if total is not None and (received > total or not response['has_more'] and total != received):
+        if not drift and total is not None and (received > total or not response['has_more'] and total != received):
             raise AdapterContractError('PULL_RESPONSE_TOTAL_MISMATCH')
+        state['total_drift'] = drift
         proof={'request_digest':digest({'connection':connection.id,'type':task.payload['data_type'],'mode':task.payload['mode'],'checkpoint':state.get('checkpoint')}),'response_digest':digest(response),'received_at':utcnow().isoformat(),'records':len(records),'page':response.get('page')}
         batch = None
         if records:
@@ -169,6 +174,11 @@ def _reconcile(db, task, actor):
         return
     ids = [x['batch_id'] for x in state.get('chunks', []) if x.get('batch_id')]
     total = state.get('source_total')
+    if state.get('total_drift'):
+        # Pages were all committed, but the source changed underneath the run: never withdraw rows on that basis.
+        task.result = {**state, 'reconcile': {'skipped': '源端总数在采集过程中变化，本次只入库、不撤下记录',
+            'source_total': total, 'received': state.get('committed_records')}}
+        return
     if total is not None and total != state.get('committed_records'):
         outcome = {'blocked': '接收条数与源端总数不一致，未对账'}
     else:
