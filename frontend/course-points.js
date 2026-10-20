@@ -14,7 +14,7 @@ export async function coursePointsAction(action, id, c) {
   if(!d.can_link)throw Error('当前课程或身份不能关联项目，请刷新办理状态。');
   const picker=await c.projectField(c,'',{name:'project_id',key:'id',optional:false,courseApplication:applicationId});
   if(!current())return;
-  return c.formModal('关联培训项目',c.note('课程：'+d.course.name+'。请选择本人负责或有管理权限的项目；审核中、已结项项目不能改挂。')+picker+c.field('reason','关联说明','textarea','将已审批课程用于本项目培训',{full:true}),async v=>{
+  return c.formModal('关联培训项目',c.note('课程：'+d.course.name+'。请选择本人负责或有管理权限的项目；审核中、已结项项目不能改挂。')+picker+c.field('reason','关联说明','textarea','',{full:true,phrases:'link',textLimit:2000}),async v=>{
    const project=await c.api('/social/objects/social_project/'+encodeURIComponent(v.project_id));
    await c.api('/social/projects/'+encodeURIComponent(v.project_id)+'/courses/link',{method:'POST',body:{course_code:d.course.code,expected_version:project.item.version,reason:v.reason}});
    c.closeModal();c.toast('课程已关联项目');return coursePointsAction('open',applicationId+'|'+v.project_id,c);

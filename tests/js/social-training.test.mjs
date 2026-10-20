@@ -221,7 +221,7 @@ test('学校可为已备案项目关联已有入库课程，保留项目版本�
  let footer,form,posted;
  c.modal=(_title,_body,foot)=>{footer=foot};c.downloads=()=>'';c.eventsHtml=()=>'';c.formModal=(_title,body,save)=>{form={body,save}};
  const detail={item:{id:'project',owner_id:'teacher',org_id:'college',state:'FILED',version:7,data:{code:'P1',name:'本轮<项目>',mode:'module',category:'community'},closeout:{}},kind:'social_project',state_label:'已备案',facts:{effective:0,excluded:0,units:[],followups:[]},attachments:[],events:[]};
- c.api=async(url,options)=>{if(options)posted={url,...options};return detail};
+ c.api=async(url,options)=>{if(url.endsWith('/course-options'))return {items:[{code:'C1',name:'已审批课程'}],total:1,page:1,size:20,q:''};if(options)posted={url,...options};return detail};
  await socialAction('social-detail','social_project|project',c);
  assert.match(footer,/social-course-link/);
  await socialAction('social-course-link','',c);
@@ -883,4 +883,17 @@ test('结项补正的全选状态随已保存核对项初始化，并随单项�
    all.checked=true;all.change();assert.ok(boxes.every(x=>x.checked));
   }
  }finally{globalThis.document=original}
+});
+
+test('财务纪检和制度确认不预填结论，采用需要本人补齐依据的句式',async()=>{
+ const c=renderContext({my_duties:['finance','discipline','coordinator']});
+ c.me={user:{id:'reviewer'},role:{kind:'school'}};await renderSocial('annual',c);
+ let fields={};c.field=(name,label,type,value,options={})=>{fields[name]={value,options};return ''};
+ c.formModal=()=>{};c.modal=()=>{};c.downloads=()=>'';c.eventsHtml=()=>'';c.periods=[];
+ c.api=async()=>({item:{id:'annual',org_id:'college',period_id:'period',state:'SUBMITTED',version:1,data:{}},state_label:'待审核',attachments:[],events:[]});
+ await socialAction('social-detail','social_annual|annual',c);
+ for(const [action,phrases]of [['finance','review'],['discipline','review'],['coordinator','review'],['activate','basis'],['record_basis','basis'],['void','basis']]){
+  fields={};await socialAction('social-transition',action,c);
+  assert.equal(fields.reason.value,'');assert.equal(fields.reason.options.phrases,phrases);
+ }
 });

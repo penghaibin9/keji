@@ -1,3 +1,4 @@
+import {allowFormLeave,dirtyForms} from '../../frontend/form-assist.js';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {readFileSync} from 'node:fs';
@@ -46,7 +47,7 @@ test('malformed values are rejected',()=>{
 });
 const source=readFileSync(new URL('../../frontend/app.js',import.meta.url),'utf8');
 function actualNavigationContext(){
-  const context={titles,page:'cockpit',filter:{...filters},periodId:'p',tablePage:2,location:{hash:'#cockpit',pathname:'/',search:''},
+  const context={allowFormLeave,dirtyForms,titles,page:'cockpit',filter:{...filters},periodId:'p',tablePage:2,location:{hash:'#cockpit',pathname:'/',search:''},
     businessFilters,pageFilters,drillFilters,navigationHash,restoreNavigation,selectedPeriod,
     me:null,renderSequence:0,participationPage:1,$:()=>null,render:async()=>{},setMobileMenu:()=>{},history:{replaceState(...args){context.location.hash=args[2].slice(args[2].indexOf('#'));}}};
   vm.createContext(context);

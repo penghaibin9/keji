@@ -13,7 +13,7 @@ from .models import Base
 
 BASELINE_REVISION = "20260918_0001"
 # Additive revisions after the baseline, oldest first, with the schema contract each adds.
-EXTENSION_REVISIONS = (("20261008_0002", "social_schema.json"), ("20261009_0003", "teaching_schema.json"), ("20261012_0004", "auth_session_schema.json"), ("20261013_0005", "audit_index_schema.json"))
+EXTENSION_REVISIONS = (("20261008_0002", "social_schema.json"), ("20261009_0003", "teaching_schema.json"), ("20261012_0004", "auth_session_schema.json"), ("20261013_0005", "audit_index_schema.json"), ("20261021_0006", "form_draft_schema.json"))
 CURRENT_REVISION = EXTENSION_REVISIONS[-1][0]
 KNOWN_REVISIONS = (BASELINE_REVISION, *(r for r, _ in EXTENSION_REVISIONS))
 SOURCE_KIND = "canonical_empty_school"

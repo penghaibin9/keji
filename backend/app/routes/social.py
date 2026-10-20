@@ -680,6 +680,32 @@ def course_create(data:CourseIn,request:Request):
     return command(request,data.model_dump(mode='json'),'records.write',apply)
 
 
+@router.get('/projects/{ident}/course-options')
+def project_course_options(ident:str,request:Request,q:str=Query('',max_length=100),
+                           page:int=Query(1,ge=1),size:int=Query(20,ge=1,le=100)):
+    def read(db,a,s):
+        project=st.scoped(db,a,'social_project',ident,write=True)
+        if project.state not in ('DRAFT','RETURNED','FILED'):
+            raise HTTPException(409,'当前项目状态不能关联课程')
+        approved=select(SocialResource.id).where(
+            SocialResource.kind=='course_apply',SocialResource.org_id==project.org_id,
+            SocialResource.state=='ACTIVE',SocialResource.data['application'].as_boolean()==True,
+            SocialResource.data['course_code'].as_string()==TrainingCourseMaster.code)
+        if a.role.kind=='teacher':
+            approved=approved.where(SocialResource.data['teacher_id'].as_string()==a.id)
+        elif a.role.kind not in ('college','school') or 'records.write' not in a.permissions:
+            raise HTTPException(403,'当前身份不能关联课程')
+        query=select(TrainingCourseMaster).where(TrainingCourseMaster.active==True,
+            or_(TrainingCourseMaster.project_code=='',TrainingCourseMaster.project_code.is_(None)),approved.exists())
+        if q.strip():
+            query=query.where(or_(TrainingCourseMaster.name.contains(q.strip(),autoescape=True),
+                                  TrainingCourseMaster.code.contains(q.strip(),autoescape=True)))
+        total=db.scalar(select(func.count()).select_from(query.subquery()))
+        rows=db.scalars(query.order_by(TrainingCourseMaster.name,TrainingCourseMaster.code).offset((page-1)*size).limit(size)).all()
+        return {'items':[{'code':r.code,'name':r.name} for r in rows],'total':total,'page':page,'size':size,'q':q.strip()}
+    return read_operation(request,'records.read',read)
+
+
 @router.post('/projects/{ident}/courses/link')
 def project_course_link(ident:str,data:CourseLinkIn,request:Request):
     def apply(db,a,s):

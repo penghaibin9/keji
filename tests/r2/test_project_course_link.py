@@ -25,6 +25,37 @@ def link(client,version=1,code='LINK-C1',**options):
         {'expected_version':version,'course_code':code,'reason':'本轮合成项目复用已审批课程','basis':'合成核对依据'},**options)
 
 
+@pytest.mark.parametrize('username,status',[('teacher',200),('collegehead',200),('schooladmin',200),
+    ('depthead',403),('otherteacher',403),('otherdept',403)])
+def test_searchable_course_options_respect_existing_link_scope(link_case,username,status):
+    app,c=link_case;auth(c,username)
+    response=c.get('/api/social/projects/link-project/course-options?q=合成&size=1')
+    assert response.status_code==status,response.text
+    if status==200:
+        result=response.json()
+        assert result['items']==[{'code':'LINK-C1','name':'已审批合成课程'}]
+        assert result['total']==1 and result['size']==1
+        assert c.get('/api/social/projects/link-project/course-options?q=%25').json()['items']==[]
+        assert c.get('/api/social/projects/link-project/course-options?page=2&size=1').json()['items']==[]
+
+
+@pytest.mark.parametrize('change',['inactive','linked','not_approved','not_application','other_college','other_owner'])
+def test_course_picker_never_offers_ineligible_courses(link_case,change):
+    app,c=link_case
+    with app.state.sessions.begin() as db:
+        course=db.get(TrainingCourseMaster,'link-course');application=db.get(SocialResource,'link-application')
+        if change=='inactive':course.active=False
+        if change=='linked':course.project_code='OTHER'
+        if change=='not_approved':application.state='SUBMITTED'
+        if change=='not_application':application.data={**application.data,'application':False}
+        if change=='other_college':application.org_id='college2'
+        if change=='other_owner':application.data={**application.data,'teacher_id':'otherteacher'}
+    auth(c,'teacher')
+    result=c.get('/api/social/projects/link-project/course-options')
+    assert result.status_code==200,result.text
+    assert result.json()['items']==[] and result.json()['total']==0
+
+
 def test_link_reuses_course_and_preserves_approved_application(link_case):
     app,c=link_case
     with app.state.sessions() as db:

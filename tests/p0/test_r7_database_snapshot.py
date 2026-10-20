@@ -20,9 +20,9 @@ def read(path):
 
 def test_deterministic_no_raw_rows_and_validated(canonical):
     first=read(canonical);second=read(canonical)
-    assert first==second and len(first['tables'])==55
+    assert first==second and len(first['tables'])==56
     assert validate_snapshot(first)==first
-    assert compare_snapshots(first,second)['tables']==55
+    assert compare_snapshots(first,second)['tables']==56
     assert all(set(x)=={'rows','columns','sha256'} for x in first['tables'].values())
 
 def test_real_sqlite_backup_copy_reconciles_then_same_count_tampering_fails(canonical,tmp_path):

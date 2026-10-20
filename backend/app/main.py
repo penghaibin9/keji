@@ -22,7 +22,7 @@ from .maintenance_guard import configured_maintenance
 from .access_logging import record_access_best_effort
 from . import __version__
 from .routes import auth, sso, admin, business, calculations, files, tasks, integrations, reference, delivery, integration_center, integration_intake, sso_trial
-from .routes import social, ledgers, applications, social_images
+from .routes import social, ledgers, applications, social_images, form_drafts
 
 log = logging.getLogger("nondegree")
 
@@ -147,6 +147,7 @@ def create_app(settings: Settings | None = None):
     app.include_router(ledgers.router)
     app.include_router(applications.router)
     app.include_router(social_images.router)
+    app.include_router(form_drafts.router)
     # A local review server only. Production frontend is served by the separate nginx service.
     if cfg.env=="test":
         frontend=Path(__file__).resolve().parents[2]/"frontend"

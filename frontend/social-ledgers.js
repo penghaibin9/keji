@@ -1,3 +1,4 @@
+import {validateFormAssists} from './form-assist.js?v=20261021-form-merged1';
 // 学院台账报送与口径检查、首页五项指标、课程视频分钟资源。
 // 推荐值按系统推荐口径计算，学校书面确认前只用于核对。
 import {mineSchoolData} from './school-data.js?v=20261019-merge1&display=20261019-clean2';
@@ -106,7 +107,7 @@ function previewHtml(c, r, fileName) {
   const unitReview = needsUnitReview(r.reported_quantities);
   return `<section class="ledger-preview mt16"><div class="detail-action-context"><strong>已检查文件</strong><p>${c.esc(fileName)}</p></div><dl class="kv"><dt>识别到的学院</dt><dd>${c.esc(r.meta.college || '未识别')}</dd><dt>年度</dt><dd>${c.esc(r.meta.year || '未识别')}</dd><dt>表格版本</dt><dd>${c.esc(r.template_label)}</dd><dt>负责人 / 经办人</dt><dd>${c.esc(r.meta.leader || '—')} / ${c.esc(r.meta.handler || '—')}</dd></dl>`
     + `<div class="summary-row mt16">${stat(c, '项目行数', s.rows, '行')}${reportedStats(c, r.reported_quantities)}${stat(c, unitReview ? '推荐试算量' : '按推荐口径', fmt(s.recommended_total), unitReview ? '' : '人次')}${stat(c, '严重问题', s.serious, '行', '', s.serious ? 'bad' : '')}</div>`
-    + `<form id="ledger-submit-form" class="form-grid mt16">${c.field('org_id', '报送学院', 'select', r.suggested_org_id || '', {options: [['', '请选择学院'], ...r.colleges.map(o => [o.id, o.name])]})}${c.field('year', '统计年度', 'number', r.meta.year || year, {min: 2020, max: 2100})}${c.field('reason', '报送说明', 'textarea', '学院报送' + (r.meta.year || year) + '年社会培训人次统计表', {full: true})}</form>`
+    + `<form id="ledger-submit-form" class="form-grid mt16">${c.field('org_id', '报送学院', 'select', r.suggested_org_id || '', {options: [['', '请选择学院'], ...r.colleges.map(o => [o.id, o.name])]})}${c.field('year', '统计年度', 'number', r.meta.year || year, {min: 2020, max: 2100})}${c.field('reason', '报送说明', 'textarea', '学院报送' + (r.meta.year || year) + '年社会培训人次统计表', {full: true,phrases:'report',textLimit:2000})}</form>`
     + (unitReview ? c.note(unitReviewNote) : '') + r.notes.map(n => c.note(n, true)).join('') + c.note(r.note)
     + rowsTable(c, r.rows, false) + '</section>';
 }
@@ -167,6 +168,7 @@ async function submit(c) {
   if (!lastPreview || !lastFile) throw Error('请先检查这份表');
   if (document.getElementById('f-ledger_file')?.files?.[0] !== lastFile) { invalidateLedgerPreview(); throw Error('统计表已更换，请重新检查后报送'); }
   const form = document.getElementById('ledger-submit-form');
+  if(!validateFormAssists(form))return;
   const v = Object.fromEntries(new FormData(form));
   if (!v.org_id) throw Error('请选择报送学院');
   const fd = new FormData(); fd.set('file', lastFile); fd.set('org_id', v.org_id); fd.set('year', v.year); fd.set('reason', v.reason || '');
@@ -205,7 +207,7 @@ async function detailPage(c, id) {
     + `<section class="summary-row ledger-stats">${reportedStats(c, d.reported_quantities)}${stat(c, unitReview ? '推荐试算量' : '按推荐口径', fmt(t.recommended_total), unitReview ? '' : '人次', unitReview ? '按各行口径核对，不作为原表人次统计' : '系统推荐口径，待学校确认')}${stat(c, unitReview ? '当前核对量' : t.pending_rows ? '当前汇总（含待核定）' : '核定人次', fmt(t.final_total), unitReview ? '' : '人次', t.pending_rows ? t.pending_rows + ' 行未核定（暂用推荐值）' : '全部核定', t.pending_rows ? 'warn' : '')}${college ? '' : stat(c, '严重问题', s.serious, '行', '需要重点核对', s.serious ? 'bad' : '')}${stat(c, '已核定', `${done}/${all.length}`, '行', done === all.length ? '全部核定' : '留空的行暂用推荐值', done === all.length ? '' : 'warn')}</section>`
     + (unitReview ? c.note(unitReviewNote, false, '单位与核对口径') : '') + (d.data.notes || []).map(n => c.note(n, true)).join('') + (college && d.note ? `<details class="detail-fold mt16"><summary>推荐值与正式核定的区别</summary><p>${c.esc(d.note)}</p></details>` : c.note(d.note, false, '统计口径'))
     + `<div class="card mt16"><div class="card-head"><div class="ledger-filter" role="group" aria-label="筛选行">${FILTERS.map(([k, l]) => `<button type="button" class="btn sm ${rowFilter === k ? 'primary' : ''}" data-action="tz-filter" data-id="${k}" aria-pressed="${rowFilter === k}">${l}（${count[k]}）</button>`).join('')}</div></div>${tools}${rowsTable(c, shown, d.can_review, d)}`
-    + (d.can_review ? `<div class="form-grid card-pad">${c.field('ledger_review_reason', '本次核定说明', 'textarea', '', {full: true, hint: unitReview ? '请按各行口径说明原表单位、备案方式及核定依据' : '例如：按 2026 年推荐口径核定，线上浏览量不计人次'})}</div>` : '') + '</div>'
+    + (d.can_review ? `<div class="form-grid card-pad">${c.field('ledger_review_reason', '本次核定说明', 'textarea', '', {full: true,phrases:'review',textLimit:2000, hint: unitReview ? '请按各行口径说明原表单位、备案方式及核定依据' : '例如：按 2026 年推荐口径核定，线上浏览量不计人次'})}</div>` : '') + '</div>'
     + drafts + figure + versions + '</div>';
 }
 
@@ -290,7 +292,7 @@ async function saveConflict(c) {
 }
 
 async function withdrawConflict(c, id) {
-  return c.formModal('撤回利益冲突申报',c.field('reason','撤回原因','textarea','',{full:true}),async v=>{
+  return c.formModal('撤回利益冲突申报',c.field('reason','撤回原因','textarea','',{full:true,phrases:'withdraw',textLimit:2000}),async v=>{
     if(v.reason.trim().length<2)throw Error('请写明撤回原因');
     await c.api('/social/conflicts/' + encodeURIComponent(id) + '/withdraw', {method: 'POST', body: {reason:v.reason}});
     c.toast('已撤回');await openConflicts(c);
@@ -311,6 +313,7 @@ function fillRecommended(c) {
 }
 
 async function saveReview(c, code) {
+  if(!validateFormAssists(document.getElementById('f-ledger_review_reason')?.parentElement))return;
   const [id, version] = code.split('|');
   captureDraft();
   const rows = Object.entries(draft).filter(([, v]) => v.approved !== '').map(([row, v]) => ({row_no: Number(row), approved: v.approved, reason: v.reason}));
@@ -418,7 +421,7 @@ async function bindLedgerRow(action, code, c) {
   if (personal) body += c.note('原表姓名：' + (row.allocations?.[Number(index)]?.name || '待核对')) + c.field('teacher_id', '对应教师及工号', 'select', '', {options: people});
   else if (owner) body += c.field('owner_id', '项目负责人及工号', 'select', row.owner_id || '', {options: people});
   else body += c.field('action', '办理方式', 'select', '', {options: [['', '请选择办理方式'], ['link', '关联已有项目'], ['new', '确认是独立新项目']]}) + c.field('project_id', '已有项目（选择关联时必填）', 'select', '', {required: false, options: [['', '请选择项目'], ...(ledger.project_options || []).map(p => [p.id, `${p.name} · ${p.code}`])]});
-  body += c.field('reason', '确认依据与说明', 'textarea');
+  body += c.field('reason', '确认依据与说明', 'textarea','',{phrases:'basis',textLimit:2000});
   c.formModal(title, body, async v => {
     const endpoint = personal ? 'person' : 'project-link';
     const data = {...v, expected_version: ledger.version};

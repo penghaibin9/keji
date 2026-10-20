@@ -20,7 +20,7 @@ def generate(root):
     result = {'kind': 'school_delivery_working_tree_snapshot', 'program_baseline': version['input_zip_sha256'],
               'migration_heads': schema['migration_heads'], 'file_count': len(files), 'files': files,
               'self_excluded': sorted(GENERATED), 'final_archive_hash_source': 'release-metadata.json and SHA256SUMS'}
-    (root / 'docs/交付文件校验清单.json').write_text(json.dumps(result, ensure_ascii=False, indent=2) + '\n', encoding='utf-8')
+    (root / 'docs/交付文件校验清单.json').write_text(json.dumps(result, ensure_ascii=False, indent=2) + '\n', encoding='utf-8', newline='\n')
     lines = ['# 源代码与资料移交清单（交付候选）', '',
              '版本日期：2026-10-12。以审批精简版为施工基础，包含本轮导入批次、考核目标、码表展示和交付整理修复。',
              '源码基础提交与施工修改另列在外层版本元数据；当前程序摘要才是本次源码字节的识别依据，不能把基础提交号当作全部新修复的提交号。', '',
@@ -35,7 +35,7 @@ def generate(root):
     lines += [f"| `{name}` | {row['size']} | `{row['sha256']}` |" for name, row in files.items()]
     lines += ['', '## 双方签收', '', '移交介质或学校托管地址：【待双方填写】。学校接收人、供应商负责人、日期及签章：【待双方填写】。',
               '学校所有权及双方服务责任以合同和正式签收为准；本次生成文件清单不等于完成源码归属签认。', '']
-    (root / 'docs/源代码与资料移交清单.md').write_text('\n'.join(lines), encoding='utf-8')
+    (root / 'docs/源代码与资料移交清单.md').write_text('\n'.join(lines), encoding='utf-8', newline='\n')
     documents = ['USER_MANUAL.md', 'ADMIN_OPERATIONS_MANUAL.md', '权限配置说明.md', '培训方案与课件.md',
                  '数据字典.md', '数据字典.xlsx', 'API_ENDPOINT_CATALOG.md', '测试报告_20261012.md',
                  '数据中台字段映射核对表_20261012.md', '学校接口字段映射模板_20261012.json',
@@ -58,7 +58,7 @@ def generate(root):
                    '- 售后服务承诺书、合同责任与源码移交签收、实际培训签到、操作考核及反馈。',
                    '- 已知依赖漏洞处理或针对性评估、集中日志六个月留存和加密异地备份方案确认。', '',
                    '本材料清单不签署服务承诺、不代填学校制度、不替代学校盖章验收。', '']
-    (root / 'docs/验收材料清单.md').write_text('\n'.join(acceptance), encoding='utf-8')
+    (root / 'docs/验收材料清单.md').write_text('\n'.join(acceptance), encoding='utf-8', newline='\n')
     return {'file_count': len(files), 'program_baseline': result['program_baseline']}
 
 

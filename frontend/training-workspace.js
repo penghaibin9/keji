@@ -11,8 +11,8 @@ const baseLevels={school:'校级',city:'市级',province:'省级及以上'};
 const usages={practice:'实践教学基地',ideology:'思政实践教学基地'};
 const CLOSING=['CLOSE_COLLEGE','CLOSE_REVIEW','CLOSED'];
 const key=(section,c)=>`${c.me?.user?.id}|${c.me?.role?.kind}|${section}`;
-export function trainingState(section,c){const k=key(section,c);if(!state.has(k))state.set(k,{selected:'',tab:'',q:'',org:'',package:false,oneSkill:false});const s=state.get(k);if(section==='projects'&&c.setProjectViewState)Object.assign(s,{q:c.filter?.q||'',org:c.filter?.org_id||'',tab:c.filter?.project_status||'',selected:c.filter?.project_pick||''});return s}
-export function trainingChange(section,c,action,value){const s=trainingState(section,c);if(action==='pick')s.selected=value;else if(action==='tab'){s.tab=value;s.selected=''}else if(action==='reset')Object.assign(s,{q:'',org:'',tab:'',package:false,oneSkill:false,selected:''});else if(action==='filter')Object.assign(s,value,{selected:''});if(section==='projects')c.setProjectViewState?.(s);}
+export function trainingState(section,c){const k=key(section,c);if(!state.has(k))state.set(k,{selected:'',tab:'',q:'',org:'',package:false,oneSkill:false});const s=state.get(k);if(section==='projects'&&c.setProjectViewState)Object.assign(s,{q:c.filter?.q||'',org:c.filter?.org_id||'',tab:c.filter?.project_status||'',selected:c.filter?.project_pick||''});else if(c.setTrainingViewState)Object.assign(s,{q:c.filter?.q||'',org:c.filter?.org_id||'',tab:c.filter?.workspace_status||'',selected:c.filter?.workspace_pick||'',package:c.filter?.package==='true',oneSkill:c.filter?.one_skill==='true'});return s}
+export function trainingChange(section,c,action,value){const s=trainingState(section,c);if(action==='pick')s.selected=value;else if(action==='tab'){s.tab=value;s.selected=''}else if(action==='reset')Object.assign(s,{q:'',org:'',tab:'',package:false,oneSkill:false,selected:''});else if(action==='filter')Object.assign(s,value,{selected:''});if(section==='projects')c.setProjectViewState?.(s);else c.setTrainingViewState?.(section,s);if(['filter','tab','reset'].includes(action))c.setSocialPage?.(1,1);}
 const text=v=>v===0?'0':v==null||v===''?'待补充':String(v);
 const imageUrl=id=>typeof id==='string'&&/^[A-Za-z0-9-]{8,36}$/.test(id)?'/api/social/images/'+id:'';
 const typeIcon={projects:'book',courses:'book',bases:'school',outcomes:'award',trainers:'users'};
@@ -108,7 +108,7 @@ export function renderTrainingWorkspace(section,w,c,options={}){
  const e=c.esc,rows=trainingModels(section,w,c),s=trainingState(section,c);
  if(options.serverSearch!==undefined)s.q=options.serverSearch;
  const filtered=section==='records'?rows:filterTrainingRows(rows,s,section);
- const selected=filtered.find(r=>r.id===s.selected)||filtered[0];s.selected=selected?.id||'';
+ const lostSelection=!!s.selected&&!filtered.some(r=>r.id===s.selected);const selected=filtered.find(r=>r.id===s.selected)||filtered[0];s.selected=selected?.id||'';if(lostSelection){if(section==='projects')c.setProjectViewState?.(s);else c.setTrainingViewState?.(section,s);}
  // 列表里只切换右侧摘要的按钮叫“查看摘要”；打开完整业务的按钮统一叫“查看详情”。
  const pick=(r,label='查看摘要')=>['records','trainers'].includes(section)?`<button type="button" class="btn text tw-row-select" data-action="training-pick" data-id="${e(r.id)}" aria-pressed="${r.id===s.selected}" aria-controls="training-detail" aria-label="${e(label+'：'+r.name+(r.date?' · '+r.date:''))}">${e(label)}</button>`:c.act(label,'training-pick',r.id,'text');
  const orgs=[...new Map(rows.map(r=>[orgKey(r),r.org])).entries()].filter(([k])=>k);
@@ -123,5 +123,5 @@ export function renderTrainingWorkspace(section,w,c,options={}){
  const total=options.total??w.pagination?.total??w.total??rows.length,narrowed=Boolean(s.tab||s.org||s.package||s.oneSkill);
  // 学院、状态等筛选作用于当前已读取的记录；总数超过一页时如实提示，并保留翻页。
  const footer=options.pager||(!narrowed&&options.socialPager)||`<div class="tw-list-footer"><span>${narrowed?'筛选结果 '+filtered.length+' 条 · ':''}共 ${total} 条${narrowed&&total>rows.length?' · 学院和状态筛选仅作用于当前页 '+rows.length+' 条':''}</span>${options.socialPager||''}</div>`;
- return `<section class="training-workspace tw-section-${section}"><div class="tw-heading"><div><h1>${labels[section]}</h1><p>${descriptions[section]}</p></div><div class="tw-heading-actions">${options.actions||''}</div></div>${options.before||''}<div class="tw-layout"><div class="tw-main">${filter}${tabbar}${section==='records'?`<p class="tw-data-summary">本页 ${rows.length} 条记录 · ${rows.reduce((n,r)=>n+Number(r.raw.hours||0),0)} 学时 · ${rows.reduce((n,r)=>n+Number(r.raw.participants||0),0)} 课程人次</p>`:''}${list}${footer}${options.after||''}</div>${preview(selected,section,c)}</div></section>`;
+ return `<section class="training-workspace tw-section-${section}"><div class="tw-heading"><div><h1>${labels[section]}</h1><p>${descriptions[section]}</p></div><div class="tw-heading-actions">${options.actions||''}</div></div>${options.before||''}<div class="tw-layout"><div class="tw-main">${filter}${tabbar}${lostSelection?'<p class="note" role="status">先前选中的记录已不在当前清单，已重新显示当前可见记录。</p>':''}${section==='records'?`<p class="tw-data-summary">本页 ${rows.length} 条记录 · ${rows.reduce((n,r)=>n+Number(r.raw.hours||0),0)} 学时 · ${rows.reduce((n,r)=>n+Number(r.raw.participants||0),0)} 课程人次</p>`:''}${list}${footer}${options.after||''}</div>${preview(selected,section,c)}</div></section>`;
 }

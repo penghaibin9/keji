@@ -404,7 +404,7 @@ def closing_effective_counts(db, project_ids):
         totals[pid]+=unit_counts(data)['effective']
     latest={}
     for pid,after in db.execute(select(WorkflowEvent.object_id,WorkflowEvent.after).where(WorkflowEvent.object_type=='social_project',WorkflowEvent.object_id.in_(ids),WorkflowEvent.action=='投诉与项目跟踪').order_by(WorkflowEvent.created_at,WorkflowEvent.id)):
-        latest[(pid,after['case_reference'])]=after
+        remember_latest_case(latest,(pid,after['case_reference']),after)
     for (pid,_),after in latest.items():
         if after.get('invalidate_cohort'):totals[pid]=0
     return totals
@@ -426,10 +426,20 @@ def project_special_labels(db, projects):
     return labels
 
 
+def remember_latest_case(latest,key,after):
+    previous=latest.get(key)
+    # MySQL timestamps can tie; validated project versions still identify the later continuation.
+    current_version=after.get('expected_version')
+    previous_version=(previous or {}).get('expected_version')
+    if previous and isinstance(current_version,int) and isinstance(previous_version,int) and current_version<previous_version:
+        return
+    latest[key]=after
+
+
 def project_followups(db,ident):
     latest={}
     for event in db.scalars(select(WorkflowEvent).where(WorkflowEvent.object_type=='social_project',WorkflowEvent.object_id==ident,WorkflowEvent.action=='投诉与项目跟踪').order_by(WorkflowEvent.created_at,WorkflowEvent.id)):
-        latest[event.after['case_reference']]=event.after
+        remember_latest_case(latest,event.after['case_reference'],event.after)
     return list(latest.values())
 
 

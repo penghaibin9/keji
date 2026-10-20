@@ -1,3 +1,5 @@
+import * as formDrafts from '../../frontend/form-drafts.js';
+import * as formAssist from '../../frontend/form-assist.js';
 import {renderTrainingWorkspace,trainingChange} from '../../frontend/training-workspace.js';
 // Real renderer/control tests with explicit synthetic API fixtures, not browser E2E.
 
@@ -88,7 +90,7 @@ function engine(responder=async()=>({items:[],total:0,page:1,size:20}), role='sc
  const requests=[], nodes=new Map();
  function node(id){if(!nodes.has(id)){const classes=new Set(),attrs=new Map();nodes.set(id,{innerHTML:'',textContent:'',value:'',classList:{add(v){classes.add(v)},remove(v){classes.delete(v)},contains(v){return classes.has(v)},toggle(v,force){const on=force??!classes.has(v);if(on)classes.add(v);else classes.delete(v);return on}},setAttribute(k,v){attrs.set(k,v)},getAttribute(k){return attrs.get(k)??null},removeAttribute(k){attrs.delete(k)},focus(){},addEventListener(){},append(){},querySelector(){return node(id+'-child')},querySelectorAll(){return []}})}return nodes.get(id)}
  const ctx=vm.createContext({renderTrainingWorkspace,trainingChange,renderSchoolCockpit,bindSchoolCockpit,console,URLSearchParams,URL,Blob,FormData,Number,String,Object,Array,Date,Math,Set,Map,JSON,RegExp,Error,Promise,crypto:globalThis.crypto,setTimeout:()=>0,clearTimeout(){},
-  ...scope,...socialTraining,...workspace,...drafts,...ledgers,...schoolData,...approvalFlow,...applications,renderBusinessHistory,connectorInfo,connectorCards,connectorStatus,incomeChart,guideCards,scopedDateFilters,incomeParticipantsChart,barChart,syncStatusChart,rankRows,percentChange,RANK_METRICS,icons,
+  ...formDrafts,...formAssist,...scope,...socialTraining,...workspace,...drafts,...ledgers,...schoolData,...approvalFlow,...applications,renderBusinessHistory,connectorInfo,connectorCards,connectorStatus,incomeChart,guideCards,scopedDateFilters,incomeParticipantsChart,barChart,syncStatusChart,rankRows,percentChange,RANK_METRICS,icons,
   document:{querySelector:node,querySelectorAll:()=>[],addEventListener(){},createElement:()=>node('created'),body:node('body')},window:{addEventListener(){}},location:{hash:'',pathname:'/',search:''},history:{replaceState(){}},
   fetch:async(url,options)=>{requests.push({url,options});let answer=await responder(url,options);if(url.endsWith('/draft')&&options.method==='GET'&&!answer.connection){const cat=await responder('/api/connections/catalog',options),ident=url.split('/').at(-2),entry=cat.items.find(x=>x.connection.id===ident);answer={connection:entry.connection,draft_version:0,active_version:entry.connection.version||1}}if(url.endsWith('/implementation')&&!answer.statuses){const cat=await responder('/api/connections/catalog',options),ident=url.split('/').at(-2),entry=cat.items.find(x=>x.connection.id===ident);answer={connection_id:ident,code:entry.connection.code,name:entry.connection.name,statuses:{materials:'资料待登记',configuration:'配置待完善',tests:'待真实测试',published:'未发布或授权失效',health:'未检查',acceptance:'待学校签认'}}}return {ok:true,status:200,json:async()=>answer}},
  });
@@ -99,6 +101,22 @@ function engine(responder=async()=>({items:[],total:0,page:1,size:20}), role='sc
  ctx.T.setUser({user:{id:'u',name:'合成用户',is_admin:role==='school'},role:{kind:role,name:role},permissions:['portal.read','records.read','qualification.read','points.read','assessment.read','sync.manage','organization.read','notice.read','import','export','settings.manage','users.manage','audit.read','operations.read','rules.manage','dispute.write'],csrf:'test-csrf'});
  return {t:ctx.T,ctx,requests,node};
 }
+test('登录失效时保留已修改表单，不自动丢弃或重放请求',async()=>{
+ const e=engine(),input={name:'reason',type:'textarea',value:''},form={elements:[input]};
+ formAssist.rememberForm(form);input.value='尚未保存的老师说明';
+ e.node('#modal-root').innerHTML='原填写表单';
+ e.node('#modal-root').querySelectorAll=()=>[form];
+ let calls=0;e.ctx.fetch=async()=>{calls++;return {ok:false,status:401,json:async()=>({detail:'登录失效'})}};
+ await assert.rejects(e.t.api('/qualifications',{method:'POST',body:{reason:input.value}}),/本次填写暂时保留/);
+ assert.equal(input.value,'尚未保存的老师说明');assert.equal(e.node('#modal-root').innerHTML,'原填写表单');
+ assert.equal(calls,1);assert.equal(vm.runInContext('sessionExpired',e.ctx),true);
+});
+test('网络失败保留未知提交边界，不建议刷新或自动重复办理',async()=>{
+ const e=engine();let calls=0;e.ctx.fetch=async()=>{calls++;throw Error('offline')};
+ await assert.rejects(e.t.api('/qualifications/x/actions',{method:'POST',body:{action:'approve'}}),/提交结果尚未确认.*不要刷新或重复提交/);
+ assert.equal(calls,1);
+ await assert.rejects(e.t.api('/qualifications'),/已填写内容请先保留/);
+});
 test('登录页默认选中第一个统一认证标签，开通后跳转原认证入口',async()=>{
  const e=engine(async()=>({available:true})),button=e.node('#sso-login'),note=e.node('#local-login-note');
  let click,target;button.disabled=true;button.addEventListener=(event,handler)=>{if(event==='click')click=handler};e.ctx.location.assign=url=>{target=url};
