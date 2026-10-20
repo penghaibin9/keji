@@ -2,7 +2,7 @@ import {coursePointsAction} from './course-points.js?v=20261019-flow4';
 import {renderTrainingWorkspace,trainingChange} from './training-workspace.js?v=20261019-walk3&nav=20261020-m6';
 import {renderSchoolCockpit,bindSchoolCockpit} from './school-cockpit.js?v=20261019-walk3&display=20261019-clean2';
 import {icons} from './icons.js';
-import {socialPage,socialAction,applicationProjectPicker} from './social-training.js?v=20261019-walk3&selection=20261019-row1&course_points=20261019-flow4&display=20261019-clean2&history_dates=20261020-images1&nav=20261020-m6&core_verify=20261020-1';
+import {socialPage,socialAction,applicationProjectPicker} from './social-training.js?v=20261019-walk3&selection=20261019-row1&course_points=20261019-flow4&display=20261019-clean2&history_dates=20261020-images1&nav=20261020-m6&core_verify=20261021-4';
 import {applicationAction,trainersHtml,applyPageHtml,APPLY_PAGES,myApplicationsHtml,homeApplicationsHtml,myCoursesHtml,libraryHtml,libraryFilterSubmit,homeCoursesHtml,courseAction} from './applications.js?v=20261019-flow3&display=20261019-clean2&trainers=20261020-tabs1&nav=20261020-m6&core_verify=20261021-4';
 import {nextCode,runBatch,batchStage,batchMode,batchPerformer,BATCH_LABELS,materialUploadForm,checkUploadFiles,uploadEntries,uploadSequential,uploadStatusHtml} from './approval-flow.js?v=20261017-multi-materials2';
 import {ledgerPage,resourceStatsPage,homeIndicators,ledgerAction,resetLedgerView,minePage,mineReminders} from './social-ledgers.js?v=20261019-walk3&display=20261019-clean2&nav=20261020-m9';
