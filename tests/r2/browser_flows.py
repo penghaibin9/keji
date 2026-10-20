@@ -61,7 +61,7 @@ with sync_playwright() as p:
                 page.locator('#f-old_password').fill(OLD);page.locator('#f-new_password').fill(NEW);page.locator('#f-repeat').fill(NEW);submit(page)
                 expect(page.locator('#login-form')).to_be_visible()
                 page.locator('#username').fill(name);page.locator('#password').fill(NEW);page.locator('#login-form button[type=submit]').click()
-            expect(page.locator('#content h1')).to_have_text('工作总览')
+            expect(page.locator('#content h1')).to_have_text('首页')
             expect(page.locator('#content .kpis')).to_be_visible()
             cookies=[{k:v for k,v in cookie.items() if k in {'name','secure','httpOnly','sameSite','path'}} for cookie in context.cookies()]
             result['cookie_security'].append({'role':name,'cookies':cookies})
@@ -123,10 +123,10 @@ with sync_playwright() as p:
         nav(school,'cockpit');school.locator('#filters input[name=project_code]').fill('P1');school.locator('#filters button[type=submit]').click()
         expect(school.locator('#content .kpis')).to_be_visible()
         school.locator('#content .kpis [data-action=scope-nav][data-id=records]').first.click()
-        expect(school.locator('#content h1')).to_have_text('培训数据台账')
+        expect(school.locator('#content h1')).to_have_text('培训数据')
         assert 'project_code=P1' in school.url
         expect(school.locator('#filters input[name=project_code]')).to_have_value('P1');snap(school,'filtered-cockpit-drill-preserved')
-        school.go_back();expect(school.locator('#content h1')).to_have_text('学校管理驾驶舱')
+        school.go_back();expect(school.locator('#content h1')).to_have_text('管理驾驶舱')
         expect(school.locator('#filters input[name=project_code]')).to_have_value('P1')
         snap(school,'browser-back-preserved-filter')
         # Editing the current certificate must not alter archived evidence.
