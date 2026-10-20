@@ -168,8 +168,10 @@ def test_new_ledger_version_does_not_confuse_row_position_with_project_identity(
     assert len(make(old)['made'])==2
     newer=submit_sheet(client2,[[1,'项目丙',30,8,30,'测试教师一：30','签到表',''],[2,'项目甲',30,8,30,'测试教师一：30','签到表',''],[3,'项目乙',30,8,30,'测试教师一：30','签到表','']])
     make(newer)
-    names=[p['data']['name'] for p in client2.get('/api/social/workspace?section=projects').json()['projects']]
+    projects=client2.get('/api/social/workspace?section=projects').json()['projects']
+    names=[p['data']['name'] for p in projects]
     assert sorted(names)==['项目丙','项目乙','项目甲'], '新版本插入一行后漏掉项目丙并重复项目乙：'+str(names)
+    assert all(p['org_name'] for p in projects)  # 承办学院名称随项目返回
 
 
 def test_identical_names_do_not_share_personal_allocation(app2,client2):

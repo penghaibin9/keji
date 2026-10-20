@@ -351,7 +351,7 @@ test('学校保留原申请详情布局，教研室学院空态指向本角色�
  }
  for(const kind of ['teacher','dept','college']){
   const c=ctx({items:[],counts:{draft:0,pending:0,returned:0,done:0}});c.me={role:{kind}};c.render=async()=>{};c.table=(_head,_rows,empty,hint)=>empty+' '+hint;await applicationAction('app-mine-filter','',c);
-  const html=await myApplicationsHtml(c);if(['dept','college'].includes(kind)){assert.match(html,/培训课程管理.*培训基地管理/);assert.doesNotMatch(html,/我要申报/);if(kind==='college')assert.match(html,/培训师资库/)}else assert.match(html,/我要申报/);
+  const html=await myApplicationsHtml(c);if(['dept','college'].includes(kind)){assert.match(html,/培训课程.*培训基地/);assert.doesNotMatch(html,/我的申报/);if(kind==='college')assert.match(html,/培训师资/)}else assert.match(html,/我的申报/);
  }
 });
 
@@ -369,7 +369,7 @@ test('代登记退回申请依服务端补正提交权限或登记人识别本�
 });
 
 test('学院课程基地外聘师表单复用现有整页表单，来源与实际审批去向一致',async()=>{
- const cases=[['app-course-new','','培训课程 / 填写资料','/applications/courses',{code:'C1',name:'课程',teacher_id:'teacher',hours:0},'已提交，等待学校审批'],['app-base-new','','培训基地 / 填写资料','/applications/bases',{code:'B1',name:'基地',teacher_id:'teacher',usage_practice:true,onsite:'yes',established_on:'2026-10-01',recognition:'正式依据'},'已提交，等待学校审批'],['app-trainer-new','external','培训师资库 / 填写资料','/applications/trainers',{name:'外聘培训师',unit:'工作单位',dir_community:true,qualification_basis:'资格依据'},'已提交，等待教务处备案审核']];
+ const cases=[['app-course-new','','培训课程 / 填写资料','/applications/courses',{code:'C1',name:'课程',teacher_id:'teacher',hours:0},'已提交，等待学校审批'],['app-base-new','','培训基地 / 填写资料','/applications/bases',{code:'B1',name:'基地',teacher_id:'teacher',usage_practice:true,onsite:'yes',established_on:'2026-10-01',recognition:'正式依据'},'已提交，等待学校审批'],['app-trainer-new','external','培训师资 / 填写资料','/applications/trainers',{name:'外聘培训师',unit:'工作单位',dir_community:true,qualification_basis:'资格依据'},'已提交，等待教务处备案审核']];
  for(const [action,id,location,url,values,message] of cases){
   const c=formContext();c.me={user:{id:'collegehead'},role:{kind:'college'}};c.teacherField=(value,name,label)=>c.field(name,label,'text',value);let toast;c.toast=value=>{toast=value};await applicationAction(action,id,c);
   assert.equal(c.form.options.page,true);assert.equal(c.form.options.contextLabel,location);assert.match(c.form.body,/class="application-form"/);assert.doesNotMatch(c.form.body,/college-form|college-detail/);await c.form.save(values,{querySelectorAll:()=>[]});

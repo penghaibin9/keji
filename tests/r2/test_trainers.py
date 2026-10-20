@@ -34,7 +34,7 @@ def test_internal_trainer_goes_four_levels_and_enters_library(app2, client2):
     d = r.json()
     ident = d['item']['id']
     assert d['flow'] == 'trainer' and d['item']['state'] == 'DEPT' and d['progress']['total'] == 6
-    assert [n['label'] for n in d['progress']['nodes']] == ['提交', '教研室审核', '学院审批', '学校审批', '组织人事部认定', '进入培训师资库']
+    assert [n['label'] for n in d['progress']['nodes']] == ['提交', '教研室审核', '学院审批', '学校审批', '组织人事部认定', '进入培训师资']
     assert internal(c).status_code == 409  # 一人一单
     assert approve(c, ident).status_code == 403  # 本人不能办
     for user in ('depthead', 'collegehead', 'reviewer'):

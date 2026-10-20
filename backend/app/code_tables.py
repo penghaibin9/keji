@@ -58,7 +58,7 @@ def derive_hr_active(db,mapped,cache=None):
     """
     if 'active' in mapped or mapped.get('hr_status_code') in (None,''):return None
     status=(cache if cache is not None else tables(db)).get('hr_status')
-    if not status:return '在职状态码表还没导入，不能判断是否在职（到“对接与同步”→“代码对照”导入）'
+    if not status:return '在职状态码表还没导入，不能判断是否在职（到“系统管理 › 系统对接 › 代码对照”导入）'
     code=str(mapped['hr_status_code']).strip()
     if code not in status:return f'在职状态码 {code} 不在学校码表里'
     mapped['active']=bool(status[code].get('active'))

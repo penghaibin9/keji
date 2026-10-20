@@ -44,8 +44,8 @@ export function presetRoster(values) { roster = {...roster, ...values, page: 1};
 
 const rosterTitle = kind => ({dept: '本室教师名册', college: '本院教师名册', school: '全校教师名册'})[kind] || '教师名册';
 const rosterScopeNote = kind => kind === 'school'
-  ? '学校能看到人事表里全部老师，包括还没对上本系统账号的；没对上账号的老师授课学分算不进积分，请在“账号与权限”里建账号。'
-  : '只列已经对上本系统账号的老师。人事表里还没对上账号的老师，由学校管理员在“账号与权限”里处理。';
+  ? '学校能看到人事表里全部老师，包括还没对上本系统账号的；没对上账号的老师授课学分算不进积分，请在“用户与权限”里建账号。'
+  : '只列已经对上本系统账号的老师。人事表里还没对上账号的老师，由学校管理员在“用户与权限”里处理。';
 
 async function rosterBody(c) {
   const kind = c.me.role.kind;
@@ -54,7 +54,7 @@ async function rosterBody(c) {
   let d;
   try { d = await c.api('/reference/staff-roster?' + new URLSearchParams(params)); }
   catch (err) { return `${c.note('读取失败，请稍后重试：' + err.message, true)}<div class="card-pad">${c.act('重试', 'roster-reload', '', 'sm')}</div>`; }
-  if (!d.ever_synced) return c.note(kind === 'school' ? '人事数据尚未同步，请到“对接与同步”更新。' : '等待学校同步人事数据。');
+  if (!d.ever_synced) return c.note(kind === 'school' ? '人事数据尚未同步，请到“系统对接”更新。' : '等待学校同步人事数据。');
   const showCollege = kind === 'school', showDept = kind !== 'dept';
   const head = ['工号', '姓名', ...(showCollege ? ['学院'] : []), ...(showDept ? ['教研室'] : []), '职称', '教职工类别', '在职状态', '本地账号', `${d.school_year} 学分`, '提示', '操作'];
   const rows = d.items.map(x => [
@@ -122,7 +122,7 @@ export async function showStaffDetail(c, staffNo) {
     ['教职工类别', codeLabel(c, 'staff_type', x.staff_type)], ['在职状态', activeBadge(x) + (x.hr_status_code ? ' ' + codeLabel(c, 'hr_status', x.hr_status_code) : '')],
     ...('edu' in x ? [['性别', codeLabel(c, 'gender', x.gender)], ['学历', codeLabel(c, 'edu', x.edu)], ['学位', codeLabel(c, 'degree', x.degree)]] : [])];
   const warn = [
-    !x.user_id ? c.note('这位老师的工号在本系统没有账号，授课学分算不进积分。请在“账号与权限”里建账号。', true) : '',
+    !x.user_id ? c.note('这位老师的工号在本系统没有账号，授课学分算不进积分。请在“用户与权限”里建账号。', true) : '',
     x.problems.includes('unit_mismatch') ? c.note(`人事单位“${x.hr_org_name}”和本系统组织不一致，请学校管理员核对组织设置。`, true) : '',
     x.problems.includes('inactive_teaching') ? c.note('人事状态为不在职，但本学年还有授课记录，请核对。', true) : ''].join('');
   const years = c.table(['学年', '教务学分', '超星学分', '已认定合计', '课程数', '提示', ''], d.years.map(y => [e(y.school_year), c.number(y.jw_credit, 2), c.number(y.cx_credit, 2), `<strong>${c.number(y.total_credit, 2)}</strong>`, c.number(y.courses), [y.pending_courses ? `<span class="badge orange-b">${y.pending_courses} 门待认定</span>` : '', y.excluded_courses ? `<span class="badge gray-b">${y.excluded_courses} 门不计分</span>` : '', y.missing_credit.length ? `<span class="badge orange-b">${y.missing_credit.length} 门缺学分</span>` : ''].join(' ') || '<span class="muted small">—</span>', c.link('两学期明细', 'credit-detail', x.staff_no + '|' + y.school_year+'|staff')]), '还没有授课记录', '教务排课和超星课程同步后显示。');

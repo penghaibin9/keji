@@ -2,7 +2,7 @@
 export const BUSINESS_KEYS = Object.freeze(['q','teacher_id','org_id','start','end','project_code','course_code']);
 const PERIOD_PAGES = new Set(['home','cockpit','records','points','assessment','disputes','organization','rules']);
 const PAGE_KEYS = Object.freeze({
-  home: [...BUSINESS_KEYS,'state','returned'], cockpit: [...BUSINESS_KEYS,'state','returned','report_year','report_college','report_project','report_unit'], records: [...BUSINESS_KEYS,'tab'], credits: ['tab','q','school_year','problem','review','origin','term_name','org_id','missing_credit'], creditreview: ['q','school_year','all','org_id','pick'], organization: [...BUSINESS_KEYS,'state','returned'],
+  home: [...BUSINESS_KEYS,'state','returned'], cockpit: [...BUSINESS_KEYS,'state','returned','report_year','report_college','report_project','report_unit'], records: [...BUSINESS_KEYS,'tab'], credits: ['tab','q','school_year','problem','review','origin','term_name','org_id','missing_credit'], creditreview: ['q','school_year','all','org_id','pick'], organization: [...BUSINESS_KEYS,'state','returned','tab'],
   assessment: [...BUSINESS_KEYS,'state','returned','business_scope','progress','tab'],
   points: ['teacher_id','org_id'], disputes: ['teacher_id','state'],
   ledgers: ['year','ledger_id','source','ledger_tab','ledger_filter'],

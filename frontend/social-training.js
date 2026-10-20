@@ -1,10 +1,10 @@
 // School business pages reuse the portal's forms, permissions, navigation and attachments.
 import {checkUploadFiles,uploadEntries,uploadSequential,uploadStatusHtml,failedEntries,MAX_ATTACHMENTS} from './approval-flow.js?v=20261017-multi-materials2';
-import {renderTrainingWorkspace,trainingChange} from './training-workspace.js?v=20261019-walk3';
+import {renderTrainingWorkspace,trainingChange} from './training-workspace.js?v=20261019-walk3&nav=20261020-m6';
 import {imageField,takeImage,saveImageAfter,coverButton} from './display-image.js?v=20261019-img3';
 import {historyProjectsPage,projectViewTabs} from './history-projects.js?v=20261019-walk3&display=20261019-clean2&history_dates=20261020-images1';
 const COPY_KEYS=['name','org_id','owner_id','category','high_risk','expected_income','expected_participants','expected_outcomes','mode','class_type','level','level_basis','scene','target_groups','one_skill','province_report','province_basis','auxiliary_standard','auxiliary_daily_cap','total_hours','audiences','audience_other','service_types','teaching_methods','video_minutes','base_count','venue','quality'];
-import {progressHtml,AUDIENCE,TEACHING_MODES,IDEOLOGY} from './applications.js?v=20261019-flow3&display=20261019-clean2&trainers=20261020-tabs1';
+import {progressHtml,AUDIENCE,TEACHING_MODES,IDEOLOGY} from './applications.js?v=20261019-flow3&display=20261019-clean2&trainers=20261020-tabs1&nav=20261020-m6';
 const names={module:'模块式',person_day:'人天式',technical:'技术类',lecture:'讲座类',province:'省级',city:'市级或企业定制',school:'校级',dispatched:'统一委派异地送教',full_day:'全天实操或脱产',ordinary:'常规',subsidy:'补贴性培训',enterprise:'企业定制培训',community:'社区公益培训',rural:'乡村帮扶培训',other:'其他非学历培训',national:'国家级'};
 let workspace,context,opened,workspaceUser;
 let listSection='',listPage=1,listSearch='',resourcePage=1;
@@ -163,7 +163,7 @@ async function deadlinesModal(){
  const STATE={open:'申报中',reopened:'补报中',closed:'已截止'},tone={open:'green-b',reopened:'blue-b',closed:'gray-b'};
  const ops=x=>d.can_set?c.act('改截止日','social-deadline-edit',x.school_year,'text'):d.can_reopen?(x.state==='closed'?c.act('开放补报','social-deadline-reopen',x.school_year,'text'):x.state==='reopened'?c.act('改补报日期','social-deadline-reopen',x.school_year,'text')+c.act('关闭补报','social-deadline-close',x.school_year,'text'):''):'';
  const rows=d.items.map(x=>[e(x.school_year+' 学年'),e(x.deadline)+(x.custom?' <span class="muted small">（已调整，默认 '+e(x.default_deadline)+'）</span>':''),'<span class="badge '+tone[x.state]+'">'+STATE[x.state]+'</span>'+(x.days_left!=null?' <span class="muted small">还剩 '+x.days_left+' 天</span>':''),e(x.reopen_until||'—'),ops(x)]);
- const tip=c.note('从“我的课程”申报的课，每学年的课在学年结束后的 9 月 30 日前申报，到期前 '+d.remind_days+' 天在老师的“我的课程”和教师工作台里提醒。'+(d.can_set?'学校可以调整截止日；':'')+'截止后由学院负责人为本院开放补报，最长 '+d.reopen_max_days+' 天。退回补正的申报不受截止日限制。'+(d.college?'当前学院：'+d.college+'。':''));
+ const tip=c.note('从“我的课程”申报的课，每学年的课在学年结束后的 9 月 30 日前申报，到期前 '+d.remind_days+' 天在老师的“我的课程”和首页里提醒。'+(d.can_set?'学校可以调整截止日；':'')+'截止后由学院负责人为本院开放补报，最长 '+d.reopen_max_days+' 天。退回补正的申报不受截止日限制。'+(d.college?'当前学院：'+d.college+'。':''));
  return c.modal('培训课程申报期限',tip+c.table(['学年','申报截止日','状态','本院补报截止','操作'],rows),c.act('关闭','close'),true);
 }
 
@@ -173,7 +173,7 @@ export async function socialPage(section,c){
  // 教研室查看项目和资源，不直接登记；课程、基地仍可走本人申请流程。
  const can=p=>c.can(p)&&!(p==='records.write'&&c.me?.role?.kind==='dept'&&['projects','courses','bases','outcomes'].includes(section));
  const buttons=[];
- if(section==='annual'&&c.me?.role?.kind==='teacher')buttons.push(act('返回政策通知','nav','notices'));
+ if(section==='annual'&&c.me?.role?.kind==='teacher')buttons.push(act('返回通知公告','nav','notices'));
  // 老师可以申报本人负责的培训项目（先到学院审批，再到学校备案）。
  if(section==='projects'&&(can('records.write')||c.me?.role?.kind==='teacher'))buttons.push(act('申报培训项目','social-project-new','','primary'));
  // 培训课程、培训基地：学校直接登记入库；老师、教研室、学院走申请（学院登记的视为学院已确认，直接到学校审批）。
@@ -220,7 +220,7 @@ export async function socialPage(section,c){
  const summary=p.total?'<div class="social-summary">'+stats.map(([label,value,hint,ico])=>'<article class="social-stat"><div class="social-stat-icon">'+c.icon(ico)+'</div><div><span>'+esc(label)+'</span><strong>'+esc(value)+'</strong></div></article>').join('')+'</div>':'';
  const pager=(c.me?.role?.kind==='teacher'&&p.total<=p.size||(dept||college)&&p.page===1&&p.total<=p.size)?'':'<div class="social-pager"><span>共 '+p.total+' 项 · 第 '+p.page+' 页</span>'+(p.page>1?act('上一页','social-list-page',String(p.page-1)):'')+(p.page*p.size<p.total?act('下一页','social-list-page',String(p.page+1)):'')+'</div>';
  const tools='<form id="social-search-form" class="social-tools" role="search" aria-label="检索'+config.label+'"><input id="social-query" type="search" aria-label="检索关键词" placeholder="输入关键词检索" value="'+esc(listSearch)+'" maxlength="100"><button class="btn" type="submit">'+c.icon('search')+'查询</button>'+(listSearch?act('清空检索','social-list-reset'):'')+'</form>';
- const scopeNote={teacher:{projects:'这里只显示你负责或参与授课的项目。项目由二级学院申报、学校备案；你在“个人数据看板”申报本人积分。',courses:'这里只显示你参与项目关联的课程，以及登记在你名下的课程资源。',bases:'这里显示所属学院的培训基地，供申报和授课时查阅。',outcomes:'这里显示所属学院已登记的培训成果。'},dept:{projects:'这里显示本教研室教师负责或参与的项目，只能查看和导出；申报、备案、结项由学院和学校办理。',courses:'这里显示本教研室项目关联的课程和学院课程资源；可查看课程资料，也可通过“申报培训课程”提交申请。',bases:'这里显示所属学院的培训基地；可查阅已有基地，也可通过“申请培训基地”提交申请。',outcomes:'这里显示所属学院的培训成果，只能查看。'}}[c.me?.role?.kind]?.[section];
+ const scopeNote={teacher:{projects:'这里只显示你负责或参与授课的项目。项目由二级学院申报、学校备案；你在“我的培训明细”申报本人积分。',courses:'这里只显示你参与项目关联的课程，以及登记在你名下的课程资源。',bases:'这里显示所属学院的培训基地，供申报和授课时查阅。',outcomes:'这里显示所属学院已登记的培训成果。'},dept:{projects:'这里显示本教研室教师负责或参与的项目，只能查看和导出；申报、备案、结项由学院和学校办理。',courses:'这里显示本教研室项目关联的课程和学院课程资源；可查看课程资料，也可通过“申报培训课程”提交申请。',bases:'这里显示所属学院的培训基地；可查阅已有基地，也可通过“申请培训基地”提交申请。',outcomes:'这里显示所属学院的培训成果，只能查看。'}}[c.me?.role?.kind]?.[section];
  const empty='<div class="social-empty"><div class="social-empty-art">'+c.icon(listSearch?'search':config.icon)+'</div><h3>'+(listSearch?'没有找到匹配的记录':'还没有'+config.label)+'</h3><p>'+(listSearch?'换个关键词试试。':'')+'</p><div class="social-empty-action">'+(listSearch?act('查看全部','social-list-reset'):['teacher','dept','college'].includes(c.me?.role?.kind)?'':buttons[0]||'')+'</div></div>';
  let content=rows.length?table(headers,rows):empty;
  if(section==='projects'&&c.me?.role?.kind==='teacher'){
@@ -578,7 +578,7 @@ function bindProjectCategory(){
 
 function policyForm(x=null,copy=false){
  const c=context,values={...(x?.data||{}),name:x?(x.name+(copy?'（新版本）':'')):'',period_id:x?.period_id||currentOpenPeriod(c.periods)},edit=x&&!copy;
- if(!c.periods.some(p=>p.state==='OPEN'))throw Error('没有开放的考核周期，请先在“规则与配置 → 考核周期与规则”新增周期');
+ if(!c.periods.some(p=>p.state==='OPEN'))throw Error('没有开放的考核周期，请先在“规则配置 → 考核周期与规则”新增周期');
  const policyField=(key,label,type='text',value='',opts={})=>c.field(key,label,type,Array.isArray(values[key])?values[key].join('\n'):(values[key]??value),opts);
  const choice=(key,label,options)=>policyField(key,label,'select','',{options:[['','待学校确认'],...options],required:false});
  let body=`<div class="social-recommend"><button type="button" class="btn light" id="policy-recommend">按系统推荐口径一键填写（待学校书面确认）</button><p class="cell-sub">只补空白项，不覆盖已填内容；书面依据须由学校确认后填写。</p></div>`+policyField('name','规则版本名称')+policyField('period_id','适用周期','select','',{options:[['','请选择适用年度或学年'],...c.periods.filter(x=>x.state==='OPEN').map(x=>[x.id,x.name])]});
@@ -715,7 +715,7 @@ export async function socialAction(action,id,c){
    if(!submit_now){c.toast(x?'补正已保存，尚未提交；确认无误后在详情里提交':'已保存草稿，可在详情里提交');return r}
    try{await c.api('/social/claims/'+id+'/actions',{method:'POST',body:{action:'submit',expected_version:version,reason:submitReason,basis:data.basis||''}});c.toast(x?'补正已保存并重新提交审批':'已提交审批，院长初审后会继续往下走')}
    catch(err){const msg=notSubmitted(saved,err);outcomeNotes.set(pkey,msg);c.toast(msg,true)}
-   return r},{...(x?{reopen:true,submit:'保存补正并重新提交',reasonLabel:'补正说明',reasonDefault:'按退回意见补正'}:{submit:'申报',reasonLabel:'申报说明',reasonDefault:'申报本人社会培训积分',compact:true,hint:'选项目、拍认定表、点“申报”就办完了；说明已预填，可不改。',after:r=>r?.item?.id?showDetail('social_claim',r.item.id):null}),...(teacher?{page:true,compact:false,draft:x?'仅保存补正':'保存草稿',submit:x?'保存补正并重新提交':'提交审核',contextLabel:'个人数据看板 / 本人积分 / '+(x?'补正资料':'新增申报'),hint:x?'已有材料会保留。仅保存补正不会提交审核；核对无误后再重新提交。':'新申报须先选择认定表材料。保存草稿会保存内容和材料，提交审核才进入办理流程。'}:{})});
+   return r},{...(x?{reopen:true,submit:'保存补正并重新提交',reasonLabel:'补正说明',reasonDefault:'按退回意见补正'}:{submit:'申报',reasonLabel:'申报说明',reasonDefault:'申报本人社会培训积分',compact:true,hint:'选项目、拍认定表、点“申报”就办完了；说明已预填，可不改。',after:r=>r?.item?.id?showDetail('social_claim',r.item.id):null}),...(teacher?{page:true,compact:false,draft:x?'仅保存补正':'保存草稿',submit:x?'保存补正并重新提交':'提交审核',contextLabel:'我的培训明细 / 本人积分 / '+(x?'补正资料':'新增申报'),hint:x?'已有材料会保留。仅保存补正不会提交审核；核对无误后再重新提交。':'新申报须先选择认定表材料。保存草稿会保存内容和材料，提交审核才进入办理流程。'}:{})});
  }
  if(['social-annual-new','social-annual-edit'].includes(action)){
   const x=action==='social-annual-edit'?opened.item:null,old=x?.data||{};

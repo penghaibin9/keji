@@ -176,3 +176,30 @@ body[data-training="true"] .training-workspace .btn.primary:hover{background:#00
 .duty-gap-notice p{margin:4px 0 0;font-size:13px}
 .detail-cover{margin:0 0 12px;max-width:360px}
 .detail-cover img{width:100%;max-height:220px;object-fit:cover;border-radius:6px;display:block;border:1px solid #e1eaf7}
+/* 标题栏“更多操作”下拉：主按钮之外的操作收在这里。 */
+.more-actions{position:relative;display:inline-block}
+.more-actions>summary{list-style:none;cursor:pointer;display:inline-flex;align-items:center;gap:6px}
+.more-actions>summary::-webkit-details-marker{display:none}
+.more-actions>summary::after{content:"";width:7px;height:7px;border-right:1.5px solid currentColor;border-bottom:1.5px solid currentColor;transform:translateY(-2px) rotate(45deg);margin-left:2px}
+.more-actions[open]>summary::after{transform:translateY(2px) rotate(-135deg)}
+.more-actions-menu{position:absolute;right:0;top:calc(100% + 6px);z-index:40;min-width:200px;display:flex;flex-direction:column;gap:2px;padding:6px;background:#fff;border:1px solid #dbe3ef;border-radius:10px;box-shadow:0 12px 32px rgba(15,35,75,.14)}
+.more-actions-menu>.btn{justify-content:flex-start;width:100%;min-height:38px;border:0;background:transparent;color:#1f2d45;font-weight:500;text-align:left;white-space:nowrap}
+.more-actions-menu>.btn:hover,.more-actions-menu>.btn:focus-visible{background:#eef4ff;color:#1d4ed8}
+@media(max-width:560px){.more-actions-menu{right:auto;left:0}}
+/* 其他页面的标题栏向培训业务页统一：同样的字号、颜色和副标题样式。 */
+body:not(.no-shell) #content .pagehead{margin:0 0 20px;align-items:center;gap:20px}
+body:not(.no-shell) #content .pagehead h1{font-size:28px;line-height:1.4;font-weight:750;letter-spacing:0;color:#07194c}
+body:not(.no-shell) #content .page-title .teacher-page-subtitle{font-size:15px;line-height:1.5;color:#536b98}
+@media(max-width:1400px){body:not(.no-shell) #content .pagehead h1{font-size:26px}body:not(.no-shell) #content .page-title .teacher-page-subtitle{font-size:13px}}
+@media(max-width:900px){body:not(.no-shell) #content .pagehead{align-items:flex-start}body:not(.no-shell) #content .pagehead h1{font-size:24px}}
+/* 三级考核：考核对象用分段按钮，办理进度用筛选按钮，与上方页签区分开。 */
+.assessment-object{display:flex;align-items:center;gap:12px;margin:0 0 16px;flex-wrap:wrap}
+.assessment-control-label{font-size:14px;color:#536b98;white-space:nowrap}
+.progress-quick{align-items:center}
+.segmented{display:inline-flex;padding:3px;background:#e9eff8;border-radius:10px;gap:2px;flex-wrap:wrap}
+.segmented>button{border:0;background:transparent;color:#3a4f6f;font-size:14px;min-height:36px;padding:6px 16px;border-radius:8px;cursor:pointer}
+.segmented>button:hover{color:#1d4ed8}
+.segmented>button.active{background:#fff;color:#1d4ed8;font-weight:600;box-shadow:0 1px 3px rgba(15,35,75,.14)}
+.progress-quick:has(>.assessment-control-label){padding:16px 20px 0}
+/* 窄屏头部：按钮间距收紧，避免右侧退出按钮把页面撑出横向滚动条。 */
+@media(max-width:480px){body:not(.no-shell) .nd-header__tools{gap:6px;min-width:0}body:not(.no-shell) .nd-header__exit{margin-left:0;padding-left:0;border-left:0}body:not(.no-shell) .nd-header__icon-button{flex:none}}

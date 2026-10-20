@@ -146,7 +146,9 @@ def workspace(request:Request,section:str=Query('projects',pattern='^(projects|c
                 out['effective']=effective[p.id]
                 if (item.get('closeout') or {}).get('actual_income') is not None:out['actual_income']=item['closeout']['actual_income']
             return out
-        project_items=[{**(item:=st.project_read_item(a,p)),'metrics':metrics(p,item),'state_label':special_labels.get(p.id) or st.state_label(p),'report_issues':application_blockers(p.data),'video_minutes':round(minutes.get(p.data['code'],0))} for p in projects]
+        # 承办学院名称随授权项目返回：教师、教研室的组织列表不含学院，不能在页面上显示成“—”。
+        project_orgs=dict(db.execute(select(Org.id,Org.name).where(Org.id.in_({p.org_id for p in projects}))).all()) if projects else {}
+        project_items=[{**(item:=st.project_read_item(a,p)),'org_name':project_orgs.get(p.org_id,''),'metrics':metrics(p,item),'state_label':special_labels.get(p.id) or st.state_label(p),'report_issues':application_blockers(p.data),'video_minutes':round(minutes.get(p.data['code'],0))} for p in projects]
         claim_items=[st.claim_read_item(db,a,c) for c in claims]
         return {'projects':project_items,'history_available':a.role.kind in ('school','college') and request.app.state.settings.school_reports_dir is not None,'claims':claim_items,'annuals':[{**st.annual_read_item(a,row),'org_name':resource_orgs.get(row.org_id,'—')} for row in annuals],'resources':[{**st.resource_read_item(a,row),'state_label':st.state_label(row),'org_name':resource_orgs[row.org_id]} for row in resources],
                 'policies':display(policies),'courses':serial(courses),'course_stats':serial(course_stats),'course_info':serial(course_info),'states':st.STATES,'decisions':st.DECISIONS,
