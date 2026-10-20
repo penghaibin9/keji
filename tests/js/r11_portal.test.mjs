@@ -1309,12 +1309,12 @@ test('资质临期采用学校提醒天数，草稿不标临期，学校当天�
  assert.doesNotMatch(expiry('2026-10-23',5),/即将到期/);assert.match(expiry('2026-10-23',30),/即将到期 · 剩余 6 天/);assert.doesNotMatch(expiry('2026-10-23',30,'DRAFT'),/即将到期/);assert.match(expiry('2026-10-17',0),/今天到期/);assert.match(expiry('2026-10-16',30),/已过期 1 天/);assert.match(expiry(null,30),/长期有效/);
 });
 
-test('教师资质列表按状态提供入口，去掉本人姓名与版本列，单页不显示翻页',async()=>{
+test('资质列表四种身份都按状态页签筛选；教师去掉本人姓名与版本列，单页不显示翻页',async()=>{
  const items=['DRAFT','RETURNED','APPROVED'].map((state,i)=>({id:'q'+i,name:'证书<'+i+'>',category:'教学资质',state,certificate_no:'Q'+i,issuer:'合成机构',expires:null}));
  const e=engine(async url=>url.includes('/qualification-summary')?{items:[{key:'VALID',count:1}],expiry_days:5,note:'学校提前5天提醒'}:{items,total:3,page:1,size:20},'teacher');
  e.t.setUser({user:{id:'u',staff_no:'T1'},role:{kind:'teacher'},permissions:['qualification.read','qualification.write','portal.read']});
  const html=await e.t.pages.qualifications();for(const label of ['继续填写','补充材料','查看详情','合成机构','学校提前5天提醒'])assert.ok(html.includes(label),label);assert.match(html,/证书&lt;0&gt;/);assert.doesNotMatch(html,/<th[^>]*>教师<|<th[^>]*>版本<|pagination/);
- const manager=engine(async()=>({items,total:3,page:1,size:20}));const all=await manager.t.pages.qualifications();assert.match(all,/<th[^>]*>教师<|<th[^>]*>版本</);assert.doesNotMatch(all,/teacher-qualification-list/);
+ const manager=engine(async()=>({items,total:3,page:1,size:20}));const all=await manager.t.pages.qualifications();assert.match(all,/<th[^>]*>教师 \/ 所属组织</);assert.match(all,/<th[^>]*>版本</);assert.match(all,/qualification-state-tabs/);assert.match(all,/>待审核</);
 });
 
 test('我的资质列表在原证书列展示图片入口，无附件记录说明缺图，管理角色保留原表格',async()=>{
