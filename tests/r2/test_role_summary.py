@@ -46,6 +46,33 @@ def test_ordinary_teacher_summary_does_not_grant_demo_access(app2, client2):
     assert response.json() == {'demo_switch': None, 'identities': [], 'current_todo_count': 1}
 
 
+def test_teacher_summary_matches_own_action_list_including_project_and_expiry(app2, client2):
+    from datetime import timedelta
+    from app.social_models import SocialProject
+    from test_project_apply import teacher_project
+
+    add_qualifications(app2)
+    auth(client2, 'teacher')
+    project = teacher_project(client2)
+    with app2.state.sessions.begin() as db:
+        item = db.get(SocialProject, project['id'])
+        item.state = 'FILED'
+        item.data = {**item.data, 'end_date': (date.today() - timedelta(days=1)).isoformat()}
+        db.add(Qualification(id='role-summary-expiry', teacher_id='teacher',
+                            category='职业资格', name='合成到期核对', certificate_no='TEST-EXPIRY',
+                            issuer='测试机构', obtained=date(2026, 1, 1),
+                            expires=date.today() + timedelta(days=1), state='APPROVED'))
+    tasks = client2.get('/api/todos?attention=handle&size=100').json()
+    assert tasks['total'] == 3
+    assert {x['id'] for x in tasks['items']} == {
+        'role-summary-draft', 'role-summary-expiry', project['id']}
+    assert client2.get('/api/auth/role-summary').json()['current_todo_count'] == tasks['total']
+    auth(client2, 'otherteacher')
+    other = client2.get('/api/todos?attention=handle').json()
+    assert other['total'] == 0
+    assert client2.get('/api/auth/role-summary').json()['current_todo_count'] == 0
+
+
 def test_role_summary_keeps_real_extra_identity_scope(app2, client2):
     from test_multi_identity import _add_extra
     add_qualifications(app2)
