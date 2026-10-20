@@ -864,3 +864,23 @@ test('学院学校共用项目次要动作折叠，教师原动作不变且无�
   }else{assert.match(main,/data-action="social-prep"/);assert.match(main,/data-id="refile"/);if(role==='school')assert.match(main,/data-action="social-report-info"/)}
  }
 });
+
+
+test('结项补正的全选状态随已保存核对项初始化，并随单项变化',async()=>{
+ const c=renderContext({},['records.write']);await renderSocial('projects',c);
+ c.modal=()=>{};c.downloads=()=>'';c.eventsHtml=()=>'';c.formModal=()=>{};
+ c.api=async()=>({item:{id:'check-project',owner_id:'teacher',state:'FILED',version:1,data:{name:'合成结项',category:'community'},closeout:{}},facts:{units:[],followups:[]},attachments:[],events:[]});
+ await socialAction('social-detail','social_project|check-project',c);
+ const original=globalThis.document;
+ try{
+  for(const states of [[true,true],[true,false],[false,false]]){
+   const input=(checked=false)=>({checked,value:'',style:{},addEventListener(type,fn){this[type]=fn}}),all=input(),boxes=states.map(input),fields=new Map([['close-check-all',all]]);
+   for(const id of ['f-actual_income','f-funding_source','f-satisfaction','f-location','f-retained','f-personnel'])fields.set(id,input());
+   globalThis.document={getElementById:id=>fields.get(id)||null,querySelectorAll:selector=>selector.includes('name^="checked_"')?boxes:[]};
+   await socialAction('social-close','',c);await new Promise(resolve=>setTimeout(resolve,5));
+   assert.equal(all.checked,states.every(Boolean));
+   boxes[0].checked=false;boxes[0].change();assert.equal(all.checked,false);
+   all.checked=true;all.change();assert.ok(boxes.every(x=>x.checked));
+  }
+ }finally{globalThis.document=original}
+});

@@ -557,7 +557,7 @@ function bindCloseForm(){
  const sync=()=>{const money=Number(income.value||0),special=source.value==='government_special';show('special',special);show('split',!special);show('rect',sat.value!==''&&Number(sat.value)<85);
   if(hint){const r=Number(ret.value||0),p=Number(per.value||0),off=loc.value==='offsite',minR=off?10:20,maxP=off?70:60;hint.textContent=money>0&&!special?'按到账收入 '+money+' 元：学校留存至少 '+(money*minR/100).toFixed(2)+' 元，人员支出至多 '+(money*maxP/100).toFixed(2)+' 元'+(r||p?'；当前留存 '+(r/money*100).toFixed(1)+'%、人员支出 '+(p/money*100).toFixed(1)+'%'+(r<money*minR/100||p>money*maxP/100?'，不符合比例要求':'，符合比例要求'):''):'';hint.style.color=/不符合/.test(hint.textContent)?'#c0392b':/符合/.test(hint.textContent)?'#218b74':''}};
  for(const el of [income,source,sat,loc,ret,per])el?.addEventListener('input',sync),el?.addEventListener('change',sync);sync();
- const boxes=[...document.querySelectorAll('#edit-form input[type=checkbox][name^="checked_"]')];
+ const boxes=[...document.querySelectorAll('#edit-form input[type=checkbox][name^="checked_"]')];if(all)all.checked=boxes.length>0&&boxes.every(x=>x.checked);
  all?.addEventListener('change',()=>boxes.forEach(b=>b.checked=all.checked));boxes.forEach(b=>b.addEventListener('change',()=>{all.checked=boxes.every(x=>x.checked)}));
 }
 const VENUE_PLACE={base:'例：湘茶思政实践基地',campus:'例：实训楼101教室',offsite:'例：湘茶集团茶园'};
