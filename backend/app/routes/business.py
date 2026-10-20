@@ -326,8 +326,15 @@ def approval_center(request:Request):
     allowed={'tab','q','type','state','period_id','org_id','stage'}
     filters,page,size=filters_from(request,allowed)
     filters=clean_filters(filters,allowed)
-    return read_operation(request,'portal.read',lambda db,a,s:load(db,a,filters,page,size,
-        _todo_items(db,a) if filters.get('tab','handle')=='handle' else []))
+    def run(db,a,s):
+        source=_todo_items(db,a) if filters.get('tab','handle')=='handle' else []
+        result=load(db,a,filters,page,size,source)
+        # 右上角待办数还包括安全提示、接口失败；审批清单不列它们，但要说明数量和去处，避免总数对不上。
+        result['system_items']=[{'type':x['type'],'id':x['id'],'title':x.get('title','')} for x in source
+            if x['type'] in {'sync','security'} and x.get('action_required',True) and x['state']!='EXPIRING'
+            and (not x.get('target_id') or x['target_id'] in a.org_ids)]
+        return result
+    return read_operation(request,'portal.read',run)
 
 
 @router.get('/portal/workbench')

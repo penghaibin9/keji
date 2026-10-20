@@ -1940,6 +1940,11 @@ test('教研室导出详情突出下载状态并折叠处理记录',async()=>{
 });
 
 
+test('审批中心写明右上角待办另含的系统提醒数量和去处',async()=>{
+ const e=engine(()=>({items:[],total:2,page:1,size:20,counts:{},stages:[],can_archive:false,system_items:[{type:'security',id:'security-alerts',title:'安全提示'}]}));e.t.setState('todos');
+ const html=await e.t.pages.todos();assert.match(html,/本页只列业务审批/);assert.match(html,/安全提示 1 项/);assert.match(html,/data-id="audit"/);assert.doesNotMatch(html,/接口失败/);
+ const none=engine(()=>({items:[],total:0,page:1,size:20,counts:{},stages:[],can_archive:false,system_items:[]}));none.t.setState('todos');assert.doesNotMatch(await none.t.pages.todos(),/系统提醒/);
+});
 test('审批中心三分区复用原单并显示具体事项与周期，教师仍读本人待办',async()=>{
  const item={type:'qualification',id:'q',title:'资质审核',business_name:'证书<甲>',business_type_label:'教师资质',owner_name:'张<老师>',staff_no:'J001',org_name:'本室',period_name:'2026周期',state:'SUBMITTED',state_label:'待审核',entered_at:'2026-10-18T01:00:00',action_label:'查看并办理'};
  const e=engine(()=>({items:[item],total:1,page:1,size:20,counts:{qualification:1},stages:['SUBMITTED'],can_archive:false}),'college');e.t.setState('todos');const html=await e.t.pages.todos();
