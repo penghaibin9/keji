@@ -429,6 +429,12 @@ test('audit changes still expose both before and after business evidence',()=>{
 test('help role selection never grants the current user additional navigation',async()=>{
  const e=engine(undefined,'teacher');e.t.setUser({user:{id:'u'},role:{kind:'teacher'},permissions:['portal.read','records.read']});e.t.setState('help');vm.runInContext("helpAudience='school'",e.ctx);const html=await e.t.pages.help();assert.match(html,/维护组织、账号与角色/);assert.match(html,/当前账号没有此办理入口/);assert.doesNotMatch(html,/data-action="nav" data-id="permissions"/);
 });
+test('帮助中心按新菜单写路径，并列出原菜单名称对照',async()=>{
+ const e=engine(undefined,'teacher');e.t.setUser({user:{id:'u'},role:{kind:'teacher'},permissions:['portal.read','records.read','qualification.read','points.read']});e.t.setState('help');vm.runInContext("helpAudience='current'",e.ctx);
+ const html=await e.t.pages.help();assert.match(html,/教师发展 › 教师资质/);assert.match(html,/菜单说明/);assert.match(html,/原菜单名称对照/);
+ assert.match(html,/个人数据看板|教师工作台/);assert.match(html,/表格导入导出、表格导入中心/);assert.match(html,/<td>导入导出<\/td>|>导入导出</);assert.doesNotMatch(html,/我要申报|我的培训数据，选择/);
+ assert.ok(vm.runInContext("navAliases.todos.includes('审批中心')&&navAliases.cockpit.includes('学校管理驾驶舱')",e.ctx));
+});
 test('delivery checklist cannot manufacture acceptance from healthy process values',()=>{
  const e=engine();const html=vm.runInContext('deliveryReadiness()',e.ctx);assert.match(html,/待提供学校验收证据/);assert.match(html,/不从运行心跳推断验收通过/);assert.doesNotMatch(html,/green-b/);
 });
