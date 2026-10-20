@@ -68,11 +68,11 @@ const empty=(s='暂无记录',desc='')=>`<div class="empty">${icon('data')}<h3>$
 const note=(s,warn=false,summary='')=>summary&&!warn?`<details class="ui-note"><summary>${esc(summary)}</summary><div>${esc(s)}</div></details>`:`<div class="info-banner ${warn?'warn':''}">${icon(warn?'warning':'help')}<div>${esc(s)}</div></div>`;
 const json=o=>`<pre class="data-json">${esc(JSON.stringify(o,null,2))}</pre>`;
 const ts=v=>v?new Date(/(?:Z|[+-]\d{2}:\d{2})$/.test(v)?v:v+'Z').toLocaleString('zh-CN',{hour12:false}):'—';
-const titles={apply_course:'申报培训课程',apply_project:'申报培训项目',apply_base:'申请培训基地',apply_trainer:'申报培训师',mine:'个人培训',ledgers:'学院台账与口径检查',resources:'培训课程视频分钟资源',projects:'培训项目管理',courses:'培训课程管理',bases:'培训基地管理',trainers:'培训师资库',outcomes:'培训成果',recognition:'社会培训积分认定',annual:'学院年度考核',policy:'学校制度执行口径',home:'工作总览',todos:'审批中心',cockpit:'学校管理驾驶舱',records:'培训数据',credits:'授课与学分',creditreview:'授课认定',qualifications:'教师资质管理',points:'教师积分激励',assessment:'三级考核管理',disputes:'数据核对与复核',organization:'教研室与二级学院管理',rules:'规则与周期',imports:'表格导入中心',exports:'导出与任务中心',permissions:'账号与权限',settings:'字典与参数',audit:'操作日志与安全审计',sync:'对接与同步',implementation:'接口实施工具',sso:'学校统一认证',hub:'学校数据中台',province:'湘培直通车',guide:'对接怎么开始',operations:'运行与备份',notices:'政策通知',help:'操作指引'};
+const titles={apply_course:'申报培训课程',apply_project:'申报培训项目',apply_base:'申请培训基地',apply_trainer:'申报培训师',mine:'我的培训明细',ledgers:'学院台账',resources:'课程资源统计',projects:'培训项目',courses:'培训课程',bases:'培训基地',trainers:'培训师资',outcomes:'培训成果',recognition:'申报与认定',annual:'学院年度考核',policy:'学校制度执行口径',home:'首页',todos:'待办中心',cockpit:'管理驾驶舱',records:'培训数据',credits:'授课学分',creditreview:'授课认定',qualifications:'教师资质',points:'教师积分',assessment:'三级考核',disputes:'数据核对',organization:'院系概况',rules:'考核周期与规则',imports:'表格导入',exports:'导出下载',permissions:'用户与权限',settings:'字典与参数',audit:'安全提示与操作日志',sync:'系统对接',implementation:'接口实施工具',sso:'学校统一认证',hub:'学校数据中台',province:'湘培直通车',guide:'对接怎么开始',operations:'运行与备份',notices:'通知公告',help:'帮助中心'};
 // 同一页面对不同角色的叫法：教研室负责人在台账页只看本教研室平均积分。
-const roleTitles={dept:{ledgers:'教研室平均积分',organization:'本教研室管理'},college:{organization:'本学院与教研室管理'},teacher:{home:'教师工作台',mine:'个人数据看板',annual:'学院考核公示',todos:'我的待办',assessment:'三级考核管理',points:'教师积分激励',recognition:'积分申报',projects:'培训项目',courses:'培训课程',bases:'培训基地',qualifications:'教师资质管理',records:'我的培训数据',credits:'我的课程',disputes:'我提出的核对',exports:'导出下载'}};
+const roleTitles={};
 // 教师看到的合并页名称（菜单和页签标题）。
-const roleGroupTitles={teacher:{assessment:'三级考核管理',points:'教师积分激励'}};
+const roleGroupTitles={};
 // 授课认定人即使是普通教师身份，也办理全校的授课认定，页面不叫“我的授课与学分”。
 const pageTitle=p=>(p==='credits'&&me?.credit_reviewer?null:roleTitles[me?.role?.kind]?.[p])||titles[p];
 let me=null,csrf='',page='home',filter={},tablePage=1,participationPage=1,periodId='',periods=[],teachers=[],orgs=[],view={},modalContext=null,renderSequence=0,assessmentTab='teacher',settingsSelection='';
@@ -537,32 +537,30 @@ function loginView(message=''){
  }).catch(()=>{const note=$('#local-login-note');if(note)note.textContent='暂时无法确认统一认证状态，请切换“本地账号登录”。'});
 }
 // 系统管理简化（2026-10-09）：几个相关页面合成一个菜单，页面顶部用标签切换；原页面和权限代码不变。
-const pageGroups={rules:{title:'规则与配置',tabs:[['rules','考核周期与规则','rules.manage'],['policy','社会培训制度口径','rules.manage'],['settings','字典与参数','settings.manage']]},audit:{title:'日志与运行',tabs:[['audit','安全提示与操作日志','audit.read'],['operations','运行与备份','operations.read']]},assessment:{title:'三级考核管理',tabs:[['assessment','三级考核','assessment.read'],['annual','学院社会培训年度考核','assessment.read']]},points:{title:'教师积分激励',tabs:[['points','积分核对与确认','points.read'],['recognition','社会培训积分申报与认定','points.read']]},imports:{title:'表格导入导出',tabs:[['imports','表格导入','import'],['exports','导出下载','export']]}};
+const pageGroups={rules:{title:'规则配置',tabs:[['rules','考核周期与规则','rules.manage'],['policy','社会培训制度口径','rules.manage'],['settings','字典与参数','settings.manage']]},audit:{title:'日志与运维',tabs:[['audit','安全提示与操作日志','audit.read'],['operations','运行与备份','operations.read']]},assessment:{title:'三级考核',tabs:[['assessment','教师与组织考核','assessment.read'],['annual','学院年度考核','assessment.read']]},points:{title:'教师积分',tabs:[['points','积分明细','points.read'],['recognition','申报与认定','points.read']]},imports:{title:'导入导出',tabs:[['imports','表格导入','import'],['exports','导出下载','export']]}};
 const pageGroupOf=p=>Object.keys(pageGroups).find(g=>pageGroups[g].tabs.some(([k])=>k===p));
 const groupNavItem=(g,ico)=>{const t=pageGroups[g].tabs.find(([,,perm])=>can(perm));return t?[[t[0],ico,t[2]]]:[]};
 // 教师菜单里项目、课程、基地、师资只有“我要申报”入口；从看板、通知等进入业务页时，侧栏同样选中对应入口。
 const teacherNavAlias={projects:'apply_project',courses:'apply_course',bases:'apply_base',trainers:'apply_trainer'};
-const navKey=p=>['sso','hub','province','guide','implementation'].includes(p)?'sync':p==='resources'&&me?.role?.kind!=='teacher'?'courses':me?.role?.kind==='teacher'&&teacherNavAlias[p]?teacherNavAlias[p]:(pageGroupOf(p)||p);
-// 只有一个可用标签时，菜单直接用该页名称（例如教师只能导出，不显示“表格导入导出”）。
-const navLabel=p=>{const g=pageGroupOf(p);if(g){const own=roleGroupTitles[me?.role?.kind]?.[g];if(own)return own;const tabs=pageGroups[g].tabs.filter(([,,perm])=>can(perm));return tabs.length===1?tabs[0][1]:pageGroups[g].title}return (p==='credits'&&me?.credit_reviewer?null:roleTitles[me?.role?.kind]?.[p])||({organization:'学院与教研室'})[p]||pageTitle(p)};
-function pageGroupTabs(p){const g=pageGroupOf(p);if(!g)return '';const tabs=pageGroups[g].tabs.filter(([key,,perm])=>can(perm)&&pageAllowed(key));if(tabs.length<2)return '';return `<nav class="section-tabs page-group-tabs" aria-label="${esc(pageGroups[g].title)}">${tabs.map(([k,l])=>`<button type="button" data-action="nav" data-id="${k}" class="${k===p?'active':''}" aria-pressed="${k===p}">${esc(me.role.kind==='teacher'?({points:'已认定明细',recognition:'申报进度',assessment:'我的年度考核',annual:'学院考核公示'}[k]||l):l)}</button>`).join('')}</nav>`}
+const navKey=p=>['sso','hub','province','guide','implementation'].includes(p)?'sync':p==='mine'?'home':me?.role?.kind==='teacher'&&teacherNavAlias[p]?teacherNavAlias[p]:(pageGroupOf(p)||p);
+// 只有一个可用标签时，菜单直接用该页名称。
+const navLabel=p=>{const g=pageGroupOf(p);if(g){const own=roleGroupTitles[me?.role?.kind]?.[g];if(own)return own;const tabs=pageGroups[g].tabs.filter(([,,perm])=>can(perm));return tabs.length===1?tabs[0][1]:pageGroups[g].title}return (p==='credits'&&me?.credit_reviewer?null:roleTitles[me?.role?.kind]?.[p])||(p.startsWith('apply_')?pageTitle(p.slice(6).replace(/^(project|course|base|trainer)$/,'$1s')):pageTitle(p))};
+function pageGroupTabs(p){const g=pageGroupOf(p);if(!g)return '';const tabs=pageGroups[g].tabs.filter(([key,,perm])=>can(perm)&&pageAllowed(key));if(tabs.length<2)return '';return `<nav class="section-tabs page-group-tabs" aria-label="${esc(pageGroups[g].title)}">${tabs.map(([k,l])=>`<button type="button" data-action="nav" data-id="${k}" class="${k===p?'active':''}" aria-pressed="${k===p}">${esc(l)}</button>`).join('')}</nav>`}
 // “授课认定”菜单只给授课认定人和系统管理员等学校审核账号（me.credit_reviewer）。
 const reviewNavItem=()=>me?.credit_reviewer?[['creditreview','check','portal.read']]:[];
 function navItems(){
- // 教师入口依次为我的工作、我的业务、我要申报；组内入口和权限不变。
- if(me.role.kind==='teacher')return [['我的工作',[['home','home','portal.read'],['todos','tasks','portal.read'],['notices','notice','notice.read']]],['我的业务',[['credits','book','records.read'],['mine','users','portal.read'],['qualifications','cert','qualification.read'],...reviewNavItem(),['points','award','points.read'],['assessment','assess','assessment.read']]],['我要申报',[['apply_course','book','portal.read'],['apply_project','tasks','portal.read'],['apply_base','org','portal.read'],['apply_trainer','cert','portal.read']]]].map(([group,items])=>[group,items.filter(x=>can(x[2])&&pageAllowed(x[0]))]).filter(([,items])=>items.length);
- // 管理角色按办事顺序分组。
+ // 四种身份共用一棵菜单树：分组和顺序相同，无权的项隐藏。教师的培训业务入口暂指向本人申报页。
+ const teacher=me.role.kind==='teacher',business=teacher?[['apply_project','book'],['apply_course','book'],['apply_base','org'],['apply_trainer','cert']].map(([p,i])=>[p,i,'portal.read']):[['projects','book','records.read'],['courses','book','records.read'],['bases','org','records.read'],['trainers','cert','records.read']];
  return [
- ['待办与通知',[['home','home','portal.read'],['todos','tasks','portal.read'],['notices','notice','notice.read']]],
- ['培训业务',[['projects','book','records.read'],['courses','book','records.read'],['bases','org','records.read'],['trainers','cert','records.read'],['records','data','records.read'],['outcomes','award','records.read']]],
- ['教师与资质',[['qualifications','cert','qualification.read'],['credits','book','records.read'],...reviewNavItem()]],
- ['积分与考核',[['points','award','points.read'],['assessment','assess','assessment.read'],['disputes','help','dispute.write']]],
- ['统计分析',[...(me.role.kind==='school'?[['cockpit','chart','portal.read']]:[]),['ledgers','data','records.read']]],
- ['系统管理',[['organization','org','organization.read'],['permissions','shield','users.manage'],...groupNavItem('imports','download'),['sync','sync','sync.manage'],...groupNavItem('rules','settings'),...groupNavItem('audit','logs')]]
+ ['工作台',[['home','home','portal.read'],['todos','tasks','portal.read'],['notices','notice','notice.read']]],
+ ['教师发展',[['qualifications','cert','qualification.read'],['credits','book','records.read'],...reviewNavItem(),['points','award','points.read'],['assessment','assess','assessment.read'],['disputes','help','dispute.write']]],
+ ['培训业务',business],
+ ['统计分析',[['records','data','records.read'],['outcomes','award','records.read'],['resources','chart','records.read'],['organization','org','organization.read'],['ledgers','data','records.read'],['cockpit','chart','portal.read']]],
+ ['系统管理',[['permissions','shield','users.manage'],...(teacher?[]:groupNavItem('imports','download')),['sync','sync','sync.manage'],...groupNavItem('rules','settings'),...groupNavItem('audit','logs')]]
  ].map(([group,items])=>[group,items.filter(x=>can(x[2])&&pageAllowed(x[0]))]).filter(([,items])=>items.length);}
 let sidebarPage='';
 function sidebarNavigation(){
- return navItems().map(([group,items],index)=>`<section class="nav-section"><button type="button" class="nav-group" data-action="toggle-nav-group" aria-expanded="true" aria-controls="nav-group-${index}"><span class="nav-group-label">${icon(({我的工作:'tasks',我要申报:'plus',我的业务:'book',待办与通知:'tasks',培训业务:'book',教师与资质:'cert',积分与考核:'assess',统计分析:'chart',系统管理:'settings'})[group]||'tasks')}<span>${esc(group)}</span></span>${icon('down')}</button><div class="nav-group-items" id="nav-group-${index}">${items.map(([p,i])=>`<button type="button" data-action="nav" data-id="${p}" class="nav-item" title="${esc(navLabel(p))}" aria-label="${esc(navLabel(p))}">${icon(i)}<span class="nav-label">${esc(navLabel(p))}</span></button>`).join('')}</div></section>`).join('');
+ return navItems().map(([group,items],index)=>`<section class="nav-section"><button type="button" class="nav-group" data-action="toggle-nav-group" aria-expanded="true" aria-controls="nav-group-${index}"><span class="nav-group-label">${icon(({工作台:'home',教师发展:'cert',培训业务:'book',统计分析:'chart',系统管理:'settings'})[group]||'tasks')}<span>${esc(group)}</span></span>${icon('down')}</button><div class="nav-group-items" id="nav-group-${index}">${items.map(([p,i])=>`<button type="button" data-action="nav" data-id="${p}" class="nav-item" title="${esc(navLabel(p))}" aria-label="${esc(navLabel(p))}">${icon(i)}<span class="nav-label">${esc(navLabel(p))}</span></button>`).join('')}</div></section>`).join('');
 }
 function setNavigationGroup(button,open){
  button.setAttribute('aria-expanded',String(open));

@@ -889,28 +889,29 @@ test('global search is explicitly named when its visual text is hidden on mobile
 
 test('selected design keeps all authorized navigation and Chinese group headings',()=>{
  const e=engine();const html=e.t.sidebarNavigation();
- for(const title of ['待办与通知','培训业务','教师与资质','积分与考核','统计分析','系统管理','表格导入导出','对接与同步','规则与配置','日志与运行','账号与权限'])assert.ok(html.includes(title),title);
- for(const route of ['home','todos','records','qualifications','points','assessment','rules','permissions','audit','sync','imports','organization','cockpit','ledgers'])assert.ok(html.includes('data-id="'+route+'"'),route);
- // 系统管理简化：字典参数、运行备份、导出下载并入合并页的标签，不再单独占菜单。
+ const groups=[...html.matchAll(/<span class="nav-group-label">.*?<span>([^<]+)<\/span>/g)].map(m=>m[1]);
+ assert.deepEqual(groups,['工作台','教师发展','培训业务','统计分析','系统管理']);
+ for(const title of ['首页','待办中心','教师资质','授课学分','教师积分','三级考核','培训项目','培训课程','培训基地','培训师资','培训数据','课程资源统计','院系概况','学院台账','管理驾驶舱','用户与权限','导入导出','系统对接','规则配置','日志与运维'])assert.ok(html.includes('title="'+title+'"'),title);
+ for(const route of ['home','todos','records','qualifications','points','assessment','rules','permissions','audit','sync','imports','organization','cockpit','ledgers','resources'])assert.ok(html.includes('data-id="'+route+'"'),route);
+ // 字典参数、运行备份、导出下载并入合并页的标签，不再单独占菜单。
  for(const route of ['settings','operations','exports'])assert.ok(!html.includes('data-id="'+route+'"'));
- assert.equal((html.match(/aria-expanded="true"/g)||[]).length,6);
- assert.match(html,/aria-controls="nav-group-0"/);assert.match(html,/title="工作总览" aria-label="工作总览"/);
- const business=html.slice(html.indexOf('>培训业务<'),html.indexOf('>教师与资质<'));
- for(const title of ['培训项目管理','培训课程管理','培训基地管理','培训数据'])assert.ok(business.includes(title),title);
- assert.doesNotMatch(business,/data-id="points"|data-id="assessment"/);
+ assert.equal((html.match(/aria-expanded="true"/g)||[]).length,5);
+ const business=html.slice(html.indexOf('>培训业务<'),html.indexOf('>统计分析<'));
+ assert.deepEqual([...business.matchAll(/data-id="(\w+)"/g)].map(m=>m[1]),['projects','courses','bases','trainers']);
+ const stats=html.slice(html.indexOf('>统计分析<'),html.indexOf('>系统管理<'));
+ assert.deepEqual([...stats.matchAll(/data-id="(\w+)"/g)].map(m=>m[1]),['records','outcomes','resources','organization','ledgers','cockpit']);
 });
-test('教师菜单我的业务紧随政策通知，保留全部入口和三个分组',()=>{
+test('教师与管理角色共用一棵菜单树，教师培训业务暂指向本人申报页',()=>{
  const e=engine(undefined,'teacher');e.t.setUser({user:{id:'u',name:'教师'},role:{kind:'teacher'},permissions:['portal.read','records.read','qualification.read','qualification.write','points.read','assessment.read','dispute.write','notice.read','export']});
  const html=e.t.sidebarNavigation(),ids=[...html.matchAll(/data-action="nav" data-id="(\w+)"/g)].map(m=>m[1]);
- assert.deepEqual(ids,['home','todos','notices','credits','mine','qualifications','points','assessment','apply_course','apply_project','apply_base','apply_trainer']);
- assert.match(html,/>我要申报</);assert.match(html,/>申报培训课程</);assert.match(html,/>申报培训师</);assert.match(html,/>我的工作</);assert.match(html,/>我的业务</);assert.doesNotMatch(html,/>我的结果</);assert.match(html,/>我的课程</);
- assert.equal((html.match(/class="nav-section"/g)||[]).length,3);const business=html.slice(html.indexOf('>我的业务<'));assert.match(business,/data-id="points"/);assert.match(business,/data-id="assessment"/);
- assert.match(html,/>教师资质管理</);assert.match(html,/>教师积分激励</);assert.match(html,/>三级考核管理</);assert.doesNotMatch(html,/>我的资质<|>我的积分<|>我的考核<|培训项目管理/);
- for(const p of ['projects','courses','disputes','exports','records'])assert.ok(e.t.pageAllowed(p),p+' still reachable from links');
+ assert.deepEqual(ids,['home','todos','notices','qualifications','credits','points','assessment','disputes','apply_project','apply_course','apply_base','apply_trainer','records','outcomes']);
+ assert.equal((html.match(/class="nav-section"/g)||[]).length,4);assert.doesNotMatch(html,/>系统管理<|data-id="exports"|data-id="mine"/);
+ for(const title of ['培训项目','培训课程','培训基地','培训师资','教师资质','教师积分','三级考核'])assert.ok(html.includes('title="'+title+'"'),title);
+ for(const p of ['projects','courses','disputes','exports','records','mine'])assert.ok(e.t.pageAllowed(p),p+' still reachable from links');
 });
 test('navigation does not expose unauthorized items or empty groups',()=>{
  const e=engine();e.t.setUser({user:{id:'u',name:'教师'},role:{kind:'teacher'},permissions:['portal.read']});
- const html=e.t.sidebarNavigation();assert.match(html,/教师工作台/);assert.doesNotMatch(html,/系统管理|数据与分析|业务办理|data-id="settings"|data-id="organization"/);
+ const html=e.t.sidebarNavigation();assert.match(html,/>工作台</);assert.doesNotMatch(html,/系统管理|统计分析|教师发展|data-id="settings"|data-id="organization"/);
 });
 test('学校审核账号不是系统管理员时不显示账号与权限，系统管理员仍显示',()=>{
  for(const [admin,shown] of [[false,false],[true,true]]){
@@ -922,7 +923,7 @@ test('教师从看板进入项目等业务页时侧栏选中对应申报入口�
  const e=engine();e.t.setUser({user:{id:'u',name:'教师'},role:{kind:'teacher'},permissions:['portal.read']});
  for(const [page,key] of [['projects','apply_project'],['courses','apply_course'],['bases','apply_base'],['trainers','apply_trainer']])assert.equal(vm.runInContext(`navKey('${page}')`,e.ctx),key);
  e.t.setUser({user:{id:'u',name:'学院'},role:{kind:'college'},permissions:['records.read']});
- assert.equal(vm.runInContext("navKey('projects')",e.ctx),'projects');assert.equal(vm.runInContext("navKey('resources')",e.ctx),'courses');
+ assert.equal(vm.runInContext("navKey('projects')",e.ctx),'projects');assert.equal(vm.runInContext("navKey('resources')",e.ctx),'resources');
 });
 test('desktop rail toggle updates accessible name and expanded state without network',()=>{
  const e=engine();e.t.handlers['collapse-sidebar']();assert.equal(e.node('#sidebar').classList.contains('collapsed'),true);
@@ -1215,9 +1216,9 @@ test('header and footer save share a pending guard and recover after a rejected 
 });
 
 
-test('course navigation consolidates resources without removing course or base entry',()=>{
+test('课程资源统计归入统计分析，培训课程和基地入口保留',()=>{
  const e=engine();const menus=vm.runInContext('navItems()',e.ctx).flatMap(group=>group[1]).map(item=>item[0]);
- assert.ok(menus.includes('courses'));assert.ok(menus.includes('bases'));assert.ok(!menus.includes('resources'));
+ assert.ok(menus.includes('courses'));assert.ok(menus.includes('bases'));assert.ok(menus.includes('resources'));
 });
 
 test('simplified sync overview shows three connectors, four hub tables and hides implementation tools behind a link',async()=>{
@@ -1634,12 +1635,12 @@ test('教师考核保留本人流程并可从通知查看学院公示，管理�
  e.t.setState('assessment');
  assert.equal(e.t.pageAllowed('annual'),true);
  assert.equal(e.t.pageAllowed('assessment'),true);
- const tabs=vm.runInContext("pageGroupTabs('assessment')",e.ctx);assert.match(tabs,/我的年度考核/);assert.match(tabs,/学院考核公示/);assert.doesNotMatch(tabs,/学院社会培训年度考核/);
+ const tabs=vm.runInContext("pageGroupTabs('assessment')",e.ctx);assert.match(tabs,/教师与组织考核/);assert.match(tabs,/学院年度考核/);
  const html=await e.t.pages.assessment();
  assert.doesNotMatch(html,/data-action="ranking-print"/);
  assert.match(html,/等待学校生成考核结果/);
  const admin=engine(undefined,'college');assert.equal(admin.t.pageAllowed('annual'),true);
- assert.match(vm.runInContext("pageGroupTabs('assessment')",admin.ctx),/学院社会培训年度考核/);
+ assert.match(vm.runInContext("pageGroupTabs('assessment')",admin.ctx),/学院年度考核/);
 });
 
 test('教师公示入口仍要求考核读取权限，通知日期使用统一北京时间',async()=>{
