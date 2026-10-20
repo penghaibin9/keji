@@ -63,7 +63,7 @@ export async function showApplication(id) {
 function decide(id, action) {
   const d = opened, label = {approve: '通过', return: '退回', submit: '重新提交', withdraw: '撤回'}[action];
   const level = (d.progress.nodes.find(n => n.state === 'current') || {}).label || '';
-  const hint = action === 'return' ? '写清楚要补什么。老师补正后从这一级接着审，不从头走。' : action === 'approve' ? (level ? '本次办理：' + level + '。' : '') + '通过后自动转到下一级，最后一级通过即生效。' : action === 'withdraw' ? '撤回后可修改再提交，会从第一级重新审。' : '会从退回的那一级接着审。';
+  const hint = action === 'return' ? '写清楚要补什么。老师补正后从这一级接着审，不从头走。' : action === 'approve' ? (level ? '本次办理：' + level + '。' : '') + '通过后自动转到下一级，最后一级通过即生效。' : action === 'withdraw' ? '撤回后可修改再提交，会从第一级重新审。' : d.item.state === 'WITHDRAWN' ? '撤回后重新提交，会从第一级重新审核。' : '会从退回的那一级接着审。';
   const value = {approve: '材料齐全，同意', return: '', submit: '已按意见补正，重新提交', withdraw: '撤回修改'}[action];
   const needBasis = action === 'approve' && ['组织人事部认定', '教务处备案审核'].includes(level);
   const fillCourseware = action === 'approve' && ['course','teaching_course'].includes(d.flow) && ['学院审批','学校审批'].includes(level) && !d.item.data?.courseware?.checked;

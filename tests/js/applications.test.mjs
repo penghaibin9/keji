@@ -400,3 +400,17 @@ test('基地、课程、培训师申请表都有选填封面，保存成功后�
  await assert.rejects(()=>bad.form.save({code:'B3',name:'坏图',usage_practice:true,onsite:'yes',established_on:'2026-10-01',recognition:'依据',cover_file:{name:'a.gif',size:10}}),/PNG、JPG/);
  assert.equal(bad.requests.filter(r=>r.options).length,0);
 });
+
+
+test('撤回重提与退回补正分别说明重新起审和原级续审，提交动作不变',async()=>{
+ for(const flow of ['course','base','trainer'])for(const state of ['WITHDRAWN','RETURNED']){
+  const c=formContext();c.reasonFields=()=>'';
+  const d={item:{id:'resubmit',name:'合成申请',state,version:4,data:{created_by:'teacher'}},flow,label:'申请',state_label:state==='WITHDRAWN'?'已撤回':'退回补正',permissions:{submit:true},fields:[],attachments:[],events:[],progress:p};
+  c.api=async(url,options)=>{c.requests.push({url,options});return d};
+  await applicationAction('app-detail','resubmit',c);await applicationAction('app-submit','resubmit',c);
+  assert.match(c.form.body,state==='WITHDRAWN'?/从第一级重新审核/:/从退回的那一级接着审/);
+  assert.doesNotMatch(c.form.body,state==='WITHDRAWN'?/从退回的那一级接着审/:/从第一级重新审核/);
+  await c.form.save({reason:'合成重提'});const sent=c.requests.find(x=>x.options).options.body;
+  assert.equal(sent.action,'submit');assert.equal(sent.expected_version,4);
+ }
+});
