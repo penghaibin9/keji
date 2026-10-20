@@ -192,3 +192,12 @@ body:not(.no-shell) #content .pagehead h1{font-size:28px;line-height:1.4;font-we
 body:not(.no-shell) #content .page-title .teacher-page-subtitle{font-size:15px;line-height:1.5;color:#536b98}
 @media(max-width:1400px){body:not(.no-shell) #content .pagehead h1{font-size:26px}body:not(.no-shell) #content .page-title .teacher-page-subtitle{font-size:13px}}
 @media(max-width:900px){body:not(.no-shell) #content .pagehead{align-items:flex-start}body:not(.no-shell) #content .pagehead h1{font-size:24px}}
+/* 三级考核：考核对象用分段按钮，办理进度用筛选按钮，与上方页签区分开。 */
+.assessment-object{display:flex;align-items:center;gap:12px;margin:0 0 16px;flex-wrap:wrap}
+.assessment-control-label{font-size:14px;color:#536b98;white-space:nowrap}
+.progress-quick{align-items:center}
+.segmented{display:inline-flex;padding:3px;background:#e9eff8;border-radius:10px;gap:2px;flex-wrap:wrap}
+.segmented>button{border:0;background:transparent;color:#3a4f6f;font-size:14px;min-height:36px;padding:6px 16px;border-radius:8px;cursor:pointer}
+.segmented>button:hover{color:#1d4ed8}
+.segmented>button.active{background:#fff;color:#1d4ed8;font-weight:600;box-shadow:0 1px 3px rgba(15,35,75,.14)}
+.progress-quick:has(>.assessment-control-label){padding:16px 20px 0}
