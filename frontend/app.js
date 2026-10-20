@@ -332,7 +332,7 @@ function formModal(title,body,callback,{wide=false,submit='保存',hint='',compa
  if(page){$('#modal-root .modal').classList.add('page-form');$('#modal-root .detail-location').textContent=contextLabel||'申报填写 · 标有 * 的为必填项';}
  if(compact){const dialog=$('#modal-root .modal');dialog.classList.add('record-editor');const actions=document.createElement('div');actions.className='record-head-actions';actions.innerHTML=act('取消','close')+`<button type="submit" form="edit-form" class="btn primary">${esc(submit)}</button>`;$('.modal-head',dialog).append(actions);}
  if(returnTo)for(const back of [$('#modal-root .modal-foot button[data-action=close]'),...$$('#modal-root .record-head-actions button[data-action=close]')]){back.textContent=returnLabel;back.addEventListener('click',async e=>{e.preventDefault();e.stopImmediatePropagation();try{await returnTo()}catch(err){toast(err.message,true)}},true)}
- const form=$('#edit-form'),flow=stepper&&!page?bindFormSteps(form,submit,partialDraft):null;if(page)bindPageFormSections(form);if(me?.role?.kind==='teacher'&&!page)$('#modal-root .modal').classList.add('teacher-action-form');bindFileFeedback(form);if(typeof HTMLFormElement!=='undefined'&&form instanceof HTMLFormElement)form._initialValues=formValues(form);let saving=false;form.addEventListener('submit',async e=>{e.preventDefault();if(saving||flow&&!flow.submit(e.submitter))return;saving=true;const buttons=$$('button[form=edit-form]');buttons.forEach(button=>button.disabled=true);$('#form-error').innerHTML='';try{await callback(formValues(form),form,e.submitter)}catch(err){if($('#form-error')){$('#form-error').innerHTML=`<div class="error-text">${esc(err.message)}</div>`;const input=(err.fields||[]).map(path=>form.elements?.namedItem?.(path.split('.').at(-1))).find(Boolean);if(input){flow?.reveal(input);input.focus()}else $('#form-error').focus();}else toast(err.message,true)}finally{saving=false;buttons.forEach(button=>{if(button.isConnected)button.disabled=false})}});
+ const form=$('#edit-form'),flow=stepper&&!page?bindFormSteps(form,submit,partialDraft):null;if(page)bindPageFormSections(form);if(me?.role?.kind==='teacher'&&!page)$('#modal-root .modal').classList.add('teacher-action-form');bindFileFeedback(form);if(typeof HTMLFormElement!=='undefined'&&form instanceof HTMLFormElement)form._initialValues=formValues(form);let saving=false;form.addEventListener('submit',async e=>{e.preventDefault();if(saving||flow&&!flow.submit(e.submitter))return;saving=true;const buttons=$$('button[form=edit-form]');buttons.forEach(button=>button.disabled=true);$('#form-error').innerHTML='';try{await callback(formValues(form),form,e.submitter);await refreshAccountSummary(true)}catch(err){if($('#form-error')){$('#form-error').innerHTML=`<div class="error-text">${esc(err.message)}</div>`;const input=(err.fields||[]).map(path=>form.elements?.namedItem?.(path.split('.').at(-1))).find(Boolean);if(input){flow?.reveal(input);input.focus()}else $('#form-error').focus();}else toast(err.message,true)}finally{saving=false;buttons.forEach(button=>{if(button.isConnected)button.disabled=false})}});
 }
 function closeModal(){$('#modal-root').classList.add('hidden');$('#modal-root').innerHTML='';modalContext=null;if(modalTrigger?.isConnected)modalTrigger.focus();modalTrigger=null}
 const evidenceNames={credits:'授课学分',teaching_credits:'授课学分依据',credits_basis:'授课学分口径',facts:'取数依据',raw:'原始汇总',records:'培训记录',qualifications:'有效资质',point_entries:'积分流水',rule:'适用规则',config:'规则配置',components:'指标明细',label:'指标名称',name:'名称',source:'数据来源',hours:'授课学时',participants:'课程人次',income:'归属培训收入',points:'积分',qualification_count:'有效资质数',previous_assessment:'上次归档考核分',version_no:'规则版本',rule_version:'规则版本',factor:'积分系数',weight:'考核权重',target:'达标值',cap:'积分上限',amount:'分值',score:'得分',formula:'计算公式',reason:'办理原因',basis:'依据',event_date:'业务日期',created_at:'生成时间',state:'办理状态',project:'项目',course:'课程',class_name:'班级',written:'入库结果',row_no:'原始行号',total:'合计',count:'数量',start_date:'开始日期',end_date:'结束日期',period:'适用周期',identity:'归档身份',teacher_name:'教师姓名',org_name:'所属组织',school_name:'学校名称',target_name:'考核对象',evidence:'评分依据',metric_name:'指标名称',raw_value:'原始值',data_source:'数据来源',target_value:'达标值',calculated_score:'计算得分',method_label:'评分方式',steps:'计算步骤',tier_hit:'命中分档',index:'档位',min:'门槛',bounds:'封顶 / 保底',floor:'保底',applied:'触发情况'};
@@ -625,7 +625,7 @@ async function boot(){
  if(scopeChanged)toast('原页面不在当前身份的授权范围内，已回到首页。');
 }
 // 共用已有身份授权；这里只呈现角色、待办数量和原账号操作。
-let accountRefreshTimer=null,accountSummaryLoading=false;
+let accountRefreshTimer=null,accountSummaryLoading=false,accountSummaryPending=false;
 function accountRoleItems(){
  const demo=me?.demo_switch;
  return [...(demo?.options||[]).map(x=>({...x,key:'demo:'+x.username,label:x.label,current:x.username===demo.current,kind:({teacher:'teacher',show_teacher:'teacher',depthead:'dept',show_dept:'dept',collegehead:'college',show_college:'college'})[x.username]||'school'})),
@@ -639,8 +639,9 @@ function accountMenuHtml(){
  const count=accountOtherTodos();
  return `<div class="nd-header__identity"><span class="nd-header__avatar" aria-hidden="true">${esc(me.user.name.slice(0,1))}</span><div class="nd-header__person current-identity" title="${esc(me.user.name+' · '+me.role.name)}"><strong>${esc(me.user.name)}</strong><small>${esc(me.role.name)}</small></div><details class="account-menu" id="account-menu"><summary class="account-trigger" aria-label="切换角色" aria-controls="account-panel">${icon('sync')}<span>切换角色</span>${icon('down')}<span id="account-other-alert" class="account-count" title="其他角色待办" ${count?'':'hidden'}>${count>99?'99+':count||''}</span></summary><section class="account-panel" id="account-panel" aria-label="账号与角色"><div class="account-panel-heading"><h2>${me.demo_switch?'选择演示角色':me.identities?.length?'选择办理身份':'账号信息'}</h2><span class="account-other-total" id="account-total-label" ${count?'':'hidden'}>其他角色待办 <b id="account-menu-total">${count>99?'99+':count}</b></span></div><div id="account-role-list">${accountRoleRows()}</div><p class="account-panel-hint">${accountRoleItems().length?'有红色数字的角色有待办，点击可切换处理。':'查看本人账号资料与密码设置。'}</p><p id="account-count-status" class="account-count-status" role="status"></p><footer class="account-panel-footer">${act('账号信息','profile','','text','users')}${act('修改密码','password','','text','lock')}</footer></section></details></div>`;
 }
-async function refreshAccountSummary(){
- if(!me||me.user.must_change_password||accountSummaryLoading)return;
+async function refreshAccountSummary(afterSave=false){
+ if(!me||me.user.must_change_password)return;
+ if(accountSummaryLoading){if(afterSave)accountSummaryPending=true;return;}
  const owner=me;accountSummaryLoading=true;
  try{
   const data=await api('/auth/role-summary');if(me!==owner)return;
@@ -653,7 +654,7 @@ async function refreshAccountSummary(){
   const current=data.current_todo_count,bell=$('#header-todo-count');if(bell){bell.hidden=!(current>0);bell.textContent=current>99?'99+':String(current||0);bell.setAttribute('aria-label','当前角色 '+(current||0)+' 项待办');const tip=me.role.kind==='teacher'?'待办：需要本人办理的事项':'待办：本级审批事项，另含安全提示、接口失败等系统提醒';bell.parentElement?.setAttribute?.('title',tip)}
   const status=$('#account-count-status');if(status)status.textContent=accountRoleItems().some(x=>x.unavailable)?'部分身份暂不可用，请联系管理员核对。':'';
  }catch(err){if(me===owner){const status=$('#account-count-status');if(status)status.textContent='待办数量暂未读取，请收起后重新打开。'}}
- finally{accountSummaryLoading=false}
+ finally{accountSummaryLoading=false;if(accountSummaryPending){accountSummaryPending=false;await refreshAccountSummary()}}
 }
 function mountAccountMenu(){
  const menu=$('#account-menu');if(!menu)return;

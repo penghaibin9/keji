@@ -1984,3 +1984,23 @@ test('积分流水显示同项目原认定和更正的中文来源，来源文�
  assert.equal((html.match(/&lt;合成项目&gt; · QA-SAFE/g)||[]).length,2);
  assert.match(html,/1.10/);assert.match(html,/社会培训授课积分更正/);assert.doesNotMatch(html,/<合成项目>/);
 });
+
+
+test('表单办理成功后立即刷新角色待办，失败不刷新',async()=>{
+ for(const failed of [false,true]){
+  const e=engine(async()=>({identities:[],current_todo_count:1}));let submit;
+  e.node('#edit-form').addEventListener=(type,fn)=>{if(type==='submit')submit=fn};
+  vm.runInContext("modal=()=>{};bindFileFeedback=()=>{};formValues=()=>({});",e.ctx);
+  e.ctx.save=async()=>{if(failed)throw Error('办理失败')};
+  vm.runInContext("formModal('提交','',save,{stepper:false})",e.ctx);
+  await submit({preventDefault(){},submitter:null});
+  assert.equal(e.requests.filter(x=>x.url==='/api/auth/role-summary').length,failed?0:1);
+  if(!failed)assert.equal(e.node('#header-todo-count').textContent,'1');
+ }
+});
+test('办理时旧待办请求尚未返回，完成后重新读取最新数量',async()=>{
+ let release,calls=0;const e=engine(async()=>{calls++;if(calls===1)await new Promise(resolve=>release=resolve);return {identities:[],current_todo_count:calls===1?2:1}});
+ const first=vm.runInContext('refreshAccountSummary()',e.ctx);
+ await vm.runInContext('refreshAccountSummary(true)',e.ctx);release();await first;
+ assert.equal(calls,2);assert.equal(e.node('#header-todo-count').textContent,'1');
+});
