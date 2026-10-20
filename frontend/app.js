@@ -1,9 +1,9 @@
 import {coursePointsAction} from './course-points.js?v=20261019-flow4';
-import {renderTrainingWorkspace,trainingChange} from './training-workspace.js?v=20261019-walk3';
+import {renderTrainingWorkspace,trainingChange} from './training-workspace.js?v=20261019-walk3&nav=20261020-m2';
 import {renderSchoolCockpit,bindSchoolCockpit} from './school-cockpit.js?v=20261019-walk3&display=20261019-clean2';
 import {icons} from './icons.js';
-import {socialPage,socialAction,applicationProjectPicker} from './social-training.js?v=20261019-walk3&selection=20261019-row1&course_points=20261019-flow4&display=20261019-clean2&history_dates=20261020-images1&nav=20261020-b3';
-import {applicationAction,trainersHtml,applyPageHtml,APPLY_PAGES,myApplicationsHtml,homeApplicationsHtml,myCoursesHtml,libraryHtml,libraryFilterSubmit,homeCoursesHtml,courseAction} from './applications.js?v=20261019-flow3&display=20261019-clean2&trainers=20261020-tabs1';
+import {socialPage,socialAction,applicationProjectPicker} from './social-training.js?v=20261019-walk3&selection=20261019-row1&course_points=20261019-flow4&display=20261019-clean2&history_dates=20261020-images1&nav=20261020-m2';
+import {applicationAction,trainersHtml,applyPageHtml,APPLY_PAGES,myApplicationsHtml,homeApplicationsHtml,myCoursesHtml,libraryHtml,libraryFilterSubmit,homeCoursesHtml,courseAction} from './applications.js?v=20261019-flow3&display=20261019-clean2&trainers=20261020-tabs1&nav=20261020-m2';
 import {nextCode,runBatch,batchStage,batchMode,batchPerformer,BATCH_LABELS,materialUploadForm,checkUploadFiles,uploadEntries,uploadSequential,uploadStatusHtml} from './approval-flow.js?v=20261017-multi-materials2';
 import {ledgerPage,resourceStatsPage,homeIndicators,ledgerAction,resetLedgerView,minePage,mineReminders} from './social-ledgers.js?v=20261019-walk3&display=20261019-clean2';
 import {rosterSection,rosterHandlers,onlineHandlers,showStaffDetail,showCourseDetail,presetRoster,loadCodeTables} from './school-data.js?v=20261019-merge1&display=20261019-clean2';
@@ -696,8 +696,18 @@ function scopeNav(dest,extra={}){const f=drillFilters(dest,filter,extra);return 
 async function render(){
  if(!me)return;if(document.body?.dataset){document.body.dataset.training=String(['projects','courses','bases','trainers','records','outcomes'].includes(page));document.body.dataset.cockpit='false'}const seq=++renderSequence;$('#content').setAttribute('data-page',page);$('#breadcrumb').textContent=pageTitle(page);syncSidebar();
  $('#content').innerHTML='<div class="busy-panel">正在读取授权业务数据…</div>';
- try{if(!pageAllowed(page))throw Error('当前账号未授权访问此页面，请从左侧授权菜单进入。');let html=await pages[page]();if(!html.includes('page-group-tabs'))html=pageGroupTabs(page)+html;if(seq!==renderSequence)return;$('#content').innerHTML=html+`<footer class="footer"><span>${esc(me.school_name||'湖南科技职业学院')} · 一站式非学历教育智慧前台</span><span>权限范围：${esc(me.role.kind==='teacher'?'仅本人':orgName(me.user.org_id))}</span></footer>`;if(document.body?.dataset)document.body.dataset.cockpit=String(page==='cockpit'&&!!view.report?.available);mergePageHelp($('#content'));bindFilters();bindPortalControls();if(page==='cockpit'&&view.report?.available)bindSchoolCockpit($('#content'),view.report,f=>nav('cockpit',f),{sourceUnit:filter.report_unit,onSourceUnit:unit=>{filter.report_unit=unit;syncLocation(true)}})}
+ try{if(!pageAllowed(page))throw Error('当前账号未授权访问此页面，请从左侧授权菜单进入。');let html=await pages[page]();if(!html.includes('page-group-tabs'))html=pageGroupTabs(page)+html;if(seq!==renderSequence)return;$('#content').innerHTML=html+`<footer class="footer"><span>${esc(me.school_name||'湖南科技职业学院')} · 一站式非学历教育智慧前台</span><span>权限范围：${esc(me.role.kind==='teacher'?'仅本人':orgName(me.user.org_id))}</span></footer>`;if(document.body?.dataset)document.body.dataset.cockpit=String(page==='cockpit'&&!!view.report?.available);mergePageHelp($('#content'));collapseHeadActions($('#content'));bindFilters();bindPortalControls();if(page==='cockpit'&&view.report?.available)bindSchoolCockpit($('#content'),view.report,f=>nav('cockpit',f),{sourceUnit:filter.report_unit,onSourceUnit:unit=>{filter.report_unit=unit;syncLocation(true)}})}
  catch(err){if(seq===renderSequence&&$('#content'))$('#content').innerHTML=pageHead()+note(friendlyError(err),true)+`<div class="mt16">${act('重新读取','refresh')}</div>`;}
+}
+// 标题栏只留一个主按钮：优先保留主色按钮，没有时保留第一个；其余按钮收进“更多操作”。
+function collapseHeadActions(root){
+ for(const bar of [...(root?.querySelectorAll?.('.pagehead > .page-actions, .tw-heading-actions')||[])]){
+  const old=[...bar.children].filter(x=>x.matches('details.tw-more')),buttons=[...bar.children,...old.flatMap(d=>[...d.querySelectorAll(':scope > div > .btn')])].filter(x=>x.matches('button.btn, a.btn'));if(buttons.length<2)continue;
+  const main=buttons.find(x=>x.classList.contains('primary'))||buttons[0],rest=buttons.filter(x=>x!==main);
+  const more=document.createElement('details');more.className='more-actions';more.innerHTML='<summary class="btn">更多操作</summary><div class="more-actions-menu" role="menu"></div>';
+  const menu=more.querySelector('.more-actions-menu');for(const x of rest){x.setAttribute('role','menuitem');x.classList.remove('primary','secondary');menu.append(x)}
+  main.before(more);old.forEach(d=>d.remove());
+ }
 }
 // 每页只留一个“页面说明”：各处的办理指引、统计口径、查看范围等折叠说明，渲染后统一收进标题旁的“页面说明”。
 // 筛选、数据明细类折叠（更多筛选、查看精确数值、带表格的课程资源明细等）不动。
@@ -917,7 +927,7 @@ async exports(){const d=await api('/tasks?'+query({page:tablePage,size:20,kind:'
  async notices(){
   const d=await api('/notices?'+listQuery()),teacher=me.role.kind==='teacher';view=d;
   const list=teacher?(d.items.length?`<div class="teacher-notice-list">${d.items.map(x=>{const excerpt=String(x.body||'').trim().replace(/\s+/g,' ');return `<article class="teacher-notice-item"><span class="notice-list-icon" aria-hidden="true">${icon('notice')}</span><div><h2>${link(x.title,'notice',x.id)}</h2><p class="notice-meta"><span>${esc(x.category)}</span><span>${esc(x.org_name||orgName(x.org_id))}</span><time datetime="${esc(x.created_at)}">${esc(ts(x.created_at))}</time></p>${excerpt?`<p class="notice-excerpt">${esc(excerpt.slice(0,100))}${excerpt.length>100?'…':''}</p>`:''}</div>${act('阅读通知','notice',x.id,'light')}</article>`}).join('')}</div>`:empty('暂无政策通知','学校发布并在本人可见范围内的通知，会显示在这里。')):table(['通知标题','分类','发布范围','发布时间','操作'],d.items.map(x=>[link(x.title,'notice',x.id),esc(x.category),esc(x.org_name||orgName(x.org_id)),esc(x.created_at?.slice(0,10)),link('阅读','notice',x.id)+(can('notice.manage')?link('编辑 / 撤回','notice-form',x.id):'')]));
-  return pageHead('学校政策、业务通知与操作指引。',(can('notice.manage')?act('发布通知','notice-form','','primary','plus'):'')+(teacher&&can('assessment.read')?act('学院考核公示','nav','annual','','assess'):''))+`<section class="card">${filtersBar()}${list}${pager(d)}</section>`;
+  return pageHead('学校政策、业务通知与操作指引。',(can('notice.manage')?act('发布通知','notice-form','','primary','plus'):''))+`<section class="card">${filtersBar()}${list}${pager(d)}</section>`;
  },
  async help(){return pageHead('按角色办理，一次把关键事项办清楚。')+`<div class="equal2">${[['普通教师','先核对培训台账，再上传资质与佐证；资质提交后等待审核。查看积分和考核计算依据，有问题从明细提交核对申请，处理后本人确认。'],['教研室 / 二级学院','从统一待办进入本组织业务，核验材料和计算依据。考核仅在本层级步骤可确认，发现问题说明原因退回，不能跳过教师确认。'],['学校管理部门','先初始化组织、账号、字典和周期；维护积分 / 考核规则并试算。以电子表格导入或人工录入形成可追溯台账，计算后组织四级确认，最后归档。'],['管理员运维','教师批量导入后账号默认停用，先配置并启用。每日核查任务进程、磁盘和备份，定期独立恢复演练。机房上线前须完成真实学校数据库、100 并发、3000 在线与脱敏真实案例比对。']].map(([t,b])=>`<section class="card card-pad"><h2>${t}</h2><p class="policy-text mt16">${b}</p></section>`).join('')}</div><div class="card card-pad mt20"><h2>常见问题</h2><div class="policy"><h3>为什么不能改已确认或归档的数据？</h3><p>积分通过追加差额纠错；已确认的积分需授权留痕解锁。考核须按流程退回后重算，已归档不可覆盖，应新建更正周期，原周期继续保留。</p><h3>导出没有立即下载怎么办？</h3><p>进入“表格导入导出 → 导出下载”查看后台任务。长时间排队时由管理员检查 后台任务进程；权限变化后应重新导出，不能继续下载旧范围文件。</p><h3>电子表格为什么要再次点击确认？</h3><p>上传后只生成预览与错误行，不写业务表。确认时再次校验当前权限和数据重复情况，全批次在同一事务中入库。</p><h3>没有接学校接口能用吗？</h3><p>本地账号、手工台账和电子表格 可独立运行。统一认证、学校数据中台、湘培直通车尚未接通，不能把本地校验结果当成外部同步成功。</p></div></div>`}
 };
@@ -1951,6 +1961,7 @@ handlers['todos-tab']=id=>{todoTab=(me.role.kind==='teacher'?['handle','mine']:[
 for(const action of ['impl-draft-diff','impl-quick-trial','impl-quick-publish','impl-quick-disable','impl-step','impl-handover','impl-copy','impl-materials','impl-credential-meta','impl-acceptance','impl-probe','impl-publish','impl-health','impl-reset','impl-login-test'])handlers[action]=id=>handleImplementationAction(action,id,implementationContext());
 document.addEventListener('submit',async e=>{if(e.target.id!=='lib-filters')return;e.preventDefault();libraryFilterSubmit(e.target);try{await render()}catch(err){toast(err.message,true)}});
 document.addEventListener('submit',async e=>{if(e.target.id!=='social-search-form')return;e.preventDefault();try{if(e.target.classList.contains('tw-filters')){const v=Object.fromEntries(new FormData(e.target));trainingChange(page,socialContext(),'filter',{q:v.q||'',org:v.org||'',package:v.package==='on',oneSkill:v.oneSkill==='on'});if(page==='trainers'){await render();return}}await socialAction('social-list-apply','',socialContext())}catch(err){toast(err.message,true)}});
+document.addEventListener('click',e=>{for(const d of $$('.more-actions[open]'))if(!d.contains(e.target)||e.target.closest('.more-actions-menu [data-action],.more-actions-menu a'))d.open=false});
 document.addEventListener('click',e=>{const menu=$('#account-menu');if(menu?.open&&(!menu.contains(e.target)||e.target.closest('[data-action]')))menu.open=false});
 document.addEventListener('keydown',e=>{const menu=$('#account-menu');if(e.key==='Escape'&&menu?.open){menu.open=false;$('summary',menu)?.focus();e.stopImmediatePropagation()}},true);
 if(typeof window.addEventListener==='function')window.addEventListener('focus',()=>{if(me)refreshAccountSummary()});

@@ -1,6 +1,6 @@
 // Shared master/detail surface; all mutations still use the existing business handlers.
 const state = new Map();
-const labels = {projects:'培训项目管理',courses:'培训课程管理',bases:'培训基地管理',trainers:'培训师资库',records:'培训数据',outcomes:'培训成果'};
+const labels = {projects:'培训项目',courses:'培训课程',bases:'培训基地',trainers:'培训师资',records:'培训数据',outcomes:'培训成果'};
 const descriptions = {projects:'从项目申报到备案结项，进度与材料一目了然',courses:'课程资料与教学资源集中管理',bases:'场地信息、认定材料与使用范围集中管理',trainers:'师资资格、专业方向与认定材料集中查阅',records:'授课明细与取数依据，逐条核对有据可查',outcomes:'成果认定、归属与证明材料集中管理'};
 const states={DRAFT:'草稿',RETURNED:'退回补正',COLLEGE:'待学院审批',SUBMITTED:'待审核备案',FILED:'已备案',CLOSE_COLLEGE:'待学院结项核验',CLOSE_REVIEW:'待结项核验',CLOSED:'已结项',ACTIVE:'已认定',ARCHIVED:'已归档'};
 const modes={lecture:'讲授',practice:'实训实操',case:'案例研讨',onsite:'现场教学',online:'线上自学'};

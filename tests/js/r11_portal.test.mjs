@@ -1643,9 +1643,9 @@ test('教师考核保留本人流程并可从通知查看学院公示，管理�
  assert.match(vm.runInContext("pageGroupTabs('assessment')",admin.ctx),/学院年度考核/);
 });
 
-test('教师公示入口仍要求考核读取权限，通知日期使用统一北京时间',async()=>{
+test('通知页标题栏不再放学院考核公示按钮，通知日期使用统一北京时间',async()=>{
  const e=engine(async()=>({items:[{id:'notice',title:'合成公示',category:'年度考核公示',org_id:'college',body:'合成通知',created_at:'2026-10-17T22:10:00'}],total:1,page:1,size:20}),'teacher');e.t.setState('notices');
- let html=await e.t.pages.notices();assert.match(html,/学院考核公示/);assert.match(html,/data-action="nav" data-id="annual"/);assert.match(html,/2026\/10\/18 06:10:00/);assert.match(html,/datetime="2026-10-17T22:10:00"/);
+ let html=await e.t.pages.notices();assert.doesNotMatch(html,/data-action="nav" data-id="annual"/);assert.match(html,/2026\/10\/18 06:10:00/);assert.match(html,/datetime="2026-10-17T22:10:00"/);
  e.t.setUser({user:{id:'restricted'},role:{kind:'teacher'},permissions:['portal.read','notice.read']});assert.equal(e.t.pageAllowed('annual'),false);html=await e.t.pages.notices();assert.doesNotMatch(html,/data-id="annual"/);
 });
 
