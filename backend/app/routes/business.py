@@ -84,8 +84,14 @@ def qualifications(request:Request):
         if f.get('teacher_id'):q=q.where(Qualification.teacher_id==f['teacher_id'])
         if f.get('org_id'):q=q.where(Qualification.teacher_id.in_(select(User.id).where(User.org_id.in_(authorized_org_descendants(db,a,f['org_id'])))))
         if f.get('state'):
-            if f['state'] not in {'DRAFT','SUBMITTED','RETURNED','APPROVED'}:raise HTTPException(422,'资质状态无效')
-            q=q.where(Qualification.state==f['state'])
+            if f['state'] not in {'DRAFT','SUBMITTED','RETURNED','APPROVED','EXPIRING','EXPIRED'}:raise HTTPException(422,'资质状态无效')
+            if f['state'] in {'EXPIRING','EXPIRED'}:
+                # 与资质概况同一口径：审核通过且已过有效期为已过期；提醒天数内到期为即将到期。
+                setting=db.get(Setting,'qualification');days=int((setting.value or {}).get('expiry_days',0)) if setting else 0
+                today=school_today()
+                q=q.where(Qualification.state=='APPROVED',Qualification.expires.is_not(None))
+                q=q.where(Qualification.expires<today) if f['state']=='EXPIRED' else q.where(Qualification.expires>=today,Qualification.expires<=today+timedelta(days=days))
+            else:q=q.where(Qualification.state==f['state'])
         if f.get('q'):q=q.where(Qualification.name.contains(f['q'],autoescape=True)|Qualification.certificate_no.contains(f['q'],autoescape=True))
         return page_result(db,q.order_by(Qualification.created_at.desc(),Qualification.id),p,z)
     return read_operation(request,'qualification.read',load)

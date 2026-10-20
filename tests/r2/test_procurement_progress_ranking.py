@@ -70,6 +70,10 @@ def test_qualification_summary_distribution(client2,app2):
             db.add(Qualification(teacher_id='teacher',category='职业资格',name='证'+no,certificate_no=no,issuer='x',obtained=date(2020,1,1),expires=expires,state=state))
     d={x['key']:x['count'] for x in client2.get('/api/qualification-summary').json()['items']}
     assert d=={'SUBMITTED':1,'RETURNED':1,'EXPIRING':1,'VALID':1,'EXPIRED':1,'DRAFT':0}
+    # 列表的“即将到期”“已过期”页签与概况同一口径。
+    for key,names in [('EXPIRING',['证C']),('EXPIRED',['证E']),('APPROVED',['证C','证D','证E'])]:
+        listed=client2.get('/api/qualifications?state='+key).json();assert sorted(x['name'] for x in listed['items'])==names,key
+    assert client2.get('/api/qualifications?state=VALIDISH').status_code==422
     auth(client2,'otherteacher');assert client2.get('/api/qualification-summary').json()['total']==0
 
 

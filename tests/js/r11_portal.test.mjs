@@ -1719,7 +1719,7 @@ test('资质状态切换保留关键词并回到第一页，查询表单保留�
  await e.t.handlers['qualification-filter']('RETURNED');
  assert.equal(e.t.getState().filter.q,'证书');assert.equal(e.t.getState().filter.state,'RETURNED');assert.equal(e.t.getState().tablePage,1);
  const html=await e.t.pages.qualifications();assert.match(html,/name="state" value="RETURNED"/);assert.match(html,/data-id="RETURNED" aria-pressed="true"/);assert.doesNotMatch(html,/<select name="state"/);
- await e.t.handlers['qualification-filter']('EXPIRED');assert.equal(e.t.getState().filter.state,'RETURNED');
+ await e.t.handlers['qualification-filter']('UNKNOWN');assert.equal(e.t.getState().filter.state,'RETURNED');await e.t.handlers['qualification-filter']('EXPIRED');assert.equal(e.t.getState().filter.state,'EXPIRED');
  assert.ok(e.requests.every(x=>x.options.method==='GET'));
 });
 

@@ -708,7 +708,7 @@ body[data-role="teacher"] #content .mine-detail-workspace .mine-mini{display:gri
 body[data-role="teacher"] #content .mc-cards{grid-template-columns:1fr}.qualification-overview{align-items:flex-start;flex-direction:column;gap:16px;padding:18px;margin-bottom:18px}
 .qualification-total{gap:12px}.qualification-symbol{width:44px;height:44px}.qualification-total strong{font-size:28px}
 .qualification-expiry-counts{padding:14px 0 0;border-left:0;border-top:1px solid #e1e9f3;width:100%;gap:4px 18px}.qualification-expiry-counts b{font-size:20px;margin-inline:5px}
-.qualification-state-tabs{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:0;padding:4px 6px 0;overflow:visible}.qualification-state-tabs button{flex-direction:column;justify-content:center;gap:3px;min-height:60px;padding:8px 3px;font-size:13px;white-space:normal}
+.qualification-state-tabs{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:0;padding:4px 6px 0;overflow:visible}.qualification-state-tabs button{flex-direction:column;justify-content:center;gap:3px;min-height:60px;padding:8px 3px;font-size:13px;white-space:normal}
 .qualification-total>div{display:flex;align-items:baseline;gap:12px}.qualification-expiry-counts p{font-size:12px;line-height:1.7}
 body[data-role="teacher"] #content .teacher-qualification-list .table td:first-child{display:block!important}
 body[data-role="teacher"] #content .teacher-qualification-list .table td:first-child::before{display:none!important}
