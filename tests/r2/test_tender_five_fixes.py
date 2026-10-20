@@ -45,21 +45,25 @@ def test_archived_project_cannot_be_recognized_in_another_period(recognized,clie
         assert sum(db.scalars(select(PointEntry.amount).where(PointEntry.kind=='SOCIAL')))==Decimal('1.56')
 
 
-def test_two_drafts_only_one_can_submit_and_returned_draft_does_not_reserve(setup_social,client2,app2,monkeypatch):
+def test_project_claim_reuses_original_draft_and_returned_application(setup_social,client2,app2,monkeypatch):
     monkeypatch.setattr(st,'today',lambda:date(2026,9,3));pid=setup_social
-    assert import_rows(client2,pid,[row()]).status_code==200;close_project(client2,pid);pol=policy(client2,True);second_period(app2,pol)
-    auth(client2,'teacher');ids=[]
+    assert import_rows(client2,pid,[row()]).status_code==200;close_project(client2,pid);pol=policy(client2,True,resubmission_mode='original_submission');second_period(app2,pol)
+    auth(client2,'teacher')
+    r=post(client2,'/api/social/claims',claim_payload(pid,pol));assert r.status_code==200,r.text
+    item=r.json()['item'];ident=item['id'];proof(client2,'social_claim',ident,item['version'])
     for period,rule in [('period2026',pol),('overlap','overlap-rule')]:
-        r=post(client2,'/api/social/claims',claim_payload(pid,rule,period));assert r.status_code==200,r.text
-        item=r.json()['item'];ids.append(item['id']);proof(client2,'social_claim',item['id'],item['version'])
-    assert action(client2,'claims','social_claim',ids[0],'submit').status_code==200
+        duplicate=post(client2,'/api/social/claims',claim_payload(pid,rule,period))
+        assert duplicate.status_code==409 and '同一项目' in duplicate.text
+    assert action(client2,'claims','social_claim',ident,'submit').status_code==200
     overview=client2.get('/api/social/overview?year=2026').json()['points']
     assert Decimal(overview['trial'])==Decimal('1.56') and overview['trial_claims']==1
-    rejected=action(client2,'claims','social_claim',ids[1],'submit')
-    assert rejected.status_code==409 and '重复认定' in rejected.text
-    auth(client2,'collegehead');assert action(client2,'claims','social_claim',ids[0],'return').status_code==200
-    auth(client2,'teacher');r=action(client2,'claims','social_claim',ids[1],'submit');assert r.status_code==200,r.text
-    assert action(client2,'claims','social_claim',ids[0],'submit').status_code==409
+    auth(client2,'collegehead');assert action(client2,'claims','social_claim',ident,'return').status_code==200
+    auth(client2,'teacher')
+    duplicate=post(client2,'/api/social/claims',claim_payload(pid,'overlap-rule','overlap'))
+    assert duplicate.status_code==409 and '同一项目' in duplicate.text
+    resubmitted=action(client2,'claims','social_claim',ident,'submit');assert resubmitted.status_code==200,resubmitted.text
+    with app2.state.sessions() as db:
+        assert len(list(db.scalars(select(SocialClaim).where(SocialClaim.project_id==pid))))==1
 
 
 def test_legacy_pending_duplicate_is_rejected_at_archive(recognized,client2,app2):
