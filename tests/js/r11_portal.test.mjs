@@ -1092,9 +1092,10 @@ test('school cockpit shows comparison, multi-metric colleges, charts and sync fa
  await e.t.handlers['rank-metric']('assessment_average');const again=await e.t.pages.cockpit();assert.match(again,/学院排行 · 考核均分/);assert.ok(again.indexOf('学院一')<again.indexOf('学院二'));
  assert.ok(e.requests.every(r=>r.options.method==='GET'));
 });
-test('organization page renders assessment score summary and score bands for the scope',async()=>{
+test('院系概况分页签，考核进度页签显示分值汇总与分档',async()=>{
  const e=engine(url=>url.startsWith('/api/organization-workbench')?{statistics:{...cockpitResponder('/api/statistics'),ranking:[],state_filter_note:''},todos:{items:[],total:0},assessment_states:{}}:{items:[]},'college');
- e.t.setState('organization');const html=await e.t.pages.organization();assert.match(html,/本范围教师考核分值汇总与分档/);assert.match(html,/90–100分/);assert.match(html,/平均分/);
+ e.t.setState('organization');let html=await e.t.pages.organization();assert.match(html,/运行概览/);assert.match(html,/考核进度/);assert.match(html,/教师名册/);assert.doesNotMatch(html,/本范围教师考核分值汇总与分档/);
+ e.t.setState('organization',{tab:'assessment'});html=await e.t.pages.organization();assert.match(html,/本范围教师考核分值汇总与分档/);assert.match(html,/教师考核处理进度/);assert.match(html,/90–100分/);assert.match(html,/平均分/);
 });
 test('integration detail renders latest sync per data type with failure reason and province ledger explanation',async()=>{
  const e=engine(url=>{
