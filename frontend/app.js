@@ -2,7 +2,7 @@ import {coursePointsAction} from './course-points.js?v=20261019-flow4';
 import {renderTrainingWorkspace,trainingChange} from './training-workspace.js?v=20261019-walk3';
 import {renderSchoolCockpit,bindSchoolCockpit} from './school-cockpit.js?v=20261019-walk3&display=20261019-clean2';
 import {icons} from './icons.js';
-import {socialPage,socialAction,applicationProjectPicker} from './social-training.js?v=20261019-walk3&selection=20261019-row1&course_points=20261019-flow4&display=20261019-clean2&history_dates=20261020-images1&nav=20261020-b2';
+import {socialPage,socialAction,applicationProjectPicker} from './social-training.js?v=20261019-walk3&selection=20261019-row1&course_points=20261019-flow4&display=20261019-clean2&history_dates=20261020-images1&nav=20261020-b3';
 import {applicationAction,trainersHtml,applyPageHtml,APPLY_PAGES,myApplicationsHtml,homeApplicationsHtml,myCoursesHtml,libraryHtml,libraryFilterSubmit,homeCoursesHtml,courseAction} from './applications.js?v=20261019-flow3&display=20261019-clean2&trainers=20261020-tabs1';
 import {nextCode,runBatch,batchStage,batchMode,batchPerformer,BATCH_LABELS,materialUploadForm,checkUploadFiles,uploadEntries,uploadSequential,uploadStatusHtml} from './approval-flow.js?v=20261017-multi-materials2';
 import {ledgerPage,resourceStatsPage,homeIndicators,ledgerAction,resetLedgerView,minePage,mineReminders} from './social-ledgers.js?v=20261019-walk3&display=20261019-clean2';
@@ -540,7 +540,9 @@ function loginView(message=''){
 const pageGroups={rules:{title:'规则与配置',tabs:[['rules','考核周期与规则','rules.manage'],['policy','社会培训制度口径','rules.manage'],['settings','字典与参数','settings.manage']]},audit:{title:'日志与运行',tabs:[['audit','安全提示与操作日志','audit.read'],['operations','运行与备份','operations.read']]},assessment:{title:'三级考核管理',tabs:[['assessment','三级考核','assessment.read'],['annual','学院社会培训年度考核','assessment.read']]},points:{title:'教师积分激励',tabs:[['points','积分核对与确认','points.read'],['recognition','社会培训积分申报与认定','points.read']]},imports:{title:'表格导入导出',tabs:[['imports','表格导入','import'],['exports','导出下载','export']]}};
 const pageGroupOf=p=>Object.keys(pageGroups).find(g=>pageGroups[g].tabs.some(([k])=>k===p));
 const groupNavItem=(g,ico)=>{const t=pageGroups[g].tabs.find(([,,perm])=>can(perm));return t?[[t[0],ico,t[2]]]:[]};
-const navKey=p=>['sso','hub','province','guide','implementation'].includes(p)?'sync':(pageGroupOf(p)||p);
+// 教师菜单里项目、课程、基地、师资只有“我要申报”入口；从看板、通知等进入业务页时，侧栏同样选中对应入口。
+const teacherNavAlias={projects:'apply_project',courses:'apply_course',bases:'apply_base',trainers:'apply_trainer'};
+const navKey=p=>['sso','hub','province','guide','implementation'].includes(p)?'sync':p==='resources'&&me?.role?.kind!=='teacher'?'courses':me?.role?.kind==='teacher'&&teacherNavAlias[p]?teacherNavAlias[p]:(pageGroupOf(p)||p);
 // 只有一个可用标签时，菜单直接用该页名称（例如教师只能导出，不显示“表格导入导出”）。
 const navLabel=p=>{const g=pageGroupOf(p);if(g){const own=roleGroupTitles[me?.role?.kind]?.[g];if(own)return own;const tabs=pageGroups[g].tabs.filter(([,,perm])=>can(perm));return tabs.length===1?tabs[0][1]:pageGroups[g].title}return (p==='credits'&&me?.credit_reviewer?null:roleTitles[me?.role?.kind]?.[p])||({organization:'学院与教研室'})[p]||pageTitle(p)};
 function pageGroupTabs(p){const g=pageGroupOf(p);if(!g)return '';const tabs=pageGroups[g].tabs.filter(([key,,perm])=>can(perm)&&pageAllowed(key));if(tabs.length<2)return '';return `<nav class="section-tabs page-group-tabs" aria-label="${esc(pageGroups[g].title)}">${tabs.map(([k,l])=>`<button type="button" data-action="nav" data-id="${k}" class="${k===p?'active':''}" aria-pressed="${k===p}">${esc(me.role.kind==='teacher'?({points:'已认定明细',recognition:'申报进度',assessment:'我的年度考核',annual:'学院考核公示'}[k]||l):l)}</button>`).join('')}</nav>`}
