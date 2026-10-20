@@ -6,7 +6,7 @@ const PAGE_KEYS = Object.freeze({
   assessment: [...BUSINESS_KEYS,'state','returned','business_scope','progress','tab'],
   points: ['teacher_id','org_id'], disputes: ['teacher_id','state'],
   qualifications: ['q','teacher_id','state'], rules: [],
-  audit: ['q','module','result','start','end','actor','org_id','object_id','request_id'], imports: ['q'], notices: ['q'], permissions: ['q','hr_state'],
+  audit: ['q','module','result','start','end','actor','org_id','object_id','request_id','kind'], imports: ['q'], notices: ['q'], permissions: ['q','hr_state'],
   todos: ['q','type','stage','tab','state','period_id','org_id'], sync: [], sso:['tab','impl_step'], hub:['tab','impl_step','data_type','state'], province:['tab','impl_step','data_type','state'], guide:[], operations: [], exports: [], help: [],
 });
 function valuesFor(keys, values = {}) {

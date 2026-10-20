@@ -626,7 +626,49 @@ test('export task lists show Chinese type and business status instead of interna
 test('教师参训导出任务准确标识业务类型，不显示成课程人次',async()=>{
  const e=engine(()=>({items:[{id:'part-export',kind:'export',state:'DONE',payload:{kind:'participations'},attempts:1}],page:1,size:20,total:1}), 'teacher');
  const html=await e.t.pages.exports();
- assert.match(html,/教师参训记录/);assert.doesNotMatch(html,/课程人次|>participations</);
+ assert.match(customerVisible(html),/教师参训记录/);assert.doesNotMatch(customerVisible(html),/课程人次|>participations</);
+});
+
+test('审计导出保留操作类型和其他筛选，默认与页面一致只导出改动',async()=>{
+ for(const kind of [undefined,'change','access','all']){
+  const e=engine();e.t.setState('audit',{...(kind?{kind}:{}),actor:'合成管理员',start:'2026-10-19'});
+  await vm.runInContext("exportRows('audit')",e.ctx);
+  const request=e.requests.find(x=>x.url==='/api/exports');
+  assert.deepEqual(JSON.parse(request.options.body).filters,{...(kind?{kind}:{}),actor:'合成管理员',start:'2026-10-19',kind:kind||'change'});
+ }
+});
+
+test('审计操作类型经过查询白名单、地址刷新和导出后保持一致',async()=>{
+ for(const kind of ['change','access','all']){
+  const filters=scope.pageFilters('audit',{kind,start:'2026-10-19',end:'2026-10-19'});
+  const restored=scope.restoreNavigation(scope.navigationHash('audit',filters),{audit:'操作审计'});
+  assert.equal(restored.filter.kind,kind);
+  const e=engine();e.t.setState(restored.page,restored.filter);await e.t.pages.audit();
+  const query=new URL(e.requests[0].url,'http://testserver').searchParams;
+  assert.equal(query.get('kind'),kind==='all'?null:kind);
+  await vm.runInContext("exportRows('audit')",e.ctx);
+  assert.equal(JSON.parse(e.requests.find(x=>x.url==='/api/exports').options.body).filters.kind,kind);
+ }
+});
+
+test('历史导出只加说明，保留原下载入口和任务数据，新格式明确生成时间与口径',async()=>{
+ const task={id:'old-report',kind:'export',state:'DONE',historical_report:true,payload:{kind:'points',filters:{period_id:'period',q:'<检索>'}},result:{size:2048}};
+ const before=JSON.stringify(task),e=engine(()=>({items:[task],total:1,page:1,size:20,task,attempts:[]}));
+ e.t.setData([{id:'period',name:'合成周期'}]);
+ const html=await e.t.pages.exports();assert.match(html,/历史版本/);assert.match(html,/data-action="task-download" data-id="old-report"/);
+ await e.t.handlers.task(task.id);const detail=e.node('#modal-root').innerHTML;
+ assert.match(detail,/历史文件未记录/);assert.match(detail,/合成周期/);assert.match(detail,/&lt;检索&gt;/);assert.doesNotMatch(detail,/<检索>|<pre/);assert.equal(JSON.stringify(task),before);
+ const render=vm.runInContext('exportResultSummary',e.ctx),current=render({report_version:2,generated_at:'2026-10-19T12:00:00',rows:0,size:1024},{payload:{kind:'points'},historical_report:false});
+ assert.match(current,/当前格式/);assert.match(current,/生成时间（北京时间）/);assert.match(current,/0 条/);assert.match(current,/正负分值的代数和/);assert.doesNotMatch(current,/历史版本：/);
+});
+
+test('报表指南说明各类口径与业务页直出入口，按当前权限显示',()=>{
+ const admin=engine();admin.t.setUser({user:{id:'admin',is_admin:true},role:{kind:'school'},permissions:['records.read','qualification.read','points.read','assessment.read','audit.read','data.export']});
+ const html=vm.runInContext('exportReportGuide()',admin.ctx);
+ for(const label of ['培训授课数据','教师参训记录','教师资质','教师积分','教师考核','组织考核','操作审计','结构化业务移交包','项目上报表','社会培训办理材料','已认定积分汇总'])assert.ok(html.includes(label),label);
+ assert.match(html,/审核通过.*不等于当前有效/);assert.match(html,/历史区间2023-07-01至2026-06-30/);assert.match(html,/按教师当前组织归属/);
+ const teacher=engine(undefined,'teacher'),own=vm.runInContext('exportReportGuide()',teacher.ctx);
+ assert.doesNotMatch(own,/操作审计|结构化业务移交包|项目上报表|>组织考核</);assert.match(own,/跨周期更正/);
 });
 
 test('实际台账页面上下文包含统一时间格式，历次报送可完整渲染',async()=>{
@@ -1422,6 +1464,32 @@ test('组织试算和正式计算保留结果并展示后端目标核对提示',
  assert.match(e.node('#modal-root').innerHTML,/组织考核已生成，请核对目标/);assert.match(e.node('#modal-root').innerHTML,/info-banner warn/);assert.match(e.node('#modal-root').innerHTML,/来源未记录/);
  assert.equal(e.requests.filter(r=>r.url==='/api/organization-assessments/calculate'&&r.options.method==='POST').length,1);
 });
+test('导入须知与模板用途按权限显示，行数上限随当前配置同步更新',async()=>{
+ for(const role of ['dept','college','school']){
+  const e=engine(undefined,role);
+  for(const limit of [1200,7500]){
+   vm.runInContext(`businessConfig.import_max_rows=${limit}`,e.ctx);
+   const html=await e.t.pages.imports(),cards=[...html.matchAll(/<button data-action="template" data-id="([^"]+)">([\s\S]*?)<\/button>/g)];
+   assert.match(html,/导入填写须知：请使用当前下载的标准模板/);assert.match(html,/任一行校验未通过时，整批不入库/);
+   assert.ok(html.includes(`当前页面单批上限为 ${limit} 行`));assert.doesNotMatch(html,/5000 行/);
+   assert.deepEqual(cards.map(x=>x[1]),role==='school'?['records','participations','qualifications','teachers']:['records','participations','qualifications']);
+   for(const card of cards)assert.ok(card[2].includes(`最多 ${limit} 行`));
+   assert.match(cards.find(x=>x[1]==='records')[2],/项目备案、结项和积分认定仍需按流程办理/);
+   assert.match(cards.find(x=>x[1]==='participations')[2],/作为学员参加培训的记录，不计入授课收入和授课人次/);
+   assert.match(cards.find(x=>x[1]==='qualifications')[2],/由教师本人补充证明材料并提交审核/);
+   if(role==='school')assert.match(cards.find(x=>x[1]==='teachers')[2],/停用待配置账号，管理员重置临时密码并启用后才能登录/);
+  }
+ }
+});
+
+test('三个模板下载沿用服务端文件名，与页面显示名称一致',async()=>{
+ const e=engine(undefined,'dept'),downloads=[];
+ e.ctx.captureTemplateDownload=(...args)=>downloads.push(args);
+ vm.runInContext('download=captureTemplateDownload',e.ctx);
+ for(const kind of ['records','participations','qualifications'])await e.t.handlers.template(kind);
+ assert.deepEqual(downloads,[['/imports/templates/records'],['/imports/templates/participations'],['/imports/templates/qualifications']]);
+});
+
 test('有错误行的导入预览显示校验未通过',async()=>{
  const e=engine(async()=>({items:[{id:'bad-import',filename:'测试.xlsx',kind:'records',state:'PREVIEW',total:1,errors:1}],total:1,page:1,size:20}));
  const html=await e.t.pages.imports();

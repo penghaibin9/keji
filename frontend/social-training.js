@@ -138,9 +138,9 @@ function reportModal(){
  const c=context,e=c.esc,r=reportResult;
  const form='<form id="report-range-form" class="report-range" onsubmit="return false"><label>开始日期<input type="date" id="report-start" value="'+e(reportRange.start)+'"></label><label>结束日期<input type="date" id="report-end" value="'+e(reportRange.end)+'"></label>'
   +'<label>或按学年<select id="report-year"><option value="">用左边的起止日期</option>'+schoolYears().map(y=>'<option value="'+y+'"'+(reportRange.year===y?' selected':'')+'>'+y+' 学年</option>').join('')+'</select></label></form>';
- let body=c.note('默认是上级给的统计区间（2023-07-01 至 2026-06-30），也可以选学年。只统计已备案及以后的项目；'+(c.me?.role?.kind==='school'?'学校导出全校。':'学院导出本院，用于自查。'))+form;
+ let body=c.note('默认是上级给的历史统计区间（2023-07-01 至 2026-06-30），不是滚动最新三年，也可以选本次起止日期或学年。只统计已备案及以后的项目；'+(c.me?.role?.kind==='school'?'学校导出全校。':'学院导出本院，用于自查。'))+c.note('用于项目清单和绩效汇总核对，纳入培训日期与区间重叠的项目。视频时长优先取项目填写值（含0），未填写时取课程资源合计，两张表口径一致。绩效表基地数统计本范围全部有效基地；近一年为区间结束日前365天，新增课程、视频按系统建档时间判断，基地按设立日期判断。课程缺学时或教学方式时，占比标为待补充。',false,'上报表用途与统计口径')+form;
  if(r){
-  body+='<div class="report-result">'+(r.count?'<p><strong>'+e(r.start+' 至 '+r.end)+'</strong>：'+e(r.scope)+'共 '+r.count+' 个项目，'+(r.blocked?'<span class="badge orange-b">'+r.blocked+' 个缺上报信息</span>，点项目名打开后用“补填上报信息”补齐。':'<span class="badge green-b">全部齐全</span>，可以下载。')+'</p>':'<p>这个区间里没有已备案的项目。</p>')
+  body+='<div class="report-result">'+(r.count?'<p><strong>'+e(r.start+' 至 '+r.end)+'</strong>：'+e(r.scope)+'共 '+r.count+' 个项目，'+(r.blocked?'<span class="badge orange-b">'+r.blocked+' 个缺上报信息</span>，点项目名打开后用“补填上报信息”补齐。':'<span class="badge green-b">项目上报信息齐全</span>，可以下载。')+'</p>':'<p>这个区间里没有已备案的项目。</p>')
    +(r.items.length?c.table(['项目','承办学院','状态','缺项'],r.items.map(x=>[c.act(x.name+(x.cohort?'（'+x.cohort+'）':''),'social-detail','social_project|'+x.id,'text'),e(x.org_name),e(x.state_label),x.issues.length?'<span class="report-issues">'+x.issues.map(e).join('<br>')+'</span>':'<span class="badge green-b">齐全</span>'])):'')
    +'<p class="muted small">'+e(r.note)+'</p></div>';
  }

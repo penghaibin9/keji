@@ -8,7 +8,14 @@ def workbook(payload):
     book=Workbook();sheet=book.active;sheet.title='业务概要'
     obj=payload['item'];sheet.append(['项目','内容'])
     sheet.append(['办理状态',payload['state_label']]);sheet.append(['记录版本',obj['version']])
-    sheet.append(['正式性','已归档结果' if obj['state']=='ARCHIVED' else '过程材料或候选试算，非正式结果'])
+    nature='已归档结果' if obj['state']=='ARCHIVED' else '过程材料或候选试算，非正式结果'
+    if payload.get('facts') is not None:
+        nature='已结项项目材料' if obj['state']=='CLOSED' else '已备案项目材料（结项尚未完成）' if obj['state'] in {'FILED','CLOSE_COLLEGE','CLOSE_REVIEW'} else '项目办理过程材料（尚未完成备案或结项）'
+        if obj['state']=='VOID' or payload['facts'].get('invalidated'):nature='项目作废后的历史材料（不得作为有效结项依据）'
+    elif obj['state']=='PUBLIC':nature='公示中的积分汇总（尚未归档）' if obj.get('kind')=='point_report' else '公示中的考核材料（尚未归档）'
+    elif obj['state']=='ACTIVE':nature='已生效业务资料（当前启用）'
+    if obj['data'].get('superseded_by'):nature='已被新公示替代的历史材料'
+    sheet.append(['正式性',nature])
     if payload.get('readonly'):sheet.append(['查看范围',payload.get('readonly_reason','仅本人参与摘要，不含学员名册、财务和他人工作资料')])
     if payload.get('public_summary'):sheet.append(['查看范围','仅公开年度评分摘要，不含项目原始证据及个人积分明细'])
     for reason in obj.get('closeout_pending',[]):sheet.append(['历史资料待补',reason])

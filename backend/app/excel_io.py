@@ -36,6 +36,7 @@ from .inbound_sync import IntegrationSchedule
 from .social_models import SocialProject,SocialUnit,SocialPolicy,SocialClaim,SocialAnnual,SocialResource
 
 MAX_ROWS=5000
+EXPORT_FORMAT_VERSION=2
 MAX_XLSX_BYTES=10*1024*1024
 MAX_UNCOMPRESSED=50*1024*1024
 MAX_ZIP_ENTRIES=1000
@@ -54,6 +55,32 @@ TEMPLATES={
   ('来源唯一编号','external_key'),('教师工号','teacher_staff_no'),('参训日期','event_date'),('项目编码','project_code'),('项目名称','project'),
   ('课程编码','course_code'),('课程名称','course'),('参训学时','hours'),('数据来源','source')],
 }
+
+TEMPLATE_NAMES={'records':'培训授课数据','participations':'教师参训记录','qualifications':'教师资质草稿','teachers':'教师账号'}
+TEMPLATE_COLUMN_HELP={
+ '来源唯一编号':'必填，按文本填写。同类记录中必须唯一，保留前导零；重复编号会被拒绝，本模板不覆盖已有记录。',
+ '教师工号':'必填，按文本填写学校账号中的完整工号，保留前导零。教师须为当前授权范围内的启用账号，不能用姓名代替工号。',
+ '业务日期':'必填，填写实际授课业务发生日期，使用“2026-10-19”格式，不填写日期说明文字。',
+ '项目编码':'必填，按文本填写并保留前导零，与项目名称对应。仅限字母、数字、下划线或短横线，最多64个字符；优先核对已有项目编码。',
+ '项目名称':'必填，填写实际培训项目名称，与项目编码对应，最多160个字符。导入台账不代表完成项目申报、备案或结项。',
+ '课程编码':'必填，按文本填写并保留前导零，与课程名称及项目对应。仅限字母、数字、下划线或短横线，最多64个字符；不能使用已绑定其他项目的课程编码。',
+ '课程名称':'必填，填写实际培训课程名称，与课程编码对应，最多160个字符。',
+ '班级编码':'必填，按文本填写并保留前导零。仅限字母、数字、下划线或短横线，最多64个字符；同一编码须属于同一项目和课程。',
+ '班级名称':'必填，填写实际培训班级名称，与班级编码对应，最多160个字符。',
+ '授课学时':'必填，填写教师实际授课学时，使用非负数字，最多两位小数，可填0。单位为学时，不在单元格内附加单位文字。',
+ '课程人次':'必填，填写非负整数，单位为人次。按学校确认的课程人次口径核对，不能直接当作项目去重人数，也不要重复统计同一业务。',
+ '归属培训收入':'必填，单位为元，最多两位小数。填写归属本条教师授课明细的培训收入，须有核对依据；不能用缺失值猜为0，也不能重复填入项目总收入。',
+ '数据来源':'选填，可留空。正式记录统一标记为“表格导入”；如填写，须使用学校当前业务字典允许的来源，原填写值保留在导入预览中。',
+ '参训日期':'必填，填写教师作为学员参加培训的实际日期，使用“2026-10-19”格式。不能用本表登记教师授课。',
+ '参训学时':'必填，填写教师作为学员参加培训的学时，使用非负数字，最多两位小数，可填0。不计入授课收入或授课人次。',
+ '资质类别':'必填，使用学校“资质字典与到期提醒”中当前配置的类别，不得自行编写新的类别名称。',
+ '证书名称':'必填，与证书及证明材料上的名称一致，最多160个字符。导入后为草稿，仍需教师本人补充证明材料并提交审核。',
+ '证书编号':'必填，按文本填写完整证书编号，保留前导零，最多128个字符。同一教师的相同证书编号不能重复导入。',
+ '发证机构':'必填，填写证书上的发证机构完整名称，最多160个字符。',
+ '取得日期':'必填，填写证书实际取得日期，使用“2026-10-19”格式，并与证明材料一致。',
+ '有效期至':'选填，使用“2026-10-19”格式，不能早于取得日期。仅长期有效的证书可留空；留空时系统按长期有效处理。',
+}
+TEMPLATE_TEXT_FIELDS={'external_key','teacher_staff_no','project_code','course_code','class_code','certificate_no'}
 
 
 def _plain(value):
@@ -191,9 +218,13 @@ def template_bytes(kind):
     wb=Workbook();ws=wb.active;ws.title='导入数据';headers=[x[0] for x in TEMPLATES[kind]];ws.append(headers);ws.freeze_panes='A2';ws.auto_filter.ref=f'A1:{get_column_letter(len(headers))}1'
     fill=PatternFill('solid',fgColor='D9EAF7')
     for i,cell in enumerate(ws[1],1):
-        cell.font=Font(bold=True);cell.fill=fill;cell.alignment=Alignment(horizontal='center');cell.comment=Comment('请勿修改表头；禁止公式。日期使用 YYYY-MM-DD。','跃科')
-        ws.column_dimensions[get_column_letter(i)].width=max(14,min(28,len(headers[i-1])*2+8))
-    wb.properties.title=f'{kind} 导入模板';wb.properties.creator='湖南跃科信息工程有限公司'
+        cell.font=Font(bold=True);cell.fill=fill;cell.alignment=Alignment(horizontal='center')
+        help_text='请勿修改表头；禁止公式。日期使用 YYYY-MM-DD。' if kind=='teachers' else '请勿修改表头名称或顺序；禁止公式。\n'+TEMPLATE_COLUMN_HELP[headers[i-1]]
+        cell.comment=Comment(help_text,'跃科');cell.comment.width=420;cell.comment.height=140
+        column=ws.column_dimensions[get_column_letter(i)];column.width=max(14,min(28,len(headers[i-1])*2+8))
+        if kind!='teachers' and TEMPLATES[kind][i-1][1] in TEMPLATE_TEXT_FIELDS:
+            column.number_format='@';cell.number_format='@'
+    wb.properties.title=f'{TEMPLATE_NAMES[kind]}模板';wb.properties.creator='湖南跃科信息工程有限公司'
     out=BytesIO();wb.save(out);wb.close();return out.getvalue()
 
 
@@ -462,7 +493,7 @@ def export_rows(db,actor,kind,filters,policy=None):
     if kind=='audit':
         q=audit_query(db,actor,filters)
         items=db.scalars(q.order_by(Audit.created_at.desc(),Audit.id)).all()
-        return ['时间','用户','组织ID','模块','业务对象','操作','前值','后值','原因','结果','Request-ID'],[[x.created_at,x.actor_name,x.org_id or '',x.module,x.object_id,x.action,json.dumps(x.before,ensure_ascii=False),json.dumps(x.after,ensure_ascii=False),x.reason,label(x.result),x.request_id] for x in items]
+        return ['时间（北京时间）','用户','组织ID','模块','业务对象','操作','前值','后值','原因','结果','Request-ID'],[[x.created_at+timedelta(hours=8),x.actor_name,x.org_id or '',x.module,x.object_id,x.action,json.dumps(x.before,ensure_ascii=False),json.dumps(x.after,ensure_ascii=False),x.reason,label(x.result),x.request_id] for x in items]
     raise HTTPException(422,'导出类型无效')
 
 
@@ -505,8 +536,8 @@ def process_export_task(db,task,storage_dir):
             policy=MaskPolicy(db,actor);actor.require('export');headers,rows=export_rows(db,actor,kind,filters,policy)
             title={'records':'培训授课数据','participations':'教师参训记录','qualifications':'教师资质','points':'教师积分','assessments':'教师考核','organization_assessments':'组织考核','audit':'审计记录'}[kind]
             data=rows_to_xlsx(headers,rows,title);root=_ensure_export_root(storage_dir);filename=f'{title}_{task.id[:8]}.xlsx';path=root/(task.id+'.xlsx');_atomic_write(path,data)
-        data_hash=sha256(path.read_bytes()).hexdigest();task.state='DONE';task.error='';task.result={'filename':filename,'storage_name':path.name,'sha256':data_hash,'size':path.stat().st_size,'mime':'application/zip' if kind=='handover' else 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'};task.version+=1
-        if kind!='handover':task.result['sensitive_masked']=policy.masked  # 12.6: masked identifier count for this viewer
+        data_hash=sha256(path.read_bytes()).hexdigest();task.state='DONE';task.error='';task.result={'filename':filename,'storage_name':path.name,'sha256':data_hash,'size':path.stat().st_size,'mime':'application/zip' if kind=='handover' else 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet','report_version':EXPORT_FORMAT_VERSION,'generated_at':utcnow().isoformat()};task.version+=1
+        if kind!='handover':task.result.update(sensitive_masked=policy.masked,rows=len(rows))
         db.add(TaskAttempt(task_id=task.id,attempt=attempt,result='SUCCESS',message='导出生成并完成SHA256校验'));return task
     except Exception as exc:
         task.state='FAILED';task.error=('导出校验未通过，请核对权限与数据完整性' if isinstance(exc,HTTPException) else '导出执行失败：'+type(exc).__name__);task.version+=1;db.add(TaskAttempt(task_id=task.id,attempt=attempt,result='ERROR',message=type(exc).__name__))

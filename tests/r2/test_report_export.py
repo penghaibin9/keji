@@ -1,5 +1,10 @@
 """导出上报表：预检缺项、只算已备案及以后的项目、按区间重叠取项目，两张表的数从系统里算。"""
 from io import BytesIO
+from copy import deepcopy
+from datetime import date,datetime
+from decimal import Decimal
+from types import SimpleNamespace
+import pytest
 from openpyxl import load_workbook
 from sqlalchemy import select
 from app.reference_data import TrainingCourseMaster
@@ -7,6 +12,7 @@ from app.social_models import SocialProject, SocialResource
 from conftest import auth, put
 from test_social_training import setup_social  # noqa: F401
 from test_project_apply import QUALITY
+from app import social_report
 
 RANGE = {'start': '2023-07-01', 'end': '2026-12-31'}
 
@@ -71,3 +77,25 @@ def test_projects_not_yet_filed_are_left_out(setup_social, client2, app2):
     d = c.get('/api/social/report-export/check', params=RANGE).json()
     assert d['count'] == 0 and not d['ready']
     assert c.get('/api/social/report-export', params=RANGE).status_code == 409
+
+
+@pytest.mark.parametrize('declared,expected',[('60',60),('0',0),(None,30)])
+def test_project_and_performance_video_minutes_share_one_basis(declared,expected):
+    project=SimpleNamespace(data={'name':'合成项目','code':'P1','total_hours':'8','video_minutes':declared},cohort='')
+    courses={'C1':{'project_code':'P1','minutes':Decimal(30),'hours':Decimal(8),'mode':'practice','created_at':datetime(2026,1,1)}}
+    before=deepcopy(project.data)
+    db=SimpleNamespace(scalars=lambda query:SimpleNamespace(all=lambda:[]))
+    actor=SimpleNamespace(org_ids=['school'],role=SimpleNamespace(kind='school'))
+    row=social_report.project_row(project,courses)
+    performance=social_report.performance(db,actor,date(2026,1,1),date(2026,12,31),[project],courses)
+    assert row[3]==performance[4]==expected and project.data==before
+    performance=social_report.performance(db,actor,date(2026,1,1),date(2026,12,31),[project,project],courses)
+    assert performance[4]==expected*2
+
+
+def test_incomplete_course_mode_does_not_publish_a_partial_percentage():
+    courses={'C1':{'project_code':'P1','minutes':Decimal(0),'hours':Decimal(8),'mode':'practice','created_at':datetime(2026,1,1)},
+             'C2':{'project_code':'P1','minutes':Decimal(0),'hours':Decimal(8),'mode':None,'created_at':datetime(2026,1,1)}}
+    db=SimpleNamespace(scalars=lambda query:SimpleNamespace(all=lambda:[]))
+    actor=SimpleNamespace(org_ids=['school'],role=SimpleNamespace(kind='school'))
+    assert '待补充' in social_report.performance(db,actor,date(2026,1,1),date(2026,12,31),[],courses)[-1]

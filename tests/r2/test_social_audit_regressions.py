@@ -32,6 +32,34 @@ def test_export_grade_label_matches_frozen_recognition(state,label):
     assert (label,'合格') in list(book['业务概要'].values)
 
 
+@pytest.mark.parametrize('state,expected',[('CLOSED','已结项项目材料'),('FILED','已备案项目材料（结项尚未完成）'),('CLOSE_REVIEW','已备案项目材料（结项尚未完成）'),('DRAFT','项目办理过程材料（尚未完成备案或结项）')])
+def test_project_material_nature_follows_project_milestones(state,expected):
+    from app.social_export import workbook
+    payload={'item':{'state':state,'version':1,'data':{'name':'合成项目'}},'facts':{'units':[]},'state_label':'合成状态'}
+    before=deepcopy(payload);book=load_workbook(BytesIO(workbook(payload)))
+    assert ('正式性',expected) in list(book['业务概要'].values)
+    book.close();assert payload==before
+
+
+def test_public_report_is_labelled_public_not_archived():
+    from app.social_export import workbook
+    payload={'item':{'kind':'point_report','state':'PUBLIC','version':1,'data':{'rows':[]}},'state_label':'公示中'}
+    book=load_workbook(BytesIO(workbook(payload)))
+    assert ('正式性','公示中的积分汇总（尚未归档）') in list(book['业务概要'].values)
+    book.close()
+
+
+def test_invalidated_project_active_resource_and_replaced_report_keep_their_status():
+    from app.social_export import workbook
+    cases=[({'item':{'state':'CLOSED','version':1,'data':{}},'facts':{'units':[],'invalidated':True}},'项目作废后的历史材料（不得作为有效结项依据）'),
+           ({'item':{'state':'ACTIVE','version':1,'data':{}}},'已生效业务资料（当前启用）'),
+           ({'item':{'kind':'point_report','state':'PUBLIC','version':1,'data':{'rows':[],'superseded_by':'new'}}},'已被新公示替代的历史材料')]
+    for payload,expected in cases:
+        payload['state_label']='合成状态';before=deepcopy(payload)
+        book=load_workbook(BytesIO(workbook(payload)));assert ('正式性',expected) in list(book['业务概要'].values)
+        book.close();assert payload==before
+
+
 def test_revoked_qualification_permission_must_also_apply_to_mine(app2, client2):
     with app2.state.sessions.begin() as db:
         db.add(Qualification(teacher_id='teacher', category='双师型初级', name='隔离资质', certificate_no='SYNTHETIC-1', issuer='隔离机构', obtained=date(2026,1,1), state='APPROVED'))
