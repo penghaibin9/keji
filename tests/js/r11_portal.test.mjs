@@ -127,14 +127,21 @@ test('身份菜单保留账号密码入口，真实待办只提示其他可切�
  assert.equal(vm.runInContext('accountOtherTodos()',e.ctx),4);assert.match(vm.runInContext('accountMenuHtml()',e.ctx),/data-id="identity:extra"/);
 });
 
-test('身份菜单安全切换，带待办时跳转待办页，失败保留当前页面',async()=>{
+test('切换身份保留当前业务和页签，清除关键词与组织条件',async()=>{
+ const e=engine(async()=>({ok:true}));let target;e.ctx.history.replaceState=(_s,_t,url)=>{target=url};e.ctx.location.reload=()=>{};e.ctx.location.search='';
+ e.t.setUser({demo_switch:{current:'teacher',options:[{username:'teacher',label:'教师本人',todo_count:0},{username:'collegehead',label:'学院负责人',todo_count:2}]}});
+ vm.runInContext("page='projects';filter={q:'关键词',org_id:'o1',teacher_id:'t1',tab:'x',project_view:'business'}",e.ctx);
+ await e.t.handlers['account-switch']('demo:collegehead');
+ assert.equal(target,'/#projects?project_view=business');
+});
+test('身份菜单安全切换，留在当前业务页而不跳待办，失败保留当前页面',async()=>{
  for(const failed of [false,true]){
   const e=engine(async()=>{if(failed)throw Error('连接中断');return {ok:true}});let target,reloaded=false;e.ctx.history.replaceState=(_state,_title,url)=>{target=url};e.ctx.location.reload=()=>{reloaded=true};e.ctx.location.search='?mode=review';
   e.t.setUser({demo_switch:{current:'teacher',options:[{username:'teacher',label:'教师本人',todo_count:0},{username:'collegehead',label:'学院负责人',todo_count:2}]}});
   await e.t.handlers['account-switch']('demo:teacher');assert.equal(e.requests.length,0);
   if(failed)await assert.rejects(e.t.handlers['account-switch']('demo:collegehead'),/连接中断/);else await e.t.handlers['account-switch']('demo:collegehead');
   const request=e.requests[0];assert.equal(request.url,'/api/auth/demo-switch');assert.equal(request.options.headers['X-CSRF-Token'],'test-csrf');assert.deepEqual(JSON.parse(request.options.body),{username:'collegehead'});
-  assert.equal(target,failed?undefined:'/?mode=review#todos');assert.equal(reloaded,!failed);
+  assert.equal(target,failed?undefined:'/?mode=review#home');assert.equal(reloaded,!failed);
  }
  const e=engine();await assert.rejects(e.t.handlers['account-switch']('demo:unauthorized'),/不可用/);assert.equal(e.requests.length,0);
 });

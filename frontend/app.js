@@ -617,8 +617,10 @@ async function boot(){
  periods=loaded[0].items;teachers=loaded[1].items;orgs=loaded[2].items;businessConfig=loaded[3];Object.assign(labels,businessConfig.status_labels||{});
  let restored;try{restored=restoreNavigation(location.hash,titles)}catch{location.hash='';restored=restoreNavigation('',titles)}/* 地址栏筛选参数写坏时回到首页，不让登录后白屏 */
  page=restored.page;filter=restored.filter;periodId=restored.periodId;
+ let scopeChanged=false;if(!pageAllowed(page)){scopeChanged=page!=='home';page='home';filter={};periodId=''}
  // 老师登录后落在菜单第一项“工作总览”（要处理的事、我的申请、我的超星课都在这里）。
  shell();mountAccountMenu();await render();
+ if(scopeChanged)toast('原页面不在当前身份的授权范围内，已回到工作总览。');
 }
 // 共用已有身份授权；这里只呈现角色、待办数量和原账号操作。
 let accountRefreshTimer=null,accountSummaryLoading=false;
@@ -656,13 +658,19 @@ function mountAccountMenu(){
  menu.addEventListener('toggle',()=>{if(menu.open)refreshAccountSummary()});refreshAccountSummary();
  if(!accountRefreshTimer&&typeof window.setInterval==='function')accountRefreshTimer=window.setInterval(()=>{if(me&&!document.hidden)refreshAccountSummary()},60000);
 }
+let accountSwitching=false;
+// 切换身份后留在同一业务：只保留业务页和页签，教师、组织、关键词等查询条件一律清除，新身份无权时由 boot 回到工作总览。
 async function switchAccountRole(key){
  const item=accountRoleItems().find(x=>x.key===key);if(!item||item.unavailable)throw Error('当前身份不可用，请刷新后重试。');
- if(item.current){$('#account-menu').open=false;if(item.todo_count>0)return nav('todos');return}
+ if(item.current){$('#account-menu').open=false;return}
+ if(accountSwitching)return;
+ if(document.querySelector?.('.modal form')&&window.confirm?.('当前窗口里有未保存的内容，切换身份后会丢失。确定要切换吗？')===false)return;
+ accountSwitching=true;
  const demo=key.startsWith('demo:');
- await api(demo?'/auth/demo-switch':'/auth/identity',{method:'POST',body:demo?{username:item.username}:{identity_id:item.id}});
+ try{await api(demo?'/auth/demo-switch':'/auth/identity',{method:'POST',body:demo?{username:item.username}:{identity_id:item.id}})}finally{accountSwitching=false}
  $('#app').innerHTML='<div class="busy-panel" role="status">正在切换身份…</div>';closeModal();
- history.replaceState(null,'',location.pathname+location.search+(item.todo_count>0?'#todos':''));location.reload();
+ const keep={};for(const k of ['tab','project_view'])if(filter?.[k])keep[k]=filter[k];
+ history.replaceState(null,'',location.pathname+location.search+navigationHash(page,pageFilters(page,keep)));location.reload();
 }
 function syncLocation(replace=false){const hash=navigationHash(page,filter,periodId);if(replace)history.replaceState(null,'',location.pathname+location.search+hash);else if(location.hash!==hash)location.hash=hash;}
 // 老师的“业务办理”：四类申请集中在一处，点了直接打开对应的申请表。
