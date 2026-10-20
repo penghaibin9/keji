@@ -68,7 +68,7 @@ const empty=(s='暂无记录',desc='')=>`<div class="empty">${icon('data')}<h3>$
 const note=(s,warn=false,summary='')=>summary&&!warn?`<details class="ui-note"><summary>${esc(summary)}</summary><div>${esc(s)}</div></details>`:`<div class="info-banner ${warn?'warn':''}">${icon(warn?'warning':'help')}<div>${esc(s)}</div></div>`;
 const json=o=>`<pre class="data-json">${esc(JSON.stringify(o,null,2))}</pre>`;
 const ts=v=>v?new Date(/(?:Z|[+-]\d{2}:\d{2})$/.test(v)?v:v+'Z').toLocaleString('zh-CN',{hour12:false}):'—';
-const titles={apply_course:'申报培训课程',apply_project:'申报培训项目',apply_base:'申请培训基地',apply_trainer:'申报培训师',mine:'我的培训明细',ledgers:'学院台账',resources:'课程资源统计',projects:'培训项目',courses:'培训课程',bases:'培训基地',trainers:'培训师资',outcomes:'培训成果',recognition:'申报与认定',annual:'学院年度考核',policy:'学校制度执行口径',home:'首页',todos:'待办中心',cockpit:'管理驾驶舱',records:'培训数据',credits:'授课学分',creditreview:'授课认定',qualifications:'教师资质',points:'教师积分',assessment:'三级考核',disputes:'数据核对',organization:'院系概况',rules:'考核周期与规则',imports:'表格导入',exports:'导出下载',permissions:'用户与权限',settings:'字典与参数',audit:'安全提示与操作日志',sync:'系统对接',implementation:'接口实施工具',sso:'学校统一认证',hub:'学校数据中台',province:'湘培直通车',guide:'对接怎么开始',operations:'运行与备份',notices:'通知公告',help:'帮助中心'};
+const titles={apply_course:'培训课程',apply_project:'培训项目',apply_base:'培训基地',apply_trainer:'培训师资',mine:'我的培训明细',ledgers:'学院台账',resources:'课程资源统计',projects:'培训项目',courses:'培训课程',bases:'培训基地',trainers:'培训师资',outcomes:'培训成果',recognition:'申报与认定',annual:'学院年度考核',policy:'学校制度执行口径',home:'首页',todos:'待办中心',cockpit:'管理驾驶舱',records:'培训数据',credits:'授课学分',creditreview:'授课认定',qualifications:'教师资质',points:'教师积分',assessment:'三级考核',disputes:'数据核对',organization:'院系概况',rules:'考核周期与规则',imports:'表格导入',exports:'导出下载',permissions:'用户与权限',settings:'字典与参数',audit:'安全提示与操作日志',sync:'系统对接',implementation:'接口实施工具',sso:'学校统一认证',hub:'学校数据中台',province:'湘培直通车',guide:'对接怎么开始',operations:'运行与备份',notices:'通知公告',help:'帮助中心'};
 // 同一页面对不同角色的叫法：教研室负责人在台账页只看本教研室平均积分。
 const roleTitles={};
 // 教师看到的合并页名称（菜单和页签标题）。
@@ -537,14 +537,13 @@ function loginView(message=''){
  }).catch(()=>{const note=$('#local-login-note');if(note)note.textContent='暂时无法确认统一认证状态，请切换“本地账号登录”。'});
 }
 // 系统管理简化（2026-10-09）：几个相关页面合成一个菜单，页面顶部用标签切换；原页面和权限代码不变。
-const pageGroups={rules:{title:'规则配置',tabs:[['rules','考核周期与规则','rules.manage'],['policy','社会培训制度口径','rules.manage'],['settings','字典与参数','settings.manage']]},audit:{title:'日志与运维',tabs:[['audit','安全提示与操作日志','audit.read'],['operations','运行与备份','operations.read']]},assessment:{title:'三级考核',tabs:[['assessment','教师与组织考核','assessment.read'],['annual','学院年度考核','assessment.read']]},points:{title:'教师积分',tabs:[['points','积分明细','points.read'],['recognition','申报与认定','points.read']]},imports:{title:'导入导出',tabs:[['imports','表格导入','import'],['exports','导出下载','export']]}};
+const pageGroups={rules:{title:'规则配置',tabs:[['rules','考核周期与规则','rules.manage'],['policy','社会培训制度口径','rules.manage'],['settings','字典与参数','settings.manage']]},audit:{title:'日志与运维',tabs:[['audit','安全提示与操作日志','audit.read'],['operations','运行与备份','operations.read']]},assessment:{title:'三级考核',tabs:[['assessment','教师与组织考核','assessment.read'],['annual','学院年度考核','assessment.read']]},points:{title:'教师积分',tabs:[['points','积分明细','points.read'],['recognition','申报与认定','points.read']]},projects:{title:'培训项目',tabs:[['apply_project','我的申报','portal.read'],['projects','我负责或参与的','records.read']]},courses:{title:'培训课程',tabs:[['apply_course','我的申报','portal.read'],['courses','课程库','records.read']]},bases:{title:'培训基地',tabs:[['apply_base','我的申请','portal.read'],['bases','基地清单','records.read']]},trainers:{title:'培训师资',tabs:[['apply_trainer','我的申报','portal.read'],['trainers','师资库','records.read']]},imports:{title:'导入导出',tabs:[['imports','表格导入','import'],['exports','导出下载','export']]}};
 const pageGroupOf=p=>Object.keys(pageGroups).find(g=>pageGroups[g].tabs.some(([k])=>k===p));
 const groupNavItem=(g,ico)=>{const t=pageGroups[g].tabs.find(([,,perm])=>can(perm));return t?[[t[0],ico,t[2]]]:[]};
 // 教师菜单里项目、课程、基地、师资只有“我要申报”入口；从看板、通知等进入业务页时，侧栏同样选中对应入口。
-const teacherNavAlias={projects:'apply_project',courses:'apply_course',bases:'apply_base',trainers:'apply_trainer'};
-const navKey=p=>['sso','hub','province','guide','implementation'].includes(p)?'sync':p==='mine'?'home':me?.role?.kind==='teacher'&&teacherNavAlias[p]?teacherNavAlias[p]:(pageGroupOf(p)||p);
+const navKey=p=>['sso','hub','province','guide','implementation'].includes(p)?'sync':p==='mine'?'home':(pageGroupOf(p)||p);
 // 只有一个可用标签时，菜单直接用该页名称。
-const navLabel=p=>{const g=pageGroupOf(p);if(g){const own=roleGroupTitles[me?.role?.kind]?.[g];if(own)return own;const tabs=pageGroups[g].tabs.filter(([,,perm])=>can(perm));return tabs.length===1?tabs[0][1]:pageGroups[g].title}return (p==='credits'&&me?.credit_reviewer?null:roleTitles[me?.role?.kind]?.[p])||(p.startsWith('apply_')?pageTitle(p.slice(6).replace(/^(project|course|base|trainer)$/,'$1s')):pageTitle(p))};
+const navLabel=p=>{const g=pageGroupOf(p);if(g){const own=roleGroupTitles[me?.role?.kind]?.[g];if(own)return own;const tabs=pageGroups[g].tabs.filter(([,,perm])=>can(perm));return tabs.length===1?tabs[0][1]:pageGroups[g].title}return (p==='credits'&&me?.credit_reviewer?null:roleTitles[me?.role?.kind]?.[p])||pageTitle(p)};
 function pageGroupTabs(p){const g=pageGroupOf(p);if(!g)return '';const tabs=pageGroups[g].tabs.filter(([key,,perm])=>can(perm)&&pageAllowed(key));if(tabs.length<2)return '';return `<nav class="section-tabs page-group-tabs" aria-label="${esc(pageGroups[g].title)}">${tabs.map(([k,l])=>`<button type="button" data-action="nav" data-id="${k}" class="${k===p?'active':''}" aria-pressed="${k===p}">${esc(l)}</button>`).join('')}</nav>`}
 // “授课认定”菜单只给授课认定人和系统管理员等学校审核账号（me.credit_reviewer）。
 const reviewNavItem=()=>me?.credit_reviewer?[['creditreview','check','portal.read']]:[];
@@ -616,7 +615,7 @@ async function boot(){
  const loaded=await Promise.all([api('/periods'),loadAllTeachers(),api('/organizations'),api('/dictionaries'),loadCodeTables(api)]);
  periods=loaded[0].items;teachers=loaded[1].items;orgs=loaded[2].items;businessConfig=loaded[3];Object.assign(labels,businessConfig.status_labels||{});
  let restored;try{restored=restoreNavigation(location.hash,titles)}catch{location.hash='';restored=restoreNavigation('',titles)}/* 地址栏筛选参数写坏时回到首页，不让登录后白屏 */
- page=restored.page;filter=restored.filter;periodId=restored.periodId;
+ page=routeAlias(restored.page);filter=restored.filter;periodId=restored.periodId;
  let scopeChanged=false;if(!pageAllowed(page)){scopeChanged=page!=='home';page='home';filter={};periodId=''}
  // 老师登录后落在菜单第一项“工作总览”（要处理的事、我的申请、我的超星课都在这里）。
  shell();mountAccountMenu();await render();
@@ -686,8 +685,10 @@ function courseApplyChooser(){
  if(opts.length===1)return handlers['teacher-apply'](opts[0][0]);
  modal('申报培训课程',note('教研室审核 → 学院审批 → 学校（继续教育学院）审批，通过后进入学校培训课程库。课程入库不单独记积分，积分按你在培训项目里授课的人次计算。')+`<div class="teacher-apply-grid one">${opts.map(([id,i,l,sub])=>`<button type="button" class="teacher-apply-item" data-action="teacher-apply" data-id="${id}">${icon(i)}<span><b>${esc(l)}</b><small>${esc(sub)}</small></span>${icon('arrow')}</button>`).join('')}</div>`,act('取消','close'));
 }
+// 教师不查询师资库，“培训师资”只有本人申报区。
+const routeAlias=p=>me?.role?.kind==='teacher'&&p==='trainers'?'apply_trainer':p;
 function nav(dest,extra={}){
- if(!Object.hasOwn(titles,dest))return;const changed=me?.role?.kind==='teacher'&&page!==dest;
+ if(me?.role?.kind==='teacher'&&dest==='trainers')dest='apply_trainer';if(!Object.hasOwn(titles,dest))return;const changed=me?.role?.kind==='teacher'&&page!==dest;
  if(dest==='ledgers')resetLedgerView(true);page=dest;filter=pageFilters(dest,extra);tablePage=1;participationPage=1;syncLocation();setMobileMenu(false);
  const rendering=render(),sequence=renderSequence;
  return rendering.then(()=>{if(changed&&page===dest&&sequence===renderSequence)window.scrollTo?.(0,0)});
@@ -696,9 +697,11 @@ function scopeNav(dest,extra={}){const f=drillFilters(dest,filter,extra);return 
 async function render(){
  if(!me)return;if(document.body?.dataset){document.body.dataset.training=String(['projects','courses','bases','trainers','records','outcomes'].includes(page));document.body.dataset.cockpit='false'}const seq=++renderSequence;$('#content').setAttribute('data-page',page);$('#breadcrumb').textContent=pageTitle(page);syncSidebar();
  $('#content').innerHTML='<div class="busy-panel">正在读取授权业务数据…</div>';
- try{if(!pageAllowed(page))throw Error('当前账号未授权访问此页面，请从左侧授权菜单进入。');let html=await pages[page]();if(!html.includes('page-group-tabs'))html=pageGroupTabs(page)+html;if(seq!==renderSequence)return;$('#content').innerHTML=html+`<footer class="footer"><span>${esc(me.school_name||'湖南科技职业学院')} · 一站式非学历教育智慧前台</span><span>权限范围：${esc(me.role.kind==='teacher'?'仅本人':orgName(me.user.org_id))}</span></footer>`;if(document.body?.dataset)document.body.dataset.cockpit=String(page==='cockpit'&&!!view.report?.available);mergePageHelp($('#content'));collapseHeadActions($('#content'));bindFilters();bindPortalControls();if(page==='cockpit'&&view.report?.available)bindSchoolCockpit($('#content'),view.report,f=>nav('cockpit',f),{sourceUnit:filter.report_unit,onSourceUnit:unit=>{filter.report_unit=unit;syncLocation(true)}})}
+ try{if(!pageAllowed(page))throw Error('当前账号未授权访问此页面，请从左侧授权菜单进入。');let html=await pages[page]();if(!html.includes('page-group-tabs'))html=pageGroupTabs(page)+html;if(seq!==renderSequence)return;$('#content').innerHTML=html+`<footer class="footer"><span>${esc(me.school_name||'湖南科技职业学院')} · 一站式非学历教育智慧前台</span><span>权限范围：${esc(me.role.kind==='teacher'?'仅本人':orgName(me.user.org_id))}</span></footer>`;if(document.body?.dataset)document.body.dataset.cockpit=String(page==='cockpit'&&!!view.report?.available);mergePageHelp($('#content'));collapseHeadActions($('#content'));placeGroupTabs($('#content'));bindFilters();bindPortalControls();if(page==='cockpit'&&view.report?.available)bindSchoolCockpit($('#content'),view.report,f=>nav('cockpit',f),{sourceUnit:filter.report_unit,onSourceUnit:unit=>{filter.report_unit=unit;syncLocation(true)}})}
  catch(err){if(seq===renderSequence&&$('#content'))$('#content').innerHTML=pageHead()+note(friendlyError(err),true)+`<div class="mt16">${act('重新读取','refresh')}</div>`;}
 }
+// 培训业务页的标题在页面模块里生成，分组页签挪到标题下面，和其他页面一致。
+function placeGroupTabs(root){const head=root?.querySelector?.('.training-workspace > .tw-heading'),tabs=head&&root.querySelector('.page-group-tabs');if(tabs?.closest&&head.after&&!tabs.closest('.training-workspace'))head.after(tabs)}
 // 标题栏只留一个主按钮：优先保留主色按钮，没有时保留第一个；其余按钮收进“更多操作”。
 function collapseHeadActions(root){
  for(const bar of [...(root?.querySelectorAll?.('.pagehead > .page-actions, .tw-heading-actions')||[])]){
@@ -1972,7 +1975,7 @@ document.addEventListener('keydown',async e=>{if(e.key!=='Enter'||e.target.id!==
 document.addEventListener('keydown',e=>{if(e.key==='Escape'){if($('#sidebar')?.classList.contains('open'))setMobileMenu(false,true);else if(!me?.user.must_change_password)closeModal()}if(e.key==='/'&&!e.target.matches('input,textarea,select')&&me){e.preventDefault();handlers.search()}});
 document.addEventListener('keydown',e=>{if(e.key!=='Tab'||$('#modal-root').classList.contains('hidden'))return;const nodes=$$('button:not([disabled]),input:not([type=hidden]):not([disabled]),select:not([disabled]),textarea:not([disabled]),a[href],[tabindex="0"]',$('#modal-root')).filter(x=>x.getClientRects().length);const first=nodes[0],last=nodes.at(-1);if(!first)return;if(e.shiftKey&&document.activeElement===first){e.preventDefault();last.focus()}else if(!e.shiftKey&&document.activeElement===last){e.preventDefault();first.focus()}});
 window.addEventListener('resize',()=>{if(me)syncMenuAccessibility()});
-window.addEventListener('hashchange',()=>{if(!me)return;try{const next=restoreNavigation(location.hash,titles);if(navigationHash(next.page,next.filter,next.periodId)===navigationHash(page,filter,periodId))return;page=next.page;filter=next.filter;periodId=next.periodId;tablePage=1;participationPage=1;render()}catch(err){toast(err.message,true)}});
+window.addEventListener('hashchange',()=>{if(!me)return;try{const next=restoreNavigation(location.hash,titles);if(navigationHash(next.page,next.filter,next.periodId)===navigationHash(page,filter,periodId))return;page=routeAlias(next.page);filter=next.filter;periodId=next.periodId;tablePage=1;participationPage=1;render()}catch(err){toast(err.message,true)}});
 window.addEventListener('afterprint',()=>document.body.classList.remove('print-mode'));
 (async()=>{try{await boot()}catch{if(!me)loginView()}})();
 

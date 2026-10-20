@@ -919,11 +919,16 @@ test('学校审核账号不是系统管理员时不显示账号与权限，系�
   assert.equal(e.t.sidebarNavigation().includes('data-id="permissions"'),shown);
  }
 });
-test('教师从看板进入项目等业务页时侧栏选中对应申报入口，其他角色不变',()=>{
- const e=engine();e.t.setUser({user:{id:'u',name:'教师'},role:{kind:'teacher'},permissions:['portal.read']});
- for(const [page,key] of [['projects','apply_project'],['courses','apply_course'],['bases','apply_base'],['trainers','apply_trainer']])assert.equal(vm.runInContext(`navKey('${page}')`,e.ctx),key);
- e.t.setUser({user:{id:'u',name:'学院'},role:{kind:'college'},permissions:['records.read']});
+test('培训业务四页：我的申报与业务列表同属一个菜单，教师有两个页签，师资只有本人申报',()=>{
+ const e=engine();e.t.setUser({user:{id:'u',name:'教师'},role:{kind:'teacher'},permissions:['portal.read','records.read']});
+ for(const [apply,list] of [['apply_project','projects'],['apply_course','courses'],['apply_base','bases'],['apply_trainer','trainers']]){assert.equal(vm.runInContext(`navKey('${apply}')`,e.ctx),list);assert.equal(vm.runInContext(`navKey('${list}')`,e.ctx),list)}
+ const tabs=vm.runInContext("pageGroupTabs('apply_project')",e.ctx);assert.match(tabs,/>我的申报</);assert.match(tabs,/>我负责或参与的</);
+ assert.match(vm.runInContext("pageGroupTabs('courses')",e.ctx),/>课程库</);
+ assert.equal(vm.runInContext("pageGroupTabs('apply_trainer')",e.ctx),'');assert.equal(vm.runInContext("routeAlias('trainers')",e.ctx),'apply_trainer');
+ e.t.setUser({user:{id:'u',name:'学院'},role:{kind:'college'},permissions:['records.read','portal.read']});
  assert.equal(vm.runInContext("navKey('projects')",e.ctx),'projects');assert.equal(vm.runInContext("navKey('resources')",e.ctx),'resources');
+ assert.equal(vm.runInContext("pageGroupTabs('projects')",e.ctx),'');assert.equal(vm.runInContext("routeAlias('trainers')",e.ctx),'trainers');
+ assert.equal(vm.runInContext("navLabel('projects')",e.ctx),'培训项目');
 });
 test('desktop rail toggle updates accessible name and expanded state without network',()=>{
  const e=engine();e.t.handlers['collapse-sidebar']();assert.equal(e.node('#sidebar').classList.contains('collapsed'),true);
