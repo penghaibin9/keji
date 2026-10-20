@@ -186,7 +186,7 @@ export function courseFactsHtml(c, o, back = '', declaration = '') {
   const block = (title, html, extra = '') => html || extra ? `<section class="cx-info-section"><h3>${title}</h3><dl class="cx-info-grid">${html}</dl>${extra}</section>` : '';
   const status = String(o.archived) === '1' ? '<span class="badge gray-b">已归档</span>' : '<span class="badge green-b">使用中</span>';
   const warning = o.credit == null ? `<div class="cx-credit-warning">${c.icon?.('warning') || ''}<strong>缺学分</strong><span>${source === '超星' ? '超星未填写' : '教务未提供'}学分，${o.calculated_credit != null ? '核算学分已按学校课程记录补齐，详见逐学期认定。' : '暂不计入授课学分。'}</span></div>` : '';
-  return `<div class="cx-detail-heading"><h3>${e(o.course_name)}</h3><span class="badge blue-b">${source}课程</span>${status}${declaration}</div>${warning}${block('基本信息', base)}${block('归属与计分', who, `<p class="cx-counting-note">${source==='超星'?'学分仅计入建课人，教学团队成员不重复计算。':'教务课程按本人授课记录及学校认定结果核算学分。'}</p>`)}${block('超星记录', when)}${intro}${has(o.score) ? `<details class="implementation-details mt16"><summary>实施人员使用：参考数据</summary><p>超星参考分值：${e(o.score)}；仅供参考，不计入学分。</p></details>` : ''}`;
+  return `<div class="cx-detail-heading"><h3>${e(o.course_name)}</h3><span class="badge blue-b">${source}课程</span>${status}${declaration}</div>${warning}${block('基本信息', base)}${block('归属与计分', who, `<p class="cx-counting-note">${source==='超星'?'学分仅计入建课人，教学团队成员不重复计算。':'教务课程按本人授课记录及学校认定结果核算学分。'}</p>`)}${block('超星记录', when)}${intro}`;
 }
 
 function showOnlineDetail(c, i) {

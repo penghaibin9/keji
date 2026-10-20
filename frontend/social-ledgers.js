@@ -1,7 +1,10 @@
 // 学院台账报送与口径检查、首页五项指标、课程视频分钟资源。
 // 推荐值按系统推荐口径计算，学校书面确认前只用于核对。
-import {mineSchoolData} from './school-data.js?v=20261019-merge1';
+import {mineSchoolData} from './school-data.js?v=20261019-merge1&display=20261019-clean2';
+import {historyDateSummary} from './history-projects.js?v=20261019-walk3&display=20261019-clean2';
 let year = new Date().getFullYear();
+let sourceView = 'school';
+let sourceYear = null;
 let openId = null;      // 正在核定的台账；为空时显示各学院列表
 let rowFilter = 'all';  // 详情页行筛选：all / issues / serious
 let tab = 'ledgers';    // 列表页：ledgers 各学院台账 / targets 年度目标与考核速算
@@ -15,6 +18,10 @@ const FILTERS = [['all', '全部行'], ['issues', '有问题的行'], ['serious'
 
 // 人次最多两位小数，整数不补 .00
 const fmt = v => Number(v || 0).toLocaleString('zh-CN', {maximumFractionDigits: 2});
+const reportedText = (c, items = []) => items.length ? items.map(x => `<div>${x.value == null ? '未提供' : fmt(x.value)} ${c.esc(x.unit)}</div>`).join('') : '未提供';
+const reportedStats = (c, items = []) => items.length ? items.map(x => stat(c, '原表报送 · ' + x.unit, x.value == null ? '未提供' : fmt(x.value), x.value == null ? '' : x.unit, '保留原表单位，不跨单位相加')).join('') : stat(c, '原表报送量', '未提供', '');
+const needsUnitReview = items => items?.some(x => x.unit !== '人次') || false;
+const unitReviewNote = '以下试算量与当前核对量按各行口径核对，不作为原表人次统计；原表报送量仍按人次、人天、原表折算量分别列示。';
 
 function issueList(c, issues) {
   if (!issues?.length) return '<span class="green small">未发现问题</span>';
@@ -23,9 +30,10 @@ function issueList(c, issues) {
 
 const serious = r => r.issues?.some(i => i.level === '严重');
 
-function yearTabs(c) {
+function yearTabs(c, periods = []) {
   const now = new Date().getFullYear();
-  return `<div class="ledger-years" role="group" aria-label="选择年度">${[now - 1, now].map(y => `<button type="button" class="btn ${y === year ? 'primary' : ''}" data-action="tz-year" data-id="${y}" aria-pressed="${y === year}">${y} 年</button>`).join('')}</div>`;
+  const years = sourceView === 'school' && periods.length ? periods.map(p => p.year) : [now - 1, now];
+  return `<div class="ledger-years" role="group" aria-label="选择年度">${years.map(y => `<button type="button" class="btn ${y === year ? 'primary' : ''}" data-action="tz-year" data-id="${y}" aria-pressed="${y === year}">${y} 年</button>`).join('')}</div>`;
 }
 
 function stat(c, label, value, unit, hint, tone = '') {
@@ -42,13 +50,28 @@ function pageTabs(c) {
 }
 
 export async function ledgerPage(c) {
+  if (c.filter) sourceView = c.filter.source === 'other' ? 'other' : 'school';
+  const invalidSource = c.filter?.source && !['school','other'].includes(c.filter.source);
+  if (invalidSource || (c.filter && !c.filter.year)) sourceYear = null;
+  else if (c.filter?.year && /^(20\d{2}|2100)$/.test(c.filter.year)) year = sourceYear = Number(c.filter.year);
+  if (c.filter && (c.filter.ledger_id || null) !== openId) { resetLedgerView(); openId = c.filter.ledger_id || null; }
+  if (c.filter) {
+    tab = c.filter.ledger_tab || 'ledgers';
+    rowFilter = FILTERS.some(([key]) => key === c.filter.ledger_filter) ? c.filter.ledger_filter : 'all';
+  }
   if (!ledgerTabsFor(c).some(([k]) => k === tab)) tab = ledgerTabsFor(c)[0][0];
   if (openId && c.me?.role?.kind === 'dept') openId = null;
   if (openId) return detailPage(c, openId);
   if (tab === 'targets') return targetsPage(c);
   if (tab === 'depts') return deptsPage(c);
-  const d = await c.api('/social/ledgers?year=' + year);
+  const requestedYear = sourceView === 'school' ? sourceYear : year;
+  const d = await c.api('/social/ledgers?' + new URLSearchParams({...(requestedYear == null ? {} : {year: String(requestedYear)}), source: sourceView}));
+  if (d.year != null) year = sourceYear = d.year;
+  const periodLabel = d.source === 'school' ? d.source_periods?.find(p => p.year === year)?.label || `${year} 年` : `${year} 年`;
+  const schoolYear = d.source_periods?.some(p => p.year === year) ? year : d.source_periods?.at(-1)?.year || year;
   const college = c.me?.role?.kind === 'college', reported = d.items.length > 0;
+  const unitReview = needsUnitReview(d.reported_quantities);
+  const mixedUnits = (d.reported_quantities?.length || 0) > 1;
   const figures = d.items.some(x => x.school_figure);
   const sum = key => d.items.reduce((n, x) => n + Number(x.totals[key] || 0), 0);
   const badRows = d.items.reduce((n, x) => n + Number(x.data.summary?.serious || 0), 0);
@@ -56,47 +79,50 @@ export async function ledgerPage(c) {
   // 有严重问题、还没核定的学院排前面，先处理
   const items = [...d.items].sort((a, b) => (b.totals.pending_rows ? 1 : 0) - (a.totals.pending_rows ? 1 : 0) || (b.data.summary?.serious || 0) - (a.data.summary?.serious || 0));
   const rows = items.map(x => {
-    const cut = Number(x.totals.claimed_total) - Number(x.totals.recommended_total);
     const go = d.can_review && x.totals.pending_rows;
     return [
       `<strong>${c.esc(x.org_name)}</strong><div class="cell-sub">第 ${x.data.version_no} 版 · ${c.esc(x.data.template_label)}</div>`,
-      fmt(x.totals.claimed_total), fmt(x.totals.recommended_total),
-      cut > 0 ? `<span class="ledger-cut">−${fmt(cut)}</span><div class="cell-sub">${Math.round(cut / Number(x.totals.claimed_total) * 100)}%</div>` : '<span class="muted">无</span>',
+      reportedText(c, x.reported_quantities), fmt(x.totals.recommended_total),
       `<strong>${fmt(x.totals.final_total)}</strong>${x.totals.pending_rows ? `<div class="cell-sub">含 ${x.totals.pending_rows} 行待核定推荐值</div>` : ''}`,
-      ...(figures ? [x.school_figure ? `${fmt(x.school_figure.value)}<div class="cell-sub ${Number(x.school_figure.diff) ? 'ledger-cut' : 'green'}">${Number(x.school_figure.diff) ? '相差 ' + fmt(x.school_figure.diff) : '一致'}</div>` : '<span class="muted">未登记</span>'] : []),
+      ...(figures ? [x.school_figure ? `${fmt(x.school_figure.value)}<div class="cell-sub ${needsUnitReview(x.reported_quantities) ? '' : Number(x.school_figure.diff) ? 'ledger-cut' : 'green'}">${needsUnitReview(x.reported_quantities) ? '按各行口径核对，不计算跨单位差额' : Number(x.school_figure.diff) ? '相差 ' + fmt(x.school_figure.diff) : '一致'}</div>` : '<span class="muted">未登记</span>'] : []),
       x.data.summary?.serious ? `<span class="badge red-b">${x.data.summary.serious} 行严重</span>` : '<span class="badge green-b">无严重问题</span>',
       `<span class="badge ${x.totals.state === '已核定' ? 'green-b' : x.totals.state === '部分核定' ? 'orange-b' : 'blue-b'}">${c.esc(x.totals.state)}</span>`,
       `<button type="button" class="btn ${go ? 'primary' : ''} sm" data-action="tz-detail" data-id="${c.esc(x.id)}">${go ? '去核定' : '查看'}</button>`];
   });
   return c.pageHead(college ? '报送本院年度统计表，核对系统检查结果和学校核定进度。' : '学院报来的《社会培训人次统计表》在这里上传。系统按制度复算每一行，标出口径问题，继续教育学院逐行核定。',
       (d.can_submit ? c.act('上传学院统计表', 'tz-upload', '', 'primary', 'plus') : ''))
-    + pageTabs(c) + yearTabs(c)
-    + `<section class="summary-row ledger-stats mt16">${stat(c, '已报送学院', d.items.length, '个', !reported ? (d.missing.length ? '本年度尚未报送' : '暂无应报送学院或台账') : d.missing.length ? '还有 ' + d.missing.length + ' 个学院没报' : '应报学院都已报送', d.missing.length ? 'warn' : '')}${stat(c, '学院填报人次', fmt(sum('claimed_total')), '人次', '学院自己算的合计')}${stat(c, '按推荐口径', fmt(sum('recommended_total')), '人次', sum('claimed_total') > sum('recommended_total') ? '比填报少 ' + fmt(sum('claimed_total') - sum('recommended_total')) : '系统按制度复算')}${stat(c, !reported ? '当前汇总人次' : waiting ? '当前汇总（含待核定）' : '核定人次', reported ? fmt(sum('final_total')) : '—', '人次', !reported ? '尚未报送，暂无核定结果' : waiting ? waiting + ' 个学院待核定' : '全部核定', waiting ? 'warn' : '')}${stat(c, '有严重问题的行', badRows, '行', '漏除 8、浏览量当人数、分配超总数等', badRows ? 'bad' : '')}</section>`
-    + c.note(d.note, false, '统计口径')
-    + (d.missing.length ? c.note('还没报送：' + d.missing.map(m => m.org_name).join('、'), true) : '')
+    + pageTabs(c) + yearTabs(c, d.source_periods)
+    + (d.source_catalog_available ? `<div class="ledger-years" role="group" aria-label="台账资料来源">${[['school','学校原始台账'],['other','其他台账（含测试）']].map(([value,label]) => `<a class="btn ${sourceView === value ? 'primary' : ''}" href="${c.esc('#ledgers?' + new URLSearchParams({year: String(value === 'school' ? schoolYear : year), source: value}))}" aria-current="${sourceView === value ? 'page' : 'false'}">${label}</a>`).join('')}</div>` : '')
+    + (d.source_note ? `<div class="info-banner">${c.icon('help')}<div>${c.esc(d.source_note)}${c.me?.role?.kind === 'school' ? ` <a href="#cockpit?report_year=${year}">学校管理驾驶舱</a>` : ''}</div></div>` : '')
+    + `<section class="summary-row ledger-stats mt16">${stat(c, '已报送学院', d.items.length, '个', !reported ? (d.missing.length ? '本年度尚未报送' : '暂无应报送学院或台账') : d.missing.length ? (d.source === 'school' ? d.missing.length + ' 个学院待补资料或待导入' : '还有 ' + d.missing.length + ' 个学院没报') : '应报学院都已报送', d.missing.length ? 'warn' : '')}${reportedStats(c, d.reported_quantities)}${stat(c, unitReview ? '推荐试算量' : '按推荐口径', mixedUnits ? '按行查看' : fmt(sum('recommended_total')), unitReview ? '' : '人次', mixedUnits ? '人次、人天及折算量不合并，请查看各学院或逐行口径' : unitReview ? '按各行口径核对，不作为原表人次统计' : '系统按制度复算，待学校确认')}${stat(c, unitReview ? '当前核对量' : !reported ? '当前汇总人次' : waiting ? '当前汇总（含待核定）' : '核定人次', reported ? mixedUnits ? '分单位核对' : fmt(sum('final_total')) : '—', unitReview ? '' : '人次', !reported ? '尚未报送，暂无核定结果' : mixedUnits ? '各学院与项目行分别核对，不形成跨单位合计' : waiting ? waiting + ' 个学院待核定' : '全部核定', waiting ? 'warn' : '')}${stat(c, '有严重问题的行', badRows, '行', '漏除 8、浏览量当人数、分配超总数等', badRows ? 'bad' : '')}</section>`
+    + (unitReview ? c.note(unitReviewNote, false, '单位与核对口径') : '') + c.note(d.note, false, '统计口径')
+    + (d.missing.length ? c.note((d.source === 'school' ? '学校原表待补／待导入：' : '还没报送：') + d.missing.map(m => m.org_name + (m.source_status ? '（' + m.source_status + '）' : '')).join('、'), true) : '')
     + (d.online?.projects ? c.note(`线上影响力：${d.online.projects} 个线上项目，约 ${fmt(d.online.views)} 次浏览/观看。没有实名签到和结业，不计人次，单独登记。`) : '')
-    + `<div class="card mt16"><div class="card-head"><div><h2>${year} 年${college ? '本院' : '各学院'}台账</h2></div></div>${c.table(['学院', '学院填报', '推荐口径', '系统建议核减', '当前汇总', ...(figures ? ['学校人工核定'] : []), '口径问题', '状态', ''], rows, college ? '本院本年度尚未报送统计表' : '这一年还没有学院报送', d.can_submit ? '选择学院统计表，先检查再确认报送。' : '等待有报送权限的人员上传统计表。')}</div>`;
+    + `<div class="card mt16"><div class="card-head"><div><h2>${c.esc(periodLabel)}${college ? '本院' : '各学院'}台账</h2></div></div>${c.table(['学院', '原表报送量（分单位）', unitReview ? '推荐试算量' : '推荐口径', unitReview ? '当前核对量' : '当前汇总', ...(figures ? [unitReview ? '学校人工核对数' : '学校人工核定'] : []), '口径问题', '状态', ''], rows, college ? '本院本年度尚未报送统计表' : '这一年还没有学院报送', d.can_submit ? '选择学院统计表，先检查再确认报送。' : '等待有报送权限的人员上传统计表。')}</div>`;
 }
 
 function previewHtml(c, r, fileName) {
   const s = r.summary;
+  const unitReview = needsUnitReview(r.reported_quantities);
   return `<section class="ledger-preview mt16"><div class="detail-action-context"><strong>已检查文件</strong><p>${c.esc(fileName)}</p></div><dl class="kv"><dt>识别到的学院</dt><dd>${c.esc(r.meta.college || '未识别')}</dd><dt>年度</dt><dd>${c.esc(r.meta.year || '未识别')}</dd><dt>表格版本</dt><dd>${c.esc(r.template_label)}</dd><dt>负责人 / 经办人</dt><dd>${c.esc(r.meta.leader || '—')} / ${c.esc(r.meta.handler || '—')}</dd></dl>`
-    + `<div class="summary-row mt16">${stat(c, '项目行数', s.rows, '行')}${stat(c, '学院填报', fmt(s.claimed_total), '人次')}${stat(c, '按推荐口径', fmt(s.recommended_total), '人次')}${stat(c, '严重问题', s.serious, '行', '', s.serious ? 'bad' : '')}</div>`
+    + `<div class="summary-row mt16">${stat(c, '项目行数', s.rows, '行')}${reportedStats(c, r.reported_quantities)}${stat(c, unitReview ? '推荐试算量' : '按推荐口径', fmt(s.recommended_total), unitReview ? '' : '人次')}${stat(c, '严重问题', s.serious, '行', '', s.serious ? 'bad' : '')}</div>`
     + `<form id="ledger-submit-form" class="form-grid mt16">${c.field('org_id', '报送学院', 'select', r.suggested_org_id || '', {options: [['', '请选择学院'], ...r.colleges.map(o => [o.id, o.name])]})}${c.field('year', '统计年度', 'number', r.meta.year || year, {min: 2020, max: 2100})}${c.field('reason', '报送说明', 'textarea', '学院报送' + (r.meta.year || year) + '年社会培训人次统计表', {full: true})}</form>`
-    + r.notes.map(n => c.note(n, true)).join('') + c.note(r.note)
+    + (unitReview ? c.note(unitReviewNote) : '') + r.notes.map(n => c.note(n, true)).join('') + c.note(r.note)
     + rowsTable(c, r.rows, false) + '</section>';
 }
 
 // 列尽量少，核定值和理由放在同一格，一屏看完不横向滚动
 function rowsTable(c, rows, review, ledger = null) {
+  const unitReview = needsUnitReview(ledger?.reported_quantities);
+  const historical = r => !ledger || !r.history ? '' : `<div class="mt8">${historyDateSummary(c,r.history)}<a class="btn sm mt8" href="${c.esc('#projects?' + new URLSearchParams({project_view:'history',history_year:String(ledger.data.year),history_ledger:ledger.id,history_row:String(r.row_no)}))}">查看历史项目资料与依据</a></div>`;
   const bindings = r => !ledger?.can_draft ? '' : `<div class="mt8">${(r.allocations || []).map((a, i) => `<div class="cell-sub">${c.esc(a.name)}：${c.esc(a.binding_status || '待确认人员')}${!a.teacher_id ? c.act('确认人员', 'tz-bind-person', `${ledger.id}|${r.row_no}|${i}`) : ''}</div>`).join('')}${!r.project_id ? c.act(r.project_link_status === 'pending' ? '核对原项目或新建' : '关联已有项目', 'tz-bind-project', `${ledger.id}|${r.row_no}`) + c.act('确认负责人', 'tz-bind-owner', `${ledger.id}|${r.row_no}`) : ''}</div>`;
-  return `<div class="ledger-rows">` + c.table(['行', '培训项目', '学院填报', '推荐值（系统怎么算）', '发现的问题', ...(review ? ['核定值 / 理由'] : ledger ? ['项目核定值 / 理由'] : [])], rows.map(r => [
+  return `<div class="ledger-rows">` + c.table(['行', '培训项目', '原表报送量', '推荐值（系统怎么算）', '发现的问题', ...(review ? ['核定值 / 理由'] : ledger ? ['项目核定值 / 理由'] : [])], rows.map(r => [
     `${r.row_no}${serious(r) ? '<span class="ledger-flag" title="有严重问题"></span>' : ''}`,
-    `<strong>${c.esc(r.name)}</strong>${r.allocation ? `<div class="cell-sub">原填分配：${c.esc(r.allocation)}</div>` : ''}${r.project_code ? `<div class="mt8"><span class="badge green-b">已关联 ${c.esc(r.project_code)}</span>${r.project_id ? c.act('查看项目', 'social-detail', 'social_project|' + r.project_id, 'sm') : ''}</div>` : ''}${bindings(r)}`,
+    `<strong>${c.esc(r.name)}</strong>${historical(r)}${r.allocation ? `<div class="cell-sub">原填分配：${c.esc(r.allocation)}</div>` : ''}${r.project_code ? `<div class="mt8"><span class="badge green-b">已关联 ${c.esc(r.project_code)}</span>${r.project_id ? c.act('查看项目', 'social-detail', 'social_project|' + r.project_id, 'sm') : ''}</div>` : ''}${bindings(r)}`,
     `<strong>${c.esc(r.claimed_raw !== '' && r.claimed_raw != null ? r.claimed_raw : r.claimed ?? '—')}</strong><div class="cell-sub">${c.esc(r.people_raw !== '' && r.people_raw != null ? r.people_raw : r.people ?? '—')} 人 · ${c.esc(r.hours ?? '—')} 课时</div>`,
     `<strong>${fmt(r.recommended)}</strong><div class="cell-sub">${c.esc(r.mode || '')}${r.basis ? ' · ' + c.esc(r.basis) : ''}</div>`,
     issueList(c, r.issues),
-    ...(review ? [`<div class="ledger-decide"><input class="ledger-approved" type="number" min="0" step="0.01" data-row="${r.row_no}" data-recommended="${c.esc(r.recommended)}" aria-label="第 ${r.row_no} 行核定值" value="${c.esc(draft[r.row_no]?.approved ?? r.approved ?? '')}" placeholder="推荐 ${c.esc(r.recommended)}"><input class="ledger-reason" type="text" maxlength="500" data-row="${r.row_no}" aria-label="第 ${r.row_no} 行核定理由" value="${c.esc(draft[r.row_no]?.reason ?? r.approved_reason ?? '')}" placeholder="和推荐值不同时写理由"></div>`] : ledger ? [r.approved == null ? '待核定' : `<strong>${fmt(r.approved)} 人次</strong><div class="cell-sub">${c.esc(r.approved_reason || '已核定')}</div>`] : [])]),
+    ...(review ? [`<div class="ledger-decide"><input class="ledger-approved" type="number" min="0" step="0.01" data-row="${r.row_no}" data-recommended="${c.esc(r.recommended)}" aria-label="第 ${r.row_no} 行核定值" value="${c.esc(draft[r.row_no]?.approved ?? r.approved ?? '')}" placeholder="推荐 ${c.esc(r.recommended)}"><input class="ledger-reason" type="text" maxlength="500" data-row="${r.row_no}" aria-label="第 ${r.row_no} 行核定理由" value="${c.esc(draft[r.row_no]?.reason ?? r.approved_reason ?? '')}" placeholder="和推荐值不同时写理由"></div>`] : ledger ? [r.approved == null ? '待核定' : `<strong>${fmt(r.approved)} ${unitReview ? '（按行口径）' : '人次'}</strong><div class="cell-sub">${c.esc(r.approved_reason || '已核定')}</div>`] : [])]),
     '这个筛选下没有行', '换一个筛选看看。') + '</div>';
 }
 
@@ -146,34 +172,40 @@ async function submit(c) {
   const fd = new FormData(); fd.set('file', lastFile); fd.set('org_id', v.org_id); fd.set('year', v.year); fd.set('reason', v.reason || '');
   const saved = await c.api('/social/ledgers', {method: 'POST', body: fd});
   year = saved.data.year; resetLedgerView(); openId = saved.id;
-  c.closeModal(); c.toast('已报送，等待继续教育学院核定'); await c.render();
+  c.closeModal(); c.toast('已报送，等待继续教育学院核定');
+  return c.nav ? c.nav('ledgers', {year: String(year), ledger_id: saved.id, source: sourceView}) : c.render();
 }
 
 // 核定页：整页显示，表格够宽，逐行核对不挤在弹窗里
 async function detailPage(c, id) {
   let d;
   try { d = await c.api('/social/ledgers/' + encodeURIComponent(id)); } catch (err) { openId = null; throw err; }
+  year = d.data.year;
   const college = c.me?.role?.kind === 'college';
   const t = d.totals, s = d.data.summary, all = d.data.rows;
+  const unitReview = needsUnitReview(d.reported_quantities);
   const shown = rowFilter === 'serious' ? all.filter(serious) : rowFilter === 'issues' ? all.filter(r => r.issues?.length) : all;
   const count = {all: all.length, issues: all.filter(r => r.issues?.length).length, serious: all.filter(serious).length};
-  const versions = d.versions.length > 1 ? `<details class="business-guide data-details mt16"><summary>历次报送（${d.versions.length} 版）</summary>${c.table(['版本', '报送时间', '学院填报', '推荐口径', '当前汇总', ''], d.versions.map(v => ['第 ' + v.version_no + ' 版', c.esc(c.ts(v.created_at)), fmt(v.totals.claimed_total), fmt(v.totals.recommended_total), fmt(v.totals.final_total), v.id === d.id ? '<span class="muted small">当前查看</span>' : c.link('查看这一版', 'tz-detail', v.id)]))}</details>` : '';
+  const versions = d.versions.length > 1 ? `<details class="business-guide data-details mt16"><summary>历次报送（${d.versions.length} 版）</summary>${c.table(['版本', '报送时间', '原表报送量（分单位）', unitReview ? '推荐试算量' : '推荐口径', unitReview ? '当前核对量' : '当前汇总', ''], d.versions.map(v => ['第 ' + v.version_no + ' 版', c.esc(c.ts(v.created_at)), reportedText(c, v.reported_quantities), fmt(v.totals.recommended_total), fmt(v.totals.final_total), v.id === d.id ? '<span class="muted small">当前查看</span>' : c.link('查看这一版', 'tz-detail', v.id)]))}</details>` : '';
   const tools = d.can_review
-    ? `<div class="ledger-review-bar"><span>核定：在“核定值”里填继续教育学院认可的人次，留空表示暂不核定；和推荐值不同的要写理由。</span><span class="ledger-review-actions">${c.act('空着的行填入推荐值', 'tz-fill', '', '', 'check')}<button type="button" class="btn primary" data-action="tz-review-save" data-id="${c.esc(d.id)}|${d.version}">保存核定</button></span></div>`
+    ? `<div class="ledger-review-bar"><span>${unitReview ? '核定：按各行口径填写认可的核对值，不把人天或折算量直接当作人次。' : '核定：在“核定值”里填继续教育学院认可的人次，'}留空表示暂不核定；和推荐值不同的要写理由。</span><span class="ledger-review-actions">${c.act('空着的行填入推荐值', 'tz-fill', '', '', 'check')}<button type="button" class="btn primary" data-action="tz-review-save" data-id="${c.esc(d.id)}|${d.version}">保存核定</button></span></div>`
     : '';
   const done = all.filter(r => r.approved != null && r.approved !== '').length;
   const left = all.filter(r => !r.project_id && Number(r.approved ?? r.recommended) > 0).length;
   const drafts = d.can_draft ? `<div class="card mt16 card-pad ledger-next"><div><h2>项目关联与草稿</h2><p class="cell-sub">换版后保留明确的原项目关联；重名人员与待关联项目请先逐行确认。草稿的日期、核算方式、层级和场景须核实后才能正式备案。人次为 0 的行不生成。${d.drafts ? `已关联 ${d.drafts} 个项目。` : ''}</p></div>${left ? `<button type="button" class="btn primary" data-action="tz-drafts" data-id="${c.esc(d.id)}|${d.version}">生成项目草稿（${left} 行）</button>` : '<span class="badge green-b">当前无可生成的项目行</span>'}</div>` : '';
   const fig = d.school_figure;
-  const figure = d.can_review ? `<div class="card mt16 card-pad"><h2>学校人工核定数（和系统对比）</h2><p class="cell-sub mt8">把继续教育学院以前人工算的这份台账总数填进来，系统与当前汇总逐份对比；仍有未核定行时，即使数字一致也不代表完成核定，不能据此启用正式口径。</p>${fig ? `<p class="mt8">已登记 <strong>${fmt(fig.value)}</strong> 人次，系统当前汇总 ${fmt(t.final_total)}，${Number(fig.diff) ? `<span class="ledger-cut">相差 ${fmt(fig.diff)}</span>` : '<span class="green">一致</span>'}（${c.esc(fig.reason)}）</p>` : ''}<div class="form-grid mt16">${c.field('school_figure', '学校人工核定人次', 'number', fig?.value ?? '', {required: false, min: 0, step: 0.01})}${c.field('school_figure_reason', '来源说明', 'text', '', {hint: '例如：2025 年资料包文件夹名中的核定数'})}</div><div class="mt16"><button type="button" class="btn" data-action="tz-figure" data-id="${c.esc(d.id)}|${d.version}">保存对比数</button></div></div>` : (fig ? c.note(`学校人工核定 ${fmt(fig.value)} 人次，与系统相差 ${fmt(fig.diff)}`) : '');
+  const figureResult = !fig ? '' : unitReview
+    ? `已登记人工核对数 ${fmt(fig.value)}，当前核对量 ${fmt(t.final_total)}；按各行口径核对，不计算跨单位差额（${c.esc(fig.reason)}）。`
+    : `已登记 <strong>${fmt(fig.value)}</strong> 人次，系统当前汇总 ${fmt(t.final_total)}，${Number(fig.diff) ? `<span class="ledger-cut">相差 ${fmt(fig.diff)}</span>` : '<span class="green">一致</span>'}（${c.esc(fig.reason)}）`;
+  const figure = d.can_review ? `<div class="card mt16 card-pad"><h2>${unitReview ? '学校人工核对数' : '学校人工核定数（和系统对比）'}</h2><p class="cell-sub mt8">${unitReview ? '人工核对数须与各行采用的核算口径对应，不作为原表人次统计；仍有未核定行时，数字一致也不代表完成核定。' : '把继续教育学院以前人工算的这份台账总数填进来，系统与当前汇总逐份对比；仍有未核定行时，即使数字一致也不代表完成核定，不能据此启用正式口径。'}</p>${fig ? `<p class="mt8">${figureResult}</p>` : ''}<div class="form-grid mt16">${c.field('school_figure', unitReview ? '学校人工核对数' : '学校人工核定人次', 'number', fig?.value ?? '', {required: false, min: 0, step: 0.01})}${c.field('school_figure_reason', '来源说明', 'text', '', {hint: unitReview ? '说明原表单位及逐行核对依据，不填跨单位合计' : '例如：2025 年资料包文件夹名中的核定数'})}</div><div class="mt16"><button type="button" class="btn" data-action="tz-figure" data-id="${c.esc(d.id)}|${d.version}">保存${unitReview ? '核对数' : '对比数'}</button></div></div>` : (fig ? c.note(unitReview ? `学校人工核对数 ${fmt(fig.value)}；按各行口径核对，不计算跨单位差额。` : `学校人工核定 ${fmt(fig.value)} 人次，与系统相差 ${fmt(fig.diff)}`) : '');
   const original = d.data.file.id && c.can('file.read') ? c.act('查看报送原件', 'attachment-download', d.data.file.id) : '';
   return `<div class="ledger-detail">` + c.pageHead(college ? `${d.org_name} · ${d.data.year} 年 · 第 ${d.data.version_no} 版` : `${d.org_name} · ${d.data.year} 年 · 第 ${d.data.version_no} 版 · ${d.data.template_label} · ${d.submitted_by_name || '—'}报送《${d.data.file.name}》`, original + c.act(college ? '返回本院台账' : '返回各学院列表', 'tz-back', '', '', 'chevron'))
-    + `<div class="detail-action-context"><span>当前查看台账</span><strong>${c.esc(d.org_name)} · ${c.esc(d.data.year)} 年 · 第 ${c.esc(d.data.version_no)} 版</strong><p>${t.pending_rows ? `待学校核定 · ${t.pending_rows} 行未核定，当前汇总含推荐值` : '学校已核定 · 全部项目行已核定'}</p></div>`
+    + `<div class="detail-action-context"><span>当前查看台账</span><strong>${c.esc(d.org_name)} · ${c.esc(d.data.year)} 年 · 第 ${c.esc(d.data.version_no)} 版</strong><p>${t.pending_rows ? `待学校核定 · ${t.pending_rows} 行未核定，当前汇总含推荐值` : all.some(r => r.history?.date_prefill) ? '报送量已核定 · 历史预填日期仍待学校复核' : '学校已核定 · 全部项目行已核定'}</p></div>`
     + (college ? `<details class="detail-fold"><summary>报送资料与版本说明</summary><dl class="kv"><dt>统计表</dt><dd>${c.esc(d.data.file.name)}</dd><dt>报送人</dt><dd>${c.esc(d.submitted_by_name || '—')}</dd><dt>表格版本</dt><dd>${c.esc(d.data.template_label)}</dd></dl></details>` : '')
-    + `<section class="summary-row ledger-stats">${stat(c, '学院填报', fmt(t.claimed_total), '人次', '学院自己算的合计')}${stat(c, '按推荐口径', fmt(t.recommended_total), '人次', Number(t.claimed_total) > Number(t.recommended_total) ? '比填报少 ' + fmt(t.claimed_total - t.recommended_total) : '与填报一致')}${stat(c, t.pending_rows ? '当前汇总（含待核定）' : '核定人次', fmt(t.final_total), '人次', t.pending_rows ? t.pending_rows + ' 行未核定（暂用推荐值）' : '全部核定', t.pending_rows ? 'warn' : '')}${college ? '' : stat(c, '严重问题', s.serious, '行', '需要重点核对', s.serious ? 'bad' : '')}${stat(c, '已核定', `${done}/${all.length}`, '行', done === all.length ? '全部核定' : '留空的行暂用推荐值', done === all.length ? '' : 'warn')}</section>`
-    + (d.data.notes || []).map(n => c.note(n, true)).join('') + (college && d.note ? `<details class="detail-fold mt16"><summary>推荐值与正式核定的区别</summary><p>${c.esc(d.note)}</p></details>` : c.note(d.note, false, '统计口径'))
+    + `<section class="summary-row ledger-stats">${reportedStats(c, d.reported_quantities)}${stat(c, unitReview ? '推荐试算量' : '按推荐口径', fmt(t.recommended_total), unitReview ? '' : '人次', unitReview ? '按各行口径核对，不作为原表人次统计' : '系统推荐口径，待学校确认')}${stat(c, unitReview ? '当前核对量' : t.pending_rows ? '当前汇总（含待核定）' : '核定人次', fmt(t.final_total), unitReview ? '' : '人次', t.pending_rows ? t.pending_rows + ' 行未核定（暂用推荐值）' : '全部核定', t.pending_rows ? 'warn' : '')}${college ? '' : stat(c, '严重问题', s.serious, '行', '需要重点核对', s.serious ? 'bad' : '')}${stat(c, '已核定', `${done}/${all.length}`, '行', done === all.length ? '全部核定' : '留空的行暂用推荐值', done === all.length ? '' : 'warn')}</section>`
+    + (unitReview ? c.note(unitReviewNote, false, '单位与核对口径') : '') + (d.data.notes || []).map(n => c.note(n, true)).join('') + (college && d.note ? `<details class="detail-fold mt16"><summary>推荐值与正式核定的区别</summary><p>${c.esc(d.note)}</p></details>` : c.note(d.note, false, '统计口径'))
     + `<div class="card mt16"><div class="card-head"><div class="ledger-filter" role="group" aria-label="筛选行">${FILTERS.map(([k, l]) => `<button type="button" class="btn sm ${rowFilter === k ? 'primary' : ''}" data-action="tz-filter" data-id="${k}" aria-pressed="${rowFilter === k}">${l}（${count[k]}）</button>`).join('')}</div></div>${tools}${rowsTable(c, shown, d.can_review, d)}`
-    + (d.can_review ? `<div class="form-grid card-pad">${c.field('ledger_review_reason', '本次核定说明', 'textarea', '', {full: true, hint: '例如：按 2026 年推荐口径核定，线上浏览量不计人次'})}</div>` : '') + '</div>'
+    + (d.can_review ? `<div class="form-grid card-pad">${c.field('ledger_review_reason', '本次核定说明', 'textarea', '', {full: true, hint: unitReview ? '请按各行口径说明原表单位、备案方式及核定依据' : '例如：按 2026 年推荐口径核定，线上浏览量不计人次'})}</div>` : '') + '</div>'
     + drafts + figure + versions + '</div>';
 }
 
@@ -190,7 +222,7 @@ async function saveFigure(c, code) {
   const reason = document.getElementById('f-school_figure_reason')?.value || '';
   if (reason.trim().length < 2) throw Error('请写来源说明');
   await c.api('/social/ledgers/' + encodeURIComponent(id) + '/school-figure', {method: 'POST', body: {expected_version: Number(version), value: value === '' ? null : value, reason}});
-  c.toast('已保存，列表里会显示和系统的差异'); await c.render();
+  c.toast('已保存，返回台账查看核对记录'); await c.render();
 }
 
 // 年度目标与考核速算（规划第 2、7 步）
@@ -270,7 +302,7 @@ function captureDraft() {
   for (const x of document.querySelectorAll('.ledger-approved')) draft[x.dataset.row] = {approved: x.value, reason: reasons[x.dataset.row] || ''};
 }
 
-export function resetLedgerView(fromMenu = false) { openId = null; rowFilter = 'all'; draft = {}; if (fromMenu) tab = 'ledgers'; }
+export function resetLedgerView(fromMenu = false) { openId = null; rowFilter = 'all'; draft = {}; if (fromMenu) { tab = 'ledgers'; sourceView = 'school'; sourceYear = null; } }
 
 function fillRecommended(c) {
   let n = 0;
@@ -349,16 +381,16 @@ export async function ledgerAction(name, id, c) {
     section.focus({preventScroll:true});section.scrollIntoView({block:'start',behavior:'auto'});return;
   }
   if (['tz-bind-person', 'tz-bind-project', 'tz-bind-owner'].includes(name)) return bindLedgerRow(name, id, c);
-  if (name === 'tz-year') { year = Number(id); resetLedgerView(); return c.render(); }
+  if (name === 'tz-year') { tab = c.filter?.ledger_tab || tab; year = sourceYear = Number(id); resetLedgerView(); return c.nav ? c.nav('ledgers', {year: String(year), source: sourceView, ...(tab === 'ledgers' ? {} : {ledger_tab: tab})}) : c.render(); }
   if (name === 'tz-upload') return openUpload(c);
   if (name === 'tz-preview') return preview(c);
   if (name === 'tz-submit') return submit(c);
-  if (name === 'tz-detail') { resetLedgerView(); openId = id; return c.render(); }
-  if (name === 'tz-back') { resetLedgerView(); return c.render(); }
-  if (name === 'tz-filter') { captureDraft(); rowFilter = id; return c.render(); }
+  if (name === 'tz-detail') { resetLedgerView(); openId = id; return c.nav ? c.nav('ledgers', {year: String(year), ledger_id: id, source: sourceView}) : c.render(); }
+  if (name === 'tz-back') { resetLedgerView(); return c.nav ? c.nav('ledgers', {year: String(year), source: sourceView}) : c.render(); }
+  if (name === 'tz-filter') { captureDraft(); rowFilter = FILTERS.some(([key]) => key === id) ? id : 'all'; if (c.filter) { c.filter.ledger_filter = rowFilter; c.syncLocation?.(true); } return c.render(); }
   if (name === 'tz-fill') return fillRecommended(c);
   if (name === 'tz-review-save') return saveReview(c, id);
-  if (name === 'tz-tab') { tab = id; resetLedgerView(); return c.render(); }
+  if (name === 'tz-tab') { tab = id; resetLedgerView(); return c.nav ? c.nav('ledgers', {year: String(year), source: sourceView, ledger_tab: tab}) : c.render(); }
   if (name === 'tz-drafts') return makeDrafts(c, id);
   if (name === 'tz-figure') return saveFigure(c, id);
   if (name === 'tz-targets-save') return saveTargets(c);

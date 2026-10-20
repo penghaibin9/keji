@@ -32,6 +32,23 @@ def test_export_grade_label_matches_frozen_recognition(state,label):
     assert (label,'合格') in list(book['业务概要'].values)
 
 
+def test_formal_report_exports_numeric_corrected_points_without_changing_snapshot():
+    from app.social_export import workbook
+    rows=[{'teacher_name':'合成教师','org_name':'合成学院','project':'更正后的项目','teaching':'1.10','auxiliary':'0.00','total':'1.10'},
+          {'teacher_name':'合成教师','org_name':'合成学院','project':'其他项目','teaching':'1.00','auxiliary':'0.00','total':'1.00'}]
+    payload={'item':{'kind':'point_report','state':'ARCHIVED','version':3,'data':{'rows':rows}},'state_label':'已归档'}
+    before=deepcopy(payload)
+    views=[]
+    for _ in range(2):
+        book=load_workbook(BytesIO(workbook(payload)));sheet=book['已认定积分汇总']
+        values=list(sheet.values);assert values[1][-1]==1.1
+        assert sum(Decimal(str(r[-1])) for r in values[1:])==Decimal('2.10')
+        for cells in sheet.iter_rows(min_row=2,min_col=4,max_col=6):
+            for cell in cells:assert cell.data_type=='n' and cell.number_format=='0.00'
+        views.append(values);book.close()
+    assert views[0]==views[1] and payload==before
+
+
 @pytest.mark.parametrize('state,expected',[('CLOSED','已结项项目材料'),('FILED','已备案项目材料（结项尚未完成）'),('CLOSE_REVIEW','已备案项目材料（结项尚未完成）'),('DRAFT','项目办理过程材料（尚未完成备案或结项）')])
 def test_project_material_nature_follows_project_milestones(state,expected):
     from app.social_export import workbook

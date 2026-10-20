@@ -133,7 +133,7 @@ def test_point_report_public_feedback_is_personal_without_hiding_published_rows(
         book=load_workbook(BytesIO(exported.content),read_only=True)
         values=[str(value) for sheet in book for row in sheet.iter_rows(values_only=True) for value in row]
         assert not any(disputes[1-index]['reason'] in value or 'INTERNAL-REPORT-EVENT' in value for value in values)
-        assert list(book['已认定积分汇总'].values)[1:]==[tuple(row[k] for k in ('teacher_name','org_name','project','teaching','auxiliary','total')) for row in rows]
+        assert list(book['已认定积分汇总'].values)[1:]==[tuple(float(Decimal(row[k])) if k in ('teaching','auxiliary','total') else row[k] for k in ('teacher_name','org_name','project','teaching','auxiliary','total')) for row in rows]
         book.close()
     for account in ('reviewer','secretary','schooladmin'):
         auth(client2,account)

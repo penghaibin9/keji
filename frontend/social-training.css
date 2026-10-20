@@ -766,3 +766,19 @@ body[data-role="teacher"] .apply-counts span:nth-child(3){background:#e9f9ef;col
 #modal-root #mc-course-workspace .cx-info-section>h3{font-size:20px}
 #modal-root #mc-course-workspace .online-body>strong{font-size:20px}
 #modal-root #mc-course-workspace .cx-detail-heading .badge{font-size:14px;padding:5px 9px}
+@media(min-width:901px){
+ #content[data-page="projects"] .history-project-list .table{width:100%;min-width:0;table-layout:fixed}
+ #content[data-page="projects"] .history-project-list .table :is(th,td){padding:12px 10px;white-space:normal;overflow-wrap:anywhere;vertical-align:top}
+ #content[data-page="projects"] .history-project-list th:nth-child(1){width:12%}
+ #content[data-page="projects"] .history-project-list th:nth-child(2){width:6%}
+ #content[data-page="projects"] .history-project-list th:nth-child(3){width:27%}
+ #content[data-page="projects"] .history-project-list th:nth-child(4){width:10%}
+ #content[data-page="projects"] .history-project-list th:nth-child(5){width:14%}
+ #content[data-page="projects"] .history-project-list th:nth-child(6){width:10%}
+ #content[data-page="projects"] .history-project-list th:nth-child(7){width:11%}
+ #content[data-page="projects"] .history-project-list th:nth-child(8){width:10%}
+ #content[data-page="projects"] .history-project-list td:last-child .btn{max-width:100%;padding:6px;white-space:normal}
+}
+.history-date-prefill{background:#fff8e6;border:1px solid #efd497;border-radius:8px;padding:16px;margin-bottom:16px}
+.history-date-value{font-variant-numeric:tabular-nums;white-space:nowrap}
+.history-project-list .badge.orange-b{white-space:normal;line-height:1.5}

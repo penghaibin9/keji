@@ -392,6 +392,9 @@ def sheets_to_xlsx(sheets):
         for i,h in enumerate(headers,1):
             ws.column_dimensions[get_column_letter(i)].width=max(12,min(36,len(h)*2+6))
             if h.startswith('实施人员使用：'):ws.column_dimensions[get_column_letter(i)].hidden=True
+            if title=='教师积分' and h in ('项目编号','项目名称'):
+                ws.column_dimensions[get_column_letter(i)].width=36 if h=='项目编号' else 54
+        if title=='教师积分':ws.auto_filter.ref=ws.dimensions
     out=BytesIO();wb.save(out);wb.close();return out.getvalue()
 
 
@@ -457,12 +460,17 @@ def export_rows(db,actor,kind,filters,policy=None):
         if filters.get('org_id'):q=q.where(PointEntry.teacher_id.in_(select(User.id).where(User.org_id.in_(authorized_org_descendants(db,actor,filters['org_id'])))))
         items=db.scalars(q.order_by(PointEntry.created_at,PointEntry.id)).all();users={u.id:u for u in db.scalars(select(User).where(User.id.in_({x.teacher_id for x in items})))}
         periods=dict(db.execute(select(Period.id,Period.name).where(Period.id.in_({x.period_id for x in items}))).all())
+        claims={x.source_snapshot.get('social_claim') for x in items if x.source_snapshot.get('social_claim')}
+        projects=dict(db.execute(select(SocialClaim.id,SocialProject.data).join(SocialProject,SocialProject.id==SocialClaim.project_id).where(SocialClaim.id.in_(claims))).all())
+        def project_labels(x):
+            data=projects.get(x.source_snapshot.get('social_claim'),{})
+            return [data.get('code',''),data.get('name','')]
         def point_name(x):
             if x.kind=='SOCIAL':
                 return '社会培训'+('辅助' if 'auxiliary' in x.item_key else '授课')+'积分'+('更正' if x.source_snapshot.get('correction_id') else '')
             components=((x.source_snapshot.get('rule') or {}).get('config') or {}).get('components') or []
             return next((v['label'] for v in components if v.get('key')==x.item_key and v.get('label')),None) or {'hours':'授课贡献','participants':'课程人次','income':'收入贡献','manual_review':'人工复核调整'}.get(x.item_key,'积分调整项')
-        return ['教师工号','教师姓名','认定周期','积分项','类型','分值','原始值','公式','实施人员使用：规则编号','实施人员使用：批次编号','时间（北京时间）','原因','依据','实施人员使用：周期编号','实施人员使用：积分项编号','实施人员使用：原始时间（世界协调时）'],[[staff(users[x.teacher_id]),users[x.teacher_id].name,periods.get(x.period_id,'未命名周期'),point_name(x),label(x.kind),x.amount,x.raw_value,x.formula,x.rule_id or '',x.batch_id or '',x.created_at+timedelta(hours=8),x.reason,x.basis,x.period_id,x.item_key,x.created_at] for x in items]
+        return ['教师工号','教师姓名','认定周期','积分项','类型','分值','原始值','公式','实施人员使用：规则编号','实施人员使用：批次编号','时间（北京时间）','原因','依据','实施人员使用：周期编号','实施人员使用：积分项编号','实施人员使用：原始时间（世界协调时）','项目编号','项目名称'],[[staff(users[x.teacher_id]),users[x.teacher_id].name,periods.get(x.period_id,'未命名周期'),point_name(x),label(x.kind),x.amount,x.raw_value,x.formula,x.rule_id or '',x.batch_id or '',x.created_at+timedelta(hours=8),x.reason,x.basis,x.period_id,x.item_key,x.created_at,*project_labels(x)] for x in items]
     if kind=='assessments':
         if set(filters)-ASSESSMENT_FILTERS:raise HTTPException(422,'考核导出筛选字段无效')
         from .assessment_evidence import assessment_projection

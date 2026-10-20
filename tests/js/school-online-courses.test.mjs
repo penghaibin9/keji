@@ -42,8 +42,8 @@ test('超星课程未知性质不显示原代码徽标，详情保留中文待�
 test('超星课程详情：字段齐全、空字段不显示、简介转义、可返回',async()=>{
  const c=context([course(0),course(1,{credit:3,hours:48,course_type:'9',description:'',score:null,team_names:'',team_staff_nos:'',jw_course_code:'',major:''})]);await showStaffDetail(c,'J001');
  await onlineHandlers['online-detail']('0',c);
- for(const text of ['尔雅课','克隆','计算机','公共课','J001','甲（J001）、乙（J002）','2025-03-01 08:00:00','2025-06-01 09:30:00','64/32','仅供参考，不计入学分','&lt;b&gt;简介&lt;/b&gt;'])assert.ok(c.html.includes(text),text);
- assert.match(c.html,/data-action="course-detail" data-id="K0\|cx:0"/);assert.match(c.foot,/data-action="staff-detail" data-id="J001"/);assert.match(c.foot,/去超星看课/);
+ for(const text of ['尔雅课','克隆','计算机','公共课','J001','甲（J001）、乙（J002）','2025-03-01 08:00:00','2025-06-01 09:30:00','64/32','&lt;b&gt;简介&lt;/b&gt;'])assert.ok(c.html.includes(text),text);
+ assert.doesNotMatch(c.html,/实施人员使用|超星参考分值/);assert.match(c.html,/data-action="course-detail" data-id="K0\|cx:0"/);assert.match(c.foot,/data-action="staff-detail" data-id="J001"/);assert.match(c.foot,/去超星看课/);
  await onlineHandlers['online-detail']('1',c);
  assert.match(c.html,/<strong>3\.00<\/strong><\/dd>/);assert.match(c.html,/学时<\/dt><dd>48</);assert.match(c.html,/课程类型<\/dt><dd>待学校补充说明/);
  for(const gone of ['课程简介','<dt>教学团队','<dt>对应教务课','<dt>所属专业','score','>false<','>0<'])assert.ok(!c.html.includes(gone),gone);
@@ -58,7 +58,7 @@ test('课程详情弹窗保留全部课程、原封面、完整超星字段和�
  assert.match(c.html,/<img src="https:\/\/p\.ananas\.chaoxing\.com\/mechanical\.png"/);
  assert.match(c.html,/data-course-index="0" aria-current="true"/);
  assert.doesNotMatch(c.html,/超星 score 字段/);
- assert.match(c.html,/<details class="implementation-details/);
+ assert.doesNotMatch(c.html,/实施人员使用|implementation-details|超星参考分值/);
  assert.match(c.foot,/cx-course-footer/);assert.match(c.foot,/返回教师信息/);
 });
 

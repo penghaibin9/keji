@@ -422,12 +422,12 @@ body[data-role="teacher"] #content .page-title{gap:8px 14px}
 body[data-role="teacher"] #content .page-title .teacher-page-subtitle{flex-basis:100%;margin:0;line-height:1.7;font-size:15px;font-weight:400;color:#60738b}
 body[data-role="teacher"] #content .page-help{font-size:13px;color:#667d96}
 body[data-role="teacher"] #content .page-help-body,body[data-role="teacher"] #content .page-help>p{top:42px}
-body[data-role="teacher"] #content .btn{min-height:40px;font-size:14px;padding:8px 15px;border-radius:6px;font-weight:500;box-shadow:none;background-image:none;transition:background-color .15s,border-color .15s}
-body[data-role="teacher"] #content .btn.primary{background:#245ccc;color:#fff;border-color:#245ccc;box-shadow:none}
-body[data-role="teacher"] #content .btn.primary:hover{background:#194da9;box-shadow:none;transform:none}
-body[data-role="teacher"] #content .btn.text{background:transparent;color:#245ccc;padding:5px 8px;border-color:transparent}
-body[data-role="teacher"] #content .btn.text:hover{background:#edf3fd}
-body[data-role="teacher"] #content .btn.light{background:#eef4ff;color:#245ccc;border-color:#d7e4fa}
+body[data-role="teacher"]:not([data-training="true"]) #content .btn{min-height:40px;font-size:14px;padding:8px 15px;border-radius:6px;font-weight:500;box-shadow:none;background-image:none;transition:background-color .15s,border-color .15s}
+body[data-role="teacher"]:not([data-training="true"]) #content .btn.primary{background:#245ccc;color:#fff;border-color:#245ccc;box-shadow:none}
+body[data-role="teacher"]:not([data-training="true"]) #content .btn.primary:hover{background:#194da9;box-shadow:none;transform:none}
+body[data-role="teacher"]:not([data-training="true"]) #content .btn.text{background:transparent;color:#245ccc;padding:5px 8px;border-color:transparent}
+body[data-role="teacher"]:not([data-training="true"]) #content .btn.text:hover{background:#edf3fd}
+body[data-role="teacher"]:not([data-training="true"]) #content .btn.light{background:#eef4ff;color:#245ccc;border-color:#d7e4fa}
 body[data-role="teacher"] #content .card{border:1px solid #dfe7f0;border-radius:10px;box-shadow:none;overflow:visible}
 body[data-role="teacher"] #content .card-head,body[data-role="teacher"] #content .social-panel-head{padding:18px 22px;border-bottom:1px solid #e6edf4;min-height:0}
 body[data-role="teacher"] #content .card-head h2,body[data-role="teacher"] #content .social-panel-head h2{font-size:18px;font-weight:650;line-height:1.5;padding-left:0}
@@ -601,7 +601,7 @@ body:is([data-role="teacher"],[data-role="dept"],[data-role="college"]) #modal-r
 body:is([data-role="teacher"],[data-role="dept"],[data-role="college"]) #modal-root .modal.page-form .modal-head,body:is([data-role="teacher"],[data-role="dept"],[data-role="college"]) #modal-root .modal.page-form .modal-foot{padding-inline:16px}
 body:is([data-role="teacher"],[data-role="dept"],[data-role="college"]) #modal-root .page-form .modal-foot .btn{min-height:44px;min-width:88px}
 }
-@media(prefers-reduced-motion:reduce){body[data-role="teacher"] #content .btn{transition:none}}
+@media(prefers-reduced-motion:reduce){body[data-role="teacher"]:not([data-training="true"]) #content .btn{transition:none}}
 }
 
 /* 教师业务明细页：操作贴近结果，分区可定位，详情使用统一阅读层级。 */

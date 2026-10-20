@@ -1,5 +1,6 @@
 """Chinese business exports using the installed workbook library."""
 from io import BytesIO
+from decimal import Decimal
 from openpyxl import Workbook
 from .social_training import STATES
 
@@ -56,7 +57,9 @@ def workbook(payload):
             sheet.append(['替代说明','已被新公示替代，旧快照保留，不作为当前公示或归档依据']);sheet.append(['替代日期',data.get('superseded_on')])
         elif data.get('replaces'):sheet.append(['重新公示','按最新归档积分重新公示，期限从本次发布日重新计算'])
         report=book.create_sheet('已认定积分汇总');report.append(['教师','学院','项目','授课积分','辅助积分','合计'])
-        for row in data['rows']:report.append([row[k] for k in ('teacher_name','org_name','project','teaching','auxiliary','total')])
+        for row in data['rows']:report.append([Decimal(row[k]) if k in ('teaching','auxiliary','total') else row[k] for k in ('teacher_name','org_name','project','teaching','auxiliary','total')])
+        for cells in report.iter_rows(min_row=2,min_col=4,max_col=6):
+            for cell in cells:cell.number_format='0.00'
         sheet.append(['公示开始',data.get('public_start')]);sheet.append(['公示截止',data.get('public_end')])
     if obj.get('kind')=='correction':
         sheet.append(['授课积分更正',data['teaching']]);sheet.append(['辅助积分更正',data['auxiliary']]);sheet.append(['正式更正依据',data['decision_reference']])

@@ -33,21 +33,21 @@ test('changed calculation evidence is escaped and explains the blocked next step
  assert.match(html,/暂不能向前确认或归档/);assert.match(html,/&lt;课程&gt;/);assert.doesNotMatch(html,/<课程>/);
 });
 
-test('办理轨迹折叠上传文件校验值，业务原因和普通依据继续安全显示',()=>{
+test('办理轨迹不展示文件校验值，业务原因和普通依据继续安全显示',()=>{
  const e=engine(),render=vm.runInContext('eventsHtml',e.ctx),hash='a'.repeat(64);
  for(const prefix of ['附件SHA256:','附件校验值:','附件校验值：']){
  const html=render([{action:'上传<材料>',actor_name:'<教师>',created_at:'2026-10-18T01:00:00Z',reason:'已上传<合成附件>',basis:prefix+hash}]);
- assert.match(html,/实施人员使用：文件校验/);assert.match(html,/<details class="implementation-details">/);assert.match(html,new RegExp('<code>'+hash+'</code>'));
+ assert.doesNotMatch(html,/实施人员使用|文件校验/);assert.ok(!html.includes(hash));
  assert.doesNotMatch(customerVisible(html),/SHA256|a{64}/);assert.match(customerVisible(html),/已上传&lt;合成附件&gt;/);assert.doesNotMatch(html,/<材料>|<教师>/);
  }
  const business=render([{action:'审核',actor_name:'教师',created_at:'2026-10-18T01:00:00Z',reason:'核对完成',basis:'学院会议纪要<第3号>'}]);
  assert.match(customerVisible(business),/核对完成 · 学院会议纪要&lt;第3号&gt;/);assert.doesNotMatch(business,/implementation-details/);
 });
 
-test('考核冻结资质附件折叠技术校验但保留原版本专用下载入口',()=>{
+test('考核冻结资质附件移除技术校验，保留原版本专用下载入口',()=>{
  const e=engine();e.t.setUser({user:{id:'u'},role:{kind:'school'},permissions:['file.read']});const render=vm.runInContext('frozenAssessmentFiles',e.ctx),hash='b'.repeat(64);
  const html=render({immutable:true,assessment:{archive:{source_snapshot:{qualifications:[{attachments:[{id:'file',name:'原证书<一>',sha256:hash}]}]}}}},'assessment');
- assert.match(html,/原证书&lt;一&gt;/);assert.match(html,/实施人员使用：文件校验/);assert.match(html,/data-action="assessment-file" data-id="assessment\|file"/);assert.doesNotMatch(customerVisible(html),/b{16}/);assert.doesNotMatch(html,/<details[^>]* open/);
+ assert.match(html,/原证书&lt;一&gt;/);assert.doesNotMatch(html,/实施人员使用|文件校验|b{64}/);assert.match(html,/data-action="assessment-file" data-id="assessment\|file"/);assert.doesNotMatch(customerVisible(html),/b{16}/);assert.doesNotMatch(html,/<details[^>]* open/);
 });
 test('manual form cannot offer protected import or interface origins',async()=>{
  const e=engine();e.t.captureForm();vm.runInContext("businessConfig.record_sources=['学校登记','Excel导入','学校数据中台']",e.ctx);
@@ -77,6 +77,7 @@ import {connectorInfo,connectorCards,connectorStatus,incomeChart,guideCards,scop
 import * as scope from '../../frontend/scope.js';
 import * as socialTraining from '../../frontend/social-training.js';
 import {icons} from '../../frontend/icons.js';
+import {renderSchoolCockpit,bindSchoolCockpit} from '../../frontend/school-cockpit.js';
 import * as workspace from '../../frontend/integration-workspace.js';
 import * as drafts from '../../frontend/integration-drafts.js';
 import {renderBusinessHistory} from '../../frontend/business-history.js';import * as ledgers from '../../frontend/social-ledgers.js';import * as schoolData from '../../frontend/school-data.js';import * as approvalFlow from '../../frontend/approval-flow.js';import * as applications from '../../frontend/applications.js';
@@ -86,7 +87,7 @@ const implementationDetailTags=html=>[...String(html??'').matchAll(/<details\b[^
 function engine(responder=async()=>({items:[],total:0,page:1,size:20}), role='school'){
  const requests=[], nodes=new Map();
  function node(id){if(!nodes.has(id)){const classes=new Set(),attrs=new Map();nodes.set(id,{innerHTML:'',textContent:'',value:'',classList:{add(v){classes.add(v)},remove(v){classes.delete(v)},contains(v){return classes.has(v)},toggle(v,force){const on=force??!classes.has(v);if(on)classes.add(v);else classes.delete(v);return on}},setAttribute(k,v){attrs.set(k,v)},getAttribute(k){return attrs.get(k)??null},removeAttribute(k){attrs.delete(k)},focus(){},addEventListener(){},append(){},querySelector(){return node(id+'-child')},querySelectorAll(){return []}})}return nodes.get(id)}
- const ctx=vm.createContext({renderTrainingWorkspace,trainingChange,console,URLSearchParams,URL,Blob,FormData,Number,String,Object,Array,Date,Math,Set,Map,JSON,RegExp,Error,Promise,crypto:globalThis.crypto,setTimeout:()=>0,clearTimeout(){},
+ const ctx=vm.createContext({renderTrainingWorkspace,trainingChange,renderSchoolCockpit,bindSchoolCockpit,console,URLSearchParams,URL,Blob,FormData,Number,String,Object,Array,Date,Math,Set,Map,JSON,RegExp,Error,Promise,crypto:globalThis.crypto,setTimeout:()=>0,clearTimeout(){},
   ...scope,...socialTraining,...workspace,...drafts,...ledgers,...schoolData,...approvalFlow,...applications,renderBusinessHistory,connectorInfo,connectorCards,connectorStatus,incomeChart,guideCards,scopedDateFilters,incomeParticipantsChart,barChart,syncStatusChart,rankRows,percentChange,RANK_METRICS,icons,
   document:{querySelector:node,querySelectorAll:()=>[],addEventListener(){},createElement:()=>node('created'),body:node('body')},window:{addEventListener(){}},location:{hash:'',pathname:'/',search:''},history:{replaceState(){}},
   fetch:async(url,options)=>{requests.push({url,options});let answer=await responder(url,options);if(url.endsWith('/draft')&&options.method==='GET'&&!answer.connection){const cat=await responder('/api/connections/catalog',options),ident=url.split('/').at(-2),entry=cat.items.find(x=>x.connection.id===ident);answer={connection:entry.connection,draft_version:0,active_version:entry.connection.version||1}}if(url.endsWith('/implementation')&&!answer.statuses){const cat=await responder('/api/connections/catalog',options),ident=url.split('/').at(-2),entry=cat.items.find(x=>x.connection.id===ident);answer={connection_id:ident,code:entry.connection.code,name:entry.connection.name,statuses:{materials:'资料待登记',configuration:'配置待完善',tests:'待真实测试',published:'未发布或授权失效',health:'未检查',acceptance:'待学校签认'}}}return {ok:true,status:200,json:async()=>answer}},
@@ -117,21 +118,34 @@ test('当前环境未连接统一认证时保留说明和本地登录，不产�
  assert.equal(button.disabled,true);assert.equal(bound,false);assert.match(e.node('#local-login-note').textContent,/当前环境未连接/);
  assert.match(e.node('#app').innerHTML,/class="btn primary login-local-submit" type="submit"/);
 });
-test('日常四角色入口使用业务标签，沿用安全切换及失败复原，旧演示标签保持兼容',async()=>{
- const options=[['teacher','教师'],['depthead','教研室负责人'],['collegehead','二级学院负责人'],['schooladmin','学校管理员']].map(([username,label])=>({username,label}));
- for(const failed of [false,true]){
-  let release;const pending=new Promise(resolve=>{release=resolve}),e=engine(async()=>{await pending;if(failed)throw Error('连接中断');return {ok:true}}),label=e.node('created'),select=e.node('created-child');
-  let change,target;select.addEventListener=(event,handler)=>{if(event==='change')change=handler};e.ctx.location.replace=url=>{target=url};e.ctx.location.hash='#assessment';e.ctx.location.search='?mode=review';
-  e.t.setUser({demo_switch:{label:'快速切换角色',current:'teacher',options}});vm.runInContext('mountDemoSwitcher()',e.ctx);
-  assert.match(label.innerHTML,/<span>快速切换角色<\/span><select aria-label="快速切换角色">/);assert.equal((label.innerHTML.match(/<option /g)||[]).length,4);assert.match(label.innerHTML,/value="teacher" selected/);
-  select.value='teacher';await change();assert.equal(e.requests.length,0);
-  select.value='collegehead';const switching=change();assert.equal(select.disabled,true);release();await switching;
-  const request=e.requests[0];assert.equal(request.url,'/api/auth/demo-switch');assert.equal(request.options.method,'POST');assert.equal(request.options.credentials,'same-origin');assert.equal(request.options.headers['X-CSRF-Token'],'test-csrf');assert.deepEqual(JSON.parse(request.options.body),{username:'collegehead'});
-  if(failed){assert.equal(select.value,'teacher');assert.equal(select.disabled,false);assert.equal(target,undefined)}else{assert.equal(target,'/?mode=review');assert.match(e.node('#app').innerHTML,/正在切换身份/)}
- }
- const e=engine();e.t.setUser({demo_switch:{current:'teacher',options}});vm.runInContext('mountDemoSwitcher()',e.ctx);assert.match(e.node('created').innerHTML,/<span>演示身份<\/span><select aria-label="切换演示身份">/);
- e.t.setUser({demo_switch:{label:'切换<角色>"',current:'teacher',options}});vm.runInContext('mountDemoSwitcher()',e.ctx);assert.match(e.node('created').innerHTML,/aria-label="切换&lt;角色&gt;&quot;"/);assert.doesNotMatch(e.node('created').innerHTML,/<角色>/);
+test('身份菜单保留账号密码入口，真实待办只提示其他可切换角色并转义名称',()=>{
+ const e=engine();e.t.setUser({user:{name:'测试教师'},role:{name:'普通教师'},demo_switch:{current:'teacher',options:[{username:'teacher',label:'教师本人',todo_count:5},{username:'depthead',label:'教研室<负责人>',todo_count:3},{username:'collegehead',label:'学院负责人',todo_count:0}]}});
+ const html=vm.runInContext('accountMenuHtml()',e.ctx);
+ assert.match(html,/账号信息/);assert.match(html,/修改密码/);assert.match(html,/教研室&lt;负责人&gt;/);assert.doesNotMatch(html,/<负责人>/);
+ assert.equal(vm.runInContext('accountOtherTodos()',e.ctx),3);assert.match(html,/data-id="demo:teacher"[^>]*aria-current="true"/);
+ e.t.setUser({user:{name:'测试教师'},role:{name:'普通教师'},demo_switch:null,identities:[{id:'',role_name:'教师',current:true,todo_count:2},{id:'extra',role_name:'学院负责人',org_name:'授权学院',todo_count:4}]});
+ assert.equal(vm.runInContext('accountOtherTodos()',e.ctx),4);assert.match(vm.runInContext('accountMenuHtml()',e.ctx),/data-id="identity:extra"/);
 });
+
+test('身份菜单安全切换，带待办时跳转待办页，失败保留当前页面',async()=>{
+ for(const failed of [false,true]){
+  const e=engine(async()=>{if(failed)throw Error('连接中断');return {ok:true}});let target,reloaded=false;e.ctx.history.replaceState=(_state,_title,url)=>{target=url};e.ctx.location.reload=()=>{reloaded=true};e.ctx.location.search='?mode=review';
+  e.t.setUser({demo_switch:{current:'teacher',options:[{username:'teacher',label:'教师本人',todo_count:0},{username:'collegehead',label:'学院负责人',todo_count:2}]}});
+  await e.t.handlers['account-switch']('demo:teacher');assert.equal(e.requests.length,0);
+  if(failed)await assert.rejects(e.t.handlers['account-switch']('demo:collegehead'),/连接中断/);else await e.t.handlers['account-switch']('demo:collegehead');
+  const request=e.requests[0];assert.equal(request.url,'/api/auth/demo-switch');assert.equal(request.options.headers['X-CSRF-Token'],'test-csrf');assert.deepEqual(JSON.parse(request.options.body),{username:'collegehead'});
+  assert.equal(target,failed?undefined:'/?mode=review#todos');assert.equal(reloaded,!failed);
+ }
+ const e=engine();await assert.rejects(e.t.handlers['account-switch']('demo:unauthorized'),/不可用/);assert.equal(e.requests.length,0);
+});
+
+test('其他窗口切换身份后，待办响应不覆盖当前页面的角色',async()=>{
+ const e=engine(async()=>({demo_switch:{current:'schooladmin',options:[]},identities:[],current_todo_count:99}));
+ e.t.setUser({user:{name:'教师'},role:{name:'教师'},demo_switch:{current:'teacher',options:[]}});
+ await vm.runInContext('refreshAccountSummary()',e.ctx);
+ assert.equal(vm.runInContext('me.demo_switch.current',e.ctx),'teacher');assert.match(e.node('#account-count-status').textContent,/身份已变化/);
+});
+
 test('统一认证状态请求失败时如实提示未知且不启用入口',async()=>{
  for(const fail of [async()=>{throw Error('网络中断')},async()=>({ok:false})]){
   const e=engine(),button=e.node('#sso-login');e.ctx.fetch=fail;button.disabled=true;
@@ -397,10 +411,10 @@ test('零份考核不展示空分档表，有考核时保留真实分值和分�
  assert.match(populated,/85\.00/);assert.match(populated,/80—90分/);assert.match(populated,/分档说明/);
 });
 test('mobile configuration selector retains current selection and technical content closed',()=>{
- const e=engine();const html=vm.runInContext('settingWorkspace',e.ctx)({items:[{key:'branding',version:1,value:{school_name:'学校'}}]},{key:'branding',version:1,value:{school_name:'学校'}},{items:[]});assert.match(html,/id="settings-mobile-select"/);assert.match(html,/value="branding" selected/);assert.match(html,/实施人员使用：查看原始配置/);assert.doesNotMatch(html,/settings-raw" open/);
+ const e=engine();const html=vm.runInContext('settingWorkspace',e.ctx)({items:[{key:'branding',version:1,value:{school_name:'学校'}}]},{key:'branding',version:1,value:{school_name:'学校'}},{items:[]});assert.match(html,/id="settings-mobile-select"/);assert.match(html,/value="branding" selected/);assert.doesNotMatch(html,/实施人员使用|settings-raw|原始配置/);
 });
 test('audit access detail does not label reads as business changes',()=>{
- const e=engine();vm.runInContext("view={items:[{id:'a',module:'access',action:'GET',actor_name:'合成账号',result:'SUCCESS',after:{http_status:200},request_id:'trace'}]}",e.ctx);e.t.handlers['audit-detail']('a');const html=e.node('#modal-root').innerHTML;assert.match(html,/业务访问概况/);assert.match(html,/没有修改业务数据/);assert.doesNotMatch(html,/<h3>变更前|<h3>调整前/);assert.match(html,/<details class="mt20"><summary>实施人员使用/);
+ const e=engine();vm.runInContext("view={items:[{id:'a',module:'access',action:'GET',actor_name:'合成账号',result:'SUCCESS',after:{http_status:200},request_id:'trace'}]}",e.ctx);e.t.handlers['audit-detail']('a');const html=e.node('#modal-root').innerHTML;assert.match(html,/业务访问概况/);assert.match(html,/没有修改业务数据/);assert.doesNotMatch(html,/<h3>变更前|<h3>调整前/);assert.doesNotMatch(html,/实施人员使用|追踪编号/);
 });
 test('audit changes still expose both before and after business evidence',()=>{
  const e=engine();vm.runInContext("view={items:[{id:'a',module:'settings',action:'PUT',actor_name:'合成账号',result:'SUCCESS',before:{name:'原名称'},after:{name:'新名称'}}]}",e.ctx);e.t.handlers['audit-detail']('a');const html=e.node('#modal-root').innerHTML;assert.match(html,/变更前/);assert.match(html,/原名称/);assert.match(html,/新名称/);
@@ -674,7 +688,7 @@ test('报表指南说明各类口径与业务页直出入口，按当前权限�
 test('实际台账页面上下文包含统一时间格式，历次报送可完整渲染',async()=>{
  const stamp='2026-10-11T21:57:00',totals={claimed_total:'30',recommended_total:'30',final_total:'30',pending_rows:0};
  const detail={id:'context-time',version:1,org_name:'合成学院',can_review:false,can_draft:false,note:'',versions:[{id:'old',version_no:1,created_at:stamp,totals},{id:'context-time',version_no:2,created_at:stamp,totals}],totals,data:{year:2026,version_no:2,template_label:'合成台账',file:{name:'合成.xlsx'},summary:{serious:0},rows:[]}};
- const e=engine(async()=>detail),c=vm.runInContext('ledgerContext()',e.ctx);c.render=async()=>{};
+ const e=engine(async()=>detail),c=vm.runInContext('ledgerContext()',e.ctx);c.render=async()=>{};c.nav=async(_page,next)=>{c.filter=next};
  await ledgers.ledgerAction('tz-detail','context-time',c);
  try{const html=await ledgers.ledgerPage(c);assert.ok(html.includes(e.t.ts(stamp)));assert.match(html,/历次报送/)}finally{await ledgers.ledgerAction('tz-back','',c)}
 });
@@ -1027,6 +1041,24 @@ function cockpitResponder(url){
  if(url.startsWith('/api/connections/summary'))return {items:[{code:'province',name:'湘培直通车',connection_state:'NOT_CONNECTED',latest_task:{id:'t',state:'BLOCKED',display_state:'BLOCKED',success_count:0,failed_count:2,pending_confirmation_count:0,last_activity_at:'2026-09-20T00:00:00',failure_reason:'外部接口未真实连接'}}]};
  return {items:[],total:0,page:1,size:20};
 }
+test('学校原表驾驶舱使用独立筛选，原授课统计与真实同步状态仍可展开',async()=>{
+ const period={year:2026,label:'2026年1—8月',start:'2026-01-01',end:'2026-08-31'};
+ const report={available:true,school_name:'湖南科技职业学院',period,periods:[period],college:'合成学院',project:'p4',
+  read_at:'2026-10-19T00:00:00Z',version:'hash',totals:{person_times:'204',person_days:null,records:1,colleges:1,person_times_colleges:1},
+  colleges:['合成学院'],projects:[{id:'p4',name:'原表项目',college:'合成学院'}],rank:[{name:'合成学院',value:'204'}],composition:[{name:'合成学院',value:1}],
+  comparison:[{...period,records:5,colleges:1}],table:[{college:'合成学院',records:{2026:5},selected_records:1,quantities:[{unit:'人次',value:'204'}],status:'待核定'}],details:[],warnings:[],excluded:[],note:'原表报送值',comparison_note:'不同口径分别统计'};
+ const e=engine(url=>url.startsWith('/api/social/cockpit?')?report:cockpitResponder(url));
+ vm.runInContext("me.environment='test'",e.ctx);
+ e.t.setState('cockpit',{report_college:'合成学院',report_year:'2026',report_project:'p4',org_id:'o'});
+ const html=await e.t.pages.cockpit();
+ assert.match(html,/sc-main-value">204<small>人次/);assert.match(html,/sc-legacy/);assert.match(html,/实际同步状态/);
+ assert.match(html,/外部接口未真实连接/);
+ assert.match(html,/本地验证/);assert.match(html,/本区为隔离样本授课数据/);
+ const reportRequest=e.requests.find(x=>x.url.startsWith('/api/social/cockpit?'));
+ assert.equal(new URL(reportRequest.url,'http://test').searchParams.get('project'),'p4');
+ for(const x of e.requests.filter(x=>x.url.startsWith('/api/statistics')))assert.doesNotMatch(x.url,/report_college|report_year|report_project/);
+});
+
 test('school cockpit shows comparison, multi-metric colleges, charts and sync failure reason from one stats source',async()=>{
  const e=engine(cockpitResponder);e.t.setState('cockpit',{},1,1,'p');const html=await e.t.pages.cockpit();
  for(const text of ['环比 / 同比','+200.00%','上期为0，不计算','学院多指标对比','教师参与情况','培训收入与课程人次趋势','最近失败原因','外部接口未真实连接','学院排行 · 收入','bar-fail'])assert.ok(html.includes(text),text);
@@ -1813,7 +1845,7 @@ test('学校学院教研室共用中文导入预览与明确的文件行数确�
   const job={id:'shared-import',filename:'合成<导入>.xlsx',kind:role==='school'?'teachers':'records',state:'PREVIEW',total:1,errors:0,sha256:'a'.repeat(64),version:7};
   const e=engine(()=>({job,rows:{items:[{row_no:2,payload:{raw},errors:[]}],page:1,size:30,total:1}}),role);
   await e.t.handlers.import('shared-import');const html=e.node('#modal-root').innerHTML,visible=customerVisible(html);
-  assert.match(html,/导入内容/);assert.match(html,/查看本行完整字段/);assert.match(html,/实施人员使用：文件校验/);assert.doesNotMatch(visible,/a{16}|原始字段/);assert.doesNotMatch(html,/internal_secret|do-not-show/);
+  assert.match(html,/导入内容/);assert.match(html,/查看本行完整字段/);assert.doesNotMatch(html,/实施人员使用|文件校验|a{64}/);assert.doesNotMatch(visible,/a{16}|原始字段/);assert.doesNotMatch(html,/internal_secret|do-not-show/);
   if(role==='school'){assert.match(visible,/登录账号：r4_import_test/);assert.match(visible,/组织编码：dept1/)}else assert.match(visible,/授课学时：0/);
   e.t.captureForm();await e.t.handlers['import-confirm']('shared-import');const form=e.t.getForm();
   assert.match(form.body,/本次导入文件/);assert.match(form.body,/合成&lt;导入&gt;.xlsx/);assert.match(form.body,/共 1 行/);assert.equal(form.options.contextLabel,'表格导入 / 确认入库');assert.equal(typeof form.options.returnTo,'function');
@@ -1898,4 +1930,14 @@ test('直接进入审批中心默认待我办理，不继承前一账号已办�
 test('业务依据的时间用统一本地格式，业务日期、名称和零值保持原样',()=>{
  const html=engine().t.evidenceHtml({period:{name:'2026-10-18T15:37:42Z',created_at:'2026-10-18T15:37:42.926330',start_date:'2026-01-01'},hours:0,id:'hidden-id'});
  assert.match(html,/2026\/10\/18 23:37:42/);assert.match(html,/2026-01-01/);assert.match(html,/2026-10-18T15:37:42Z/);assert.match(html,/>0</);assert.doesNotMatch(html,/926330|hidden-id/);assert.match(engine().t.evidenceHtml({created_at:'2026-99-18T15:37:42'}),/2026-99-18T15:37:42/);
+});
+
+
+test('积分流水显示同项目原认定和更正的中文来源，来源文字安全转义',async()=>{
+ const items=[{id:'original',teacher_id:'u',kind:'SOCIAL',item_key:'social_teaching',amount:'1.00',project_name:'<合成项目>',project_code:'QA-SAFE'},
+ {id:'fix',teacher_id:'u',kind:'SOCIAL',item_key:'social_fix_teaching',source_snapshot:{correction_id:'fix'},amount:'0.10',project_name:'<合成项目>',project_code:'QA-SAFE'}];
+ const e=engine(async url=>url.includes('point-balances')?{items:[]}:{items,total:2,sum:'1.10',page:1,size:20},'teacher');
+ e.t.setState('points');const html=await e.t.pages.points();
+ assert.equal((html.match(/&lt;合成项目&gt; · QA-SAFE/g)||[]).length,2);
+ assert.match(html,/1.10/);assert.match(html,/社会培训授课积分更正/);assert.doesNotMatch(html,/<合成项目>/);
 });

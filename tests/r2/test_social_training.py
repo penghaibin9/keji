@@ -455,7 +455,7 @@ def test_annual_report_cannot_archive_points_changed_after_publication(recognize
     from openpyxl import load_workbook
     book=load_workbook(BytesIO(exported.content),data_only=True)
     assert dict(list(book['业务概要'].values)[1:])['办理状态']=='已被新公示替代'
-    assert list(book['已认定积分汇总'].values)[1][-1]=='1.56'
+    assert list(book['已认定积分汇总'].values)[1][-1]==1.56
     auth(client2,'vice')
     for day in (date(2027,1,10),date(2027,1,14),date(2027,1,15)):
         monkeypatch.setattr(st,'today',lambda:day)
@@ -575,3 +575,154 @@ def test_project_submit_requires_venue_for_legacy_or_refiled_project(setup_socia
         p=db.get(SocialProject,pid);data=dict(p.data);data.pop('venue',None);p.data=data;p.state='RETURNED'
     r=action(client2,'projects','social_project',pid,'submit')
     assert r.status_code==409 and '培训场地' in r.text,r.text
+
+
+def test_college_quality_review_metadata_does_not_block_school_closeout(setup_social,client2,app2):
+    c=client2;pid=setup_social
+    assert import_rows(c,pid,[row()]).status_code==200
+    with app2.state.sessions.begin() as db:
+        project=db.get(SocialProject,pid)
+        project.data={**project.data,'quality':{'teacher_review':{'percent':100},'courseware_review':{'percent':100}}}
+    closeout={'closed_on':'2026-09-02','outcome_report':'合成完整结项报告','satisfaction':'96','actual_income':'0',
+              'finance_reference':'合成零收入核验','location':'onsite','materials_checked':['plan','filing_form','roster','attendance','hours','process','assessment','outcomes']}
+    auth(c,'teacher')
+    forged=action(c,'projects','social_project',pid,'close_submit',closeout={**closeout,'college_checked_by':'collegehead'})
+    assert forged.status_code==422
+    result=action(c,'projects','social_project',pid,'close_submit',closeout=closeout)
+    assert result.status_code==200,result.text
+    assert result.json()['item']['state']=='CLOSE_COLLEGE'
+    auth(c,'collegehead');result=action(c,'projects','social_project',pid,'approve')
+    assert result.status_code==200,result.text
+    assert result.json()['item']['closeout']['college_checked_by']=='collegehead'
+    auth(c,'reviewer');result=action(c,'projects','social_project',pid,'close')
+    assert result.status_code==200,result.text
+    closed=result.json()['item']
+    assert closed['state']=='CLOSED'
+    assert closed['closeout']['college_checked_by']=='collegehead'
+    assert closed['closeout']['reviewed_by']=='reviewer'
+    assert {'teacher_review','courseware_review'}<=set(closed['closeout']['materials_checked'])
+    with pytest.raises(Exception):
+        st.require_closeout_distribution({**closeout,'college_checked_by':'collegehead','actual_income':'100','funding_source':'other_training','retained':'0','personnel':'100'})
+
+
+def test_closed_report_partial_correction_preserves_unsent_fields_and_recognition(recognized,client2):
+    claim_id,_=recognized;c=client2
+    auth(c,'teacher')
+    original=detail(c,'social_claim',claim_id)['item']['snapshot']
+    pid=detail(c,'social_claim',claim_id)['item']['project_id']
+    auth(c,'collegehead');project=detail(c,'social_project',pid)['item']
+    fields={'total_hours':'2','audiences':['社区居民'],'audience_other':'合成说明','service_types':['regional'],
+            'teaching_methods':['classroom'],'video_minutes':'15','base_count':2}
+    first=put(c,f'/api/social/projects/{pid}/report-info',{'expected_version':project['version'],**fields,'reason':'合成上报资料基线'})
+    assert first.status_code==200,first.text
+    item=first.json()['item']
+    changed=put(c,f'/api/social/projects/{pid}/report-info',{'expected_version':item['version'],'total_hours':'3','reason':'只更正合成总学时'})
+    assert changed.status_code==200,changed.text
+    result=changed.json()['item'];assert result['state']=='CLOSED'
+    assert Decimal(result['data']['total_hours'])==Decimal('3')
+    for key in fields:
+        if key!='total_hours':assert result['data'][key]==item['data'][key]
+    assert result['closeout']==item['closeout']
+    auth(c,'teacher')
+    assert detail(c,'social_claim',claim_id)['item']['snapshot']==original
+    auth(c,'collegehead')
+    assert put(c,f'/api/social/projects/{pid}/report-info',{'expected_version':item['version'],'total_hours':'4','reason':'旧版本应拒绝'}).status_code==409
+    cleared=put(c,f'/api/social/projects/{pid}/report-info',{'expected_version':result['version'],'audiences':[],'video_minutes':'0','reason':'明确清空受众并保留零值'})
+    assert cleared.status_code==200,cleared.text
+    assert cleared.json()['item']['data']['audiences']==[]
+    assert Decimal(cleared.json()['item']['data']['video_minutes'])==0
+    assert cleared.json()['item']['data']['service_types']==['regional']
+
+
+def test_corrected_points_repeat_exports_keep_net_and_visible_project(recognized,client2,app2):
+    from openpyxl import load_workbook
+    from app.worker import run_once
+    claim_id,_=recognized;c=client2
+    auth(c,'teacher');original=detail(c,'social_claim',claim_id)['item']['snapshot']
+    for delta in ('0.20','-0.66'):
+        auth(c,'teacher')
+        r=post(c,'/api/social/corrections',{'claim_id':claim_id,'period_id':'period2026','teaching':delta,'auxiliary':'0','decision_reference':'合成更正决定','reason':'合成重复导出核对'})
+        assert r.status_code==200,r.text
+        fix=r.json()['item'];proof(c,'social_resource',fix['id'],fix['version'])
+        assert action(c,'corrections','social_resource',fix['id'],'submit').status_code==200
+        for user in ('collegehead','reviewer','vice','depthead'):
+            auth(c,user);r=action(c,'corrections','social_resource',fix['id'],'approve');assert r.status_code==200,r.text
+    with app2.state.sessions() as db:
+        before=[(x.id,x.amount,x.source_snapshot) for x in db.scalars(select(PointEntry).order_by(PointEntry.id))]
+    for user in ('teacher','collegehead'):
+        auth(c,user);points=c.get('/api/points?period_id=period2026').json()
+        assert Decimal(points['sum'])==Decimal('1.10') and points['total']==6
+        assert {x['project_code'] for x in points['items']}=={'SOC-P1'}
+        for iteration in range(2):
+            job=post(c,'/api/exports',{'kind':'points','filters':{'period_id':'period2026'},'confirmed':False}).json()
+            assert run_once(app2.state.settings)['status']=='DONE'
+            response=c.get('/api/tasks/'+job['id']+'/download');assert response.status_code==200
+            assert c.get('/api/tasks/'+job['id']+'/download').content==response.content
+            book=load_workbook(BytesIO(response.content));sheet=book.active;rows=list(sheet.values)
+            assert rows[0][16:]==('项目编号','项目名称')
+            assert len(rows)==7 and sum(Decimal(str(r[5])) for r in rows[1:])==Decimal('1.10')
+            assert {r[16] for r in rows[1:]}=={'SOC-P1'}
+            assert {r[17] for r in rows[1:]}=={'隔离技能培训'}
+            assert not sheet.column_dimensions['Q'].hidden and not sheet.column_dimensions['R'].hidden
+            assert sheet.auto_filter.ref=='A1:R7'
+            assert all(sheet.cell(row=n,column=6).data_type=='n' for n in range(2,8))
+            if iteration:assert rows==previous
+            previous=rows;book.close()
+    auth(c,'teacher');assert detail(c,'social_claim',claim_id)['item']['snapshot']==original
+    with app2.state.sessions() as db:
+        assert [(x.id,x.amount,x.source_snapshot) for x in db.scalars(select(PointEntry).order_by(PointEntry.id))]==before
+
+
+def test_post_report_correction_rereports_without_overwriting_old_snapshot(recognized,client2,app2,monkeypatch):
+    from copy import deepcopy
+    from openpyxl import load_workbook
+    from app.core import serial
+    claim_id,pol=recognized;c=client2
+    monkeypatch.setattr(st,'today',lambda:date(2026,11,1))
+    auth(c,'schooladmin');duties=c.get('/api/social/duties').json()
+    assignments=deepcopy(duties['assignments']);assignments['secretary'].append('schooladmin')
+    assigned=put(c,'/api/social/duties',{'expected_version':duties['version'],'assignments':assignments,'reason':'隔离回归配置汇总人'})
+    assert assigned.status_code==200,assigned.text
+    original=detail(c,'social_claim',claim_id)['item']['snapshot']
+    def correction(delta):
+        auth(c,'teacher')
+        r=post(c,'/api/social/corrections',{'claim_id':claim_id,'period_id':'period2026','teaching':delta,'auxiliary':'0','decision_reference':'合成报送更正决定','reason':'验证报送后追加差额'})
+        assert r.status_code==200,r.text
+        fix=r.json()['item'];proof(c,'social_resource',fix['id'],fix['version'])
+        assert action(c,'corrections','social_resource',fix['id'],'submit').status_code==200
+        for user in ('collegehead','reviewer','vice','depthead'):
+            auth(c,user);r=action(c,'corrections','social_resource',fix['id'],'approve');assert r.status_code==200,r.text
+        assert action(c,'corrections','social_resource',fix['id'],'approve').status_code==409
+    def report():
+        auth(c,'schooladmin')
+        r=post(c,'/api/social/reports',{'org_id':'college1','policy_id':pol,'year':2026,'start_month':9,'end_month':10,'reason':'隔离合成汇总报送'})
+        assert r.status_code==200,r.text
+        ident=r.json()['item']['id']
+        assert action(c,'reports','social_resource',ident,'submit').status_code==200
+        auth(c,'reviewer');item=detail(c,'social_resource',ident)['item']
+        body={'action':'approve','expected_version':item['version'],'reason':'隔离归口复核'};key=str(uuid.uuid4())
+        first=post(c,f'/api/social/reports/{ident}/actions',body,key=key)
+        assert first.status_code==200,first.text
+        replay=post(c,f'/api/social/reports/{ident}/actions',body,key=key)
+        assert replay.status_code==200 and replay.json()==first.json()
+        assert first.json()['item']['state']=='ARCHIVED'
+        return ident
+    def exported(ident):
+        auth(c,'collegehead');r=c.get(f'/api/social/objects/social_resource/{ident}/export')
+        assert r.status_code==200,r.text
+        book=load_workbook(BytesIO(r.content));sheet=book['已认定积分汇总']
+        values=list(sheet.values);assert sheet['F2'].data_type=='n';book.close();return values
+    correction('-0.46');old=report();old_export=exported(old)
+    assert Decimal(str(old_export[1][-1]))==Decimal('1.10')
+    with app2.state.sessions() as db:old_item=serial(db.get(SocialResource,old))
+    correction('0.15')
+    with app2.state.sessions() as db:
+        before_reports=[(x.id,x.amount,x.source_snapshot) for x in db.scalars(select(PointEntry).order_by(PointEntry.id))]
+    new=report();assert new!=old
+    assert Decimal(str(exported(new)[1][-1]))==Decimal('1.25')
+    assert exported(new)==exported(new) and exported(old)==old_export
+    with app2.state.sessions() as db:
+        assert serial(db.get(SocialResource,old))==old_item
+        assert db.get(SocialClaim,claim_id).snapshot==original
+        assert [(x.id,x.amount,x.source_snapshot) for x in db.scalars(select(PointEntry).order_by(PointEntry.id))]==before_reports
+        assert sum(x.amount for x in db.scalars(select(PointEntry)))==Decimal('1.25')

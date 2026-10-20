@@ -45,11 +45,37 @@ def test_link_reuses_course_and_preserves_approved_application(link_case):
     assert link(c,version=2).status_code==409
 
 
-@pytest.mark.parametrize('username',['teacher','depthead','collegehead'])
-def test_only_school_registrar_can_link(link_case,username):
+@pytest.mark.parametrize('username,status',[('teacher',200),('collegehead',200),('depthead',403),('otherteacher',403),('otherdept',403)])
+def test_link_respects_course_owner_and_project_management_scope(link_case,username,status):
     app,c=link_case;auth(c,username)
-    assert link(c).status_code==403
+    response=link(c);assert response.status_code==status,response.text
+    with app.state.sessions() as db:assert db.get(TrainingCourseMaster,'link-course').project_code==('LINK-P1' if status==200 else None)
+
+
+@pytest.mark.parametrize('change',[ 'other_owner','other_course_owner','under_review'])
+def test_teacher_cannot_link_others_courses_or_projects_or_change_reviewing_project(link_case,change):
+    app,c=link_case
+    with app.state.sessions.begin() as db:
+        if change=='other_owner':db.get(SocialProject,'link-project').owner_id='otherteacher'
+        elif change=='other_course_owner':
+            a=db.get(SocialResource,'link-application');a.data={**a.data,'teacher_id':'otherteacher'}
+        else:db.get(SocialProject,'link-project').state='COLLEGE'
+    auth(c,'teacher');assert link(c).status_code in (403,409)
     with app.state.sessions() as db:assert db.get(TrainingCourseMaster,'link-course').project_code is None
+
+
+def test_course_progress_and_link_candidates_are_scoped(link_case):
+    app,c=link_case;auth(c,'teacher')
+    response=c.get('/api/applications/link-application/course-points');assert response.status_code==200,response.text
+    assert response.json()['stage']=='link' and response.json()['can_link']
+    options=c.get('/api/social/project-options?course_application_id=link-application').json()
+    assert [p['id'] for p in options['items']]==['link-project']
+    assert link(c).status_code==200
+    response=c.get('/api/applications/link-application/course-points').json()
+    assert response['stage']=='work' and response['project']['id']=='link-project' and not response['can_claim']
+    auth(c,'otherteacher')
+    assert c.get('/api/applications/link-application/course-points').status_code==403
+    assert c.get('/api/social/project-options?course_application_id=link-application').status_code==403
 
 
 @pytest.mark.parametrize('change,status',[('other_college',403),('unapproved',403),('not_application',403),

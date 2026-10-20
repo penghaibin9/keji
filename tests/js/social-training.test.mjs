@@ -22,6 +22,15 @@ test('external instructors can be recorded with a stable school reference',()=>{
 });
 
 const escapeHtml=value=>String(value??'').replace(/[&<>"']/g,char=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[char]));
+test('学校学院项目页以元信息进入历史来源，业务办理切换保留旧项目入口',async()=>{
+ const c=renderContext({history_available:true}),original=c.api;c.filter={};
+ c.api=async url=>url.startsWith('/social/history-projects')?(c.requests.push(url),{year:2026,years:[2025,2026],issue:'all',counts:{all:28,missing:28,conflict:0},items:[],note:'历史资料'}):original(url);
+ let html=await socialPage('projects',c);assert.match(html,/学校历史资料/);assert.match(html,/28/);assert.equal(c.requests.filter(p=>p.startsWith('/social/history-projects')).length,1);
+ c.filter={project_view:'business'};html=await socialPage('projects',c);assert.match(html,/项目业务办理/);assert.equal(c.requests.filter(p=>p.startsWith('/social/history-projects')).length,1);
+});
+test('教师教研室及未配置历史资料不额外请求历史整院来源',async()=>{
+ for(const role of ['teacher','dept','school']){const c=renderContext({history_available:role!=='school'});c.me.role.kind=role;c.filter={project_view:'history'};await socialPage('projects',c);assert.equal(c.requests.some(p=>p.startsWith('/social/history-projects')),false)}
+});
 function renderContext(data={},permissions=[]){
  const workspace={projects:[],courses:[],resources:[],claims:[],annuals:[],policies:[],my_duties:[],course_stats:{},decisions:{},states:{ACTIVE:'已启用',DRAFT:'草稿'},pagination:{total:0,page:1,size:20},resource_pagination:{total:0,page:1,size:200},...data};
  const requests=[];
@@ -39,9 +48,37 @@ async function renderSocial(section,context){
  await socialAction('social-list-reset','',context);
  return socialPage(section,context);
 }
+test('四种角色共用培训图文版式，申报与登记入口仍按原权限显示',async()=>{
+ const data={projects:[{id:'unified-project',owner_id:'owner',org_id:'college1',state:'FILED',cohort:'第一期',data:{name:'统一项目',code:'P1'}}],courses:[{code:'C1',name:'统一课程',project_code:'P1'}],resources:[{id:'base1',kind:'base',name:'统一基地',org_id:'college1',state:'ACTIVE',data:{}},{id:'result1',kind:'achievement',name:'统一成果',org_id:'college1',state:'ACTIVE',data:{level:'school'}}],pagination:{total:1,page:1,size:20}};
+ for(const role of ['teacher','dept','college','school']){
+  const c=renderContext(data,['records.read',...(['school','college','dept'].includes(role)?['records.write']:[])]);c.me={user:{id:'unified-'+role},role:{kind:role}};
+  for(const section of ['projects','courses','bases','outcomes']){
+   const html=await renderSocial(section,c);
+   assert.match(html,new RegExp('class="training-workspace tw-section-'+section+'"'));
+   assert.match(html,/class="tw-layout"/);assert.match(html,/class="tw-detail"/);
+   if(['teacher','dept'].includes(role))assert.doesNotMatch(html,/data-action="training-image"|>(办理备案|学院审批|查看与结项)<\/button>|data-id="achievement"/);
+   if(section==='courses'){
+    assert.match(html,/data-action="social-course-view" data-id="C1"/);
+    if(role==='school')assert.match(html,/data-action="social-course-new"/);
+    else{assert.doesNotMatch(html,/data-action="social-course-new"/);assert.match(html,/申报培训课程/)}
+    if(role==='dept')assert.doesNotMatch(html,/data-action="social-resource-new"/);
+   }
+  }
+ }
+});
 function summaryValues(html){
  return Object.fromEntries([...html.matchAll(/<article class="social-stat">[\s\S]*?<span>([^<]+)<\/span><strong>([^<]+)<\/strong>/g)].map(match=>[match[1],match[2]]));
 }
+
+test('从课程积分办理进入申报时锁定实际项目并带入周期和规则',async()=>{
+ const c=renderContext({policies:[{id:'policy1',name:'已确认口径',state:'ACTIVE',period_id:'period1'}]},['points.read']);c.me={user:{id:'teacher',staff_no:'J001'},role:{kind:'teacher'}};
+ c.periods=[{id:'period1',name:'认定年度',state:'OPEN',start_date:'2026-01-01',end_date:'2026-12-31'}];await renderSocial('recognition',c);
+ const fields=[];c.field=(name,label,type,value)=>{fields.push({name,value});return `<input name="${name}" value="${value??''}">`};
+ let form;c.formModal=(title,body)=>{form={title,body}};const api=c.api;c.api=async url=>url==='/social/objects/social_project/project1'?{item:{id:'project1',data:{name:'明确项目'},cohort:'第一期'}}:api(url);
+ await socialAction('social-claim-new','project1|period1|policy1',c);
+ assert.match(form.body,/明确项目/);assert.match(form.body,/project1/);assert.doesNotMatch(form.body,/id="social-project-picker"/);
+ assert.ok(fields.some(x=>x.name==='period_id'&&x.value==='period1'));assert.ok(fields.some(x=>x.name==='policy_id'&&x.value==='policy1'));
+});
 
 test('项目补正提交按钮与确认页按退回层级续办，不误导重走学院',async()=>{
  for(const [state,returned_level,label] of [['RETURNED','school','补正后提交学校备案'],['RETURNED','college','补正后提交学院审批'],['DRAFT',undefined,'提交学院审批']]){
@@ -377,7 +414,9 @@ async function pickerContext(action,items){
   :'<input name="'+name+'" value="'+escapeHtml(value)+'">';
  context.formModal=(title,body,save,options)=>{context.modals.push({title,body,save,options})};
  context.lookup=async url=>({items:[],q:new URL(url,'http://localhost').searchParams.get('q')||'',page:Number(new URL(url,'http://localhost').searchParams.get('page')||1),size:20,total:0});
+ const workspaceApi=context.api;
  context.api=async(url,options)=>{
+  if(url==='/social/workspace'&&!options)return workspaceApi(url);
   context.requests.push(url);
   if(options){context.posts.push({url,...options});return {}}
   if(['/social/project-options','/social/project-options?mine=true'].includes(url))return {items,q:'',page:1,size:20,total:450};
@@ -399,7 +438,7 @@ test('课程和个人积分从项目候选接口取值，分别提交项目编�
  const project={id:'project-450',code:'PROJECT-450',name:'候选<img src=x onerror="alert(1)">',cohort:'第三期'};
  for(const [action,name,key,url] of [['social-course-new','project_code','code','/social/courses'],['social-claim-new','project_id','id','/social/claims']]){
   const context=await pickerContext(action,[project]),modal=context.modals[0];
-  assert.deepEqual(context.requests,[action==='social-claim-new'?'/social/project-options?mine=true':'/social/project-options']);
+  assert.deepEqual(context.requests,action==='social-claim-new'?['/social/workspace','/social/project-options?mine=true']:['/social/project-options']);
   assert.ok(modal.body.includes('<select id="f-'+name+'" name="'+name+'">'));
   assert.ok(modal.body.includes('<option value="'+project[key]+'">'));
   assert.ok(modal.body.includes(escapeHtml(project.name)));

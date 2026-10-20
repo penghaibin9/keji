@@ -134,3 +134,41 @@
 /* 平板和小屏电脑：抬头随页面吸顶；手机两行抬头太高，不吸顶，跟着页面滚走。 */
 @media(min-width:761px) and (max-width:900px){.nd-header{position:sticky;top:0}.target-workspace .card-head{top:var(--nd-h)}}
 @media(max-width:760px){.target-workspace .card-head{top:0}.content{min-height:0}}
+
+/* 账号与身份菜单：共用既有授权，待办只显示当前会话可切换身份的数量。 */
+.nd-header .account-menu{position:relative;display:block}
+.account-trigger{position:relative;display:flex;align-items:center;gap:8px;min-height:42px;padding:8px 12px;cursor:pointer;list-style:none;border:1px solid #c8dcff;border-radius:7px;background:#eef5ff;color:#145bd7;font-size:15px;white-space:nowrap}
+.account-trigger::-webkit-details-marker{display:none}
+.account-trigger:focus-visible{outline:3px solid #80a8ed;outline-offset:4px}
+.account-trigger>.icon{width:18px;height:18px;margin-left:4px}
+.account-menu[open] .account-trigger>.icon{transform:rotate(180deg)}
+.nd-header .account-panel{position:absolute;top:calc(100% + 14px);right:0;width:480px;max-width:calc(100vw - 24px);max-height:calc(100dvh - var(--nd-h) - 28px);overflow:auto;padding:18px 16px 0;background:#fff;border:1px solid #dbe5f0;border-radius:10px;box-shadow:0 12px 32px #1938581a;color:#173955;text-align:left;z-index:60}
+.account-panel-heading{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:16px}
+.account-panel h2{font-size:18px;line-height:1.5;margin:0}
+.account-other-total{font-size:13px;color:#647b95;white-space:nowrap}.account-other-total b{display:inline-flex;align-items:center;justify-content:center;min-width:20px;height:20px;border-radius:10px;padding:0 5px;background:#d83e4e;color:#fff;margin-left:4px}.account-other-total[hidden]{display:none}
+.account-panel-hint{font-size:13px;line-height:1.6;color:#647b95;margin:14px 0 0;padding-top:12px;border-top:1px solid #e7edf5}
+#account-role-list{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}
+.nd-header .account-role-row{position:relative;display:flex;align-items:center;gap:10px;width:100%;min-height:64px;padding:14px 12px;border:1px solid #dbe5f0;border-radius:7px;background:#fff;text-align:left}
+.account-role-row .account-count{position:absolute;top:5px;right:5px}
+.nd-header .account-role-row:hover{background:#f4f7fc}
+.nd-header .account-role-row.is-current{background:#edf4ff;border-color:#376eff;color:#1559c7}
+.account-role-copy{display:block;flex:1;min-width:0}
+.account-role-copy strong{display:block;font-size:15px;font-weight:600;line-height:1.5;overflow-wrap:anywhere}
+.account-role-copy small{display:block;font-size:12px;color:#647b95;margin-top:2px;overflow-wrap:anywhere}
+.account-selected{display:grid;place-items:center;flex:none;width:20px;height:20px;border-radius:50%;background:#145bd7;color:#fff}.nd-header .account-selected .icon{width:14px;height:14px}
+.account-role-row .account-selected{position:absolute;right:9px;bottom:8px}
+.nd-header .account-role-row{padding-right:32px}
+.nd-header .account-count{display:inline-flex;align-items:center;justify-content:center;flex:none;min-width:20px;height:20px;padding:0 5px;border-radius:10px;background:#d83e4e;color:#fff;font-size:12px;font-weight:600;line-height:1;white-space:nowrap}
+.nd-header .account-count[hidden]{display:none}
+.nd-header__icon-button:has(#header-todo-count){position:relative}
+#header-todo-count{position:absolute;top:0;right:-3px;box-shadow:0 0 0 2px #fff}
+#account-other-alert{position:absolute;top:-7px;right:-7px;box-shadow:0 0 0 2px #fff}
+.account-count-status{margin:8px 10px;color:#987020;font-size:13px;line-height:1.5}
+.account-count-status:empty{display:none}
+.account-single-role{margin:12px;font-size:15px;color:#647b95}
+.account-panel-footer{position:sticky;bottom:0;z-index:1;display:flex;align-items:center;background:#fff;border-top:1px solid #dbe5f0;margin-top:12px;padding:8px 0}
+.nd-header .account-panel-footer .btn{display:flex;justify-content:center;gap:9px;flex:1;min-height:44px;padding:8px 10px;font-size:15px;white-space:nowrap}
+.account-panel-footer .btn+.btn{border-left:1px solid #dbe5f0;border-radius:0}
+@media(max-width:900px){.nd-header .account-panel{position:fixed;top:calc(var(--nd-h) + 8px);right:12px}.account-trigger{gap:5px}.account-trigger>.icon{width:14px;margin-left:0}}
+@media(max-width:760px){.nd-header .account-panel{top:136px;left:12px;right:12px;width:auto;max-height:calc(100dvh - 150px)}.account-panel h2{font-size:17px}.nd-header .account-role-row{min-height:64px;padding:12px 8px;gap:7px}.account-role-copy strong{font-size:14px}.account-trigger{font-size:13px;padding:8px}.nd-header .account-role-row>.icon{width:19px;height:19px}}
+@media(max-width:350px){#account-role-list{grid-template-columns:1fr}.account-other-total{font-size:12px}.account-trigger>span:not(.account-count){display:none}}

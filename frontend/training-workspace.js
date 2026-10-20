@@ -11,8 +11,8 @@ const baseLevels={school:'校级',city:'市级',province:'省级及以上'};
 const usages={practice:'实践教学基地',ideology:'思政实践教学基地'};
 const CLOSING=['CLOSE_COLLEGE','CLOSE_REVIEW','CLOSED'];
 const key=(section,c)=>`${c.me?.user?.id}|${c.me?.role?.kind}|${section}`;
-export function trainingState(section,c){const k=key(section,c);if(!state.has(k))state.set(k,{selected:'',tab:'',q:'',org:'',package:false,oneSkill:false});return state.get(k)}
-export function trainingChange(section,c,action,value){const s=trainingState(section,c);if(action==='pick')s.selected=value;else if(action==='tab'){s.tab=value;s.selected=''}else if(action==='reset')Object.assign(s,{q:'',org:'',tab:'',package:false,oneSkill:false,selected:''});else if(action==='filter')Object.assign(s,value,{selected:''});}
+export function trainingState(section,c){const k=key(section,c);if(!state.has(k))state.set(k,{selected:'',tab:'',q:'',org:'',package:false,oneSkill:false});const s=state.get(k);if(section==='projects'&&c.setProjectViewState)Object.assign(s,{q:c.filter?.q||'',org:c.filter?.org_id||'',tab:c.filter?.project_status||'',selected:c.filter?.project_pick||''});return s}
+export function trainingChange(section,c,action,value){const s=trainingState(section,c);if(action==='pick')s.selected=value;else if(action==='tab'){s.tab=value;s.selected=''}else if(action==='reset')Object.assign(s,{q:'',org:'',tab:'',package:false,oneSkill:false,selected:''});else if(action==='filter')Object.assign(s,value,{selected:''});if(section==='projects')c.setProjectViewState?.(s);}
 const text=v=>v===0?'0':v==null||v===''?'待补充':String(v);
 const imageUrl=id=>typeof id==='string'&&/^[A-Za-z0-9-]{8,36}$/.test(id)?'/api/social/images/'+id:'';
 const typeIcon={projects:'book',courses:'book',bases:'school',outcomes:'award',trainers:'users'};
@@ -72,7 +72,7 @@ function projectStage(x){
 }
 function projectPrimary(row,c){
  const x=row.raw,school=c.me?.role?.kind==='school',college=c.me?.role?.kind==='college';
- const label=school&&x.state==='SUBMITTED'?'办理备案':school&&x.state==='CLOSE_REVIEW'?'办理结项核验':college&&['COLLEGE','CLOSE_COLLEGE'].includes(x.state)?'学院审批':x.state==='FILED'&&row.status!=='结项退回补正'?'查看与结项':'查看完整资料';
+ const label=school&&x.state==='SUBMITTED'?'办理备案':school&&x.state==='CLOSE_REVIEW'?'办理结项核验':college&&['COLLEGE','CLOSE_COLLEGE'].includes(x.state)?'学院审批':x.state==='FILED'&&row.status!=='结项退回补正'&&(school||college||x.owner_id===c.me?.user?.id)?'查看与结项':'查看完整资料';
  return c.act(label,row.detailAction,row.detailId,'primary');
 }
 function preview(row,section,c){
@@ -81,7 +81,7 @@ function preview(row,section,c){
  let body=section==='records'?'':cover(row,section,c,true)+imageTools(row,section,c);
  body+=`<div class="tw-detail-name"><h3>${e(row.name)}</h3>${badge(row,c)}</div>`;
  if(section==='projects'){
-  body+=facts([['项目编号',row.code],['承办学院',row.org],['负责人',c.teacherName(x.owner_id)],['培训类别',categoryLabels[d.category]],['培训时间',row.date],['项目期次',x.cohort],['一人一技',d.one_skill?'是':'否'],['需要报省',d.province_report?'是':'否']],c);
+  body+=facts([['项目编号',row.code],['承办学院',row.org],['负责人',c.teacherName(x.owner_id)],...(c.me?.role?.kind==='teacher'?[['我的角色',x.owner_id===c.me.user.id?'项目负责人':'参与教师']]:[]),['培训类别',categoryLabels[d.category]],['培训时间',row.date],['项目期次',x.cohort],['一人一技',d.one_skill?'是':'否'],['需要报省',d.province_report?'是':'否']],c);
   const stage=projectStage(x);
   body+=`<ol class="tw-progress">${['申报','学院审批','学校备案',x.state==='CLOSED'?'已结项':CLOSING.includes(x.state)?'结项核验':'培训与结项'].map((l,i)=>`<li class="${i<stage?'done':i===stage?'current':''}"><span>${i<stage?'✓':i+1}</span>${l}</li>`).join('')}</ol>`;
   // 结项前显示申报时的预计值，进入结项后显示核算出的有效人次和到账收入，并标明口径。
@@ -101,15 +101,15 @@ function preview(row,section,c){
  else if(section==='trainers')body+=facts([['职称或岗位',x.title],[x.source==='external'?'工作单位':'所属学院',row.org],...(x.source==='external'?[['登记学院',x.org_name]]:[]),['专业特长',x.specialty],['培训业务类别',(x.directions||[]).join('、')],['授课课程',(x.courses||[]).join('、')||(x.source==='external'?'外聘培训师暂无关联课程':'暂无已入库的授课课程')],['来源',x.source==='external'?'外聘培训师':'校内教师'],['认定或备案日期',x.effective_on],['认定或备案依据',x.filing_basis],['省级推荐',x.recommended_province_on||'尚未推荐']],c);
  else body+=facts([['课程',x.course],['教师',c.teacherName(x.teacher_id)],['培训日期',x.event_date],['授课学时',text(x.hours)+' 学时'],['课程人次',text(x.participants)+' 人次'],['归属培训收入',text(x.income)+' 元'],['数据来源',x.source==='Excel导入'?'表格导入':x.source]],c)+`<p class="tw-note">课程人次用于数据核对，个人积分以审核归档为准。</p>`;
  const action=section==='projects'?projectPrimary(row,c):row.detailAction?c.act(section==='records'?'查看完整明细':section==='trainers'?'查看认定资料':'查看完整资料',row.detailAction,row.detailId,'primary'):'<p class="tw-note">当前身份仅可查看基础信息</p>';
- const extra=section==='courses'?c.act('查看资源','social-course-resources',row.id,''):section==='trainers'&&c.me.role.kind==='school'&&!x.recommended_province_on?c.act('推荐省级','trainer-recommend',row.id):'';
- return `<aside class="tw-detail" aria-label="${title}" tabindex="-1"><h2>${title}</h2>${body}<div class="tw-detail-actions">${action}${extra}</div></aside>`;
+ const extra=section==='courses'?c.act('查看资源','social-course-resources',row.id,'')+(row.info.application_id&&c.can?.('points.read')?c.act('积分办理','course-points',row.info.application_id):''):section==='trainers'&&c.me.role.kind==='school'&&!x.recommended_province_on?c.act('推荐省级','trainer-recommend',row.id):'';
+ return `<aside id="training-detail" class="tw-detail" aria-label="${title}" tabindex="-1"><h2>${title}</h2>${body}<div class="tw-detail-actions">${action}${extra}</div></aside>`;
 }
 export function renderTrainingWorkspace(section,w,c,options={}){
  const e=c.esc,rows=trainingModels(section,w,c),s=trainingState(section,c);
  if(options.serverSearch!==undefined)s.q=options.serverSearch;
  const filtered=section==='records'?rows:filterTrainingRows(rows,s,section);
  const selected=filtered.find(r=>r.id===s.selected)||filtered[0];s.selected=selected?.id||'';
- const pick=(r,label='查看详情')=>c.act(label,'training-pick',r.id,'text');
+ const pick=(r,label='查看详情')=>['records','trainers'].includes(section)?`<button type="button" class="btn text tw-row-select" data-action="training-pick" data-id="${e(r.id)}" aria-pressed="${r.id===s.selected}" aria-controls="training-detail" aria-label="${e(label+'：'+r.name+(r.date?' · '+r.date:''))}">${e(label)}</button>`:c.act(label,'training-pick',r.id,'text');
  const orgs=[...new Map(rows.map(r=>[orgKey(r),r.org])).entries()].filter(([k])=>k);
  const filter=section==='records'?(options.filters||''):(!rows.length&&!s.q&&['teacher','dept','college'].includes(c.me?.role?.kind))?'':`<form id="social-search-form" class="tw-filters"><label class="tw-search">${c.icon('search')}<input id="social-query" name="q" maxlength="100" value="${e(s.q)}" aria-label="检索关键词" placeholder="${section==='trainers'?'搜索教师姓名或专业':'搜索'+labels[section].replace('管理','')+'名称或编号'}"></label><label class="tw-org">所属学院<select name="org" aria-label="所属学院"><option value="">全部学院</option>${orgs.map(([k,name])=>`<option value="${e(k)}"${k===s.org?' selected':''}>${e(name)}</option>`).join('')}</select></label><button type="submit" class="btn primary">查询</button>${c.act('重置','training-reset')}${options.serverSearch?c.act('清空检索','social-list-reset'):''} ${section==='courses'?`<div class="tw-filter-extra"><span>课程标记：</span><label><input type="checkbox" name="package"${s.package?' checked':''}> 培训包</label><label><input type="checkbox" name="oneSkill"${s.oneSkill?' checked':''}> 一人一技</label></div>`:''}</form>`;
  const categories=tabs(section),tabbar=categories.length?`<nav class="tw-tabs" aria-label="${labels[section]}分类">${categories.map(([v,l])=>`<button type="button" data-action="training-tab" data-id="${v}" aria-pressed="${s.tab===v}" class="${s.tab===v?'active':''}">${l}</button>`).join('')}</nav>`:'';
@@ -117,7 +117,7 @@ export function renderTrainingWorkspace(section,w,c,options={}){
  if(section==='trainers'||section==='records'){
   const headers=section==='trainers'?['教师','所属学院或单位','培训业务类别','资格状态','操作']:['培训日期','项目 / 课程','教师','学时','课程人次','归属收入','来源','操作'];
   list=`<div class="tw-table-wrap"><table class="tw-table"><thead><tr>${headers.map(h=>`<th>${h}</th>`).join('')}</tr></thead><tbody>${filtered.map(r=>{const x=r.raw;const cells=section==='trainers'?[`<div class="tw-person">${cover(r,section,c)}<span><strong>${e(r.name)}</strong><small>${e(x.title||'')}</small></span></div>`,e(r.org),e((x.directions||[]).join('、')),badge(r,c),pick(r)+(x.can_view_detail?'':'<small>仅基础信息</small>')]:[e(x.event_date),`<strong>${e(r.name)}</strong><small>${e(r.subtitle)}</small>`,e(c.teacherName(x.teacher_id)),e(text(x.hours)),e(text(x.participants)),e(text(x.income))+'元',e(x.source==='Excel导入'?'表格导入':x.source),pick(r,'查看')];return `<tr class="${r.id===s.selected?'selected':''}">${cells.map((v,i)=>`<td data-label="${headers[i]}">${v}</td>`).join('')}</tr>`}).join('')}</tbody></table></div>`;
- }else list=`<div class="tw-list tw-${section}">${filtered.map(r=>{const d=r.raw.data||{};return `<article class="tw-item${r.id===s.selected?' selected':''}">${cover(r,section,c)}<div class="tw-item-copy"><div class="tw-item-head"><h3>${c.act(r.name,'training-pick',r.id,'text')}</h3>${badge(r,c)}</div>${meta('org',r.org,c)}${section==='courses'?meta('file',r.subtitle,c):section==='projects'?meta('clock',r.date,c)+(r.code?`<p class="tw-code">编号：${e(r.code)}</p>`:''):section==='bases'?meta('map',d.location,c)+meta('clock','设立日期：'+text(d.established_on),c):`<p class="tw-meta">${e(levels[d.level]||'级别待确认')} · ${e(d.confirmed_on||'日期待补充')}</p><p class="tw-description">${e(d.recognition||'认定依据待补充')}</p>`}<div class="tw-item-actions">${pick(r,section==='courses'?'查看课程':'查看详情')}${section==='courses'?c.act('查看资源','social-course-resources',r.id,''):''}</div></div></article>`}).join('')}</div>`;
+ }else list=`<div class="tw-list tw-${section}">${filtered.map(r=>{const d=r.raw.data||{};return `<article class="tw-item${r.id===s.selected?' selected':''}">${cover(r,section,c)}<div class="tw-item-copy"><div class="tw-item-head"><h3><button type="button" class="btn text tw-card-select" data-action="training-pick" data-id="${e(r.id)}" aria-pressed="${r.id===s.selected}" aria-controls="training-detail">${e(r.name)}</button></h3>${badge(r,c)}</div>${meta('org',r.org,c)}${section==='courses'?meta('file',r.subtitle,c):section==='projects'?meta('clock',r.date,c)+(r.code?`<p class="tw-code">编号：${e(r.code)}</p>`:''):section==='bases'?meta('map',d.location,c)+meta('clock','设立日期：'+text(d.established_on),c):`<p class="tw-meta">${e(levels[d.level]||'级别待确认')} · ${e(d.confirmed_on||'日期待补充')}</p><p class="tw-description">${e(d.recognition||'认定依据待补充')}</p>`}<div class="tw-item-actions">${pick(r,section==='courses'?'查看课程':'查看详情')}${section==='courses'?c.act('查看资源','social-course-resources',r.id,''):''}</div></div></article>`}).join('')}</div>`;
  if(!filtered.length)list=`<div class="tw-empty">${c.icon(section==='trainers'?'users':'file')}<h3>${s.q?'没有找到匹配的记录':rows.length?'没有符合条件的记录':'暂无'+labels[section].replace('管理','')+'记录'}</h3><p>${rows.length?'调整筛选条件后再试':'新增或审核通过后，资料将显示在这里。'}</p>${s.q?c.act('查看全部','social-list-reset'):rows.length?c.act('清除筛选','training-reset'):''}</div>`;
  const total=options.total??w.pagination?.total??w.total??rows.length,narrowed=Boolean(s.tab||s.org||s.package||s.oneSkill);
  // 学院、状态等筛选作用于当前已读取的记录；总数超过一页时如实提示，并保留翻页。

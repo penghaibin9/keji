@@ -2,7 +2,7 @@
 // 只调用 /api/applications；谁能办、回避、代办、版本和材料都由后端核对，这里按后端给的 permissions 显示按钮。
 import {materialUploadForm} from './approval-flow.js?v=20261017-multi-materials2';
 import {renderTrainingWorkspace} from './training-workspace.js?v=20261019-walk3';
-import {courseFactsHtml, onlineCard} from './school-data.js?v=20261019-merge1';
+import {courseFactsHtml, onlineCard} from './school-data.js?v=20261019-merge1&display=20261019-clean2';
 import {imageField, takeImage, saveImageAfter, coverButton} from './display-image.js?v=20261019-img3';
 let c = null, opened = null;
 
@@ -56,7 +56,7 @@ export async function showApplication(id) {
   const imageLabel = d.flow === 'trainer' || d.flow === 'trainer_external' ? '头像' : '封面';
   const cover = x.data?.cover_id ? `<figure class="detail-cover"><img src="/api/social/images/${e(x.data.cover_id)}" alt="${e(x.name)}${imageLabel}" loading="lazy"></figure>` : '';
   const body = sectioned ? `<div class="application-detail"><section class="detail-status-summary"><div><strong>${e(progress.text)}</strong><p>${e(headline)}</p><small>申请人 ${e(d.applicant?.name||'')} · ${e(d.org_name)}</small></div>${status}</section><details class="detail-fold application-flow"><summary>查看完整审批流程</summary>${progressHtml({...progress,headline},e)}</details>${navigation}<section id="application-info" class="detail-section"><h3>申请资料</h3>${cover}<dl class="detail-facts-grid">${rows}</dl></section><section id="application-materials" class="detail-section"><div class="detail-section-title"><h3>申请材料</h3><span>${d.attachments.length} 份</span></div>${files}</section><section id="application-history" class="detail-section"><h3>办理记录</h3>${events(d.events)}</section>${p.withdraw?'<p class="detail-action-note">撤回后申请暂停审核；修改并重新提交时，将从第一级重新审核。</p>':''}</div>` : `<div class="between"><p class="muted small">${e(d.label)} · 申请人 ${e(d.applicant?.name||'')} · ${e(d.org_name)}</p>${status}</div>${progressHtml({...progress,headline},e)}<dl class="kv mt16">${rows}</dl><h3 class="mt16">申请材料</h3>${files}<h3 class="mt16">办理记录</h3>${events(d.events)}`;
-  const foot = [mayImage ? coverButton(c, 'resource', x, imageLabel) : '', p.approve?c.act('通过','app-approve',x.id,'primary'):'',p.return?c.act('退回','app-return',x.id,'danger'):'',p.edit?c.act('补正资料','app-edit',x.id,'primary'):'',p.submit?c.act('重新提交','app-submit',x.id,p.edit?'':'primary'):'',p.upload?c.act('上传材料','app-upload',x.id):'',p.withdraw?c.act('撤回','app-withdraw',x.id,'light'):'',c.act('关闭','close')].join('');
+  const foot = [x.kind==='course_apply'&&x.state==='ACTIVE'&&c.can?.('points.read')?c.act('积分办理','course-points',x.id,'primary'):'',mayImage ? coverButton(c, 'resource', x, imageLabel) : '', p.approve?c.act('通过','app-approve',x.id,'primary'):'',p.return?c.act('退回','app-return',x.id,'danger'):'',p.edit?c.act('补正资料','app-edit',x.id,'primary'):'',p.submit?c.act('重新提交','app-submit',x.id,p.edit?'':'primary'):'',p.upload?c.act('上传材料','app-upload',x.id):'',p.withdraw?c.act('撤回','app-withdraw',x.id,'light'):'',c.act('关闭','close')].join('');
   c.modal(d.label+' · '+x.name,body,foot,true,sectioned?d.label+' / 申请详情':'');
 }
 
@@ -336,7 +336,7 @@ export async function applyPageHtml(ctx, key) {
   const active = mine.filter(x => x.progress?.tone === 'green');
   const trainer = key === 'apply_trainer' ? mine[0] : null;
   const back = mine.filter(x => x.state === 'RETURNED').length;
-  const open = x => x.type === 'social_project' ? c.act(x.state === 'DRAFT' ? '继续完善' : '查看详情', 'social-detail', 'social_project|' + x.id, 'sm') : c.act(x.state === 'RETURNED' ? '去补正' : '查看详情', 'app-detail', x.id, x.state === 'RETURNED' ? 'sm primary' : 'sm');
+  const open = x => '<div class="action-row">'+(x.type === 'social_project' ? c.act(x.state === 'DRAFT' ? '继续完善' : '查看详情', 'social-detail', 'social_project|' + x.id, 'sm') : c.act(x.state === 'RETURNED' ? '去补正' : '查看详情', 'app-detail', x.id, x.state === 'RETURNED' ? 'sm primary' : 'sm'))+(key==='apply_course'&&x.state==='ACTIVE'&&c.can?.('points.read')?c.act('积分办理','course-points',x.id,'sm primary'):'')+'</div>';
   const actions = key === 'apply_course'
     ? c.act('从我的课程导入', 'teacher-apply', 'credits|', 'primary') + c.act('手动填写课程', 'teacher-apply', 'courses|app-course-new', '')
     : trainer ? c.act(['RETURNED','WITHDRAWN'].includes(trainer.state) ? '补正原申请' : '查看原申请', ['RETURNED','WITHDRAWN'].includes(trainer.state) ? 'app-edit' : 'app-detail', trainer.id, 'primary') : c.act(cfg.button, 'teacher-apply', cfg.action, 'primary');
@@ -352,7 +352,7 @@ export async function applyPageHtml(ctx, key) {
   if (key === 'apply_trainer') return html + approved('我的培训师资格', '已通过认定并进入培训师资库。', ['培训师', '单位 / 职称', '生效日期', '操作'], active.map(x => [`<strong>${e(x.name)}</strong><p class="cell-sub">${e(x.code || '')}</p>`, e([x.info?.unit, x.info?.title].filter(Boolean).join(' · ') || '—'), e(x.info?.effective_on || '—'), c.act('查看详情', 'app-detail', x.id, 'sm')]), '暂无已认定资格，完成认定后显示。');
   if (key !== 'apply_course') return html + '</div>';
   const modeName = Object.fromEntries(TEACHING_MODES);
-  return html + approved('我的培训课程', '已通过审批并进入培训课程库。', ['课程名称 / 编号', '学时', '教学方式', '操作'], active.map(x => [`<strong>${e(x.name)}</strong><p class="cell-sub">${e(x.course?.course_code || x.code || '')}</p>`, x.course?.hours != null && x.course.hours !== '' ? e(x.course.hours) : '—', e(modeName[x.course?.teaching_mode] || '—'), c.act('查看课程', 'app-detail', x.id, 'sm')]), '暂无已入库课程，完成审批后显示。');
+  return html + approved('我的培训课程', '已通过审批并进入培训课程库。', ['课程名称 / 编号', '学时', '教学方式', '操作'], active.map(x => [`<strong>${e(x.name)}</strong><p class="cell-sub">${e(x.course?.course_code || x.code || '')}</p>`, x.course?.hours != null && x.course.hours !== '' ? e(x.course.hours) : '—', e(modeName[x.course?.teaching_mode] || '—'), '<div class="action-row">'+c.act('查看课程', 'app-detail', x.id, 'sm')+(c.can?.('points.read')?c.act('积分办理','course-points',x.id,'sm primary'):'')+'</div>']), '暂无已入库课程，完成审批后显示。');
 }
 
 // 首页卡片：只列还没办结的申请（最多 3 条），没有就不显示。
@@ -434,7 +434,7 @@ export async function myCoursesHtml(ctx, tab, year, search = '') {
   const tip = `<details class="business-guide course-guide"><summary>如何申报为培训课程</summary><p>适合面向社会学员开设的课程，可沿原课程申报；经教研室、学院、学校审核后入库，同一门课只申报一次。课程入库和常规学历课堂不单独记社会培训积分，积分按培训项目的授课人次计算。每学年的课程原则上在学年结束后的 9 月 30 日前申报，以学校设置的期限为准；截止后请联系学院负责人补报。</p></details>` + deadlineNotes(mine);
   const empty = `<div class="course-empty">${c.icon?c.icon('book'):''}<h3>${needle?'没有符合条件的课程':(year?'所选学年暂无':'暂无')+(tab==='cx'?'作为建课人的超星课程':tab==='all'?'课程记录':'教务授课记录')}</h3><p>${tab==='cx'?'请先确认你是课程建课人；教学团队成员的课程由建课人申报。':'学校同步教务授课数据后，会按课程号合并显示开课学期。'}</p>${tab==='cx'&&c.me?.user?.staff_no?c.act('认领我的超星课程','cx-claim','','light'):''}${year?c.act('查看全部学年','mc-year','','text'):''}</div>`;
   const source = `<p class="course-source">数据来源：${tab==='cx'?'超星建课记录':tab==='all'?'教务与超星课程记录':'教务授课记录'} · 2020-2021 学年起${tab==='cx'?' · 学分、视频资源与社会培训积分分别统计':''}。同步时间以学校对接记录为准。</p>`;
-  const flow = `<ol class="my-course-flow" aria-label="课程办理流程">${[['data','数据采集'],['file','课程申报'],['check','审核入库'],['award','积分认定']].map(([ico,label])=>`<li>${c.icon?.(ico)||''}<span>${label}</span></li>`).join('')}</ol>`;
+  const flow = `<ol class="my-course-flow" aria-label="课程办理流程">${[['data','数据采集'],['file','课程申报'],['check','审核入库'],['users','项目培训与结项'],['award','积分认定']].map(([ico,label])=>`<li>${c.icon?.(ico)||''}<span>${label}</span></li>`).join('')}</ol>`;
   const table = list.length ? c.table(['课程名称','课程来源','开课学期','学分 / 学时','申报与积分状态','申报操作','课程详情'],list.map(([x,i])=>{
     const raw=originalCourse(x),[label,tone,hint]=declarationState(x),terms=x.terms.filter(t=>!year||t.school_year===year);
     return [`<div class="my-course-name" data-course-index="${i}"><strong>${e(x.course_name)}</strong><span>课程号：${e(x.course_code)}</span></div>`,
@@ -442,7 +442,7 @@ export async function myCoursesHtml(ctx, tab, year, search = '') {
       terms.map(t=>courseTerm(t.term_name)).join('')+(terms.length>1?`<p class="cell-sub">${terms.length} 个学期</p>`:''),
       `<div class="my-course-credit">${raw.credit==null?'<span class="amber">学分未填写</span>':`<strong>${e(c.number(raw.credit,2))}</strong> 学分`}<p class="cell-sub">${[raw.hours!=null?e(num(raw.hours))+' 学时':raw.period_text?e(raw.period_text)+' 学时':'',raw.chapters!=null?e(raw.chapters)+' 章':''].filter(Boolean).join(' · ')}</p></div>`,
       `<span class="badge ${tone}">${e(label)}</span><p class="cell-sub">${e(hint)}</p>`,
-      x.application?c.act(x.application.state==='RETURNED'?'去补正':'查看申报','app-detail',x.application.id,'sm light'):applyButton(x,i,'sm primary','申报课程'),
+      x.application?c.act(x.application.state==='RETURNED'?'去补正':'查看申报','app-detail',x.application.id,'sm light')+(x.application.state==='ACTIVE'&&c.can?.('points.read')?c.act('积分办理','course-points',x.application.id,'sm primary'):''):applyButton(x,i,'sm primary','申报课程'),
       c.act('课程详情','mc-detail',String(i),'text')];
   })) : empty;
   return `<section class="my-courses-workspace">${flow}${chips}<p class="my-course-count">共 ${list.length} 条课程记录 · 教务 ${list.filter(([x])=>x.origin==='JW').length} 条 · 超星 ${list.filter(([x])=>x.origin==='CX').length} 条</p><div class="card teacher-course-table">${table}</div><p class="my-course-policy">课程学分与教师积分分别统计；课程先申报审核，积分以实际培训业务认定结果为准。</p>${source}${tip}</section>`;

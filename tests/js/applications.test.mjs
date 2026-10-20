@@ -67,6 +67,12 @@ const card = (over = {}) => ({identity: 'CX|二维绘图软件应用', origin: '
   terms: [{term_name: '2025-2', school_year: '2025-2026'}, {term_name: '2024-2', school_year: '2024-2025'}, {term_name: '2023-2', school_year: '2023-2024'}],
   years: ['2025-2026', '2024-2025', '2023-2024'], problems: [], application: null, cover_url: 'https://evil.example/a.png', ...over});
 
+test('教务与超星已审批课程统一提供积分办理入口，未审批课程不误显示',async()=>{
+ const c=ctx({courses:[card({origin:'JW',identity:'JW|C1',application:{id:'jw-approved',state:'ACTIVE'}}),card({origin:'CX',identity:'CX|C2',application:{id:'cx-approved',state:'ACTIVE'}}),card({identity:'CX|C3',application:{id:'pending',state:'COLLEGE'}})],years:[]});c.can=()=>true;
+ const html=await myCoursesHtml(c,'all','');
+ assert.match(html,/data-action="course-points" data-id="jw-approved"/);assert.match(html,/data-action="course-points" data-id="cx-approved"/);assert.doesNotMatch(html,/data-action="course-points" data-id="pending"/);
+});
+
 test('首页超星已认定学分复用本学年汇总，不累加重复待认定或不计分课程，保留明确零值',async()=>{
  const year='2026-2027',source=(id,credit,counted,review)=>card({id,credit,years:[year],terms:[{term_name:year+'-1',school_year:year,credit,counted,review}]});
  const courses=[source('linked','3.50',false,null),source('approved','2.00',true,'approved'),source('pending','4.00',true,'pending'),source('excluded','5.00',true,'excluded')];
