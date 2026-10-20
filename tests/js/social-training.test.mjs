@@ -148,7 +148,7 @@ test('学院自评详情显示报告任务和人数依据，保留零值且公�
 test('教师复用年度公示清单及摘要详情，仅提供异议且不显示自评管理和原材料',async()=>{
  const item={id:'public-annual',org_id:'college',period_id:'period',state:'PUBLIC',state_label:'公示中',data:{},snapshot:{public_end:'2026-10-23',disputes:[{reason:'本人合成异议',resolved:true,resolution:'本人核实结论'}]}};
  const c=renderContext({annuals:[item],pagination:{total:1,page:1,size:20}},['assessment.read','assessment.review','file.write','records.write']);c.me={user:{id:'teacher'},role:{kind:'teacher'}};
- const html=await renderSocial('annual',c);assert.match(html,/学院考核公示/);assert.match(html,/返回政策通知/);assert.match(html,/查看公示/);assert.doesNotMatch(html,/建立学院年度自评|social-annual-new/);
+ const html=await renderSocial('annual',c);assert.match(html,/学院考核公示/);assert.match(html,/返回通知公告/);assert.match(html,/查看公示/);assert.doesNotMatch(html,/建立学院年度自评|social-annual-new/);
  let modal,form;c.modal=(title,body,buttons)=>{modal={title,body,buttons}};c.formModal=(_title,html)=>{form=html};c.downloads=()=>'<p>原附件不能出现</p>';c.eventsHtml=()=>'<p>原核验记录不能出现</p>';
  c.api=async()=>({item,org_name:'公示<学院>',state_label:'公示中',public_summary:true,trial:{base:'82.00',bonus_awarded:'5.00',total:'87.00',grade:'良好'},attachments:[],events:[]});await socialAction('social-detail','social_annual|public-annual',c);
  assert.equal(modal.title,'学院考核公示');assert.match(modal.body,/87.00/);assert.match(modal.buttons,/登记公示异议/);assert.doesNotMatch(modal.body,/原附件不能出现|原核验记录不能出现|学院自评资料|职能部门核验进度/);assert.doesNotMatch(modal.buttons,/上传佐证|补正年度自评|财务核验|归口初核|公示完成并归档/);

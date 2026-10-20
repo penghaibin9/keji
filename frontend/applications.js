@@ -170,7 +170,7 @@ export function teachingCourseForm(course, existing = null) {
       : await c.api('/applications/courses', {method: 'POST', body: {data, reason: v.reason || (existing ? '按意见补正' : '申报为培训课程')}});
     await saveImageAfter(c, 'resource', r, image);
     c.closeModal(); c.toast(existing ? '已保存，请点“重新提交”' : '已提交，等待教研室审核'); await c.renderKeep(); await showApplication(r.item.id);
-  }, {wide: true, page: true, contextLabel: existing ? '我的申请 / 补正资料' : '我要申报 / 填写资料', submit: existing ? '保存补正' : '提交申报', returnTo: existing ? () => showApplication(existing.item.id) : null});
+  }, {wide: true, page: true, contextLabel: existing ? '我的申请 / 补正资料' : '我的申报 / 填写资料', submit: existing ? '保存补正' : '提交申报', returnTo: existing ? () => showApplication(existing.item.id) : null});
   bindApplicationConditions(); return result;
 }
 
@@ -199,7 +199,7 @@ export async function manualCourseForm(existing = null, projectCode = '') {
       : await c.api('/applications/courses', {method: 'POST', body: {data, reason: v.reason || (existing ? '按意见补正' : '申报培训课程')}});
     await saveImageAfter(c, 'resource', r, image);
     c.closeModal(); c.toast(existing ? '已保存，请点“重新提交”' : college ? '已提交，等待学校审批' : c.me.role.kind === 'dept' ? '已提交，等待学院审批' : '已提交，等待教研室审核'); await c.renderKeep(); await showApplication(r.item.id);
-  }, {wide: true, page: true, contextLabel: existing ? '我的申请 / 补正资料' : college ? '培训课程 / 填写资料' : '我要申报 / 填写资料', submit: existing ? '保存补正' : '提交申报', returnTo: existing ? () => showApplication(existing.item.id) : null});
+  }, {wide: true, page: true, contextLabel: existing ? '我的申请 / 补正资料' : college ? '培训课程 / 填写资料' : '我的申报 / 填写资料', submit: existing ? '保存补正' : '提交申报', returnTo: existing ? () => showApplication(existing.item.id) : null});
   bindApplicationConditions(); return result;
 }
 
@@ -228,7 +228,7 @@ export function baseForm(existing = null) {
       : await c.api('/applications/bases', {method: 'POST', body: {data, reason: v.reason || (existing ? '按意见补正' : '申请培训基地')}});
     await saveImageAfter(c, 'resource', r, image);
     c.closeModal(); c.toast(existing ? '已保存，请点“重新提交”' : college ? '已提交，等待学校审批' : '已提交，等待学院审批'); await c.renderKeep(); await showApplication(r.item.id);
-  }, {wide: true, page: true, contextLabel: existing ? '我的申请 / 补正资料' : college ? '培训基地 / 填写资料' : '我要申报 / 填写资料', submit: existing ? '保存补正' : '提交申报', returnTo: existing ? () => showApplication(existing.item.id) : null});
+  }, {wide: true, page: true, contextLabel: existing ? '我的申请 / 补正资料' : college ? '培训基地 / 填写资料' : '我的申报 / 填写资料', submit: existing ? '保存补正' : '提交申报', returnTo: existing ? () => showApplication(existing.item.id) : null});
   bindApplicationConditions(); return result;
 }
 
@@ -255,7 +255,7 @@ export async function trainerForm(existing = null, source = '') {
     const validity = q => q.expires ? '有效期至 ' + q.expires : q.expires === null ? '长期有效' : '有效期待核实';
     quals = choices.length ? `<fieldset class="form-field full apply-tags"><legend>引用本人已审核资质（可多选）</legend><div class="apply-qualification-list">${choices.map(q => `<label><input type="checkbox" name="qual_${e(q.id)}" ${chosen.has(q.id) ? 'checked' : ''}><span><strong>${e(q.name)}</strong><small>${e(q.issuer || '发证机构待核实')} · ${e(validity(q))}${q.retained ? ' · 原引用，当前状态请核实' : ''}</small></span></label>`).join('')}</div><p class="hint">保留原引用；若资质审核状态发生变化，请核实或取消该引用后再保存。</p></fieldset>` : '<p class="hint form-field full">暂无可引用的已审核资质，可在下方填写职称、行业经历等资格依据。</p>';
   }
-  const body = `<div class="application-form">${applicantInfo()}${applicationCorrection(existing)}${c.note(external ? '由学院登记，教务处审核备案后进入培训师资库。' : '教研室、学院、学校审核后，由组织人事部认定并进入培训师资库。')}` +
+  const body = `<div class="application-form">${applicantInfo()}${applicationCorrection(existing)}${c.note(external ? '由学院登记，教务处审核备案后进入培训师资。' : '教研室、学院、学校审核后，由组织人事部认定并进入培训师资。')}` +
     applicationSection('一、基本信息与培训业务类别',
       (external ? c.field('name', '姓名', 'text', existing?.item?.name || '') + c.field('unit', '工作单位', 'text', d.unit || '') : '') +
       c.field('title', '职称或职务', 'text', d.title || '', {required: false, hint: '填写本人现有职称、职业技能等级或岗位。'}) +
@@ -273,7 +273,7 @@ export async function trainerForm(existing = null, source = '') {
       : await c.api('/applications/trainers', {method: 'POST', body: {data, reason: v.reason || (existing ? '按意见补正' : external ? '登记外聘培训师' : '申报培训师')}});
     await saveImageAfter(c, 'resource', r, image);
     c.closeModal(); c.toast(existing ? '已保存，请点“重新提交”' : external ? '已提交，等待教务处备案审核' : '已提交，等待教研室审核'); await c.renderKeep(); await showApplication(r.item.id);
-  }, {wide: true, page: true, contextLabel: existing ? '我的申请 / 补正资料' : c.me.role.kind==='college' ? '培训师资库 / 填写资料' : '我要申报 / 填写资料', submit: existing ? '保存补正' : '提交申报', returnTo: existing ? () => showApplication(existing.item.id) : null});
+  }, {wide: true, page: true, contextLabel: existing ? '我的申请 / 补正资料' : c.me.role.kind==='college' ? '培训师资 / 填写资料' : '我的申报 / 填写资料', submit: existing ? '保存补正' : '提交申报', returnTo: existing ? () => showApplication(existing.item.id) : null});
 }
 
 // 培训师资库：学校看全校，学院和教研室看本院；学校可以给在库培训师记“推荐进入省级师资库”。
@@ -316,7 +316,7 @@ export async function myApplicationsHtml(ctx) {
 
   return `<div class="card${sharedLayout ? ' teacher-applications' : ''}"><div class="card-head"><div><h2>我的申请</h2><p>课程、项目、基地和培训师申请 · 查看当前进度与办理方</p></div>${chips}</div>` +
     (sharedLayout?`<div class="application-status-filter" role="group" aria-label="申请状态筛选">${[['','全部'],['draft','草稿'],['pending','办理中'],['returned','待补正'],['done','已办结']].map(([key,label])=>`<button type="button" class="btn sm ${applicationFilter===key?'primary':''}" data-action="app-mine-filter" data-id="${key}" aria-pressed="${applicationFilter===key}">${label}</button>`).join('')}</div>`:'')+c.table(['申请', '进度', '操作'], (sharedLayout?visible:m.items).map(x => [`<strong>${e(x.name)}</strong><p class="cell-sub">${e(x.label)} · ${e(x.state_label)}</p>`,
-      sharedLayout ? `<div class="apply-progress-copy"><strong class="apply-current">${e(x.progress.text)}</strong><p class="cell-sub">${e(x.progress.headline || '')}</p></div>` : progressHtml({...x.progress, nodes: x.nodes, label: x.label}, e, {compact: true}), applicationOpenButton(x)]), applicationFilter?'当前状态没有申请':'还没有申请', applicationFilter?'切换状态查看其他申请。':c.me?.role?.kind==='college'?'从“培训课程管理”“培训基地管理”或“培训师资库”发起申请，提交后在这里查看进度。':c.me?.role?.kind==='dept'?'从“培训课程管理”或“培训基地管理”发起申请，提交后在这里查看进度。':'从左侧“我要申报”选择要办理的业务。') + `</div>`;
+      sharedLayout ? `<div class="apply-progress-copy"><strong class="apply-current">${e(x.progress.text)}</strong><p class="cell-sub">${e(x.progress.headline || '')}</p></div>` : progressHtml({...x.progress, nodes: x.nodes, label: x.label}, e, {compact: true}), applicationOpenButton(x)]), applicationFilter?'当前状态没有申请':'还没有申请', applicationFilter?'切换状态查看其他申请。':c.me?.role?.kind==='college'?'从“培训课程”“培训基地”或“培训师资”发起申请，提交后在这里查看进度。':c.me?.role?.kind==='dept'?'从“培训课程”或“培训基地”发起申请，提交后在这里查看进度。':'从左侧“我的申报”选择要办理的业务。') + `</div>`;
 }
 
 // 老师左侧的四个申报菜单：每个菜单一页，上面是“新建”，下面是本人这一类申请的进度。
@@ -324,7 +324,7 @@ export const APPLY_PAGES = {
   apply_course: {title: '申报培训课程', flows: ['course', 'teaching_course'], action: 'course|', button: '新申报一门培训课程', intro: '从我的课程里选，或新填一门；教研室、学院、学校逐级审批，通过后进入培训课程库。'},
   apply_project: {title: '申报培训项目', flows: ['project', 'project_close'], action: 'projects|social-project-new', button: '新申报一个培训项目', intro: '本人为负责人；学院审批后由学校备案。项目已备案后在这里办结项。'},
   apply_base: {title: '申请培训基地', flows: ['base'], action: 'bases|app-base-new', button: '新申请一个培训基地', intro: '实践教学或思政实践教学基地；学院审批后学校审批，通过后进入基地清单。'},
-  apply_trainer: {title: '申报培训师', flows: ['trainer'], action: 'trainer|', button: '新申报培训师', intro: '校内遴选：教研室、学院、学校审核后，由组织人事部认定，进入培训师资库。'}
+  apply_trainer: {title: '申报培训师', flows: ['trainer'], action: 'trainer|', button: '新申报培训师', intro: '校内遴选：教研室、学院、学校审核后，由组织人事部认定，进入培训师资。'}
 };
 
 export async function applyPageHtml(ctx, key) {
@@ -349,7 +349,7 @@ export async function applyPageHtml(ctx, key) {
     const usage = Object.fromEntries(BASE_USAGES);
     return html + approved('我的培训基地', '已通过审批并进入基地清单。', ['基地名称 / 编号', '用途', '设立日期', '操作'], active.map(x => [`<strong>${e(x.name)}</strong><p class="cell-sub">${e(x.code || '')}</p>`, e((x.info?.usages || []).map(k => usage[k] || k).join('、') || '—'), e(x.info?.established_on || x.info?.effective_on || '—'), c.act('查看详情', 'app-detail', x.id, 'sm')]), '暂无已入库基地，完成审批后显示。');
   }
-  if (key === 'apply_trainer') return html + approved('我的培训师资格', '已通过认定并进入培训师资库。', ['培训师', '单位 / 职称', '生效日期', '操作'], active.map(x => [`<strong>${e(x.name)}</strong><p class="cell-sub">${e(x.code || '')}</p>`, e([x.info?.unit, x.info?.title].filter(Boolean).join(' · ') || '—'), e(x.info?.effective_on || '—'), c.act('查看详情', 'app-detail', x.id, 'sm')]), '暂无已认定资格，完成认定后显示。');
+  if (key === 'apply_trainer') return html + approved('我的培训师资格', '已通过认定并进入培训师资。', ['培训师', '单位 / 职称', '生效日期', '操作'], active.map(x => [`<strong>${e(x.name)}</strong><p class="cell-sub">${e(x.code || '')}</p>`, e([x.info?.unit, x.info?.title].filter(Boolean).join(' · ') || '—'), e(x.info?.effective_on || '—'), c.act('查看详情', 'app-detail', x.id, 'sm')]), '暂无已认定资格，完成认定后显示。');
   if (key !== 'apply_course') return html + '</div>';
   const modeName = Object.fromEntries(TEACHING_MODES);
   return html + approved('我的培训课程', '已通过审批并进入培训课程库。', ['课程名称 / 编号', '学时', '教学方式', '操作'], active.map(x => [`<strong>${e(x.name)}</strong><p class="cell-sub">${e(x.course?.course_code || x.code || '')}</p>`, x.course?.hours != null && x.course.hours !== '' ? e(x.course.hours) : '—', e(modeName[x.course?.teaching_mode] || '—'), '<div class="action-row">'+c.act('查看课程', 'app-detail', x.id, 'sm')+(c.can?.('points.read')?c.act('积分办理','course-points',x.id,'sm primary'):'')+'</div>']), '暂无已入库课程，完成审批后显示。');

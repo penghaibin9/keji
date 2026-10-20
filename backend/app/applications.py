@@ -576,7 +576,7 @@ def mine(db, a):
 def trainer_library(db, a):
     """师资库：学校看全部，学院看本院，教研室看本院（申请中的单子只给申请人和办理人，不在库里露出）。老师不开放。"""
     if a.role.kind == 'teacher':
-        raise HTTPException(403, '培训师资库不对老师开放，本人的申报在“我的申请”里查看')
+        raise HTTPException(403, '培训师资不对老师开放，本人的申报在“培训业务 › 培训师资 › 我的申报”里查看')
     q = select(SocialResource).where(SocialResource.kind == 'trainer', SocialResource.state == 'ACTIVE').order_by(SocialResource.code)
     rows = db.scalars(q).all()
     if a.role.kind != 'school':

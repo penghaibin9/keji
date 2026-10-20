@@ -4,7 +4,7 @@ import fs from 'node:fs';
 const source=fs.readFileSync(new URL('../../frontend/app.js',import.meta.url),'utf8');
 
 test('三级考核菜单保留且内部有四类对象页签',()=>{
-  assert.match(source,/assessment:'三级考核管理'/);
+  assert.match(source,/assessment:'三级考核'/);
   assert.match(source,/\['teacher','dept','college','school'\]/);
   assert.match(source,/教师考核.*教研室考核.*学院考核.*学校考核/s);
 });
