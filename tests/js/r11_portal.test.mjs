@@ -957,6 +957,10 @@ test('mobile drawer hides background from keyboard and restores it on close and 
  e.t.handlers['close-menu']();assert.equal(e.node('#sidebar').inert,true);assert.equal(e.node('.main-shell').inert,false);
  e.ctx.window.matchMedia=()=>({matches:false});e.t.syncMenuAccessibility();assert.equal(e.node('#sidebar').inert,false);
 });
+test('学校首页人次与驾驶舱同源，人次和人天分开显示',async()=>{
+ const e=engine(url=>url.startsWith('/api/social/cockpit')?{available:true,period:{label:'2025年度'},totals:{person_times:8902,person_days:2508,raw_conversions:0,colleges:6}}:url.startsWith('/api/social/overview')?{year:2026,scope:'全校',participants:{final:11470,reported:7,colleges:7},sections:{}}:homeResponse(url));
+ const html=await e.t.pages.home();assert.match(html,/培训人次（原表报送）/);assert.match(html,/8,902/);assert.match(html,/2,508 人天/);assert.match(html,/6 个学院报送/);assert.doesNotMatch(html,/11,470/);
+});
 test('secondary shortcuts are preserved in a native disclosure, not removed',async()=>{
  const e=engine(homeResponse);const html=await e.t.pages.home();
  assert.match(html,/<details class="workbench-more"><summary>更多常用操作/);

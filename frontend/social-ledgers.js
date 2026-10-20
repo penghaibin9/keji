@@ -339,6 +339,9 @@ export async function homeIndicators(c, stats, extra = '', more = '') {
   try { o = await c.api('/social/overview?year=' + new Date().getFullYear()); } catch (err) { return c.note('首页指标暂时读取失败：' + err.message, true); }
   if (!o) return '';
   const teacher = c.me.role.kind === 'teacher', dept = c.me.role.kind === 'dept';
+  // 学校首页的人次与驾驶舱同源：取学院原表报送值，人次、人天、原表折算量分开，不合成一个“人次”。
+  let report = null;
+  if (c.me.role.kind === 'school' && c.can('records.read')) { try { const r = await c.api('/social/cockpit'); if (r?.available) report = r; } catch { report = null; } }
   const p = o.participants || {}, dual = o.dual || {}, lv = dual.levels || {}, al = o.achievements?.levels || {}, pts = o.points;
   const explanations = [];
   const card = (label, value, unit, foot, target, ico, brief = '') => {
@@ -363,7 +366,8 @@ export async function homeIndicators(c, stats, extra = '', more = '') {
        card('本教研室培训收入', c.number(stats?.income, 2), '元', '归属培训收入 · 按当前统计周期', 'records', 'wallet'),
        achievements,
        dualCard('本教研室双师型教师')]
-    : [card(p.pending_rows ? '培训人次（待核定）' : '培训人次', fmt(p.final), '人次', (p.completion ? `完成年度目标 ${Math.round(p.completion)}%（目标 ${fmt(p.target)}）· ` : '') + `${p.reported}/${p.colleges} 个学院已报` + (Number(o.online?.views) ? ` · 线上浏览 ${fmt(o.online.views)} 另计` : ''), 'ledgers', 'users',
+    : [report ? card('培训人次（原表报送）', fmt(report.totals.person_times), '人次', `${report.period?.label || ''} · 学院原表报送值，待学校核定；与管理驾驶舱同一来源。人天 ${fmt(report.totals.person_days)}、原表折算量 ${fmt(report.totals.raw_conversions)} 分开统计，不计入人次；${report.totals.colleges} 个学院报送`, 'cockpit', 'users',
+         `另有 ${fmt(report.totals.person_days)} 人天 · ${report.totals.colleges} 个学院报送`) : card(p.pending_rows ? '培训人次（待核定）' : '培训人次', fmt(p.final), '人次', (p.completion ? `完成年度目标 ${Math.round(p.completion)}%（目标 ${fmt(p.target)}）· ` : '') + `${p.reported}/${p.colleges} 个学院已报` + (Number(o.online?.views) ? ` · 线上浏览 ${fmt(o.online.views)} 另计` : ''), 'ledgers', 'users',
          p.reported ? `${p.reported}/${p.colleges} 个学院已报台账` : `学院还没报送 ${o.year} 年台账`),
        // 两个收入口径名字分开：首页取“结项到账收入”（社会培训管理办法），驾驶舱和培训数据取“归属培训收入”（授课流水）。
        card(o.income ? '结项到账收入' : '归属培训收入', o.income ? c.number(o.income.actual, 2) : c.number(stats?.income, 2), '元', o.income ? o.income.source_note + '驾驶舱的“归属培训收入”按授课流水统计，两者口径不同。' : '归属培训收入（按当前统计周期）', 'records', 'wallet',
