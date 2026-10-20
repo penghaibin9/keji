@@ -172,13 +172,13 @@ def identity_choices(db,a,request):
 
 
 def _role_todo_count(db, actor):
-    from .business import _todo_items
+    from .business import _todo_items, system_reminders
     if 'portal.read' not in actor.permissions:
         return 0
     items = [x for x in _todo_items(db, actor) if not x.get('target_id') or x['target_id'] in actor.org_ids]
     if actor.role.kind != 'teacher':
         from ..approval_center import pending
-        items = pending(db, actor, items) + [x for x in items if x['type'] in {'sync', 'security'}]
+        items = pending(db, actor, items) + system_reminders(actor, items)
     return len({(x['type'], x['id']) for x in items
                 if x.get('action_required', True) and x['state'] != 'EXPIRING'})
 

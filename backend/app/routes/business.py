@@ -99,10 +99,13 @@ def qualifications(request:Request):
 @router.get('/qualification-summary')
 def qualification_summary(request:Request):
     """5.2 status distribution: 待审/退回/即将到期/有效/已过期/草稿 within the live scope."""
-    f,_,_=filters_from(request,{'teacher_id'})
+    f,_,_=filters_from(request,{'teacher_id','org_id','q'})
     def load(db,a,s):
         q=select(Qualification.state,Qualification.expires).where(a.scope(Qualification.teacher_id))
+        # 与资质列表同一筛选（教师、组织、关键词），状态页签上的数字才能和列表对上。
         if f.get('teacher_id'):q=q.where(Qualification.teacher_id==f['teacher_id'])
+        if f.get('org_id'):q=q.where(Qualification.teacher_id.in_(select(User.id).where(User.org_id.in_(authorized_org_descendants(db,a,f['org_id'])))))
+        if f.get('q'):q=q.where(Qualification.name.contains(f['q'],autoescape=True)|Qualification.certificate_no.contains(f['q'],autoescape=True))
         setting=db.get(Setting,'qualification');days=int((setting.value or {}).get('expiry_days',0)) if setting else 0
         today=school_today();limit=today+timedelta(days=days)
         counts={'SUBMITTED':0,'RETURNED':0,'EXPIRING':0,'VALID':0,'EXPIRED':0,'DRAFT':0}
@@ -330,11 +333,20 @@ def approval_center(request:Request):
         source=_todo_items(db,a) if filters.get('tab','handle')=='handle' else []
         result=load(db,a,filters,page,size,source)
         # 右上角待办数还包括安全提示、接口失败；审批清单不列它们，但要说明数量和去处，避免总数对不上。
-        result['system_items']=[{'type':x['type'],'id':x['id'],'title':x.get('title','')} for x in source
-            if x['type'] in {'sync','security'} and x.get('action_required',True) and x['state']!='EXPIRING'
-            and (not x.get('target_id') or x['target_id'] in a.org_ids)]
+        result['system_items']=[{'type':x['type'],'id':x['id'],'title':x.get('title','')} for x in system_reminders(a,source)]
         return result
     return read_operation(request,'portal.read',run)
+
+
+def system_reminders(a,items):
+    """右上角待办数里的同步异常、安全提示：与 auth._role_todo_count 同一口径，按 (type,id) 去重。"""
+    seen,out=set(),[]
+    for x in items:
+        key=(x['type'],x['id'])
+        if (x['type'] in {'sync','security'} and x.get('action_required',True) and x['state']!='EXPIRING'
+                and (not x.get('target_id') or x['target_id'] in a.org_ids) and key not in seen):
+            seen.add(key);out.append(x)
+    return out
 
 
 @router.get('/portal/workbench')

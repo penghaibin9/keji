@@ -335,13 +335,13 @@ export async function resourceStatsPage(c) {
 // 老师看本人：我的人次、我参与的收入、本院成果、我的双师型级别、我的社会培训积分。
 // extra：调用方追加的指标格（管理角色的人均授课学分）；more：标题栏右侧的“更多统计”入口。
 export async function homeIndicators(c, stats, extra = '', more = '') {
+  // 学校首页的人次与驾驶舱同源：取学院原表报送值，人次、人天、原表折算量分开，不合成一个“人次”。两个请求同时发出。
+  const cockpit = c.me.role.kind === 'school' && c.can('records.read') ? c.api('/social/cockpit').catch(() => null) : Promise.resolve(null);
   let o;
   try { o = await c.api('/social/overview?year=' + new Date().getFullYear()); } catch (err) { return c.note('首页指标暂时读取失败：' + err.message, true); }
   if (!o) return '';
   const teacher = c.me.role.kind === 'teacher', dept = c.me.role.kind === 'dept';
-  // 学校首页的人次与驾驶舱同源：取学院原表报送值，人次、人天、原表折算量分开，不合成一个“人次”。
-  let report = null;
-  if (c.me.role.kind === 'school' && c.can('records.read')) { try { const r = await c.api('/social/cockpit'); if (r?.available) report = r; } catch { report = null; } }
+  const r = await cockpit, report = r?.available ? r : null;
   const p = o.participants || {}, dual = o.dual || {}, lv = dual.levels || {}, al = o.achievements?.levels || {}, pts = o.points;
   const explanations = [];
   const card = (label, value, unit, foot, target, ico, brief = '') => {

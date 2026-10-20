@@ -74,6 +74,9 @@ def test_qualification_summary_distribution(client2,app2):
     for key,names in [('EXPIRING',['证C']),('EXPIRED',['证E']),('APPROVED',['证C','证D','证E'])]:
         listed=client2.get('/api/qualifications?state='+key).json();assert sorted(x['name'] for x in listed['items'])==names,key
     assert client2.get('/api/qualifications?state=VALIDISH').status_code==422
+    # 按关键词筛选时，状态页签上的数字和列表同一范围。
+    d=client2.get('/api/qualification-summary?q=C').json();assert d['total']==1 and {x['key']:x['count'] for x in d['items']}['EXPIRING']==1
+    assert client2.get('/api/qualifications?q=C').json()['total']==1
     auth(client2,'otherteacher');assert client2.get('/api/qualification-summary').json()['total']==0
 
 
