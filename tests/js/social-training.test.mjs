@@ -22,11 +22,11 @@ test('external instructors can be recorded with a stable school reference',()=>{
 });
 
 const escapeHtml=value=>String(value??'').replace(/[&<>"']/g,char=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[char]));
-test('学校学院项目页以元信息进入历史来源，业务办理切换保留旧项目入口',async()=>{
+test('学校学院项目页默认进入业务办理，历史资料通过明确入口访问',async()=>{
  const c=renderContext({history_available:true}),original=c.api;c.filter={};
  c.api=async url=>url.startsWith('/social/history-projects')?(c.requests.push(url),{year:2026,years:[2025,2026],issue:'all',counts:{all:28,missing:28,conflict:0},items:[],note:'历史资料'}):original(url);
- let html=await socialPage('projects',c);assert.match(html,/学校历史资料/);assert.match(html,/28/);assert.equal(c.requests.filter(p=>p.startsWith('/social/history-projects')).length,1);
- c.filter={project_view:'business'};html=await socialPage('projects',c);assert.match(html,/项目业务办理/);assert.equal(c.requests.filter(p=>p.startsWith('/social/history-projects')).length,1);
+ let html=await socialPage('projects',c);assert.match(html,/项目业务办理/);assert.equal(c.requests.filter(p=>p.startsWith('/social/history-projects')).length,0);
+ c.filter={project_view:'history'};html=await socialPage('projects',c);assert.match(html,/学校历史资料/);assert.match(html,/28/);assert.equal(c.requests.filter(p=>p.startsWith('/social/history-projects')).length,1);
 });
 test('教师教研室及未配置历史资料不额外请求历史整院来源',async()=>{
  for(const role of ['teacher','dept','school']){const c=renderContext({history_available:role!=='school'});c.me.role.kind=role;c.filter={project_view:'history'};await socialPage('projects',c);assert.equal(c.requests.some(p=>p.startsWith('/social/history-projects')),false)}

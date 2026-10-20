@@ -2,7 +2,7 @@ import {coursePointsAction} from './course-points.js?v=20261019-flow4';
 import {renderTrainingWorkspace,trainingChange} from './training-workspace.js?v=20261019-walk3';
 import {renderSchoolCockpit,bindSchoolCockpit} from './school-cockpit.js?v=20261019-walk3&display=20261019-clean2';
 import {icons} from './icons.js';
-import {socialPage,socialAction,applicationProjectPicker} from './social-training.js?v=20261019-walk3&selection=20261019-row1&course_points=20261019-flow4&display=20261019-clean2&history_dates=20261020-images1';
+import {socialPage,socialAction,applicationProjectPicker} from './social-training.js?v=20261019-walk3&selection=20261019-row1&course_points=20261019-flow4&display=20261019-clean2&history_dates=20261020-images1&nav=20261020-b3';
 import {applicationAction,trainersHtml,applyPageHtml,APPLY_PAGES,myApplicationsHtml,homeApplicationsHtml,myCoursesHtml,libraryHtml,libraryFilterSubmit,homeCoursesHtml,courseAction} from './applications.js?v=20261019-flow3&display=20261019-clean2&trainers=20261020-tabs1';
 import {nextCode,runBatch,batchStage,batchMode,batchPerformer,BATCH_LABELS,materialUploadForm,checkUploadFiles,uploadEntries,uploadSequential,uploadStatusHtml} from './approval-flow.js?v=20261017-multi-materials2';
 import {ledgerPage,resourceStatsPage,homeIndicators,ledgerAction,resetLedgerView,minePage,mineReminders} from './social-ledgers.js?v=20261019-walk3&display=20261019-clean2';
@@ -540,7 +540,9 @@ function loginView(message=''){
 const pageGroups={rules:{title:'规则与配置',tabs:[['rules','考核周期与规则','rules.manage'],['policy','社会培训制度口径','rules.manage'],['settings','字典与参数','settings.manage']]},audit:{title:'日志与运行',tabs:[['audit','安全提示与操作日志','audit.read'],['operations','运行与备份','operations.read']]},assessment:{title:'三级考核管理',tabs:[['assessment','三级考核','assessment.read'],['annual','学院社会培训年度考核','assessment.read']]},points:{title:'教师积分激励',tabs:[['points','积分核对与确认','points.read'],['recognition','社会培训积分申报与认定','points.read']]},imports:{title:'表格导入导出',tabs:[['imports','表格导入','import'],['exports','导出下载','export']]}};
 const pageGroupOf=p=>Object.keys(pageGroups).find(g=>pageGroups[g].tabs.some(([k])=>k===p));
 const groupNavItem=(g,ico)=>{const t=pageGroups[g].tabs.find(([,,perm])=>can(perm));return t?[[t[0],ico,t[2]]]:[]};
-const navKey=p=>['sso','hub','province','guide','implementation'].includes(p)?'sync':(pageGroupOf(p)||p);
+// 教师菜单里项目、课程、基地、师资只有“我要申报”入口；从看板、通知等进入业务页时，侧栏同样选中对应入口。
+const teacherNavAlias={projects:'apply_project',courses:'apply_course',bases:'apply_base',trainers:'apply_trainer'};
+const navKey=p=>['sso','hub','province','guide','implementation'].includes(p)?'sync':p==='resources'&&me?.role?.kind!=='teacher'?'courses':me?.role?.kind==='teacher'&&teacherNavAlias[p]?teacherNavAlias[p]:(pageGroupOf(p)||p);
 // 只有一个可用标签时，菜单直接用该页名称（例如教师只能导出，不显示“表格导入导出”）。
 const navLabel=p=>{const g=pageGroupOf(p);if(g){const own=roleGroupTitles[me?.role?.kind]?.[g];if(own)return own;const tabs=pageGroups[g].tabs.filter(([,,perm])=>can(perm));return tabs.length===1?tabs[0][1]:pageGroups[g].title}return (p==='credits'&&me?.credit_reviewer?null:roleTitles[me?.role?.kind]?.[p])||({organization:'学院与教研室'})[p]||pageTitle(p)};
 function pageGroupTabs(p){const g=pageGroupOf(p);if(!g)return '';const tabs=pageGroups[g].tabs.filter(([key,,perm])=>can(perm)&&pageAllowed(key));if(tabs.length<2)return '';return `<nav class="section-tabs page-group-tabs" aria-label="${esc(pageGroups[g].title)}">${tabs.map(([k,l])=>`<button type="button" data-action="nav" data-id="${k}" class="${k===p?'active':''}" aria-pressed="${k===p}">${esc(me.role.kind==='teacher'?({points:'已认定明细',recognition:'申报进度',assessment:'我的年度考核',annual:'学院考核公示'}[k]||l):l)}</button>`).join('')}</nav>`}
@@ -548,7 +550,7 @@ function pageGroupTabs(p){const g=pageGroupOf(p);if(!g)return '';const tabs=page
 const reviewNavItem=()=>me?.credit_reviewer?[['creditreview','check','portal.read']]:[];
 function navItems(){
  // 教师入口依次为我的工作、我的业务、我要申报；组内入口和权限不变。
- if(me.role.kind==='teacher')return [['我的工作',[['home','home','portal.read'],['todos','tasks','portal.read'],['notices','notice','notice.read']]],['我的业务',[['credits','book','records.read'],['mine','users','portal.read'],['qualifications','cert','qualification.read'],...reviewNavItem(),['points','award','points.read'],['assessment','assess','assessment.read']]],['我要申报',[['apply_course','book','portal.read'],['apply_project','tasks','portal.read'],['apply_base','org','portal.read'],['apply_trainer','cert','portal.read']]]].map(([group,items])=>[group,items.filter(x=>can(x[2]))]).filter(([,items])=>items.length);
+ if(me.role.kind==='teacher')return [['我的工作',[['home','home','portal.read'],['todos','tasks','portal.read'],['notices','notice','notice.read']]],['我的业务',[['credits','book','records.read'],['mine','users','portal.read'],['qualifications','cert','qualification.read'],...reviewNavItem(),['points','award','points.read'],['assessment','assess','assessment.read']]],['我要申报',[['apply_course','book','portal.read'],['apply_project','tasks','portal.read'],['apply_base','org','portal.read'],['apply_trainer','cert','portal.read']]]].map(([group,items])=>[group,items.filter(x=>can(x[2])&&pageAllowed(x[0]))]).filter(([,items])=>items.length);
  // 管理角色按办事顺序分组。
  return [
  ['待办与通知',[['home','home','portal.read'],['todos','tasks','portal.read'],['notices','notice','notice.read']]],
@@ -557,7 +559,7 @@ function navItems(){
  ['积分与考核',[['points','award','points.read'],['assessment','assess','assessment.read'],['disputes','help','dispute.write']]],
  ['统计分析',[...(me.role.kind==='school'?[['cockpit','chart','portal.read']]:[]),['ledgers','data','records.read']]],
  ['系统管理',[['organization','org','organization.read'],['permissions','shield','users.manage'],...groupNavItem('imports','download'),['sync','sync','sync.manage'],...groupNavItem('rules','settings'),...groupNavItem('audit','logs')]]
- ].map(([group,items])=>[group,items.filter(x=>can(x[2]))]).filter(([,items])=>items.length);}
+ ].map(([group,items])=>[group,items.filter(x=>can(x[2])&&pageAllowed(x[0]))]).filter(([,items])=>items.length);}
 let sidebarPage='';
 function sidebarNavigation(){
  return navItems().map(([group,items],index)=>`<section class="nav-section"><button type="button" class="nav-group" data-action="toggle-nav-group" aria-expanded="true" aria-controls="nav-group-${index}"><span class="nav-group-label">${icon(({我的工作:'tasks',我要申报:'plus',我的业务:'book',待办与通知:'tasks',培训业务:'book',教师与资质:'cert',积分与考核:'assess',统计分析:'chart',系统管理:'settings'})[group]||'tasks')}<span>${esc(group)}</span></span>${icon('down')}</button><div class="nav-group-items" id="nav-group-${index}">${items.map(([p,i])=>`<button type="button" data-action="nav" data-id="${p}" class="nav-item" title="${esc(navLabel(p))}" aria-label="${esc(navLabel(p))}">${icon(i)}<span class="nav-label">${esc(navLabel(p))}</span></button>`).join('')}</div></section>`).join('');
@@ -617,8 +619,10 @@ async function boot(){
  periods=loaded[0].items;teachers=loaded[1].items;orgs=loaded[2].items;businessConfig=loaded[3];Object.assign(labels,businessConfig.status_labels||{});
  let restored;try{restored=restoreNavigation(location.hash,titles)}catch{location.hash='';restored=restoreNavigation('',titles)}/* 地址栏筛选参数写坏时回到首页，不让登录后白屏 */
  page=restored.page;filter=restored.filter;periodId=restored.periodId;
+ let scopeChanged=false;if(!pageAllowed(page)){scopeChanged=page!=='home';page='home';filter={};periodId=''}
  // 老师登录后落在菜单第一项“工作总览”（要处理的事、我的申请、我的超星课都在这里）。
  shell();mountAccountMenu();await render();
+ if(scopeChanged)toast('原页面不在当前身份的授权范围内，已回到工作总览。');
 }
 // 共用已有身份授权；这里只呈现角色、待办数量和原账号操作。
 let accountRefreshTimer=null,accountSummaryLoading=false;
@@ -656,13 +660,19 @@ function mountAccountMenu(){
  menu.addEventListener('toggle',()=>{if(menu.open)refreshAccountSummary()});refreshAccountSummary();
  if(!accountRefreshTimer&&typeof window.setInterval==='function')accountRefreshTimer=window.setInterval(()=>{if(me&&!document.hidden)refreshAccountSummary()},60000);
 }
+let accountSwitching=false;
+// 切换身份后留在同一业务：只保留业务页和页签，教师、组织、关键词等查询条件一律清除，新身份无权时由 boot 回到工作总览。
 async function switchAccountRole(key){
  const item=accountRoleItems().find(x=>x.key===key);if(!item||item.unavailable)throw Error('当前身份不可用，请刷新后重试。');
- if(item.current){$('#account-menu').open=false;if(item.todo_count>0)return nav('todos');return}
+ if(item.current){$('#account-menu').open=false;return}
+ if(accountSwitching)return;
+ if(document.querySelector?.('.modal form')&&window.confirm?.('当前窗口里有未保存的内容，切换身份后会丢失。确定要切换吗？')===false)return;
+ accountSwitching=true;
  const demo=key.startsWith('demo:');
- await api(demo?'/auth/demo-switch':'/auth/identity',{method:'POST',body:demo?{username:item.username}:{identity_id:item.id}});
+ try{await api(demo?'/auth/demo-switch':'/auth/identity',{method:'POST',body:demo?{username:item.username}:{identity_id:item.id}})}finally{accountSwitching=false}
  $('#app').innerHTML='<div class="busy-panel" role="status">正在切换身份…</div>';closeModal();
- history.replaceState(null,'',location.pathname+location.search+(item.todo_count>0?'#todos':''));location.reload();
+ const keep={};for(const k of ['tab','project_view'])if(filter?.[k])keep[k]=filter[k];
+ history.replaceState(null,'',location.pathname+location.search+navigationHash(page,pageFilters(page,keep)));location.reload();
 }
 function syncLocation(replace=false){const hash=navigationHash(page,filter,periodId);if(replace)history.replaceState(null,'',location.pathname+location.search+hash);else if(location.hash!==hash)location.hash=hash;}
 // 老师的“业务办理”：四类申请集中在一处，点了直接打开对应的申请表。
@@ -1500,7 +1510,7 @@ function activationIssues(entry){const c=entry.connection,a=c.config?.adapter||{
 function integrationMaterialPanel(entry){const readiness=integrationReadiness(entry),materials=entry.material_records?entry.material_records.required.map(name=>[name,'以双方正式资料和登记记录为准','实施流程 → 接入资料']):integrationMaterials[entry.connection.code]||[];return `<section class="card integration-materials"><div class="card-head"><div><h2>学校资料清单</h2><p>拿到资料后按“填写位置”逐项登记；登记完成不等于已经接通。</p></div><span class="progress-count">已登记 ${readiness.done} / ${readiness.total}</span></div><div class="material-list">${materials.map(([name,detail,location],index)=>`<div class="material-row" data-material-state="${readiness.states[index]?'done':'pending'}"><span class="material-mark">${readiness.states[index]?icon('check'):icon('time')}</span><div><strong>${esc(name)}</strong><p>${esc(detail)}</p></div><span class="material-location">填到：${esc(location)}</span>${checkedText(readiness.states[index],'已登记','待学校提供')}</div>`).join('')}</div></section>`}
 function pageAllowed(dest){
  const permission={apply_course:'portal.read',apply_project:'portal.read',apply_base:'portal.read',apply_trainer:'portal.read',mine:'portal.read',ledgers:'records.read',resources:'records.read',projects:'records.read',courses:'records.read',bases:'records.read',trainers:'records.read',outcomes:'records.read',recognition:'points.read',annual:'assessment.read',policy:'rules.manage',home:'portal.read',todos:'portal.read',cockpit:'portal.read',records:'records.read',credits:'records.read',creditreview:'portal.read',qualifications:'qualification.read',points:'points.read',assessment:'assessment.read',disputes:'dispute.write',organization:'organization.read',rules:'rules.manage',imports:'import',exports:'export',permissions:'users.manage',settings:'settings.manage',audit:'audit.read',sync:'sync.manage',implementation:'sync.manage',sso:'sync.manage',hub:'sync.manage',province:'sync.manage',guide:'sync.manage',operations:'operations.read',notices:'notice.read',help:'portal.read'}[dest];
- return !!permission&&can(permission)&&(dest!=='cockpit'||me.role.kind==='school')&&(dest!=='organization'||me.role.kind!=='teacher')&&(dest!=='trainers'||me.role.kind!=='teacher')&&(dest!=='mine'||me.role.kind==='teacher')&&(!dest.startsWith('apply_')||me.role.kind==='teacher')&&(!['ledgers','resources'].includes(dest)||me.role.kind!=='teacher')&&(dest!=='creditreview'||me.credit_reviewer===true);
+ return !!permission&&can(permission)&&(dest!=='cockpit'||me.role.kind==='school')&&(dest!=='organization'||me.role.kind!=='teacher')&&(dest!=='trainers'||me.role.kind!=='teacher')&&(dest!=='mine'||me.role.kind==='teacher')&&(!dest.startsWith('apply_')||me.role.kind==='teacher')&&(!['ledgers','resources'].includes(dest)||me.role.kind!=='teacher')&&(dest!=='creditreview'||me.credit_reviewer===true)&&(dest!=='permissions'||(me.role.kind==='school'&&me.user.is_admin===true));
 }
 function integrationTabs(code){
  const options=code==='sso'?[['overview','资料与身份'],['mappings','字段对应'],['proof','验证与启用']]:code==='middle'?[['overview','资料与采集规则'],['mappings','字段对应'],['batches','入站预览'],['tasks','采集任务'],['schedules','定时计划'],['proof','验证与启用']]:[['overview','资料与报送规则'],['mappings','字段对应'],['tasks','同步任务'],['items','逐笔结果'],['proof','验证与启用']];

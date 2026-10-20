@@ -1,7 +1,7 @@
 // 学院台账报送与口径检查、首页五项指标、课程视频分钟资源。
 // 推荐值按系统推荐口径计算，学校书面确认前只用于核对。
 import {mineSchoolData} from './school-data.js?v=20261019-merge1&display=20261019-clean2';
-import {historyDateSummary} from './history-projects.js?v=20261019-walk3&display=20261019-clean2';
+import {historyDateSummary} from './history-projects.js?v=20261019-walk3&display=20261019-clean2&history_dates=20261020-images1';
 let year = new Date().getFullYear();
 let sourceView = 'school';
 let sourceYear = null;
