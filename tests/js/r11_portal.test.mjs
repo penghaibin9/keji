@@ -2004,3 +2004,14 @@ test('办理时旧待办请求尚未返回，完成后重新读取最新数量',
  await vm.runInContext('refreshAccountSummary(true)',e.ctx);release();await first;
  assert.equal(calls,2);assert.equal(e.node('#header-todo-count').textContent,'1');
 });
+
+
+test('资质页签统计跟随教师关键词，管理端提供组织筛选并使用相同范围',async()=>{
+ for(const role of ['teacher','dept','college','school']){
+  const e=engine(async url=>url.includes('qualification-summary')?{items:[{key:'EXPIRED',count:1}],total:1}:{items:[],total:0,size:20},role);
+  e.t.setData([],[],[{id:'college-one',name:'测试学院',kind:'college'}]);e.t.setState('qualifications',{q:'证书编号',org_id:role==='teacher'?'':'college-one',state:'EXPIRED'});
+  const html=await e.t.pages.qualifications(),summary=new URL(e.requests.find(x=>x.url.includes('qualification-summary')).url,'http://local'),list=new URL(e.requests.find(x=>x.url.includes('/qualifications?')).url,'http://local');
+  assert.equal(summary.searchParams.get('q'),'证书编号');assert.equal(summary.searchParams.get('q'),list.searchParams.get('q'));assert.equal(summary.searchParams.get('state'),null);
+  if(role==='teacher'){assert.doesNotMatch(html,/select name="org_id"/);assert.equal(summary.searchParams.get('org_id'),null)}else{assert.match(html,/select name="org_id"/);assert.equal(summary.searchParams.get('org_id'),'college-one');assert.equal(list.searchParams.get('org_id'),'college-one')}
+ }
+});
