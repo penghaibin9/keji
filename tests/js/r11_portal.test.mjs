@@ -925,7 +925,7 @@ test('学校审核账号不是系统管理员时不显示账号与权限，系�
   assert.equal(e.t.sidebarNavigation().includes('data-id="permissions"'),shown);
  }
 });
-test('培训业务四页：我的申报与业务列表同属一个菜单，教师有两个页签，师资只有本人申报',()=>{
+test('培训业务四页：我的申报与业务列表同属一个菜单，教师默认我的申报，管理人员默认业务列表',()=>{
  const e=engine();e.t.setUser({user:{id:'u',name:'教师'},role:{kind:'teacher'},permissions:['portal.read','records.read']});
  for(const [apply,list] of [['apply_project','projects'],['apply_course','courses'],['apply_base','bases'],['apply_trainer','trainers']]){assert.equal(vm.runInContext(`navKey('${apply}')`,e.ctx),list);assert.equal(vm.runInContext(`navKey('${list}')`,e.ctx),list)}
  const tabs=vm.runInContext("pageGroupTabs('apply_project')",e.ctx);assert.match(tabs,/>我的申报</);assert.match(tabs,/>我负责或参与的</);
@@ -933,7 +933,9 @@ test('培训业务四页：我的申报与业务列表同属一个菜单，教�
  assert.equal(vm.runInContext("pageGroupTabs('apply_trainer')",e.ctx),'');assert.equal(vm.runInContext("routeAlias('trainers')",e.ctx),'apply_trainer');
  e.t.setUser({user:{id:'u',name:'学院'},role:{kind:'college'},permissions:['records.read','portal.read']});
  assert.equal(vm.runInContext("navKey('projects')",e.ctx),'projects');assert.equal(vm.runInContext("navKey('resources')",e.ctx),'resources');
- assert.equal(vm.runInContext("pageGroupTabs('projects')",e.ctx),'');assert.equal(vm.runInContext("routeAlias('trainers')",e.ctx),'trainers');
+ const managerTabs=vm.runInContext("pageGroupTabs('projects')",e.ctx);assert.ok(managerTabs.indexOf('>项目办理<')>0&&managerTabs.indexOf('>项目办理<')<managerTabs.indexOf('>我的申报<'));assert.equal(vm.runInContext("routeAlias('trainers')",e.ctx),'trainers');
+ assert.equal(e.t.pageAllowed('apply_course'),true);assert.equal(e.t.pageAllowed('apply_trainer'),true);
+ e.t.setUser({user:{id:'u',name:'教研室'},role:{kind:'dept'},permissions:['records.read','portal.read']});assert.equal(e.t.pageAllowed('apply_project'),false);assert.equal(vm.runInContext("pageGroupTabs('projects')",e.ctx),'');assert.match(vm.runInContext("pageGroupTabs('courses')",e.ctx),/>课程库<[\s\S]*>我的申报</);
  assert.equal(vm.runInContext("navLabel('projects')",e.ctx),'培训项目');
 });
 test('desktop rail toggle updates accessible name and expanded state without network',()=>{
