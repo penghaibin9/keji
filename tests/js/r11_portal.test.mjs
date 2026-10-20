@@ -2015,3 +2015,17 @@ test('资质页签统计跟随教师关键词，管理端提供组织筛选并�
   if(role==='teacher'){assert.doesNotMatch(html,/select name="org_id"/);assert.equal(summary.searchParams.get('org_id'),null)}else{assert.match(html,/select name="org_id"/);assert.equal(summary.searchParams.get('org_id'),'college-one');assert.equal(list.searchParams.get('org_id'),'college-one')}
  }
 });
+
+
+test('授课认定时间按页面本地时区显示，不直接截取世界时日期',()=>{
+ const e=engine(),render=vm.runInContext('creditReviewCell',e.ctx);
+ const html=render({counted:true,review:'approved',reviewed_by:'<审核员>',reviewed_at:'2026-10-20T16:05:00',review_reason:'合成核对'});
+ assert.match(html,/2026\/10\/21/);assert.match(html,/0:05:00/);assert.doesNotMatch(html,/2026-10-20/);assert.match(html,/&lt;审核员&gt;/);
+});
+test('授课认定分组全选初始化及单项联动，不串改另一来源',()=>{
+ const e=engine(),make=checked=>({checked,addEventListener(type,fn){this[type]=fn}}),jw=[make(true),make(true)],cx=[make(false)],allJw={...make(false),dataset:{crAll:'JW'}},allCx={...make(false),dataset:{crAll:'CX'}};
+ e.ctx.document.querySelectorAll=selector=>selector==='[data-cr-all]'?[allJw,allCx]:selector==='input[name=cr-pick][data-origin="JW"]'?jw:selector==='input[name=cr-pick][data-origin="CX"]'?cx:[];
+ e.t.bindPortalControls();assert.equal(allJw.checked,true);assert.equal(allCx.checked,false);
+ jw[0].checked=false;jw[0].change();assert.equal(allJw.checked,false);assert.equal(allJw.indeterminate,true);
+ allJw.checked=true;allJw.change();assert.ok(jw.every(x=>x.checked));assert.equal(allJw.indeterminate,false);assert.equal(cx[0].checked,false);
+});
