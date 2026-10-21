@@ -415,7 +415,7 @@ def portal_search(request:Request):
 
 @router.get('/organization-workbench')
 def organization_workbench(request:Request):
-    f,_,_=filters_from(request,STAT_FILTERS)
+    f,_,z=filters_from(request,STAT_FILTERS)
     def load(db,a,s):
         if a.role.kind not in {'dept','college','school'}:
             raise HTTPException(403,'仅教研室、学院或学校管理角色访问分级管理工作台')
@@ -437,7 +437,9 @@ def organization_workbench(request:Request):
                 items.append(x)
             elif target.kind=='school' and a.role.kind=='school' and x.get('type')=='sync':
                 items.append(x)
-        return {'organization':target,'statistics':summary,'todos':{'items':items,'total':len(items)},
+        # 页面只列前几项、显示总数；传了 size 就只回这么多条（学校身份上万条待办时整包约 2MB）。不传仍返回全部。
+        shown=items[:z] if 'size' in request.query_params else items
+        return {'organization':target,'statistics':summary,'todos':{'items':shown,'total':len(items)},
                 'assessment_states':summary.get('assessment_states',{}),
                 'scope':{'org_id':target_id,'org_ids':org_ids,'teacher_count':len(teacher_ids)}}
     return read_operation(request,'organization.read',load)

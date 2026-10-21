@@ -99,6 +99,72 @@ def test_todo_queries_do_not_grow_with_the_number_of_teachers(client2,app2):
     assert count[0]<60,count[0]   # 以前每位教师至少查两次库
 
 
+def _speed_teachers(app2,count=40):
+    with app2.state.sessions.begin() as db:
+        db.add(Rule(id='speed-rule',kind='assessment',name='速度测试规则',version_no=1,period_id='period2026',config={'components':[]},
+                    fingerprint='e'*64,state='ACTIVE',created_by='schooladmin',reason='测试'))
+        db.flush()
+        template=db.get(User,'otherteacher')
+        for i in range(count):
+            db.add(User(id=f'sp{i}',username=f'sp{i}',name=f'速度教师{i}',staff_no=f'SP{i:03d}',org_id='dept2' if i%2 else 'dept1',
+                        role_id=template.role_id,password_hash=template.password_hash,active=True))
+            db.flush()
+            db.add(Assessment(id=f'sp-a{i}',teacher_id=f'sp{i}',period_id='period2026',rule_id='speed-rule',score=80,detail=[],source_snapshot={},
+                              state=['DEPARTMENT','COLLEGE','SCHOOL'][i%3],version=1))
+
+
+def test_approval_center_queries_do_not_grow_with_the_number_of_items(client2,app2):
+    _speed_teachers(app2)
+    auth(client2,'schooladmin')
+    count=[0]
+    def tick(*args,**kwargs):count[0]+=1
+    event.listen(app2.state.engine,'before_cursor_execute',tick)
+    try:
+        response=client2.get('/api/approval-center?tab=handle&size=100')
+        workbench=client2.get('/api/portal/workbench')
+    finally:
+        event.remove(app2.state.engine,'before_cursor_execute',tick)
+    assert response.status_code==200,response.text
+    assert workbench.status_code==200,workbench.text
+    assert sum(1 for x in response.json()['items'] if x['type']=='assessment')>=13
+    assert count[0]<120,count[0]   # 以前每条待办要查五六次库：原单、教师、组织、周期、进入环节时间
+
+
+def test_pending_rows_match_the_one_by_one_lookup(app2,monkeypatch):
+    """批量预取只是省查询：逐条查和批量查得到的待办内容、顺序、进入环节时间完全一样。"""
+    import json
+    from datetime import datetime
+    from app import approval_center as ac
+    from app.core import Actor
+    from app.models import Org, Role, WorkflowEvent
+    from app.routes.business import _todo_items
+    _speed_teachers(app2,12)
+    with app2.state.sessions.begin() as db:
+        for i in range(12):
+            state=['DEPARTMENT','COLLEGE','SCHOOL'][i%3]
+            for n,(before,after) in enumerate([({},{'state':'TEACHER'}),({'state':'TEACHER'},{'state':state}),({'state':state},{'state':state})]):
+                db.add(WorkflowEvent(object_type='assessment',object_id=f'sp-a{i}',actor_id='schooladmin',actor_name='管理员',org_id='school',
+                                     action='流转',before=before,after=after,reason='测试',created_at=datetime(2026,9,1+i%3,8,n if i%2 else 0)))
+    def rows(preload):
+        with app2.state.sessions() as db:
+            user=db.get(User,'schooladmin');actor=Actor(db,user,db.get(Role,user.role_id),db.get(Org,user.org_id))
+            if not preload:monkeypatch.setattr(ac,'_preload',lambda db,items:([],None))
+            try:return json.dumps(ac.pending(db,actor,_todo_items(db,actor)),default=str,ensure_ascii=False,sort_keys=True)
+            finally:monkeypatch.undo()
+    fast,slow=rows(True),rows(False)
+    assert fast==slow
+    assert '2026-09-0' in fast   # 进入环节时间取自流转记录，不是建单时间
+
+
+def test_org_workbench_returns_only_the_rows_the_page_shows(client2,app2):
+    _speed_teachers(app2)
+    auth(client2,'schooladmin')
+    full=client2.get('/api/organization-workbench').json()['todos']
+    short=client2.get('/api/organization-workbench?size=6').json()['todos']
+    assert full['total']==short['total']==len(full['items'])>6
+    assert short['items']==full['items'][:6]
+
+
 def test_credit_groups_are_cached_until_the_data_changes(app2):
     rd._CREDIT_CACHE.update(key=None,at=0.0,groups=[])
     with Session(app2.state.engine) as db:
