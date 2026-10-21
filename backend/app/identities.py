@@ -77,7 +77,10 @@ def validate_extra(db, user, role_id, org_id, staff_no):
     from .routes.admin import account_shape
     org, role = account_shape(db, org_id, role_id, staff_no)
     if role.kind == 'school':
-        raise HTTPException(422, '学校管理员只能作为主身份，不能作为兼任身份')
+        from .permissions import SYSTEM_PERMISSIONS
+        # 带系统管理权限的学校角色（学校管理员）只能作为主身份；只办业务的学校审核角色可以兼任，原来的教师身份保留。
+        if set(role.permissions or []) & SYSTEM_PERMISSIONS:
+            raise HTTPException(422, '学校管理员只能作为主身份，不能作为兼任身份')
     return org, role
 
 

@@ -8,6 +8,11 @@ SCHOOL = COLLEGE | {'points.calculate','points.adjust','assessment.calculate','a
  'notice.manage','organization.manage','users.manage','roles.manage','settings.manage','rules.manage',
  'sync.manage','audit.read','operations.read','data.export'}
 ALLOWED = {'teacher':TEACHER,'dept':DEPT,'college':COLLEGE,'school':SCHOOL}
+# 系统管理权限：带任何一项的学校角色只能作为主身份（系统管理员），不能兼任。
+SYSTEM_PERMISSIONS = frozenset({'organization.manage','users.manage','roles.manage','settings.manage','rules.manage',
+ 'sync.manage','audit.read','operations.read','notice.manage'})
+# 学校业务审核：学校级审批职责的承担人员用，只办业务、不碰系统管理和批量计算。
+SCHOOL_REVIEW = SCHOOL - SYSTEM_PERMISSIONS - {'points.calculate','points.adjust','assessment.calculate','assessment.archive','data.export'}
 
 def validate_permissions(kind, permissions):
     if kind not in ALLOWED or not isinstance(permissions,list) or not all(isinstance(x,str) for x in permissions):
