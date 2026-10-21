@@ -57,6 +57,7 @@ test('课程详情弹窗保留全部课程、原封面、完整超星字段和�
  for(const text of ['cx-course-workspace','cx-course-detail','265641882','2026-2027 学年第一学期','154','自建课','课程来源</dt><dd>自建','智能装备技术学院','使用中','皮杰（2084）','2026-08-05 09:35:53','2026-10-06 07:50:20','超星未填写学分，暂不计入授课学分。'])assert.ok(c.html.includes(text),text);
  assert.match(c.html,/<img src="https:\/\/p\.ananas\.chaoxing\.com\/mechanical\.png"/);
  assert.match(c.html,/data-course-index="0" aria-current="true"/);
+ assert.match(c.html,/data-course-index="0" aria-current="true" data-action="[a-z-]+" data-id="0"/,"整张课程卡片都能点击选择，不能只靠小字按钮");
  assert.doesNotMatch(c.html,/超星 score 字段/);
  assert.doesNotMatch(c.html,/实施人员使用|implementation-details|超星参考分值/);
  assert.match(c.foot,/cx-course-footer/);assert.match(c.foot,/返回教师信息/);

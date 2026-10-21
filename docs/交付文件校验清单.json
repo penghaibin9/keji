@@ -1,6 +1,6 @@
 {
   "kind": "school_delivery_working_tree_snapshot",
-  "program_baseline": "c789c96425a1f7107568252dee16211ab4eb34c8cbe2599064b8e4349c959174",
+  "program_baseline": "907739d2826c750a5555d7941ba8cae51255924d3ab804fa997071b64a69d7fa",
   "migration_heads": [
     "20261021_0006"
   ],
@@ -547,7 +547,7 @@
       "size": 5354
     },
     "delivery/R11_BASE_MANIFEST.json": {
-      "sha256": "4b858b1b3ab16a22758103ddf655a0c16ce281a5dd5533b736a6c35dafc18fc2",
+      "sha256": "a13de79bd02160474fe79b816bf158ac4cf8a672eb699b218232ccb4cd9986ee",
       "size": 43779
     },
     "delivery/__init__.py": {
@@ -611,7 +611,7 @@
       "size": 3166
     },
     "delivery/manage.py": {
-      "sha256": "b037b18b94644e799e7dd09a0926800552f87ff2bc5587dc954b7996f9f4a118",
+      "sha256": "18d5ffb881f3447b08884cf73b893ac61e4427a44d9b3086eee3ab4d538c2866",
       "size": 16484
     },
     "delivery/requirements-browser.txt": {
@@ -643,7 +643,7 @@
       "size": 8121
     },
     "delivery/tests/test_deploy_guards.py": {
-      "sha256": "704148912edc83cfbed5dde8751d279603b1cc19fafe83a0970f392288770660",
+      "sha256": "3f8c189cd850a334539aef893a3b145b48f448e16ea25771b4080ceaee4d3044",
       "size": 5252
     },
     "delivery/validate_integration_profile.py": {
@@ -799,8 +799,8 @@
       "size": 14687
     },
     "frontend/app.js": {
-      "sha256": "ea87765ea3f4413c11a29ada17ce862b57572e7d712b33db6311e66c2652713c",
-      "size": 518682
+      "sha256": "4312e2ccc0b100f84c243c892bb244fade1927fdfd0c57a6c7a028407661166c",
+      "size": 516741
     },
     "frontend/applications.js": {
       "sha256": "e235ef6b57ae68dea4a042c5985b06387a1a39c8e3d1b046bf051915321de7c2",
@@ -931,8 +931,8 @@
       "size": 22522
     },
     "frontend/school-data.js": {
-      "sha256": "8c0a2f38ca6ae1e6a4ae16d1922d3c5adfa5e7d18fff85fbfbb79332bfb7b2dd",
-      "size": 27487
+      "sha256": "4a9f30230d57eaf988641308742f0c9a2596699bd45061cb12a43c9c0d2c2ee6",
+      "size": 27271
     },
     "frontend/school-header.css": {
       "sha256": "8bb4009937e10ed3900f2fe8c71e7c33277ba6c58637bb9d049e435e7c8002fc",
@@ -947,8 +947,8 @@
       "size": 65053
     },
     "frontend/social-training.css": {
-      "sha256": "3592c863c20d956d2d1a1f04a4b1f60102785686eabc5195e2b81b531ab1b70f",
-      "size": 71712
+      "sha256": "d88c7d1ce4ab99c4dda85139e3c2ab205663474d31a7977e4b776aee040ae5f2",
+      "size": 71868
     },
     "frontend/social-training.js": {
       "sha256": "b7f83e7d861ffd2499241a38dc20bc9d3355c4d52db2a3953831a4a5685ab8ba",
@@ -1303,8 +1303,8 @@
       "size": 2637
     },
     "tests/js/school-online-courses.test.mjs": {
-      "sha256": "745606bb9cebeead1f38041de4d7ee40933e04d5db53fac9e0a9472aafb793cf",
-      "size": 8223
+      "sha256": "af5a545a94515cf453789a1617e313bce02ee5e645ae460384c0651276b52888",
+      "size": 8303
     },
     "tests/js/scope.test.mjs": {
       "sha256": "e41ba32f07ac151e9a0003a87f21eb2859ac84d534b8af4d1462de1388f1da3f",

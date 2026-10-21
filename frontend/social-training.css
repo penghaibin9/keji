@@ -660,6 +660,7 @@ body[data-role="teacher"] .apply-counts span:nth-child(3){background:#e9f9ef;col
 .cx-course-list>h3{font-size:20px;margin:0 0 14px}
 .cx-course-scroll{overflow:auto;min-height:0;padding:2px 5px 4px 2px;display:grid;align-content:start;gap:12px;overscroll-behavior:contain}
 .cx-course-workspace .online-card{position:relative;padding:12px;gap:16px;min-height:150px;flex-shrink:0;border-radius:10px}
+.cx-course-workspace .online-card[data-action]{cursor:pointer}.cx-course-workspace .online-card[data-action]:not(.selected):hover{border-color:var(--blue)}
 .cx-course-workspace .online-card.selected{border-color:var(--blue);box-shadow:inset 3px 0 var(--blue);background:#f3f7ff}
 .cx-course-workspace .online-card.archived{opacity:1}
 .cx-course-workspace .online-cover{width:160px;flex-basis:160px;aspect-ratio:4/3;align-self:center;border-radius:7px;background:#eef3fa}
