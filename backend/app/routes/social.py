@@ -55,9 +55,18 @@ def visible_projects(db,a):
 
 
 @router.get('/project-options')
-def project_options(request:Request,q:str=Query('',max_length=100),page:int=Query(1,ge=1),size:int=Query(25,ge=1,le=100),mine:bool=Query(False)):
+def project_options(request:Request,q:str=Query('',max_length=100),page:int=Query(1,ge=1),size:int=Query(25,ge=1,le=100),mine:bool=Query(False),course_application_id:str=Query('',max_length=36)):
     def load(db,a,s):
         query=visible_projects(db,a)
+        if course_application_id:
+            from .. import applications as apps
+            from ..course_points import can_link_course
+            application=db.get(SocialResource,course_application_id)
+            if not application or application.kind!='course_apply':raise HTTPException(404,'课程申请不存在')
+            apps.read_check(db,a,application)
+            if application.state!='ACTIVE' or not can_link_course(a,application):raise HTTPException(403,'当前身份不能关联这门课程')
+            query=query.where(SocialProject.org_id==application.org_id,SocialProject.state.in_(['DRAFT','RETURNED','FILED']))
+            if a.role.kind=='teacher':query=query.where(SocialProject.owner_id==a.id)
         if mine:query=query.where(SocialProject.id.in_(st.participated_project_ids(db,a.id) or {''}),SocialProject.state=='CLOSED')
         if q:query=query.where(or_(*[column.contains(q,autoescape=True) for column in (SocialProject.data['name'].as_string(),SocialProject.data['code'].as_string(),SocialProject.cohort)]))
         total=db.scalar(select(func.count()).select_from(query.order_by(None).subquery()))
@@ -137,9 +146,11 @@ def workspace(request:Request,section:str=Query('projects',pattern='^(projects|c
                 out['effective']=effective[p.id]
                 if (item.get('closeout') or {}).get('actual_income') is not None:out['actual_income']=item['closeout']['actual_income']
             return out
-        project_items=[{**(item:=st.project_read_item(a,p)),'metrics':metrics(p,item),'state_label':special_labels.get(p.id) or st.state_label(p),'report_issues':application_blockers(p.data),'video_minutes':round(minutes.get(p.data['code'],0))} for p in projects]
+        # 承办学院名称随授权项目返回：教师、教研室的组织列表不含学院，不能在页面上显示成“—”。
+        project_orgs=dict(db.execute(select(Org.id,Org.name).where(Org.id.in_({p.org_id for p in projects}))).all()) if projects else {}
+        project_items=[{**(item:=st.project_read_item(a,p)),'org_name':project_orgs.get(p.org_id,''),'metrics':metrics(p,item),'state_label':special_labels.get(p.id) or st.state_label(p),'report_issues':application_blockers(p.data),'video_minutes':round(minutes.get(p.data['code'],0))} for p in projects]
         claim_items=[st.claim_read_item(db,a,c) for c in claims]
-        return {'projects':project_items,'claims':claim_items,'annuals':[{**st.annual_read_item(a,row),'org_name':resource_orgs.get(row.org_id,'—')} for row in annuals],'resources':[{**st.resource_read_item(a,row),'state_label':st.state_label(row),'org_name':resource_orgs[row.org_id]} for row in resources],
+        return {'projects':project_items,'history_available':a.role.kind in ('school','college') and request.app.state.settings.school_reports_dir is not None,'claims':claim_items,'annuals':[{**st.annual_read_item(a,row),'org_name':resource_orgs.get(row.org_id,'—')} for row in annuals],'resources':[{**st.resource_read_item(a,row),'state_label':st.state_label(row),'org_name':resource_orgs[row.org_id]} for row in resources],
                 'policies':display(policies),'courses':serial(courses),'course_stats':serial(course_stats),'course_info':serial(course_info),'states':st.STATES,'decisions':st.DECISIONS,
                 'my_duties':[k for k,v in st.assignments(db).items() if a.id in v],
                 'pagination':{'page':page,'size':size,'total':totals.get(section,0),'q':q},'resource_pagination':{'page':resource_page,'size':size,'total':totals.get('resources',0)}}
@@ -413,7 +424,7 @@ def project_report_info(ident:str,data:ReportInfoIn,request:Request):
         a.require('records.write');check_version(obj,data.expected_version)
         if obj.state not in {'FILED','CLOSE_COLLEGE','CLOSE_REVIEW','CLOSED'}:raise HTTPException(409,'还没备案的项目请在申报里填写')
         before=serial(obj)
-        values={k:v for k,v in serial(data.model_dump()).items() if k in {'total_hours','audiences','audience_other','service_types','teaching_methods','base_count','video_minutes'}}
+        values={k:v for k,v in serial(data.model_dump()).items() if k in data.model_fields_set and k in {'total_hours','audiences','audience_other','service_types','teaching_methods','base_count','video_minutes'}}
         obj.data={**obj.data,**values,'report_info_by':a.id,'report_info_on':st.today().isoformat()}
         result=event(db,a,'social_project',obj,'补填上报信息',before,data.reason,data.basis)
         return result
@@ -524,7 +535,8 @@ def claim_create(data:ClaimIn,request:Request):
         period=require_open_period(db,data.period_id)
         if project.closeout.get('closed_on') and not period.start_date<=date_from(project.closeout['closed_on'])<=period.end_date:
             raise HTTPException(422,'项目结项日期不在所选周期内，请选择包含结项日期的周期')
-        if st.duplicate_claim(db,project.id,a.id):raise HTTPException(409,'同一项目已有本人审批中或已归档的积分申报，请使用原申报或追加更正；不能换周期重复认定')
+        if db.scalar(select(SocialClaim.id).where(SocialClaim.project_id==project.id,SocialClaim.teacher_id==a.id,SocialClaim.state!='VOID').limit(1)):
+            raise HTTPException(409,'同一项目已有本人积分申请，请继续原草稿、补正原申请或查看认定；不能按课程或换周期重复申报')
         obj=SocialClaim(project_id=project.id,teacher_id=a.id,period_id=data.period_id,policy_id=policy.id,data={'auxiliary':serial([v.model_dump() for v in data.auxiliary]),'recognition_form_reference':data.recognition_form_reference})
         db.add(obj);db.flush();return event(db,a,'social_claim',obj,'建立本人积分申报',{},data.reason)
     return command(request,data.model_dump(),'points.read',apply)
@@ -668,13 +680,39 @@ def course_create(data:CourseIn,request:Request):
     return command(request,data.model_dump(mode='json'),'records.write',apply)
 
 
+@router.get('/projects/{ident}/course-options')
+def project_course_options(ident:str,request:Request,q:str=Query('',max_length=100),
+                           page:int=Query(1,ge=1),size:int=Query(20,ge=1,le=100)):
+    def read(db,a,s):
+        project=st.scoped(db,a,'social_project',ident,write=True)
+        if project.state not in ('DRAFT','RETURNED','FILED'):
+            raise HTTPException(409,'当前项目状态不能关联课程')
+        approved=select(SocialResource.id).where(
+            SocialResource.kind=='course_apply',SocialResource.org_id==project.org_id,
+            SocialResource.state=='ACTIVE',SocialResource.data['application'].as_boolean()==True,
+            SocialResource.data['course_code'].as_string()==TrainingCourseMaster.code)
+        if a.role.kind=='teacher':
+            approved=approved.where(SocialResource.data['teacher_id'].as_string()==a.id)
+        elif a.role.kind not in ('college','school') or 'records.write' not in a.permissions:
+            raise HTTPException(403,'当前身份不能关联课程')
+        query=select(TrainingCourseMaster).where(TrainingCourseMaster.active==True,
+            or_(TrainingCourseMaster.project_code=='',TrainingCourseMaster.project_code.is_(None)),approved.exists())
+        if q.strip():
+            query=query.where(or_(TrainingCourseMaster.name.contains(q.strip(),autoescape=True),
+                                  TrainingCourseMaster.code.contains(q.strip(),autoescape=True)))
+        total=db.scalar(select(func.count()).select_from(query.subquery()))
+        rows=db.scalars(query.order_by(TrainingCourseMaster.name,TrainingCourseMaster.code).offset((page-1)*size).limit(size)).all()
+        return {'items':[{'code':r.code,'name':r.name} for r in rows],'total':total,'page':page,'size':size,'q':q.strip()}
+    return read_operation(request,'records.read',read)
+
+
 @router.post('/projects/{ident}/courses/link')
 def project_course_link(ident:str,data:CourseLinkIn,request:Request):
     def apply(db,a,s):
-        school_registrar(a)
+        from ..course_points import can_link_course
         project=st.scoped(db,a,'social_project',ident,write=True)
         check_version(project,data.expected_version)
-        if project.state!='FILED':raise HTTPException(409,'仅已备案项目可关联课程')
+        if project.state not in ('DRAFT','RETURNED','FILED'):raise HTTPException(409,'只有草稿、退回补正或已备案项目可关联课程；审核中和结项后不能改挂')
         course=db.scalar(select(TrainingCourseMaster).where(TrainingCourseMaster.code==data.course_code).with_for_update())
         if not course or not course.active:raise HTTPException(409,'课程未入库或已停用，请核对课程编号')
         if course.project_code:raise HTTPException(409,'课程已有项目归属，不能重复关联或改挂其他项目')
@@ -683,11 +721,12 @@ def project_course_link(ident:str,data:CourseLinkIn,request:Request):
             SocialResource.data['course_code'].as_string()==course.code))
         if not approved or not approved.data.get('application'):
             raise HTTPException(403,'仅可关联承办学院已审批入库的课程')
+        if not can_link_course(a,approved):raise HTTPException(403,'只能由课程申报人关联本人负责的项目，或由本学院、学校有登记权限的人员办理')
         before=serial(course);project_before=serial(project)
         course.project_code=project.data['code'];course.version+=1;db.flush()
         audit(db,a,'social_courses',course.id,'关联已入库课程',before,serial(course),data.reason)
         return event(db,a,'social_project',project,'关联已入库课程：'+course.name,project_before,data.reason,data.basis)
-    return command(request,data.model_dump(),'records.write',apply)
+    return command(request,data.model_dump(),'records.read',apply)
 
 
 @router.post('/courses/import/{operation}')

@@ -171,6 +171,44 @@ def identity_choices(db,a,request):
     return items
 
 
+def _role_todo_count(db, actor):
+    from .business import _todo_items, system_reminders
+    if 'portal.read' not in actor.permissions:
+        return 0
+    items = _todo_items(db, actor)
+    if actor.role.kind == 'teacher':
+        # 教师清单已按本人取数，包含本人项目和资质有效期核对。
+        return sum(x.get('action_required', True) for x in items)
+    items = [x for x in items if not x.get('target_id') or x['target_id'] in actor.org_ids]
+    from ..approval_center import pending
+    items = pending(db, actor, items) + system_reminders(actor, items)
+    return len({(x['type'], x['id']) for x in items
+                if x.get('action_required', True) and x['state'] != 'EXPIRING'})
+
+
+@router.get('/role-summary')
+def role_summary(request: Request):
+    """Only counts for identities already available to this authenticated session."""
+    def load(db, actor, session):
+        from ..identities import options, identity_actor
+        demo = demo_options(actor, request.app.state.settings)
+        identities = [] if getattr(actor, 'demo_controller', None) and actor.demo_controller.id != actor.id else options(db, actor)
+        current = _role_todo_count(db, actor)
+        for item in (demo['options'] if demo else []):
+            try:
+                target = target_actor(db, actor.demo_controller, item['username'], request)
+                item['todo_count'] = current if target.id == actor.id else _role_todo_count(db, target)
+            except HTTPException:
+                item.update(todo_count=None, unavailable=True)
+        for item in identities:
+            try:
+                item['todo_count'] = current if item['current'] else _role_todo_count(db, identity_actor(db, actor.user, item['id'], request))
+            except HTTPException:
+                item.update(todo_count=None, unavailable=True)
+        return {'demo_switch': demo, 'identities': identities, 'current_todo_count': current}
+    return read_operation(request, 'portal.read', load)
+
+
 class IdentitySwitch(Input):
     identity_id: str = Field(default='',max_length=64)
 

@@ -344,3 +344,20 @@ class RuntimeState(Base):
     key: Mapped[str] = mapped_column(String(80), primary_key=True)
     value: Mapped[dict] = mapped_column(JSON)
     updated_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow)
+
+
+class FormDraft(Entity, Base):
+    """Personal unfinished input, never a business record or an approval."""
+    __tablename__ = "form_drafts"
+    user_id: Mapped[str] = mapped_column(ForeignKey("users.id"))
+    role_id: Mapped[str] = mapped_column(ForeignKey("roles.id"))
+    org_id: Mapped[str] = mapped_column(ForeignKey("organizations.id"))
+    kind: Mapped[str] = mapped_column(String(32))
+    context_key: Mapped[str] = mapped_column(String(160))
+    title: Mapped[str] = mapped_column(String(200))
+    payload: Mapped[dict] = mapped_column(JSON)
+    source_version: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    state: Mapped[str] = mapped_column(String(16), default="ACTIVE")
+    version: Mapped[int] = mapped_column(Integer, default=1)
+    updated_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow)
+    __table_args__ = (UniqueConstraint("user_id","role_id","org_id","kind","context_key",name="uq_form_draft_scope"),)

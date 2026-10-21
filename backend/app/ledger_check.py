@@ -146,7 +146,7 @@ def parse(data: bytes, filename: str) -> dict:
         if '资料要求' in first: break
         if first in ('总结', '合计', '总计') or (not _text(cell(row, 'name')) and not _text(cell(row, 'people')) and _text(cell(row, 'claimed'))):
             value, _ = _number(cell(row, 'claimed'))
-            if value: sheet_total = value
+            if value is not None: sheet_total = value
             if first in ('总结', '合计', '总计'): break
             continue
         name, people_raw = _text(cell(row, 'name')), _text(cell(row, 'people'))
@@ -162,7 +162,7 @@ def parse(data: bytes, filename: str) -> dict:
         if claimed is None: claimed = _formula_value(cell(row, 'claimed', True), people, hours, coeff)
         materials = _text(cell(row, 'materials'))
         if 'DISPIMG' in materials.upper(): materials = '（表格里嵌入了图片）'
-        items.append({'row_no': offset, 'name': name or (last_name + '（续行）'), 'people_raw': people_raw,
+        items.append({'row_no': offset, 'source_sequence': _text(cell(row, 'seq')), 'name': name or (last_name + '（续行）'), 'people_raw': people_raw,
                       'people': people, 'hours': hours, 'coeff': coeff, 'claimed': claimed, 'claimed_raw': claimed_raw,
                       'allocation': _text(cell(row, 'alloc')), 'materials': materials, 'remark': _text(cell(row, 'remark'))})
         last_name = name or last_name

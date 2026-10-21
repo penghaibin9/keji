@@ -46,6 +46,7 @@ def test_baseline_upgrade_preserves_existing_data_and_checks_full_schema(tmp_pat
         assert len([t for t in inspect(conn).get_table_names() if t.startswith('social_')])==6
     snapshot=take_snapshot(engine,require_mysql=False)
     assert validate_snapshot(snapshot)==snapshot
-    assert len(snapshot['tables'])==55
+    assert len(snapshot['tables'])==56
+    assert snapshot['tables']['form_drafts']['rows']==0
     assert snapshot['tables']['settings']['rows']==(2 if legacy_dictionary else 1)
     engine.dispose()

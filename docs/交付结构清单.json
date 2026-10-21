@@ -1,12 +1,12 @@
 {
   "migration_heads": [
-    "20261012_0004"
+    "20261021_0006"
   ],
-  "table_count": 54,
-  "column_count": 535,
-  "api_route_count": 228,
+  "table_count": 55,
+  "column_count": 548,
+  "api_route_count": 282,
   "static_route_status": "PASS",
-  "business_api_route_count": 227,
+  "business_api_route_count": 281,
   "health_api_route_count": 1,
   "schema_source": "isolated_sqlite_migrations_not_school_database",
   "fields": [
@@ -1053,6 +1053,162 @@
       "default": "",
       "sensitive": false,
       "meaning": "创建时间（UTC，服务端生成）"
+    },
+    {
+      "table": "form_drafts",
+      "table_label": "个人未完成填写暂存",
+      "column": "id",
+      "type": "VARCHAR(36)",
+      "nullable": false,
+      "primary_key": true,
+      "foreign_key": "",
+      "default": "",
+      "sensitive": false,
+      "meaning": "主键"
+    },
+    {
+      "table": "form_drafts",
+      "table_label": "个人未完成填写暂存",
+      "column": "created_at",
+      "type": "DATETIME",
+      "nullable": false,
+      "primary_key": false,
+      "foreign_key": "",
+      "default": "",
+      "sensitive": false,
+      "meaning": "创建时间"
+    },
+    {
+      "table": "form_drafts",
+      "table_label": "个人未完成填写暂存",
+      "column": "user_id",
+      "type": "VARCHAR(36)",
+      "nullable": false,
+      "primary_key": false,
+      "foreign_key": "users.id",
+      "default": "",
+      "sensitive": false,
+      "meaning": "暂存所属用户"
+    },
+    {
+      "table": "form_drafts",
+      "table_label": "个人未完成填写暂存",
+      "column": "role_id",
+      "type": "VARCHAR(36)",
+      "nullable": false,
+      "primary_key": false,
+      "foreign_key": "roles.id",
+      "default": "",
+      "sensitive": false,
+      "meaning": "暂存所属身份"
+    },
+    {
+      "table": "form_drafts",
+      "table_label": "个人未完成填写暂存",
+      "column": "org_id",
+      "type": "VARCHAR(36)",
+      "nullable": false,
+      "primary_key": false,
+      "foreign_key": "organizations.id",
+      "default": "",
+      "sensitive": false,
+      "meaning": "暂存所属组织"
+    },
+    {
+      "table": "form_drafts",
+      "table_label": "个人未完成填写暂存",
+      "column": "kind",
+      "type": "VARCHAR(32)",
+      "nullable": false,
+      "primary_key": false,
+      "foreign_key": "",
+      "default": "",
+      "sensitive": false,
+      "meaning": "允许暂存的业务类型"
+    },
+    {
+      "table": "form_drafts",
+      "table_label": "个人未完成填写暂存",
+      "column": "context_key",
+      "type": "VARCHAR(160)",
+      "nullable": false,
+      "primary_key": false,
+      "foreign_key": "",
+      "default": "",
+      "sensitive": false,
+      "meaning": "新建填写或原业务的隔离标识"
+    },
+    {
+      "table": "form_drafts",
+      "table_label": "个人未完成填写暂存",
+      "column": "title",
+      "type": "VARCHAR(200)",
+      "nullable": false,
+      "primary_key": false,
+      "foreign_key": "",
+      "default": "",
+      "sensitive": false,
+      "meaning": "本人辨认暂存的标题"
+    },
+    {
+      "table": "form_drafts",
+      "table_label": "个人未完成填写暂存",
+      "column": "payload",
+      "type": "JSON",
+      "nullable": false,
+      "primary_key": false,
+      "foreign_key": "",
+      "default": "",
+      "sensitive": false,
+      "meaning": "白名单表单内容及附件名称；不保存附件文件"
+    },
+    {
+      "table": "form_drafts",
+      "table_label": "个人未完成填写暂存",
+      "column": "source_version",
+      "type": "INTEGER",
+      "nullable": true,
+      "primary_key": false,
+      "foreign_key": "",
+      "default": "",
+      "sensitive": false,
+      "meaning": "原业务版本，用于恢复前检查变更"
+    },
+    {
+      "table": "form_drafts",
+      "table_label": "个人未完成填写暂存",
+      "column": "state",
+      "type": "VARCHAR(16)",
+      "nullable": false,
+      "primary_key": false,
+      "foreign_key": "",
+      "default": "",
+      "sensitive": false,
+      "meaning": "有效、已完成或已放弃"
+    },
+    {
+      "table": "form_drafts",
+      "table_label": "个人未完成填写暂存",
+      "column": "version",
+      "type": "INTEGER",
+      "nullable": false,
+      "primary_key": false,
+      "foreign_key": "",
+      "default": "",
+      "sensitive": false,
+      "meaning": "并发校验版本"
+    },
+    {
+      "table": "form_drafts",
+      "table_label": "个人未完成填写暂存",
+      "column": "updated_at",
+      "type": "DATETIME",
+      "nullable": false,
+      "primary_key": false,
+      "foreign_key": "",
+      "default": "",
+      "sensitive": false,
+      "meaning": "最后暂存时间"
     },
     {
       "table": "import_jobs",
@@ -6445,6 +6601,72 @@
     },
     {
       "file": "backend\\app\\routes\\admin.py",
+      "function": "head_candidates",
+      "method": "GET",
+      "path": "/api/organizations/{ident}/head-candidates",
+      "public": false,
+      "auth_primitives": [
+        "read_operation"
+      ],
+      "protected": true
+    },
+    {
+      "file": "backend\\app\\routes\\admin.py",
+      "function": "add_org_head",
+      "method": "POST",
+      "path": "/api/organizations/{ident}/heads",
+      "public": false,
+      "auth_primitives": [
+        "command"
+      ],
+      "protected": true
+    },
+    {
+      "file": "backend\\app\\routes\\admin.py",
+      "function": "remove_org_head",
+      "method": "POST",
+      "path": "/api/organizations/{ident}/heads/remove",
+      "public": false,
+      "auth_primitives": [
+        "command"
+      ],
+      "protected": true
+    },
+    {
+      "file": "backend\\app\\routes\\admin.py",
+      "function": "credit_reviewer_candidates",
+      "method": "GET",
+      "path": "/api/credit-reviewers/candidates",
+      "public": false,
+      "auth_primitives": [
+        "read_operation"
+      ],
+      "protected": true
+    },
+    {
+      "file": "backend\\app\\routes\\admin.py",
+      "function": "add_credit_reviewer",
+      "method": "POST",
+      "path": "/api/credit-reviewers",
+      "public": false,
+      "auth_primitives": [
+        "command"
+      ],
+      "protected": true
+    },
+    {
+      "file": "backend\\app\\routes\\admin.py",
+      "function": "remove_credit_reviewer",
+      "method": "POST",
+      "path": "/api/credit-reviewers/remove",
+      "public": false,
+      "auth_primitives": [
+        "command"
+      ],
+      "protected": true
+    },
+    {
+      "file": "backend\\app\\routes\\admin.py",
       "function": "create_org",
       "method": "POST",
       "path": "/api/organizations",
@@ -6525,6 +6747,17 @@
       "function": "reset_user",
       "method": "POST",
       "path": "/api/users/{ident}/reset-password",
+      "public": false,
+      "auth_primitives": [
+        "command"
+      ],
+      "protected": true
+    },
+    {
+      "file": "backend\\app\\routes\\admin.py",
+      "function": "unlock_user",
+      "method": "POST",
+      "path": "/api/users/{ident}/unlock",
       "public": false,
       "auth_primitives": [
         "command"
@@ -6730,6 +6963,193 @@
       "protected": true
     },
     {
+      "file": "backend\\app\\routes\\applications.py",
+      "function": "mine",
+      "method": "GET",
+      "path": "/api/applications/mine",
+      "public": false,
+      "auth_primitives": [
+        "read_operation"
+      ],
+      "protected": true
+    },
+    {
+      "file": "backend\\app\\routes\\applications.py",
+      "function": "teaching_courses",
+      "method": "GET",
+      "path": "/api/applications/teaching-courses",
+      "public": false,
+      "auth_primitives": [
+        "read_operation"
+      ],
+      "protected": true
+    },
+    {
+      "file": "backend\\app\\routes\\applications.py",
+      "function": "online_library",
+      "method": "GET",
+      "path": "/api/applications/online-library",
+      "public": false,
+      "auth_primitives": [
+        "read_operation"
+      ],
+      "protected": true
+    },
+    {
+      "file": "backend\\app\\routes\\applications.py",
+      "function": "deadlines",
+      "method": "GET",
+      "path": "/api/applications/deadlines",
+      "public": false,
+      "auth_primitives": [
+        "read_operation"
+      ],
+      "protected": true
+    },
+    {
+      "file": "backend\\app\\routes\\applications.py",
+      "function": "deadline_set",
+      "method": "PUT",
+      "path": "/api/applications/deadlines",
+      "public": false,
+      "auth_primitives": [
+        "command"
+      ],
+      "protected": true
+    },
+    {
+      "file": "backend\\app\\routes\\applications.py",
+      "function": "deadline_reopen",
+      "method": "PUT",
+      "path": "/api/applications/deadlines/reopen",
+      "public": false,
+      "auth_primitives": [
+        "command"
+      ],
+      "protected": true
+    },
+    {
+      "file": "backend\\app\\routes\\applications.py",
+      "function": "trainer_list",
+      "method": "GET",
+      "path": "/api/applications/trainers",
+      "public": false,
+      "auth_primitives": [
+        "read_operation"
+      ],
+      "protected": true
+    },
+    {
+      "file": "backend\\app\\routes\\applications.py",
+      "function": "get_one",
+      "method": "GET",
+      "path": "/api/applications/{ident}",
+      "public": false,
+      "auth_primitives": [
+        "read_operation"
+      ],
+      "protected": true
+    },
+    {
+      "file": "backend\\app\\routes\\applications.py",
+      "function": "course_points",
+      "method": "GET",
+      "path": "/api/applications/{ident}/course-points",
+      "public": false,
+      "auth_primitives": [
+        "read_operation"
+      ],
+      "protected": true
+    },
+    {
+      "file": "backend\\app\\routes\\applications.py",
+      "function": "course_create",
+      "method": "POST",
+      "path": "/api/applications/courses",
+      "public": false,
+      "auth_primitives": [
+        "command"
+      ],
+      "protected": true
+    },
+    {
+      "file": "backend\\app\\routes\\applications.py",
+      "function": "course_edit",
+      "method": "PUT",
+      "path": "/api/applications/courses/{ident}",
+      "public": false,
+      "auth_primitives": [
+        "command"
+      ],
+      "protected": true
+    },
+    {
+      "file": "backend\\app\\routes\\applications.py",
+      "function": "trainer_create",
+      "method": "POST",
+      "path": "/api/applications/trainers",
+      "public": false,
+      "auth_primitives": [
+        "command"
+      ],
+      "protected": true
+    },
+    {
+      "file": "backend\\app\\routes\\applications.py",
+      "function": "trainer_edit",
+      "method": "PUT",
+      "path": "/api/applications/trainers/{ident}",
+      "public": false,
+      "auth_primitives": [
+        "command"
+      ],
+      "protected": true
+    },
+    {
+      "file": "backend\\app\\routes\\applications.py",
+      "function": "trainer_recommend",
+      "method": "POST",
+      "path": "/api/applications/trainers/{ident}/recommend",
+      "public": false,
+      "auth_primitives": [
+        "command"
+      ],
+      "protected": true
+    },
+    {
+      "file": "backend\\app\\routes\\applications.py",
+      "function": "base_create",
+      "method": "POST",
+      "path": "/api/applications/bases",
+      "public": false,
+      "auth_primitives": [
+        "command"
+      ],
+      "protected": true
+    },
+    {
+      "file": "backend\\app\\routes\\applications.py",
+      "function": "base_edit",
+      "method": "PUT",
+      "path": "/api/applications/bases/{ident}",
+      "public": false,
+      "auth_primitives": [
+        "command"
+      ],
+      "protected": true
+    },
+    {
+      "file": "backend\\app\\routes\\applications.py",
+      "function": "action",
+      "method": "POST",
+      "path": "/api/applications/{ident}/actions",
+      "public": false,
+      "auth_primitives": [
+        "command"
+      ],
+      "protected": true
+    },
+    {
       "file": "backend\\app\\routes\\auth.py",
       "function": "login",
       "method": "POST",
@@ -6776,6 +7196,28 @@
       "function": "switch_demo_identity",
       "method": "POST",
       "path": "/api/auth/demo-switch",
+      "public": false,
+      "auth_primitives": [
+        "command"
+      ],
+      "protected": true
+    },
+    {
+      "file": "backend\\app\\routes\\auth.py",
+      "function": "role_summary",
+      "method": "GET",
+      "path": "/api/auth/role-summary",
+      "public": false,
+      "auth_primitives": [
+        "read_operation"
+      ],
+      "protected": true
+    },
+    {
+      "file": "backend\\app\\routes\\auth.py",
+      "function": "switch_identity",
+      "method": "POST",
+      "path": "/api/auth/identity",
       "public": false,
       "auth_primitives": [
         "command"
@@ -6963,6 +7405,17 @@
       "function": "todos",
       "method": "GET",
       "path": "/api/todos",
+      "public": false,
+      "auth_primitives": [
+        "read_operation"
+      ],
+      "protected": true
+    },
+    {
+      "file": "backend\\app\\routes\\business.py",
+      "function": "approval_center",
+      "method": "GET",
+      "path": "/api/approval-center",
       "public": false,
       "auth_primitives": [
         "read_operation"
@@ -7399,6 +7852,17 @@
       "protected": true
     },
     {
+      "file": "backend\\app\\routes\\delivery.py",
+      "function": "permission_list_xlsx",
+      "method": "GET",
+      "path": "/api/delivery/permission-list.xlsx",
+      "public": false,
+      "auth_primitives": [
+        "current_actor"
+      ],
+      "protected": true
+    },
+    {
       "file": "backend\\app\\routes\\files.py",
       "function": "attachment_list",
       "method": "GET",
@@ -7444,6 +7908,50 @@
       "protected": true
     },
     {
+      "file": "backend\\app\\routes\\form_drafts.py",
+      "function": "list_drafts",
+      "method": "GET",
+      "path": "/api/form-drafts",
+      "public": false,
+      "auth_primitives": [
+        "read_operation"
+      ],
+      "protected": true
+    },
+    {
+      "file": "backend\\app\\routes\\form_drafts.py",
+      "function": "get_draft",
+      "method": "GET",
+      "path": "/api/form-drafts/{kind}",
+      "public": false,
+      "auth_primitives": [
+        "read_operation"
+      ],
+      "protected": true
+    },
+    {
+      "file": "backend\\app\\routes\\form_drafts.py",
+      "function": "save_draft",
+      "method": "PUT",
+      "path": "/api/form-drafts/{kind}",
+      "public": false,
+      "auth_primitives": [
+        "command"
+      ],
+      "protected": true
+    },
+    {
+      "file": "backend\\app\\routes\\form_drafts.py",
+      "function": "finish_draft",
+      "method": "POST",
+      "path": "/api/form-drafts/{kind}/finish",
+      "public": false,
+      "auth_primitives": [
+        "command"
+      ],
+      "protected": true
+    },
+    {
       "file": "backend\\app\\routes\\integration_center.py",
       "function": "implementation",
       "method": "GET",
@@ -7470,6 +7978,17 @@
       "function": "save_draft",
       "method": "PUT",
       "path": "/api/connections/{ident}/draft",
+      "public": false,
+      "auth_primitives": [
+        "command"
+      ],
+      "protected": true
+    },
+    {
+      "file": "backend\\app\\routes\\integration_center.py",
+      "function": "prepare_draft",
+      "method": "POST",
+      "path": "/api/connections/{ident}/draft/prepare",
       "public": false,
       "auth_primitives": [
         "command"
@@ -7930,6 +8449,17 @@
     },
     {
       "file": "backend\\app\\routes\\ledgers.py",
+      "function": "school_cockpit",
+      "method": "GET",
+      "path": "/api/social/cockpit",
+      "public": false,
+      "auth_primitives": [
+        "read_operation"
+      ],
+      "protected": true
+    },
+    {
+      "file": "backend\\app\\routes\\ledgers.py",
       "function": "ledger_preview",
       "method": "POST",
       "path": "/api/social/ledgers/preview",
@@ -7958,6 +8488,39 @@
       "public": false,
       "auth_primitives": [
         "read_operation"
+      ],
+      "protected": true
+    },
+    {
+      "file": "backend\\app\\routes\\ledgers.py",
+      "function": "history_project_list",
+      "method": "GET",
+      "path": "/api/social/history-projects",
+      "public": false,
+      "auth_primitives": [
+        "read_operation"
+      ],
+      "protected": true
+    },
+    {
+      "file": "backend\\app\\routes\\ledgers.py",
+      "function": "history_project_detail",
+      "method": "GET",
+      "path": "/api/social/history-projects/{ident}/{row_no}",
+      "public": false,
+      "auth_primitives": [
+        "read_operation"
+      ],
+      "protected": true
+    },
+    {
+      "file": "backend\\app\\routes\\ledgers.py",
+      "function": "history_project_facts",
+      "method": "PUT",
+      "path": "/api/social/history-projects/{ident}/{row_no}/facts",
+      "public": false,
+      "auth_primitives": [
+        "command"
       ],
       "protected": true
     },
@@ -8271,6 +8834,61 @@
     },
     {
       "file": "backend\\app\\routes\\reference.py",
+      "function": "cx_unmatched_xlsx",
+      "method": "GET",
+      "path": "/api/reference/cx-unmatched.xlsx",
+      "public": false,
+      "auth_primitives": [
+        "current_actor"
+      ],
+      "protected": true
+    },
+    {
+      "file": "backend\\app\\routes\\reference.py",
+      "function": "cx_claims_mine",
+      "method": "GET",
+      "path": "/api/reference/cx-claims/mine",
+      "public": false,
+      "auth_primitives": [
+        "read_operation"
+      ],
+      "protected": true
+    },
+    {
+      "file": "backend\\app\\routes\\reference.py",
+      "function": "cx_claim_submit",
+      "method": "POST",
+      "path": "/api/reference/cx-claims",
+      "public": false,
+      "auth_primitives": [
+        "command"
+      ],
+      "protected": true
+    },
+    {
+      "file": "backend\\app\\routes\\reference.py",
+      "function": "cx_claims_list",
+      "method": "GET",
+      "path": "/api/reference/cx-claims",
+      "public": false,
+      "auth_primitives": [
+        "read_operation"
+      ],
+      "protected": true
+    },
+    {
+      "file": "backend\\app\\routes\\reference.py",
+      "function": "cx_claim_decide",
+      "method": "POST",
+      "path": "/api/reference/cx-claims/decide",
+      "public": false,
+      "auth_primitives": [
+        "command"
+      ],
+      "protected": true
+    },
+    {
+      "file": "backend\\app\\routes\\reference.py",
       "function": "school_courses",
       "method": "GET",
       "path": "/api/reference/school-courses",
@@ -8296,6 +8914,17 @@
       "function": "teacher_credit_review",
       "method": "POST",
       "path": "/api/reference/teacher-credits/review",
+      "public": false,
+      "auth_primitives": [
+        "command"
+      ],
+      "protected": true
+    },
+    {
+      "file": "backend\\app\\routes\\reference.py",
+      "function": "teacher_credit_level",
+      "method": "POST",
+      "path": "/api/reference/teacher-credits/level",
       "public": false,
       "auth_primitives": [
         "command"
@@ -8381,6 +9010,17 @@
     },
     {
       "file": "backend\\app\\routes\\social.py",
+      "function": "duty_options",
+      "method": "GET",
+      "path": "/api/social/duty-options",
+      "public": false,
+      "auth_primitives": [
+        "read_operation"
+      ],
+      "protected": true
+    },
+    {
+      "file": "backend\\app\\routes\\social.py",
       "function": "set_duties",
       "method": "PUT",
       "path": "/api/social/duties",
@@ -8436,6 +9076,28 @@
     },
     {
       "file": "backend\\app\\routes\\social.py",
+      "function": "project_prep",
+      "method": "PUT",
+      "path": "/api/social/projects/{ident}/prep",
+      "public": false,
+      "auth_primitives": [
+        "command"
+      ],
+      "protected": true
+    },
+    {
+      "file": "backend\\app\\routes\\social.py",
+      "function": "project_report_info",
+      "method": "PUT",
+      "path": "/api/social/projects/{ident}/report-info",
+      "public": false,
+      "auth_primitives": [
+        "command"
+      ],
+      "protected": true
+    },
+    {
+      "file": "backend\\app\\routes\\social.py",
       "function": "policy_create",
       "method": "POST",
       "path": "/api/social/policies",
@@ -8450,6 +9112,17 @@
       "function": "policy_recommended",
       "method": "POST",
       "path": "/api/social/policies/recommended",
+      "public": false,
+      "auth_primitives": [
+        "command"
+      ],
+      "protected": true
+    },
+    {
+      "file": "backend\\app\\routes\\social.py",
+      "function": "policy_edit",
+      "method": "PUT",
+      "path": "/api/social/policies/{ident}",
       "public": false,
       "auth_primitives": [
         "command"
@@ -8527,6 +9200,28 @@
       "function": "course_create",
       "method": "POST",
       "path": "/api/social/courses",
+      "public": false,
+      "auth_primitives": [
+        "command"
+      ],
+      "protected": true
+    },
+    {
+      "file": "backend\\app\\routes\\social.py",
+      "function": "project_course_options",
+      "method": "GET",
+      "path": "/api/social/projects/{ident}/course-options",
+      "public": false,
+      "auth_primitives": [
+        "read_operation"
+      ],
+      "protected": true
+    },
+    {
+      "file": "backend\\app\\routes\\social.py",
+      "function": "project_course_link",
+      "method": "POST",
+      "path": "/api/social/projects/{ident}/courses/link",
       "public": false,
       "auth_primitives": [
         "command"
@@ -8678,6 +9373,28 @@
     },
     {
       "file": "backend\\app\\routes\\social.py",
+      "function": "report_check",
+      "method": "GET",
+      "path": "/api/social/report-export/check",
+      "public": false,
+      "auth_primitives": [
+        "read_operation"
+      ],
+      "protected": true
+    },
+    {
+      "file": "backend\\app\\routes\\social.py",
+      "function": "report_export",
+      "method": "GET",
+      "path": "/api/social/report-export",
+      "public": false,
+      "auth_primitives": [
+        "read_operation"
+      ],
+      "protected": true
+    },
+    {
+      "file": "backend\\app\\routes\\social.py",
       "function": "ledger_summary",
       "method": "GET",
       "path": "/api/social/ledger-summary",
@@ -8706,6 +9423,40 @@
       "public": false,
       "auth_primitives": [
         "read_operation"
+      ],
+      "protected": true
+    },
+    {
+      "file": "backend\\app\\routes\\social_images.py",
+      "function": "upload_image",
+      "method": "POST",
+      "path": "/api/social/images/{target}/{ident}",
+      "public": false,
+      "auth_primitives": [
+        "command",
+        "current_actor"
+      ],
+      "protected": true
+    },
+    {
+      "file": "backend\\app\\routes\\social_images.py",
+      "function": "remove_image",
+      "method": "POST",
+      "path": "/api/social/images/{target}/{ident}/remove",
+      "public": false,
+      "auth_primitives": [
+        "command"
+      ],
+      "protected": true
+    },
+    {
+      "file": "backend\\app\\routes\\social_images.py",
+      "function": "show_image",
+      "method": "GET",
+      "path": "/api/social/images/{image_id}",
+      "public": false,
+      "auth_primitives": [
+        "current_actor"
       ],
       "protected": true
     },
@@ -8925,7 +9676,7 @@
     {
       "method": "GET",
       "path": "/api/health",
-      "file": "backend\\app\\main.py",
+      "file": "backend/app/main.py",
       "function": "health",
       "auth_primitives": [],
       "public": true,
@@ -8933,21 +9684,24 @@
     }
   ],
   "source_sha256": {
-    "backend\\app\\main.py": "671a4de1e92a1d86b50a6e33d796cdbebfe9e1289d9513970d5541232ccd1a2c",
-    "backend\\app\\routes\\admin.py": "f68b7dcb8044da6d04449441f88e42b8344beff2b988eac684ab6118e58adc06",
-    "backend\\app\\routes\\auth.py": "56e78f18f898581342882c9768daa52e526a3ba3ceca958be740d8056d22304b",
-    "backend\\app\\routes\\business.py": "a03dfa54f176452eef09779d5bbb269dbc04de1a3f59bce3c0883692ccf6aef8",
-    "backend\\app\\routes\\calculations.py": "02084076c9a3ef0a9ec2c36cd65788deb841d75852587abc7b02a48fb134c4ad",
-    "backend\\app\\routes\\delivery.py": "2c3d0cdcef2c954a01c11f6cf4314fa5057cfff9ecd407c6389ab806ea5de45a",
+    "backend/app/main.py": "0107e4bf076cbf660712968144b2f2ab1c60992045b1ac92b0442008a4b279d9",
+    "backend\\app\\routes\\admin.py": "db111939309f33273397113159a2a2d38f01d42d99e7b006175bf6f4bd9e965d",
+    "backend\\app\\routes\\applications.py": "d6d20e4a8c66612138dfbd7ff2f01e0e8886c8244507833eb4e9f515b28b131f",
+    "backend\\app\\routes\\auth.py": "da39c5497a51b955d98a83aa55305b05c296d64c41302afae1884148627f2754",
+    "backend\\app\\routes\\business.py": "59bf60566ef9b1877b1f04e6d7d7b4be11dd50e87273ba2d3d278baca29e8784",
+    "backend\\app\\routes\\calculations.py": "42b2b48d5b1b235aa6eb6114b556240553c407acfd19dff32dbdcfed9e7c0309",
+    "backend\\app\\routes\\delivery.py": "bf06721aa1aa94f8b042b445d9774f908231363300a21c055a298838caa644f3",
     "backend\\app\\routes\\files.py": "044ee90afacb047ac1223d5df8f44c06011e083b4324aadf2d31d2c6b122c743",
-    "backend\\app\\routes\\integration_center.py": "60e713dac010f35f1d09bece48611495b97a7d0bb0e6c8fd600c91e4cafd6a76",
+    "backend\\app\\routes\\form_drafts.py": "c1177be921802c928600dd3f9c6a556945de1cf05ef79b316d2c23f1f745316b",
+    "backend\\app\\routes\\integration_center.py": "66f93fa1b3168c310db7d3e71d3945504b18031f1c18d768c68f865d1f682c19",
     "backend\\app\\routes\\integration_intake.py": "6c6842a5c9aa6e0e61eb305052c3ee985fec0fd6af7a9f74592ee0b6a667fcf7",
-    "backend\\app\\routes\\integrations.py": "9b8eeb6d58e897ad43e80a441ea37007a68bd903321df36d2d094492e184bee8",
-    "backend\\app\\routes\\ledgers.py": "7638e7f48bbaea3829a011a0d60c89ded46f2bc298d8d4b4c22d338e7696b04b",
-    "backend\\app\\routes\\reference.py": "2d7f649b5611d108974e4b5b2d4506fdab3c95bec62019660f348755ff4228d8",
-    "backend\\app\\routes\\social.py": "39fdbbbbda444227c1d94c2286956acbb03f5cacd8390603ed14bc2d640603f8",
-    "backend\\app\\routes\\sso.py": "8f304380441e6301f35da29769c1778bfebe08b2b1d36002f393af467e8b6be4",
-    "backend\\app\\routes\\sso_trial.py": "9763e302eacd55ef627eb8034526f9980e194d9181bea0002c47df1b74d9b4b4",
-    "backend\\app\\routes\\tasks.py": "4f42a18e4bf087d6e0505fb5bb872d82146056d5ca09319e79bcd88aa74fc26a"
+    "backend\\app\\routes\\integrations.py": "e62883edcfa415a6c2d4a810e9fc30329a606bea9f21bcd986629e8739c166b4",
+    "backend\\app\\routes\\ledgers.py": "6915d42aa8f76f69a6a60001931cb14937dc5a0239a69d1e4752ab8b38a10f41",
+    "backend\\app\\routes\\reference.py": "dcf643bbd59121ee16fef2dbfae87129af7e067c6cad7a0666b2eb445a2c9143",
+    "backend\\app\\routes\\social.py": "71890f9e4fd7d8a6143a49c9c07d54f810325ebebff196ca34b98b9b18b05857",
+    "backend\\app\\routes\\social_images.py": "c02feaea7ea45557f381ac4af77e0c6204b6413d0f7e1b3dcff5ef0410421514",
+    "backend\\app\\routes\\sso.py": "b217f88cdb2ddcf3c95a39bb7836702a7f84c68d913f0b12d7b3a07bd601a68d",
+    "backend\\app\\routes\\sso_trial.py": "2fe1f2f73774d0253dbffda695a1742311ae99c820304816b0d0da1149e57f94",
+    "backend\\app\\routes\\tasks.py": "3a40197cfbfb6edc14016587ffc43ff72f56ad8d1518c554b0f0e8b40918d582"
   }
 }

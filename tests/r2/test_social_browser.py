@@ -35,7 +35,7 @@ def test_social_menu_form_resources_and_refresh_in_browser(tmp_path,monkeypatch)
             browser=p.chromium.launch(headless=True)
             page=browser.new_page(viewport={'width':1440,'height':1000});errors=[]
             page.on('pageerror',lambda e:errors.append(str(e)))
-            page.goto(origin);page.locator('#username').fill('schooladmin');page.locator('#password').fill(FIXTURE_PASSWORD);page.get_by_role('button',name='登录工作台').click()
+            page.goto(origin);page.get_by_role('tab',name='本地账号登录').click();page.locator('#username').fill('schooladmin');page.locator('#password').fill(FIXTURE_PASSWORD);page.get_by_role('button',name='登录工作台').click()
             page.locator('[data-action="nav"][data-id="projects"]').first.click()
             page.locator('.pagehead').get_by_role('button',name='申报培训项目',exact=True).click()
             for key,value in {'code':'BROWSER-P1','name':'隔离演示 技能培训项目','cohort':'第一期','expected_income':'0','expected_participants':'30','expected_outcomes':'掌握基础技能','start_date':'2026-10-01','end_date':'2026-10-08'}.items():page.locator('#f-'+key).fill(value)

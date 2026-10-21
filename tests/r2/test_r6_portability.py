@@ -1,6 +1,6 @@
 """PDF 12.2,14.6: whole evidence graph and precise portable values."""
 import csv,io,json,zipfile,hashlib
-from datetime import datetime
+from datetime import datetime,timedelta
 from pathlib import Path
 import pytest
 from sqlalchemy import select
@@ -21,16 +21,30 @@ def put_audit(db,ident,at):
 def test_audit_page_and_export_use_identical_inclusive_days_and_keep_time(client2,app2):
     c=client2;auth(c,'schooladmin')
     # Use the last representable instant for the schema's timestamp precision.
-    end=datetime(2026,9,18,23,59,59,0 if app2.state.engine.dialect.name=='mysql' else 999999)
+    end=datetime(2026,9,18,15,59,59,0 if app2.state.engine.dialect.name=='mysql' else 999999)
     with app2.state.sessions.begin() as db:
-        for ident,at in [('before',datetime(2026,9,17,23,59,59)),('start',datetime(2026,9,18)),('end',end),('after',datetime(2026,9,19))]:put_audit(db,ident,at)
+        for ident,at in [('before',datetime(2026,9,17,15,59,59)),('start',datetime(2026,9,17,16)),('end',end),('after',datetime(2026,9,18,16))]:put_audit(db,ident,at)
     f={'module':'r6_boundary','start':'2026-09-18','end':'2026-09-18'}
     r=c.get('/api/audit',params=f);assert r.status_code==200
     assert [x['id'] for x in r.json()['items']]==['end','start']
     wb=load_workbook(io.BytesIO(export(c,app2,'audit',f)),read_only=True)
     rows=list(wb.active.values);wb.close()
     assert len(rows)==3 and [x[4] for x in rows[1:]]==['end','start']
-    assert rows[1][0]==end.isoformat()
+    assert rows[0][0]=='时间（北京时间）' and rows[1][0]==(end+timedelta(hours=8)).isoformat()
+
+
+def test_audit_export_preserves_change_access_and_all_filters(client2,app2):
+    auth(client2,'schooladmin')
+    with app2.state.sessions.begin() as db:
+        for ident in ('change-proof','access-proof'):put_audit(db,ident,datetime(2026,9,18,2))
+        db.get(Audit,'change-proof').object_id='kind-proof'
+        read=db.get(Audit,'access-proof');read.object_id='kind-proof';read.module='access';read.action='GET'
+    for kind,expected in [('change',{'精确时间核对'}),('access',{'GET'}),('all',{'精确时间核对','GET'})]:
+        filters={'object_id':'kind-proof','kind':kind}
+        page=client2.get('/api/audit',params=filters);assert page.status_code==200,page.text
+        book=load_workbook(io.BytesIO(export(client2,app2,'audit',filters)),read_only=True)
+        rows=list(book.active.values);book.close()
+        assert {row[5] for row in rows[1:]}==expected and page.json()['total']==len(rows)-1
 
 
 @pytest.mark.parametrize('f',[{'start':'2026-09-19','end':'2026-09-18'},{'start':'20260918'},{'end':'not-date'},{'end':'2026-02-30'}])
@@ -53,6 +67,7 @@ def test_audit_kind_separates_changes_from_query_logging(client2):
 
 def test_audit_date_max_has_no_overflow(client2):
     auth(client2,'schooladmin');assert client2.get('/api/audit?end=9999-12-31').status_code==200
+    assert client2.get('/api/audit?start=0001-01-01').status_code==200
 
 
 @pytest.mark.parametrize('value',['=1+1','  =SUM(1,2)','\t+cmd','\r@payload','-12.34'])

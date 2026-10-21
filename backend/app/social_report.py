@@ -105,12 +105,14 @@ def course_facts(db, codes):
     return courses
 
 
+def project_video_minutes(p, courses):
+    declared = num(p.data.get('video_minutes'))
+    return declared if declared is not None else sum((c['minutes'] for c in courses.values() if c['project_code'] == p.data['code']), D(0))
+
+
 def project_row(p, courses):
     d = p.data
-    mine = [c for c in courses.values() if c['project_code'] == d['code']]
-    minutes = sum((c['minutes'] for c in mine), D(0))
-    if d.get('video_minutes') not in (None, ''):
-        minutes = num(d['video_minutes']) or minutes
+    minutes = project_video_minutes(p, courses)
     svc = '、'.join(SERVICE_TYPES.get(x, x) for x in d.get('service_types') or [])
     methods = '、'.join(TEACHING_METHODS.get(x, x) for x in d.get('teaching_methods') or [])
     return [d['name'] + ('（' + p.cohort + '）' if p.cohort else ''), svc, plain(num(d.get('total_hours'))), plain(minutes),
@@ -153,12 +155,13 @@ def performance(db, a, s, e, rows, courses):
     year_ago = e - timedelta(days=365)
     recent = lambda when: when is not None and year_ago < (when.date() if hasattr(when, 'date') else when) <= e
     total_hours = sum((num(p.data.get('total_hours')) or D(0) for p in rows), D(0))
-    minutes = sum((c['minutes'] for c in courses.values()), D(0))
+    minutes = sum((project_video_minutes(p, courses) for p in rows), D(0))
     base_rows = bases(db, a, e)
     with_hours = [c for c in courses.values() if c['hours'] is not None]
     lecture_total = sum((c['hours'] for c in with_hours), D(0))
     non_lecture = sum((c['hours'] for c in with_hours if c['mode'] and c['mode'] != 'lecture'), D(0))
-    ratio = plain(round(100 * non_lecture / lecture_total, 1)) if lecture_total else '待补充（课程未登记学时和教学方式）'
+    complete = all(c['hours'] is not None and c['mode'] for c in courses.values())
+    ratio = plain(round(100 * non_lecture / lecture_total, 1)) if complete and lecture_total else '待补充（课程学时或教学方式未登记）'
     recent_minutes = sum((m for c in courses.values() for when, m in c.get('resources', []) if recent(when)), D(0))
     return ['全校' if a.role.kind == 'school' else '本院', s.isoformat() + ' 至 ' + e.isoformat(), len(rows), plain(total_hours), plain(minutes),
             len(base_rows), '；'.join(b.name for b, _ in base_rows) or '无', sum(1 for c in courses.values() if recent(c['created_at'])),
@@ -176,8 +179,9 @@ def export(db, a, start, end):
     courses = course_facts(db, [p.data['code'] for p in rows])
     names = org_names(db, [p.org_id for p in rows])
     table = [[i, *project_row(p, courses), names.get(p.org_id, '')] for i, p in enumerate(rows, 1)]
-    note = ('说明：总学时、视频时长为区间内项目合计；实践教学基地为已生效的全部基地（不只思政）；“近一年”指统计区间结束日前 365 天；'
-            '非讲授式占比 = 教学方式不是“讲授”的课程学时 ÷ 已登记学时的课程学时合计。')
+    note = ('说明：总学时、视频时长为区间内项目合计；视频时长优先取项目填写值（含0），未填写时取关联课程视频资源合计，两张表使用同一口径；'
+            '实践教学基地为已生效的全部基地（不只思政）；“近一年”指统计区间结束日前365天，新增课程、视频按系统建档时间判断，基地按设立日期判断；'
+            '非讲授式占比 = 非讲授课程学时 ÷ 课程学时合计，课程缺学时或教学方式时标为待补充。')
     return {SHEET_12: [COLUMNS_12, *table], SHEET_PERF: [COLUMNS_PERF, performance(db, a, s, e, rows, courses), [], [note]]}, result
 
 

@@ -353,7 +353,8 @@ def require_project_confirmed(project):
 def require_closeout_distribution(closeout):
     from .social_schemas import Closeout
     from pydantic import ValidationError
-    try:values=Closeout.model_validate(closeout)
+    # 学院核验人是服务端审批留痕，不属于教师提交的结项表单。
+    try:values=Closeout.model_validate({k:v for k,v in closeout.items() if k != 'college_checked_by'})
     except ValidationError as exc:raise HTTPException(422,'结项资料不完整或收入分配不符合规则：'+'；'.join(e['msg'] for e in exc.errors())) from None
     if not values.finance_reference.strip():raise HTTPException(422,'结项须填写有效的财务到账核验依据')
     if values.actual_income>0:
@@ -403,7 +404,7 @@ def closing_effective_counts(db, project_ids):
         totals[pid]+=unit_counts(data)['effective']
     latest={}
     for pid,after in db.execute(select(WorkflowEvent.object_id,WorkflowEvent.after).where(WorkflowEvent.object_type=='social_project',WorkflowEvent.object_id.in_(ids),WorkflowEvent.action=='投诉与项目跟踪').order_by(WorkflowEvent.created_at,WorkflowEvent.id)):
-        latest[(pid,after['case_reference'])]=after
+        remember_latest_case(latest,(pid,after['case_reference']),after)
     for (pid,_),after in latest.items():
         if after.get('invalidate_cohort'):totals[pid]=0
     return totals
@@ -425,10 +426,20 @@ def project_special_labels(db, projects):
     return labels
 
 
+def remember_latest_case(latest,key,after):
+    previous=latest.get(key)
+    # MySQL timestamps can tie; validated project versions still identify the later continuation.
+    current_version=after.get('expected_version')
+    previous_version=(previous or {}).get('expected_version')
+    if previous and isinstance(current_version,int) and isinstance(previous_version,int) and current_version<previous_version:
+        return
+    latest[key]=after
+
+
 def project_followups(db,ident):
     latest={}
     for event in db.scalars(select(WorkflowEvent).where(WorkflowEvent.object_type=='social_project',WorkflowEvent.object_id==ident,WorkflowEvent.action=='投诉与项目跟踪').order_by(WorkflowEvent.created_at,WorkflowEvent.id)):
-        latest[event.after['case_reference']]=event.after
+        remember_latest_case(latest,event.after['case_reference'],event.after)
     return list(latest.values())
 
 
@@ -722,6 +733,8 @@ def point_entry_read_item(db, actor, item):
     result=serial(item);source=result.get('source_snapshot') or {}
     if not source.get('social_claim'):return result
     claim=db.get(SocialClaim,source['social_claim']);project=db.get(SocialProject,claim.project_id) if claim else None
+    if project:
+        result['project_code']=project.data['code'];result['project_name']=project.data['name']
     if 'records.read' in actor.permissions and actor.role.kind!='dept' and (actor.role.kind!='teacher' or (project and project.owner_id==actor.id)):return result
     recognition=source.get('recognition')
     if recognition and recognition.get('trial'):

@@ -8,6 +8,7 @@ import hashlib
 from pathlib import Path
 
 REQUIRED = [
+ 'backend/form_draft_schema.json','backend/form_draft_release.json','backend/app/routes/form_drafts.py','frontend/form-assist.js','frontend/form-drafts.js',
  'backend/auth_session_schema.json','backend/auth_session_release.json','backend/audit_index_schema.json','backend/audit_index_release.json',
  'backend/app/__init__.py','backend/app/config.py','backend/app/core.py','backend/app/schemas.py',
  'backend/app/main.py','backend/app/models.py','backend/app/services.py','backend/app/assessment_evidence.py','backend/app/read_queries.py',
@@ -54,7 +55,7 @@ def inspect_assembly(root):
         parent=v.get('down_revision')
         parents.update(parent if isinstance(parent,(list,tuple)) else [parent] if parent else [])
     heads=sorted(revision_ids-parents)
-    migration_ok=(len(revisions)==5 and {x['revision']:x.get('down_revision') for x in revisions}=={'20260918_0001':None,'20261008_0002':'20260918_0001','20261009_0003':'20261008_0002','20261012_0004':'20261009_0003','20261013_0005':'20261012_0004'} and heads==['20261013_0005'])
+    migration_ok=(len(revisions)==6 and {x['revision']:x.get('down_revision') for x in revisions}=={'20260918_0001':None,'20261008_0002':'20260918_0001','20261009_0003':'20261008_0002','20261012_0004':'20261009_0003','20261013_0005':'20261012_0004','20261021_0006':'20261013_0005'} and heads==['20261021_0006'])
     alembic_config=any((root/p).is_file() for p in ('backend/alembic.ini','alembic.ini'))
     migration_env=any((root/'backend').rglob('env.py'))
     integrity_ok=False
@@ -78,11 +79,14 @@ def inspect_assembly(root):
         audit_index=json.loads((root/'backend/audit_index_release.json').read_text())
         expected={'backend/audit_index_schema.json','backend/alembic/versions/20261013_0005_audit_result_index.py'}
         integrity_ok=integrity_ok and audit_index['revision']=='20261013_0005' and audit_index['parent']=='20261012_0004' and set(audit_index['sha256'])==expected and all(not (root/name).is_symlink() and hashlib.sha256((root/name).read_bytes()).hexdigest()==sha for name,sha in audit_index['sha256'].items())
+        drafts=json.loads((root/'backend/form_draft_release.json').read_text())
+        expected={'backend/form_draft_schema.json','backend/alembic/versions/20261021_0006_personal_form_drafts.py'}
+        integrity_ok=integrity_ok and drafts['revision']=='20261021_0006' and drafts['parent']=='20261013_0005' and set(drafts['sha256'])==expected and all(not (root/name).is_symlink() and hashlib.sha256((root/name).read_bytes()).hexdigest()==sha for name,sha in drafts['sha256'].items())
     except (OSError,ValueError,KeyError,TypeError):integrity_ok=False
     ok=integrity_ok and not missing and not python_errors and migration_ok and alembic_config and migration_env
     return {'status':'PASS' if ok else 'BLOCKED','kind':'SOURCE_ASSEMBLY_ONLY','missing':missing,
             'python_errors':python_errors,'observed_alembic_heads':heads,
-            'application_expected_heads':['20261013_0005'],'installation_scope':'canonical_baseline_additive_only','legacy_upgrade_allowed':False,
+            'application_expected_heads':['20261021_0006'],'installation_scope':'canonical_baseline_additive_only','legacy_upgrade_allowed':False,
             'historical_graph_verified':False,'unverified_historical_parent':'20260917_0001',
             'canonical_files_hash_verified':integrity_ok,'legacy_evidence_preserved':integrity_ok,'migration_graph_verified':migration_ok,'alembic_config_present':alembic_config,
             'migration_env_present':migration_env,

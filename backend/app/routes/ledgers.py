@@ -18,10 +18,31 @@ from ..reference_data import TrainingProjectMaster
 from ..social_models import SocialResource, SocialProject, SocialClaim, SocialUnit, SocialPolicy
 from .. import social_training as st
 from ..social_schemas import ProjectData
+from ..history_projects import HistoryFactsIn
 from .. import ledger_check as lc
 
 router = APIRouter(prefix='/api/social', tags=['学院台账与口径体检'])
 RECOMMENDED_NOTE = '推荐值按系统推荐口径计算，学校书面确认前仅供核对，不是正式认定结果。'
+
+
+@router.get('/cockpit')
+def school_cockpit(request: Request, year: int | None = Query(None, ge=2020, le=2100),
+                   college: str = Query('', max_length=100), project: str = Query('', max_length=100)):
+    def load(db, a, s):
+        if a.role.kind != 'school':
+            raise HTTPException(403, '学校原始资料驾驶舱仅向学校管理角色开放')
+        a.require('records.read')
+        from ..school_cockpit import load_reports, summarize
+        catalog = load_reports(request.app.state.settings.school_reports_dir)
+        colleges = {o.id: o.name for o in college_scope(db, a)}
+        rows = ledgers(db, list(colleges)) if catalog else []
+        latest = latest_by_college(rows)
+        imported = {(colleges[r.org_id], r.data['year'], r.data['file']['sha256']): {
+            'id': r.id, 'year': r.data['year'], 'version_no': r.data['version_no'],
+            'review_state': lc.totals(r.data['rows'])['state'],
+            'is_latest': latest[(r.org_id, r.data['year'])].id == r.id} for r in rows}
+        return summarize(catalog, year=year, college=college, project=project, imported_ledgers=imported)
+    return read_operation(request, 'portal.read', load)
 
 
 class ReviewRow(BaseModel):
@@ -129,11 +150,22 @@ def figure_diff(r):
     return {**fig, 'diff': lc.q2(final - Decimal(fig['value']))}
 
 
+def reported_quantities(tables):
+    grouped = {}
+    for template, rows in tables:
+        for row in rows:
+            unit = '原表折算量' if template == '2025' else '人天' if '人天' in (row.get('claimed_raw') or '') else '人次'
+            grouped.setdefault(unit, []).append(row.get('claimed'))
+    return [{'unit': unit, 'value': None if any(v is None for v in values) else lc.q2(sum((Decimal(v) for v in values), Decimal(0)))}
+            for unit, values in grouped.items()]
+
+
 def public(r, rows=True):
     data = dict(r.data)
     if not rows: data.pop('rows', None)
     return {'id': r.id, 'org_id': r.org_id, 'code': r.code, 'name': r.name, 'state': r.state, 'version': r.version,
             'created_at': serial(r.created_at), 'data': data, 'totals': lc.totals(r.data['rows']),
+            'reported_quantities': reported_quantities([(r.data['template'], r.data['rows'])]),
             'online': online(r.data['rows']), 'school_figure': figure_diff(r), 'drafts': sum(1 for x in r.data['rows'] if x.get('project_id'))}
 
 
@@ -208,6 +240,7 @@ async def ledger_preview(request: Request, file: UploadFile = File(...)):
         if result['suggested_org_id']:
             result['rows'] = [bind_allocations(db, result['suggested_org_id'], row) for row in result['rows']]
     result['file'] = {'name': name, 'sha256': sha256(data).hexdigest(), 'size': len(data)}
+    result['reported_quantities'] = reported_quantities([(result['template'], result['rows'])])
     result['note'] = RECOMMENDED_NOTE
     return serial(result)
 
@@ -257,24 +290,102 @@ async def ledger_submit(request: Request, file: UploadFile = File(...), org_id: 
 
 
 @router.get('/ledgers')
-def ledger_list(request: Request, year: int | None = Query(None, ge=2020, le=2100)):
+def ledger_list(request: Request, year: int | None = Query(None, ge=2020, le=2100),
+                source: Literal['all', 'school', 'other'] = Query('all')):
     def load(db, a, s):
         require_ledger_role(a)
         colleges = college_scope(db, a)
-        rows = ledgers(db, [o.id for o in colleges], year)
+        names = {o.id: o.name for o in colleges}
+        selected_year, selected_source, periods, catalog = year, source, [], None
+        if source != 'all':
+            from ..school_cockpit import load_reports, summarize
+            catalog = load_reports(request.app.state.settings.school_reports_dir)
+            if catalog:
+                periods = summarize(catalog)['periods']
+                selected_year = periods[-1]['year'] if year is None else year
+                if source == 'school' and selected_year not in {p['year'] for p in periods}:
+                    raise HTTPException(422, '所选年度没有学校原始资料')
+            else:
+                selected_source = 'all'
+                selected_year = date.today().year if year is None else year
+        rows = ledgers(db, list(names), selected_year)
+        if catalog:
+            adopted = {(r['college'], r['period']['year'], r['id']) for r in catalog['reports']}
+            rows = [r for r in rows if ((names[r.org_id], r.data['year'], r.data['file']['sha256']) in adopted) == (source == 'school')]
         latest = latest_by_college(rows)
         versions = {}
         for r in rows: versions.setdefault((r.org_id, r.data['year']), []).append({'id': r.id, 'version_no': r.data['version_no'], 'created_at': serial(r.created_at), 'claimed_total': lc.totals(r.data['rows'])['claimed_total']})
-        names = {o.id: o.name for o in colleges}
         items = []
         for (org_id, y), r in sorted(latest.items(), key=lambda kv: (-kv[0][1], names.get(kv[0][0], ''))):
             items.append({**public(r, rows=False), 'org_name': names.get(org_id, ''), 'versions': versions[(org_id, y)]})
-        missing = [{'org_id': o.id, 'org_name': o.name} for o in colleges if year and (o.id, year) not in latest]
-        return {'items': items, 'missing': missing, 'year': year, 'note': RECOMMENDED_NOTE,
+        if catalog and source == 'school':
+            source_colleges = {r['college'] for r in catalog['reports']}
+            provided = {(r['college'], r['period']['year']) for r in catalog['reports']}
+            missing = [{'org_id': o.id, 'org_name': o.name,
+                        'source_status': '待导入原表台账' if (o.name, selected_year) in provided else '原表未提供，待补资料'}
+                       for o in colleges if o.name in source_colleges and (o.id, selected_year) not in latest]
+        else:
+            missing = [] if catalog else [{'org_id': o.id, 'org_name': o.name} for o in colleges if selected_year and (o.id, selected_year) not in latest]
+        source_note = (f'当前资料期间：{next(p["label"] for p in periods if p["year"] == selected_year)}；学校原始台账仅统计与学校采用原件对应的版本，报送量与学校管理驾驶舱同源。' if selected_source == 'school'
+                       else '其他台账包含未与学校采用原件对应的资料和测试数据，不与学校原始台账合并统计。' if selected_source == 'other'
+                       else '尚未配置学校原始资料，当前沿用授权范围内全部台账。' if source != 'all' else '')
+        return {'items': items, 'missing': missing, 'year': selected_year, 'note': RECOMMENDED_NOTE,
+                'source': selected_source, 'source_periods': periods, 'source_catalog_available': catalog is not None, 'source_note': source_note,
+                'reported_quantities': reported_quantities([(r.data['template'], r.data['rows']) for r in latest.values()]),
                 'online': {'views': lc.q2(sum((Decimal(x['online']['views']) for x in items), Decimal(0))), 'projects': sum(x['online']['projects'] for x in items)},
                 'can_review': a.role.kind == 'school' and 'records.write' in a.permissions,
                 'can_submit': a.role.kind in LEDGER_ROLES and 'records.write' in a.permissions and 'file.write' in a.permissions}
     return read_operation(request, 'records.read', load)
+
+
+@router.get('/history-projects')
+def history_project_list(request: Request, year: int | None = Query(None, ge=2020, le=2100),
+                         issue: Literal['all', 'missing', 'conflict', 'prefill'] = Query('all'),
+                         q: str = Query('', max_length=100), page: int = Query(1, ge=1), size: int = Query(200, ge=1, le=200)):
+    def load(db, a, s):
+        from ..history_projects import adopted_ledgers, source_groups, public_history
+        catalog, colleges, sources = adopted_ledgers(db, a, request.app.state.settings)
+        years = sorted({r['period']['year'] for r in catalog['reports']})
+        chosen_year = years[-1] if year is None else year
+        if chosen_year not in years: raise HTTPException(422, '所选年度没有学校历史原始资料')
+        items = [public_history(db, a, ledger, group, colleges[ledger.org_id]) for ledger in sources if ledger.data['year'] == chosen_year for group in source_groups(ledger, catalog)]
+        items.sort(key=lambda x: (x['college'], x['row_no']))
+        counts = {'all': len(items), 'missing': sum(bool(x['missing']) for x in items), 'conflict': sum(bool(x['history']['conflicts']) for x in items)}
+        date_prefill_count = sum(x['history']['date_prefill'] is not None for x in items)
+        if q: items = [x for x in items if q in x['name']]
+        if issue == 'conflict': items = [x for x in items if x['history']['conflicts']]
+        elif issue == 'missing': items = [x for x in items if x['missing']]
+        elif issue == 'prefill': items = [x for x in items if x['history']['date_prefill']]
+        return {'items': items[(page - 1) * size:page * size], 'total': len(items), 'page': page, 'size': size,
+                'year': chosen_year, 'years': years, 'issue': issue, 'counts': counts, 'date_prefill_count': date_prefill_count,
+                'note': '历史资料按学校采用台账的编号来源列示；续行并入所属编号项目，零报送量仍保留。未知负责人、日期和材料保持待确认，不建立或改变项目审批、结项和积分。'}
+    return read_operation(request, 'records.read', load)
+
+
+@router.get('/history-projects/{ident}/{row_no}')
+def history_project_detail(ident: str, row_no: int, request: Request):
+    def load(db, a, s):
+        from ..history_projects import history_row, public_history
+        ledger, group, college = history_row(db, a, request.app.state.settings, ident, row_no)
+        return public_history(db, a, ledger, group, college, detail=True)
+    return read_operation(request, 'records.read', load)
+
+
+@router.put('/history-projects/{ident}/{row_no}/facts')
+def history_project_facts(ident: str, row_no: int, data: HistoryFactsIn, request: Request):
+    def apply(db, a, s):
+        from ..history_projects import history_row, validate_facts, public_history
+        ledger, group, college = history_row(db, a, request.app.state.settings, ident, row_no)
+        check_version(ledger, data.expected_version)
+        validate_facts(db, a, ledger, data.history)
+        before = group['head'].get('history')
+        rows = [dict(row) for row in ledger.data['rows']]
+        head = next(row for row in rows if row['row_no'] == row_no)
+        head['history'] = data.history.model_dump(mode='json')
+        ledger.data = {**ledger.data, 'rows': rows}; ledger.version += 1
+        workflow(db, a, 'social_resource', ledger.id, '补充历史项目来源事实', {'row_no': row_no, 'history': before}, {'row_no': row_no, 'history': head['history']}, data.reason, data.basis)
+        return public_history(db, a, ledger, {'head': {**group['head'], 'history': head['history']}, 'rows': [{**r, 'history': head['history']} if r['row_no'] == row_no else r for r in group['rows']]}, college, detail=True)
+    return command(request, data.model_dump(mode='json'), 'records.write', apply)
 
 
 LEDGER_ROLES = ('college', 'school')
@@ -297,7 +408,8 @@ def ledger_detail(ident: str, request: Request):
     def load(db, a, s):
         obj = scoped_ledger(db, a, ident)
         org = db.get(Org, obj.org_id)
-        others = [{'id': r.id, 'version_no': r.data['version_no'], 'created_at': serial(r.created_at), 'totals': lc.totals(r.data['rows'])} for r in ledgers(db, [obj.org_id], obj.data['year'])]
+        others = [{'id': r.id, 'version_no': r.data['version_no'], 'created_at': serial(r.created_at), 'totals': lc.totals(r.data['rows']),
+                   'reported_quantities': reported_quantities([(r.data['template'], r.data['rows'])])} for r in ledgers(db, [obj.org_id], obj.data['year'])]
         submitter = db.get(User, obj.data.get('submitted_by'))
         can_bind = 'records.write' in a.permissions and a.role.kind in ('school', 'college')
         org_ids = [obj.org_id] + [o.id for o in db.scalars(select(Org).where(Org.parent_id == obj.org_id))]

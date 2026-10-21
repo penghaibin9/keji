@@ -62,7 +62,15 @@ def generate(database, labels, output):
     assert set(names) == set(models.Base.metadata.tables), 'migrated table inventory differs from models'
     table_labels, field_labels = old_labels(labels)
     table_labels.update({'school_courses': '学校课程总库', 'teacher_course_terms': '教师课程学期',
-                         'social_projects': '社会培训项目', 'social_claims': '社会培训积分申报'})
+                         'social_projects': '社会培训项目', 'social_claims': '社会培训积分申报',
+                         'form_drafts': '个人未完成填写暂存'})
+    field_labels.update({('form_drafts', key): meaning for key, meaning in {
+        'user_id': '暂存所属用户', 'role_id': '暂存所属身份', 'org_id': '暂存所属组织',
+        'kind': '允许暂存的业务类型', 'context_key': '新建填写或原业务的隔离标识',
+        'title': '本人辨认暂存的标题', 'payload': '白名单表单内容及附件名称；不保存附件文件',
+        'source_version': '原业务版本，用于恢复前检查变更', 'state': '有效、已完成或已放弃',
+        'updated_at': '最后暂存时间',
+    }.items()})
     rows = []
     for name in names:
         primary = set(inspector.get_pk_constraint(name)['constrained_columns'])
@@ -93,7 +101,7 @@ def generate(database, labels, output):
               'routes': routes['routes'], 'source_sha256': {
                   name: hashlib.sha256((ROOT / name).read_bytes()).hexdigest() for name in digest_inputs}}
     output.parent.mkdir(parents=True, exist_ok=True)
-    output.write_text(json.dumps(result, ensure_ascii=False, indent=2) + '\n', encoding='utf-8')
+    output.write_text(json.dumps(result, ensure_ascii=False, indent=2) + '\n', encoding='utf-8', newline='\n')
     lines = ['# 数据字典（交付候选，字段级）', '',
              '迁移头：`' + ', '.join(heads) + '`。独立空库执行全部迁移后读取实际结构，',
              '逐表、逐字段与当前模型比对；不是读取学校数据库，也不是 MySQL（生产数据库）验收。', '',
@@ -111,7 +119,7 @@ def generate(database, labels, output):
                          row['foreign_key'] or '—', row['default'] or '—',
                          '是' if row['sensitive'] else '否', row['meaning'].replace('|', '／')]) + ' |')
         lines.append('')
-    (ROOT / 'docs/数据字典.md').write_text('\n'.join(lines), encoding='utf-8')
+    (ROOT / 'docs/数据字典.md').write_text('\n'.join(lines), encoding='utf-8', newline='\n')
     engine.dispose()
     return {key: result[key] for key in ('migration_heads', 'table_count', 'column_count', 'api_route_count')}
 

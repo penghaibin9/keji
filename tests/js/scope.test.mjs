@@ -1,3 +1,4 @@
+import {allowFormLeave,dirtyForms} from '../../frontend/form-assist.js';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {readFileSync} from 'node:fs';
@@ -46,7 +47,7 @@ test('malformed values are rejected',()=>{
 });
 const source=readFileSync(new URL('../../frontend/app.js',import.meta.url),'utf8');
 function actualNavigationContext(){
-  const context={titles,page:'cockpit',filter:{...filters},periodId:'p',tablePage:2,location:{hash:'#cockpit',pathname:'/',search:''},
+  const context={allowFormLeave,dirtyForms,titles,page:'cockpit',filter:{...filters},periodId:'p',tablePage:2,location:{hash:'#cockpit',pathname:'/',search:''},
     businessFilters,pageFilters,drillFilters,navigationHash,restoreNavigation,selectedPeriod,
     me:null,renderSequence:0,participationPage:1,$:()=>null,render:async()=>{},setMobileMenu:()=>{},history:{replaceState(...args){context.location.hash=args[2].slice(args[2].indexOf('#'));}}};
   vm.createContext(context);
@@ -86,4 +87,11 @@ test('审批中心已办分区与环节周期组织筛选可刷新恢复',()=>{
  const hash=navigationHash('todos',{tab:'handled',state:'待归口复审',period_id:'p1',org_id:'c1',q:'J001'});
  const restored=restoreNavigation(hash,{todos:'审批中心'});
  assert.deepEqual(restored.filter,{org_id:'c1',period_id:'p1',q:'J001',state:'待归口复审',tab:'handled'});
+});
+
+
+test('资质学院筛选在查询及刷新恢复中保留，不接受无关字段',()=>{
+ const wanted={q:'证书',teacher_id:'t1',org_id:'college1',state:'EXPIRED'};
+ assert.deepEqual(pageFilters('qualifications',{...wanted,project_code:'不要泄入'}),wanted);
+ assert.deepEqual(restoreNavigation(navigationHash('qualifications',wanted),{qualifications:'教师资质'}),{page:'qualifications',filter:wanted,periodId:''});
 });

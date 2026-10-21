@@ -212,7 +212,7 @@ def records(db, actor, tab):
 
 def load(db, actor, filters, page, size, source):
     if actor.role.kind not in {'dept', 'college', 'school'}:
-        raise HTTPException(403, '审批中心仅供管理身份使用；本人待办请进入我的待办')
+        raise HTTPException(403, '审批中心仅供管理身份使用；本人待办请进入待办中心')
     tab = filters.get('tab') or 'handle'
     if tab not in {'handle', 'handled', 'mine'}:
         raise HTTPException(422, '审批分区无效')

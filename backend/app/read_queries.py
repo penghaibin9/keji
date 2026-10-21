@@ -333,7 +333,7 @@ def audit_query(db, actor, filters=None):
             q = q.where(~access)
         elif f['kind'] == 'access':
             q = q.where(access)
-        else:
+        elif f['kind'] != 'all':
             raise HTTPException(422, '操作类型筛选无效')
     if 'q' in f:
         q = q.where(Audit.action.contains(f['q'], autoescape=True)
@@ -350,10 +350,9 @@ def audit_query(db, actor, filters=None):
     if bounds.get('start', date.min) > bounds.get('end', date.max):
         raise HTTPException(422, '开始日期不能晚于结束日期')
     if 'start' in bounds:
-        q = q.where(Audit.created_at >= datetime.combine(bounds['start'], time.min))
+        midnight = datetime.combine(bounds['start'], time.min)
+        lower = midnight - timedelta(hours=8) if midnight >= datetime.min + timedelta(hours=8) else datetime.min
+        q = q.where(Audit.created_at >= lower)
     if 'end' in bounds:
-        if bounds['end'] == date.max:
-            q = q.where(Audit.created_at <= datetime.max)
-        else:
-            q = q.where(Audit.created_at < datetime.combine(bounds['end'] + timedelta(days=1), time.min))
+        q = q.where(Audit.created_at < datetime.combine(bounds['end'], time.min) + timedelta(hours=16))
     return q

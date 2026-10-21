@@ -22,6 +22,15 @@ test('external instructors can be recorded with a stable school reference',()=>{
 });
 
 const escapeHtml=value=>String(value??'').replace(/[&<>"']/g,char=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[char]));
+test('学校学院项目页默认进入业务办理，历史资料通过明确入口访问',async()=>{
+ const c=renderContext({history_available:true}),original=c.api;c.filter={};
+ c.api=async url=>url.startsWith('/social/history-projects')?(c.requests.push(url),{year:2026,years:[2025,2026],issue:'all',counts:{all:28,missing:28,conflict:0},items:[],note:'历史资料'}):original(url);
+ let html=await socialPage('projects',c);assert.match(html,/项目业务办理/);assert.equal(c.requests.filter(p=>p.startsWith('/social/history-projects')).length,0);
+ c.filter={project_view:'history'};html=await socialPage('projects',c);assert.match(html,/学校历史资料/);assert.match(html,/28/);assert.equal(c.requests.filter(p=>p.startsWith('/social/history-projects')).length,1);
+});
+test('教师教研室及未配置历史资料不额外请求历史整院来源',async()=>{
+ for(const role of ['teacher','dept','school']){const c=renderContext({history_available:role!=='school'});c.me.role.kind=role;c.filter={project_view:'history'};await socialPage('projects',c);assert.equal(c.requests.some(p=>p.startsWith('/social/history-projects')),false)}
+});
 function renderContext(data={},permissions=[]){
  const workspace={projects:[],courses:[],resources:[],claims:[],annuals:[],policies:[],my_duties:[],course_stats:{},decisions:{},states:{ACTIVE:'已启用',DRAFT:'草稿'},pagination:{total:0,page:1,size:20},resource_pagination:{total:0,page:1,size:200},...data};
  const requests=[];
@@ -39,9 +48,37 @@ async function renderSocial(section,context){
  await socialAction('social-list-reset','',context);
  return socialPage(section,context);
 }
+test('四种角色共用培训图文版式，申报与登记入口仍按原权限显示',async()=>{
+ const data={projects:[{id:'unified-project',owner_id:'owner',org_id:'college1',state:'FILED',cohort:'第一期',data:{name:'统一项目',code:'P1'}}],courses:[{code:'C1',name:'统一课程',project_code:'P1'}],resources:[{id:'base1',kind:'base',name:'统一基地',org_id:'college1',state:'ACTIVE',data:{}},{id:'result1',kind:'achievement',name:'统一成果',org_id:'college1',state:'ACTIVE',data:{level:'school'}}],pagination:{total:1,page:1,size:20}};
+ for(const role of ['teacher','dept','college','school']){
+  const c=renderContext(data,['records.read',...(['school','college','dept'].includes(role)?['records.write']:[])]);c.me={user:{id:'unified-'+role},role:{kind:role}};
+  for(const section of ['projects','courses','bases','outcomes']){
+   const html=await renderSocial(section,c);
+   assert.match(html,new RegExp('class="training-workspace tw-section-'+section+'"'));
+   assert.match(html,/class="tw-layout"/);assert.match(html,/class="tw-detail"/);
+   if(['teacher','dept'].includes(role))assert.doesNotMatch(html,/data-action="training-image"|>(办理备案|学院审批|查看与结项)<\/button>|data-id="achievement"/);
+   if(section==='courses'){
+    assert.match(html,/data-action="social-course-view" data-id="C1"/);
+    if(role==='school')assert.match(html,/data-action="social-course-new"/);
+    else{assert.doesNotMatch(html,/data-action="social-course-new"/);assert.match(html,/申报培训课程/)}
+    if(role==='dept')assert.doesNotMatch(html,/data-action="social-resource-new"/);
+   }
+  }
+ }
+});
 function summaryValues(html){
  return Object.fromEntries([...html.matchAll(/<article class="social-stat">[\s\S]*?<span>([^<]+)<\/span><strong>([^<]+)<\/strong>/g)].map(match=>[match[1],match[2]]));
 }
+
+test('从课程积分办理进入申报时锁定实际项目并带入周期和规则',async()=>{
+ const c=renderContext({policies:[{id:'policy1',name:'已确认口径',state:'ACTIVE',period_id:'period1'}]},['points.read']);c.me={user:{id:'teacher',staff_no:'J001'},role:{kind:'teacher'}};
+ c.periods=[{id:'period1',name:'认定年度',state:'OPEN',start_date:'2026-01-01',end_date:'2026-12-31'}];await renderSocial('recognition',c);
+ const fields=[];c.field=(name,label,type,value)=>{fields.push({name,value});return `<input name="${name}" value="${value??''}">`};
+ let form;c.formModal=(title,body)=>{form={title,body}};const api=c.api;c.api=async url=>url==='/social/objects/social_project/project1'?{item:{id:'project1',data:{name:'明确项目'},cohort:'第一期'}}:api(url);
+ await socialAction('social-claim-new','project1|period1|policy1',c);
+ assert.match(form.body,/明确项目/);assert.match(form.body,/project1/);assert.doesNotMatch(form.body,/id="social-project-picker"/);
+ assert.ok(fields.some(x=>x.name==='period_id'&&x.value==='period1'));assert.ok(fields.some(x=>x.name==='policy_id'&&x.value==='policy1'));
+});
 
 test('项目补正提交按钮与确认页按退回层级续办，不误导重走学院',async()=>{
  for(const [state,returned_level,label] of [['RETURNED','school','补正后提交学校备案'],['RETURNED','college','补正后提交学院审批'],['DRAFT',undefined,'提交学院审批']]){
@@ -111,7 +148,7 @@ test('学院自评详情显示报告任务和人数依据，保留零值且公�
 test('教师复用年度公示清单及摘要详情，仅提供异议且不显示自评管理和原材料',async()=>{
  const item={id:'public-annual',org_id:'college',period_id:'period',state:'PUBLIC',state_label:'公示中',data:{},snapshot:{public_end:'2026-10-23',disputes:[{reason:'本人合成异议',resolved:true,resolution:'本人核实结论'}]}};
  const c=renderContext({annuals:[item],pagination:{total:1,page:1,size:20}},['assessment.read','assessment.review','file.write','records.write']);c.me={user:{id:'teacher'},role:{kind:'teacher'}};
- const html=await renderSocial('annual',c);assert.match(html,/学院考核公示/);assert.match(html,/返回政策通知/);assert.match(html,/查看公示/);assert.doesNotMatch(html,/建立学院年度自评|social-annual-new/);
+ const html=await renderSocial('annual',c);assert.match(html,/学院考核公示/);assert.match(html,/返回通知公告/);assert.match(html,/查看公示/);assert.doesNotMatch(html,/建立学院年度自评|social-annual-new/);
  let modal,form;c.modal=(title,body,buttons)=>{modal={title,body,buttons}};c.formModal=(_title,html)=>{form=html};c.downloads=()=>'<p>原附件不能出现</p>';c.eventsHtml=()=>'<p>原核验记录不能出现</p>';
  c.api=async()=>({item,org_name:'公示<学院>',state_label:'公示中',public_summary:true,trial:{base:'82.00',bonus_awarded:'5.00',total:'87.00',grade:'良好'},attachments:[],events:[]});await socialAction('social-detail','social_annual|public-annual',c);
  assert.equal(modal.title,'学院考核公示');assert.match(modal.body,/87.00/);assert.match(modal.buttons,/登记公示异议/);assert.doesNotMatch(modal.body,/原附件不能出现|原核验记录不能出现|学院自评资料|职能部门核验进度/);assert.doesNotMatch(modal.buttons,/上传佐证|补正年度自评|财务核验|归口初核|公示完成并归档/);
@@ -184,7 +221,7 @@ test('学校可为已备案项目关联已有入库课程，保留项目版本�
  let footer,form,posted;
  c.modal=(_title,_body,foot)=>{footer=foot};c.downloads=()=>'';c.eventsHtml=()=>'';c.formModal=(_title,body,save)=>{form={body,save}};
  const detail={item:{id:'project',owner_id:'teacher',org_id:'college',state:'FILED',version:7,data:{code:'P1',name:'本轮<项目>',mode:'module',category:'community'},closeout:{}},kind:'social_project',state_label:'已备案',facts:{effective:0,excluded:0,units:[],followups:[]},attachments:[],events:[]};
- c.api=async(url,options)=>{if(options)posted={url,...options};return detail};
+ c.api=async(url,options)=>{if(url.endsWith('/course-options'))return {items:[{code:'C1',name:'已审批课程'}],total:1,page:1,size:20,q:''};if(options)posted={url,...options};return detail};
  await socialAction('social-detail','social_project|project',c);
  assert.match(footer,/social-course-link/);
  await socialAction('social-course-link','',c);
@@ -377,7 +414,9 @@ async function pickerContext(action,items){
   :'<input name="'+name+'" value="'+escapeHtml(value)+'">';
  context.formModal=(title,body,save,options)=>{context.modals.push({title,body,save,options})};
  context.lookup=async url=>({items:[],q:new URL(url,'http://localhost').searchParams.get('q')||'',page:Number(new URL(url,'http://localhost').searchParams.get('page')||1),size:20,total:0});
+ const workspaceApi=context.api;
  context.api=async(url,options)=>{
+  if(url==='/social/workspace'&&!options)return workspaceApi(url);
   context.requests.push(url);
   if(options){context.posts.push({url,...options});return {}}
   if(['/social/project-options','/social/project-options?mine=true'].includes(url))return {items,q:'',page:1,size:20,total:450};
@@ -399,7 +438,7 @@ test('课程和个人积分从项目候选接口取值，分别提交项目编�
  const project={id:'project-450',code:'PROJECT-450',name:'候选<img src=x onerror="alert(1)">',cohort:'第三期'};
  for(const [action,name,key,url] of [['social-course-new','project_code','code','/social/courses'],['social-claim-new','project_id','id','/social/claims']]){
   const context=await pickerContext(action,[project]),modal=context.modals[0];
-  assert.deepEqual(context.requests,[action==='social-claim-new'?'/social/project-options?mine=true':'/social/project-options']);
+  assert.deepEqual(context.requests,action==='social-claim-new'?['/social/workspace','/social/project-options?mine=true']:['/social/project-options']);
   assert.ok(modal.body.includes('<select id="f-'+name+'" name="'+name+'">'));
   assert.ok(modal.body.includes('<option value="'+project[key]+'">'));
   assert.ok(modal.body.includes(escapeHtml(project.name)));
@@ -648,7 +687,7 @@ test('教师积分保存与提交按钮分开，保存不调用提交接口且�
 
 test('课程资源返回原课程，只在当前课程可读取时展示返回按钮',async()=>{
  for(const listed of [true,false]){
-  const c=renderContext({courses:listed?[{code:'C1',name:'合成课程'}]:[]});await renderSocial('courses',c);let footer;c.modal=(_t,_b,f)=>{footer=f};c.api=async()=>({items:[],page:1,size:20,total:0});
+  const c=renderContext({courses:listed?[{code:'C1',name:'合成课程'}]:[]});await renderSocial('courses',c);let footer,detailContext;c.modal=(_t,_b,f,_wide,contextLabel)=>{footer=f;detailContext=contextLabel};c.api=async()=>({items:[],page:1,size:20,total:0});
   await socialAction('social-course-resources','C1',c);assert.equal(footer.includes('返回课程资料'),listed);if(listed)assert.match(footer,/data-id="C1"/);
  }
 });
@@ -814,8 +853,8 @@ test('学院年度自评复用整页分区，补正保持原组织周期与版�
 test('学院学校共用项目次要动作折叠，教师原动作不变且无导出权限也不丢动作',async()=>{
  for(const [role,exported] of [['college',true],['college',false],['teacher',true],['school',true]]){
   const c=renderContext({},['records.read','records.write','file.write',...(exported?['export']:[])]);c.me={user:{id:role==='teacher'?'teacher':'footer-'+role+'-'+exported},role:{kind:role}};await renderSocial('projects',c);
-  let footer;c.modal=(_t,_b,f)=>{footer=f};c.downloads=()=>'';c.eventsHtml=()=>'';c.api=async()=>({item:{id:'footer-project',owner_id:'teacher',state:'FILED',data:{name:'页脚合成项目',code:'FOOTER-P1',category:'community'},closeout:{}},state_label:'已备案',facts:{units:[],followups:[],effective:0,excluded:0},attachments:[{id:'file'}],events:[]});
-  await socialAction('social-detail','social_project|footer-project',c);
+  let footer,detailContext;c.modal=(_t,_b,f,_wide,contextLabel)=>{footer=f;detailContext=contextLabel};c.downloads=()=>'';c.eventsHtml=()=>'';c.api=async()=>({item:{id:'footer-project',owner_id:'teacher',state:'FILED',data:{name:'页脚合成项目',code:'FOOTER-P1',category:'community'},closeout:{}},state_label:'已备案',facts:{units:[],followups:[],effective:0,excluded:0},attachments:[{id:'file'}],events:[]});
+  await socialAction('social-detail','social_project|footer-project',c);assert.equal(detailContext,'培训项目 / 业务详情');
   const more=footer.match(/<details class="detail-more-actions">[\s\S]*?<\/details>/)?.[0]||'',main=footer.replace(more,'');
   if(['college','school'].includes(role)){
    assert.equal((footer.match(/class="detail-more-actions"/g)||[]).length,1);
@@ -823,5 +862,38 @@ test('学院学校共用项目次要动作折叠，教师原动作不变且无�
    assert.match(more,/data-action="social-transition" data-id="refile"/);assert.doesNotMatch(main,/data-id="refile"/);assert.equal(more.includes('social-export'),exported);
    for(const action of ['social-upload','social-unit-import','social-close'])assert.ok(main.includes('data-action="'+action+'"'));
   }else{assert.match(main,/data-action="social-prep"/);assert.match(main,/data-id="refile"/);if(role==='school')assert.match(main,/data-action="social-report-info"/)}
+ }
+});
+
+
+test('结项补正的全选状态随已保存核对项初始化，并随单项变化',async()=>{
+ const c=renderContext({},['records.write']);await renderSocial('projects',c);
+ c.modal=()=>{};c.downloads=()=>'';c.eventsHtml=()=>'';c.formModal=()=>{};
+ c.api=async()=>({item:{id:'check-project',owner_id:'teacher',state:'FILED',version:1,data:{name:'合成结项',category:'community'},closeout:{}},facts:{units:[],followups:[]},attachments:[],events:[]});
+ await socialAction('social-detail','social_project|check-project',c);
+ const original=globalThis.document;
+ try{
+  for(const states of [[true,true],[true,false],[false,false]]){
+   const input=(checked=false)=>({checked,value:'',style:{},addEventListener(type,fn){this[type]=fn}}),all=input(),boxes=states.map(input),fields=new Map([['close-check-all',all]]);
+   for(const id of ['f-actual_income','f-funding_source','f-satisfaction','f-location','f-retained','f-personnel'])fields.set(id,input());
+   globalThis.document={getElementById:id=>fields.get(id)||null,querySelectorAll:selector=>selector.includes('name^="checked_"')?boxes:[]};
+   await socialAction('social-close','',c);await new Promise(resolve=>setTimeout(resolve,5));
+   assert.equal(all.checked,states.every(Boolean));
+   boxes[0].checked=false;boxes[0].change();assert.equal(all.checked,false);
+   all.checked=true;all.change();assert.ok(boxes.every(x=>x.checked));
+  }
+ }finally{globalThis.document=original}
+});
+
+test('财务纪检和制度确认不预填结论，采用需要本人补齐依据的句式',async()=>{
+ const c=renderContext({my_duties:['finance','discipline','coordinator']});
+ c.me={user:{id:'reviewer'},role:{kind:'school'}};await renderSocial('annual',c);
+ let fields={};c.field=(name,label,type,value,options={})=>{fields[name]={value,options};return ''};
+ c.formModal=()=>{};c.modal=()=>{};c.downloads=()=>'';c.eventsHtml=()=>'';c.periods=[];
+ c.api=async()=>({item:{id:'annual',org_id:'college',period_id:'period',state:'SUBMITTED',version:1,data:{}},state_label:'待审核',attachments:[],events:[]});
+ await socialAction('social-detail','social_annual|annual',c);
+ for(const [action,phrases]of [['finance','review'],['discipline','review'],['coordinator','review'],['activate','basis'],['record_basis','basis'],['void','basis']]){
+  fields={};await socialAction('social-transition',action,c);
+  assert.equal(fields.reason.value,'');assert.equal(fields.reason.options.phrases,phrases);
  }
 });

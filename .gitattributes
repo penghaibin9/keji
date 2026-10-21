@@ -1,8 +1,8 @@
 backend/alembic/versions/20260918_0001_canonical_fresh_school.py text eol=lf
 backend/alembic_legacy_unverified/20260917_0002_org_assessment_and_sync.py text eol=lf
 backend/canonical_schema.json text eol=lf
-backend/alembic/versions/20261008_0002_social_training.py text eol=lf
-backend/social_schema.json text eol=lf
+backend/alembic/versions/20261008_0002_social_training.py text eol=crlf
+backend/social_schema.json text eol=crlf
 backend/social_release.json text eol=lf
 backend/alembic/versions/20261009_0003_teacher_course_terms.py text eol=lf
 backend/teaching_schema.json text eol=lf
@@ -14,3 +14,7 @@ backend/alembic/versions/20261013_0005_audit_result_index.py text eol=lf
 backend/audit_index_schema.json text eol=lf
 backend/audit_index_release.json text eol=lf
 tests/fixtures/p0_before/** -text
+
+backend/alembic/versions/20261021_0006_personal_form_drafts.py text eol=lf
+backend/form_draft_schema.json text eol=lf
+backend/form_draft_release.json text eol=lf

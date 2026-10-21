@@ -1,0 +1,58 @@
+{
+  "date": "2026-10-19",
+  "scope": "本地学校管理驾驶舱前端交互",
+  "cause": "原有三个canvas仅绘制图形，没有悬停命中、点击联动；指标为静态容器，照片没有查看入口。",
+  "implemented": [
+    "三图表真实命中区域、悬停数值和点击筛选",
+    "学院和项目即时筛选、年份切换、刷新与重置",
+    "指标按原表单位打开来源明细，续行链接对应编号首行",
+    "现场照片原图查看、退出键关闭、焦点恢复及对应学院入口",
+    "有限时长图表过渡，尊重减少动态偏好；窄屏图表纵向排列"
+  ],
+  "frontend_tests": {
+    "total": 255,
+    "passed": 255,
+    "failed": 0
+  },
+  "browser": {
+    "date": "2026-10-19",
+    "url": "http://localhost:8773/#cockpit",
+    "role": "本地学校测试账号",
+    "checks": {
+      "rankHover": "素质教育学院3954人次",
+      "rankClick": true,
+      "donutHover": "软件学院7条，占25.0%",
+      "donutClick": "2508人天",
+      "yearBarClick": "软件学院2025年20条",
+      "yearRefreshPreserved": true,
+      "photoLoaded": {
+        "width": 1028,
+        "height": 771
+      },
+      "photoEscapeClosed": true,
+      "photoFocusReturned": true,
+      "photoRelatedCollege": "智能装备技术学院2026年2840人次",
+      "personDaysRows": 7,
+      "personTimesRows": 21,
+      "personTimesSum": 8902,
+      "historyProjectLink": "网络安全培训技术服务2026-06-01至2026-06-05待学校复核",
+      "keyboardCollege": "药学院212人次",
+      "projectChange": "用药指导培训30人次、1条记录",
+      "refresh": true,
+      "reset": true,
+      "missingData": "艺术学院2026年未提供，主数字禁用，无空筛选控件"
+    },
+    "viewportRestored": true,
+    "narrowLayout": {
+      "chartColumns": "210.12px",
+      "main": "8,902人次",
+      "viewport": 267
+    },
+    "productionTouched": false
+  },
+  "database_changed_by_this_task": false,
+  "backend_changed_by_this_task": false,
+  "production_touched": false,
+  "unavailable_filters": "教研室、课程没有与学校原表建立真实对应，保持待关联。",
+  "parallel_work": "保留其他课程积分、历史资料和既有文档删除等未提交改动；未提交、推送或部署。"
+}

@@ -1,6 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {ledgerPage,homeIndicators,ledgerAction,minePage,mineReminders,resourceStatsPage} from '../../frontend/social-ledgers.js';
+import {ledgerPage,homeIndicators,ledgerAction,minePage,mineReminders,resourceStatsPage,resetLedgerView} from '../../frontend/social-ledgers.js';
+import {historyDateSummary} from '../../frontend/history-projects.js';
 const esc=v=>String(v??'').replace(/[&<>"']/g,ch=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[ch]));
 function context(answers,role='school'){
  const requests=[];
@@ -11,6 +12,99 @@ function context(answers,role='school'){
   api:async path=>{requests.push(path);for(const [k,v] of Object.entries(answers))if(path.startsWith(k))return v;throw Error('unexpected '+path)}};
 }
 const overview={year:2026,scope:'全校',note:'推荐口径待学校确认',participants:{claimed:'4320',final:'2508',reported:3,colleges:12,pending_rows:4,pending_ledgers:2,mine:null},can_review:true,points:null,achievements:{total:3,levels:{national:0,province:1,school:2}},dual:{total:7,levels:{'初级':2,'中级':3,'高级':1,'未分级':1}}};
+
+test('台账显示同源历史日期预填和项目详情入口，不改报送量与核定状态',async()=>{
+ resetLedgerView(true);
+ const history={date_prefill:{kind:'source',start_date:'2025-09-02',end_date:'2025-09-11',text:'服务证明所载期间',evidence:'合成服务证明第2页'},confirmed_start:null,confirmed_end:null};
+ const detail={id:'prefill-ledger',version:2,org_name:'合成学院',can_review:false,can_draft:false,versions:[],note:'原值保留',
+  totals:{claimed_total:'0',recommended_total:'0',final_total:'0',pending_rows:1},reported_quantities:[{unit:'人次',value:'0'}],
+  data:{year:2025,version_no:1,template_label:'合成原表',file:{name:'原件.xlsx'},summary:{serious:0},rows:[{row_no:4,name:'合成历史项目',claimed:'0',people:'0',hours:'8',recommended:'0',approved:null,issues:[],history}]}};
+ const c=context({'/social/ledgers/prefill-ledger':detail});c.filter={year:'2025',source:'school',ledger_id:'prefill-ledger'};
+ try{
+  const html=await ledgerPage(c);
+  assert.ok(html.includes(historyDateSummary(c,history)));assert.match(html,/查看历史项目资料与依据/);
+  assert.match(html,/history_ledger=prefill-ledger&amp;history_row=4/);
+  assert.match(html,/历史预填 · 待学校复核/);assert.match(html,/待学校核定/);
+  assert.doesNotMatch(html,/学校已核定|已结项|已认定积分/);
+  detail.totals.pending_rows=0;
+  const quantityApproved=await ledgerPage(c);
+  assert.match(quantityApproved,/报送量已核定 · 历史预填日期仍待学校复核/);
+  assert.doesNotMatch(quantityApproved,/学校已核定 · 全部项目行已核定/);
+ }finally{resetLedgerView(true)}
+});
+
+test('原表报送量按单位展示，驾驶舱台账链接可按年度和编号打开及返回',async()=>{
+ const totals={claimed_total:'11410',recommended_total:'999',final_total:'999',pending_rows:1};
+ const quantities=[{unit:'人次',value:'8902'},{unit:'人天',value:'2508'},{unit:'原表折算量',value:null}];
+ const item={id:'linked-ledger',org_name:'合成学院',can_review:false,can_draft:false,version:1,versions:[],totals,reported_quantities:quantities,
+  data:{year:2025,version_no:1,template_label:'合成台账',file:{name:'原件.xlsx'},summary:{serious:0},rows:[]}};
+ const c=context({'/social/ledgers/linked-ledger':item,'/social/ledgers?year=':{items:[item],missing:[],can_submit:false,can_review:false,note:'',reported_quantities:quantities}});
+ await ledgerAction('tz-year','2025',c);
+ let html=await ledgerPage(c);
+ assert.match(html,/原表报送 · 人次/);assert.match(html,/8,902/);assert.match(html,/2,508/);assert.match(html,/未提供.*原表折算量/);
+ assert.doesNotMatch(html,/11,410|学院填报人次|系统建议核减/);
+ assert.ok(c.requests.at(-1).endsWith('&source=school'));
+ c.filter={year:'2025',ledger_id:'linked-ledger'};
+ html=await ledgerPage(c);
+ assert.match(html,/当前查看台账/);assert.match(html,/合成学院 · 2025 年/);
+ assert.match(html,/原表报送 · 人天/);assert.doesNotMatch(html,/11,410/);
+ const navigations=[];c.nav=async(page,filter)=>{navigations.push({page,filter});c.filter=filter};
+ await ledgerAction('tz-back','',c);
+ assert.deepEqual(navigations,[{page:'ledgers',filter:{year:'2025',source:'school'}}]);
+ html=await ledgerPage(c);assert.doesNotMatch(html,/当前查看台账/);assert.equal(c.requests.at(-1),'/social/ledgers?year=2025&source=school');
+ await ledgerAction('tz-back','',context({}));
+});
+
+test('2508人天台账保留原报送量与逐行公式，试算及人工核对不冒充人次',async()=>{
+ const rows=[160,384,1160,96,448,240,20].map((value,i)=>({row_no:4+i,name:'合成人天项目'+(i+1),claimed:String(value),claimed_raw:value+'人天',people:value,hours:'8',recommended:String(value),approved:null,mode:'人天式',basis:'人天式：人数×课时÷8',issues:[]}));
+ const detail={id:'days-ledger',version:1,org_name:'软件学院',can_review:true,can_draft:false,versions:[],note:'推荐值待学校确认',reported_quantities:[{unit:'人天',value:'2508'}],
+  totals:{claimed_total:'2508',recommended_total:'2508',final_total:'2508',pending_rows:7},school_figure:{value:'2508',diff:'100',reason:'逐行核对依据'},
+  data:{year:2026,version_no:1,template_label:'2026版（模块式／人天式）',file:{name:'合成原件.xls'},summary:{serious:0},rows}};
+ const c=context({'/social/ledgers/days-ledger':detail});
+ await ledgerAction('tz-detail','days-ledger',c);
+ try{
+  let html=await ledgerPage(c);
+  assert.match(html,/原表报送 · 人天/);assert.match(html,/2,508<small>人天/);
+  assert.match(html,/推荐试算量/);assert.match(html,/当前核对量/);assert.match(html,/学校人工核对数/);
+  assert.match(html,/不作为原表人次统计/);assert.match(html,/不计算跨单位差额/);assert.match(html,/人数×课时÷8/);
+  assert.doesNotMatch(html,/2,508<small>人次|2,508 人次|认可的人次|学校人工核定人次|相差 100/);
+  detail.reported_quantities=[{unit:'原表折算量',value:'2508'}];html=await ledgerPage(c);
+  assert.match(html,/推荐试算量/);assert.match(html,/原表报送 · 原表折算量/);
+  detail.reported_quantities=[{unit:'人次',value:'2508'}];html=await ledgerPage(c);
+  assert.match(html,/按推荐口径/);assert.match(html,/学校人工核定人次/);assert.match(html,/2,508<small>人次/);assert.match(html,/相差 100/);
+ }finally{await ledgerAction('tz-back','',c)}
+});
+
+test('学校来源默认最新原表年度，其他来源单列且切换刷新保留范围',async()=>{
+ resetLedgerView(true);
+ const periods=[{year:2025,label:'2025年全年'},{year:2026,label:'2026年1—8月'}];
+ const c=context({});c.filter={};
+ c.api=async path=>{c.requests.push(path);const q=new URLSearchParams(path.split('?')[1]),source=q.get('source');return {year:Number(q.get('year')||2026),source,source_periods:periods,source_catalog_available:true,source_note:source==='school'?'学校原表同源':'其他资料和测试数据单列',items:[],missing:[],reported_quantities:[],can_submit:false,can_review:false,note:''}};
+ let html=await ledgerPage(c);
+ assert.equal(c.requests.at(-1),'/social/ledgers?source=school');
+ assert.match(html,/2026年1—8月各学院台账/);assert.match(html,/学校原始台账/);assert.match(html,/其他台账（含测试）/);
+ assert.match(html,/href="#ledgers\?year=2026&amp;source=other"/);assert.match(html,/href="#cockpit\?report_year=2026"/);
+ c.filter={year:"2025",source:"school"};assert.match(await ledgerPage(c),/href="#cockpit\?report_year=2025"/);
+ c.filter={year:'2027',source:'other'};html=await ledgerPage(c);
+ assert.equal(c.requests.at(-1),'/social/ledgers?year=2027&source=other');
+ assert.match(html,/href="#ledgers\?year=2026&amp;source=school"/);
+ const navigations=[];c.nav=async(page,filter)=>{navigations.push({page,filter});c.filter=filter};
+ await ledgerAction('tz-year','2026',c);assert.deepEqual(navigations.at(-1),{page:'ledgers',filter:{year:'2026',source:'other'}});
+ await ledgerAction('tz-detail','other-ledger',c);assert.equal(navigations.at(-1).filter.source,'other');
+ await ledgerAction('tz-back','',c);assert.deepEqual(navigations.at(-1).filter,{year:'2026',source:'other'});
+ c.filter={source:'invalid',year:'2027'};await ledgerPage(c);assert.equal(c.requests.at(-1),'/social/ledgers?source=school');
+ resetLedgerView(true);
+});
+
+test('多单位列表总卡不显示人次与人天相加的试算和当前混合数',async()=>{
+ resetLedgerView(true);
+ const items=[['合成人次学院','人次','120'],['合成人天学院','人天','20']].map(([org_name,unit,value],i)=>({id:'mixed-'+i,org_name,reported_quantities:[{unit,value}],data:{version_no:1,template_label:'2026版',summary:{serious:0}},totals:{claimed_total:value,recommended_total:value,final_total:value,pending_rows:1,state:'待核定'}}));
+ const c=context({'/social/ledgers':{year:2026,items,missing:[],reported_quantities:[{unit:'人次',value:'120'},{unit:'人天',value:'20'}],can_submit:false,can_review:false,note:''}});
+ const html=await ledgerPage(c),cards=html.match(/<section class="summary-row ledger-stats mt16">[\s\S]*?<\/section>/)[0];
+ assert.match(cards,/按行查看/);assert.match(cards,/分单位核对/);assert.match(cards,/人次、人天及折算量不合并/);
+ assert.doesNotMatch(cards,/>140</);assert.match(html,/120 人次/);assert.match(html,/20 人天/);
+ resetLedgerView(true);
+});
 
 test('学院与学校台账详情在折叠说明外始终显示学院年度版本和核定进度',async()=>{
  for(const role of ['college','school']){
@@ -76,13 +170,13 @@ test('教师首页显示我的培训人次，读取失败不冒充 0',async()=>{
  assert.match(failed,/读取失败：网络断开/);assert.doesNotMatch(failed,/class="kpi"/);
 });
 test('台账页列出各学院填报、推荐、核定后与未报学院，切换年度重新读取',async()=>{
- const item={id:'r1',org_name:'软件<学院>',data:{version_no:2,template_label:'2026 版',summary:{serious:1}},totals:{claimed_total:'200',recommended_total:'150',final_total:'150',state:'待核定',pending_rows:3}};
+ const item={id:'r1',org_name:'软件<学院>',reported_quantities:[{unit:'人次',value:'200'}],data:{version_no:2,template_label:'2026 版',summary:{serious:1}},totals:{claimed_total:'200',recommended_total:'150',final_total:'150',state:'待核定',pending_rows:3}};
  const c=context({'/social/ledgers':{items:[item],missing:[{org_id:'c2',org_name:'商学院'}],can_submit:true,can_review:true,note:'说明'}});
  const html=await ledgerPage(c);
- assert.match(html,/软件&lt;学院&gt;/);assert.match(html,/第 2 版/);assert.match(html,/1 行严重/);assert.match(html,/还没报送：商学院/);assert.match(html,/去核定/);assert.match(html,/−50/);
+ assert.match(html,/软件&lt;学院&gt;/);assert.match(html,/第 2 版/);assert.match(html,/1 行严重/);assert.match(html,/还没报送：商学院/);assert.match(html,/去核定/);assert.match(html,/200 人次/);assert.doesNotMatch(html,/−50/);
  assert.match(html,/data-action="tz-upload"/);assert.match(html,/data-action="tz-detail" data-id="r1"/);
  await ledgerAction('tz-year','2025',c);await ledgerPage(c);
- assert.equal(c.requests.at(-1),'/social/ledgers?year=2025');
+ assert.equal(c.requests.at(-1),'/social/ledgers?year=2025&source=school');
 });
 test('核定页整页显示、可筛选问题行，筛选时保留已填的核定值',async()=>{
  const rows=[{row_no:4,name:'公益课',recommended:'100',claimed:'200',issues:[{level:'严重',text:'浏览量当人数'}]},{row_no:5,name:'脱产班',recommended:'32',claimed:'32',issues:[]}];
@@ -153,9 +247,9 @@ test('个人培训按统一待办计数，保留本人项目、当前审批节�
  assert.match(html,/素质教育学院/);assert.match(html,/待我处理 <span class="workbench-count">2/);assert.match(html,/3 项等待核对或学校确认/);assert.match(html,/data-action="social-claim-new"/);
  assert.match(html,/公益&lt;课&gt;/);assert.doesNotMatch(html,/公益<课>/);assert.match(html,/预计截止 2026-09-23（待学校确认）/);assert.doesNotMatch(html,/已过申报期限/);
  assert.match(html,/<td>院长初审<\/td>/);assert.match(html,/1 项待确认/);assert.doesNotMatch(html,/mine-steps|home-indicators|24 天后到期|我的培训人次/);
- assert.match(html,/第 4 行 · 项目 TZ2026-c1-004/);assert.match(html,/项目核定人次 0/);assert.match(html,/待个人核定/);assert.match(html,/满意度自动生成/);assert.match(html,/教师资质管理 · 1 项/);assert.ok(c.requests.includes('/todos?attention=handle&page=1&size=1'));
+ assert.match(html,/第 4 行 · 项目 TZ2026-c1-004/);assert.match(html,/项目核定人次 0/);assert.match(html,/待个人核定/);assert.match(html,/满意度自动生成/);assert.match(html,/教师资质 · 1 项/);assert.ok(c.requests.includes('/todos?attention=handle&page=1&size=1'));
  const api=c.api;c.api=p=>p.startsWith('/todos?')?Promise.reject(Error('待办断网')):api(p);const unknown=await minePage(c);assert.match(unknown,/workbench-count">—/);assert.match(unknown,/待办暂未读取成功/);assert.doesNotMatch(unknown,/待我处理 <span class="workbench-count">0/);
- const failed=await minePage({...context({}),api:async()=>{throw Error('断网')}},{});assert.match(failed,/个人数据看板读取失败：断网/);
+ const failed=await minePage({...context({}),api:async()=>{throw Error('断网')}},{});assert.match(failed,/我的培训明细读取失败：断网/);
 });
 test('教研室平均积分按名次列出；利益冲突弹窗可申报、只能撤回本人的',async()=>{
  const c=context({'/social/departments':{year:2026,note:'说明',items:[{org_id:'d1',name:'软件<教研室>',college:'软件学院',teachers:4,with_points:2,total:'30',average:'7.5',rank:1},{org_id:'d2',name:'空教研室',college:'软件学院',teachers:0,with_points:0,total:'0',average:null}]},
@@ -317,4 +411,37 @@ test('台账人员和项目关联表单返回时先关闭表单，再读取原�
    assert.match(html,/待确认合成项目/);assert.match(html,/返回本院台账/);assert.equal(options.returnLabel,'返回学院台账');
   }
  }finally{await ledgerAction('tz-back','',{...c,render:async()=>{}});globalThis.document=previousDocument}
+});
+
+
+test('年度切换经过通用导航重置后仍恢复原业务标签',async()=>{
+ const {resetLedgerView}=await import('../../frontend/social-ledgers.js');
+ const {navigationHash,restoreNavigation}=await import('../../frontend/scope.js');
+ for(const ledger_tab of ['targets','depts']){
+  const c={filter:{},render:async()=>{},nav:async(page,filter)=>{resetLedgerView(true);c.filter=restoreNavigation(navigationHash(page,filter),{ledgers:'台账'}).filter}};
+  await ledgerAction('tz-tab',ledger_tab,c);
+  await ledgerAction('tz-year','2025',c);
+  assert.equal(c.filter.ledger_tab,ledger_tab);assert.equal(c.filter.year,'2025');
+ }
+ resetLedgerView(true);
+});
+
+
+test('浏览器返回无标签地址时恢复台账列表，不沿用年度目标标签',async()=>{
+ resetLedgerView(true);
+ const c=context({'/social/targets':{year:2025,items:[],can_edit:false,note:''},'/social/ledgers?':{year:2026,items:[],source:'school',missing:[],source_periods:[]}});
+ c.filter={year:'2025',ledger_tab:'targets'};await ledgerPage(c);
+ c.filter={source:'school'};await ledgerPage(c);
+ assert.equal(c.requests.at(-1),'/social/ledgers?source=school');
+ resetLedgerView(true);
+});
+
+test('问题行筛选写入地址并在刷新后恢复，不能沿用上一个详情的筛选',async()=>{
+ resetLedgerView(true);
+ const detail={id:'refresh-ledger',version:1,org_name:'合成学院',can_review:false,can_draft:false,versions:[],note:'',totals:{pending_rows:2},data:{year:2025,version_no:1,file:{name:'原件.xlsx'},summary:{serious:0},rows:[{row_no:4,name:'正常合成项目',issues:[]},{row_no:5,name:'待核合成项目',issues:[{level:'注意',text:'材料待补'}]}]}};
+ const c=context({'/social/ledgers/refresh-ledger':detail});c.filter={year:'2025',ledger_id:'refresh-ledger'};let synced=false;c.syncLocation=()=>{synced=true};
+ globalThis.document={querySelectorAll:()=>[]};
+ await ledgerPage(c);await ledgerAction('tz-filter','issues',c);delete globalThis.document;assert.ok(synced);assert.equal(c.filter.ledger_filter,'issues');
+ resetLedgerView(true);const html=await ledgerPage(c);assert.match(html,/待核合成项目/);assert.doesNotMatch(html,/正常合成项目/);
+ delete c.filter.ledger_filter;assert.match(await ledgerPage(c),/正常合成项目/);resetLedgerView(true);
 });

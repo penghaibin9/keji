@@ -2,10 +2,28 @@
 
 > 由 `scripts/generate_api_catalog.py` 从当前源码自动生成。认证原语列只表示源码入口使用标准服务端认证/事务原语，不能替代运行时越权测试。
 
-当前接口共 **227** 项：业务路由 **226** 项、健康检查 **1** 项；业务静态认证门：**PASS**。
+当前接口共 **282** 项：业务路由 **281** 项、健康检查 **1** 项；业务静态认证门：**PASS**。
 
 | 方法 | 路径 | 模块文件 | 处理函数 | 认证/事务原语 | 公开 |
 |---|---|---|---|---|---|
+| POST | `/api/applications/bases` | `backend\app\routes\applications.py` | `base_create` | command | 否 |
+| PUT | `/api/applications/bases/{ident}` | `backend\app\routes\applications.py` | `base_edit` | command | 否 |
+| POST | `/api/applications/courses` | `backend\app\routes\applications.py` | `course_create` | command | 否 |
+| PUT | `/api/applications/courses/{ident}` | `backend\app\routes\applications.py` | `course_edit` | command | 否 |
+| GET | `/api/applications/deadlines` | `backend\app\routes\applications.py` | `deadlines` | read_operation | 否 |
+| PUT | `/api/applications/deadlines` | `backend\app\routes\applications.py` | `deadline_set` | command | 否 |
+| PUT | `/api/applications/deadlines/reopen` | `backend\app\routes\applications.py` | `deadline_reopen` | command | 否 |
+| GET | `/api/applications/mine` | `backend\app\routes\applications.py` | `mine` | read_operation | 否 |
+| GET | `/api/applications/online-library` | `backend\app\routes\applications.py` | `online_library` | read_operation | 否 |
+| GET | `/api/applications/teaching-courses` | `backend\app\routes\applications.py` | `teaching_courses` | read_operation | 否 |
+| GET | `/api/applications/trainers` | `backend\app\routes\applications.py` | `trainer_list` | read_operation | 否 |
+| POST | `/api/applications/trainers` | `backend\app\routes\applications.py` | `trainer_create` | command | 否 |
+| PUT | `/api/applications/trainers/{ident}` | `backend\app\routes\applications.py` | `trainer_edit` | command | 否 |
+| POST | `/api/applications/trainers/{ident}/recommend` | `backend\app\routes\applications.py` | `trainer_recommend` | command | 否 |
+| GET | `/api/applications/{ident}` | `backend\app\routes\applications.py` | `get_one` | read_operation | 否 |
+| POST | `/api/applications/{ident}/actions` | `backend\app\routes\applications.py` | `action` | command | 否 |
+| GET | `/api/applications/{ident}/course-points` | `backend\app\routes\applications.py` | `course_points` | read_operation | 否 |
+| GET | `/api/approval-center` | `backend\app\routes\business.py` | `approval_center` | read_operation | 否 |
 | GET | `/api/assessment-ranking/print` | `backend\app\routes\calculations.py` | `assessment_ranking_print` | read_operation | 否 |
 | GET | `/api/assessment-summary/latest` | `backend\app\routes\calculations.py` | `latest_assessment_summary` | read_operation | 否 |
 | GET | `/api/assessments` | `backend\app\routes\calculations.py` | `assessments` | read_operation | 否 |
@@ -23,10 +41,12 @@
 | GET | `/api/audit` | `backend\app\routes\admin.py` | `audit_list` | read_operation | 否 |
 | GET | `/api/audit/security-alerts` | `backend\app\routes\admin.py` | `security_alerts` | read_operation | 否 |
 | POST | `/api/auth/demo-switch` | `backend\app\routes\auth.py` | `switch_demo_identity` | command | 否 |
+| POST | `/api/auth/identity` | `backend\app\routes\auth.py` | `switch_identity` | command | 否 |
 | POST | `/api/auth/login` | `backend\app\routes\auth.py` | `login` | — | 是 |
 | POST | `/api/auth/logout` | `backend\app\routes\auth.py` | `logout` | command | 否 |
 | GET | `/api/auth/me` | `backend\app\routes\auth.py` | `me` | current_actor | 否 |
 | POST | `/api/auth/password` | `backend\app\routes\auth.py` | `change_password` | command | 否 |
+| GET | `/api/auth/role-summary` | `backend\app\routes\auth.py` | `role_summary` | read_operation | 否 |
 | GET | `/api/auth/sso/callback` | `backend\app\routes\sso.py` | `sso_callback` | — | 是 |
 | GET | `/api/auth/sso/implementation-callback` | `backend\app\routes\sso_trial.py` | `finish_trial` | — | 是 |
 | POST | `/api/auth/sso/logout` | `backend\app\routes\sso.py` | `sso_logout` | command | 否 |
@@ -51,6 +71,7 @@
 | GET | `/api/connections/{ident}/draft` | `backend\app\routes\integration_center.py` | `get_draft` | read_operation | 否 |
 | PUT | `/api/connections/{ident}/draft` | `backend\app\routes\integration_center.py` | `save_draft` | command | 否 |
 | POST | `/api/connections/{ident}/draft/login-test` | `backend\app\routes\sso_trial.py` | `start_trial` | command | 否 |
+| POST | `/api/connections/{ident}/draft/prepare` | `backend\app\routes\integration_center.py` | `prepare_draft` | command | 否 |
 | POST | `/api/connections/{ident}/draft/preview` | `backend\app\routes\integration_center.py` | `preview_draft` | command | 否 |
 | POST | `/api/connections/{ident}/draft/probe` | `backend\app\routes\integration_center.py` | `test_draft` | command | 否 |
 | POST | `/api/connections/{ident}/draft/publish` | `backend\app\routes\integration_center.py` | `publish_draft` | command | 否 |
@@ -66,14 +87,22 @@
 | PUT | `/api/connections/{ident}/materials` | `backend\app\routes\integration_center.py` | `update_materials` | command | 否 |
 | POST | `/api/connections/{ident}/probe` | `backend\app\routes\integrations.py` | `connection_probe` | command | 否 |
 | POST | `/api/connections/{ident}/sync` | `backend\app\routes\integrations.py` | `manual_sync` | command | 否 |
+| POST | `/api/credit-reviewers` | `backend\app\routes\admin.py` | `add_credit_reviewer` | command | 否 |
+| GET | `/api/credit-reviewers/candidates` | `backend\app\routes\admin.py` | `credit_reviewer_candidates` | read_operation | 否 |
+| POST | `/api/credit-reviewers/remove` | `backend\app\routes\admin.py` | `remove_credit_reviewer` | command | 否 |
 | GET | `/api/delivery/configuration` | `backend\app\routes\delivery.py` | `configuration` | read_operation | 否 |
 | GET | `/api/delivery/configuration.xlsx` | `backend\app\routes\delivery.py` | `configuration_xlsx` | current_actor | 否 |
+| GET | `/api/delivery/permission-list.xlsx` | `backend\app\routes\delivery.py` | `permission_list_xlsx` | current_actor | 否 |
 | GET | `/api/dictionaries` | `backend\app\routes\admin.py` | `dictionaries` | read_operation | 否 |
 | GET | `/api/disputes` | `backend\app\routes\business.py` | `disputes` | read_operation | 否 |
 | POST | `/api/disputes` | `backend\app\routes\business.py` | `dispute_create` | command | 否 |
 | GET | `/api/disputes/{ident}` | `backend\app\routes\business.py` | `dispute_detail` | read_operation | 否 |
 | POST | `/api/disputes/{ident}/resolve` | `backend\app\routes\business.py` | `dispute_resolve` | command | 否 |
 | POST | `/api/exports` | `backend\app\routes\tasks.py` | `create_export` | command | 否 |
+| GET | `/api/form-drafts` | `backend\app\routes\form_drafts.py` | `list_drafts` | read_operation | 否 |
+| GET | `/api/form-drafts/{kind}` | `backend\app\routes\form_drafts.py` | `get_draft` | read_operation | 否 |
+| PUT | `/api/form-drafts/{kind}` | `backend\app\routes\form_drafts.py` | `save_draft` | command | 否 |
+| POST | `/api/form-drafts/{kind}/finish` | `backend\app\routes\form_drafts.py` | `finish_draft` | command | 否 |
 | GET | `/api/health` | `backend/app/main.py` | `health` | — | 是 |
 | GET | `/api/imports` | `backend\app\routes\tasks.py` | `imports` | read_operation | 否 |
 | GET | `/api/imports/templates/{kind}` | `backend\app\routes\tasks.py` | `import_template` | current_actor | 否 |
@@ -110,6 +139,9 @@
 | GET | `/api/organizations` | `backend\app\routes\admin.py` | `organizations` | read_operation | 否 |
 | POST | `/api/organizations` | `backend\app\routes\admin.py` | `create_org` | command | 否 |
 | PUT | `/api/organizations/{ident}` | `backend\app\routes\admin.py` | `update_org` | command | 否 |
+| GET | `/api/organizations/{ident}/head-candidates` | `backend\app\routes\admin.py` | `head_candidates` | read_operation | 否 |
+| POST | `/api/organizations/{ident}/heads` | `backend\app\routes\admin.py` | `add_org_head` | command | 否 |
+| POST | `/api/organizations/{ident}/heads/remove` | `backend\app\routes\admin.py` | `remove_org_head` | command | 否 |
 | POST | `/api/organizations/{ident}/state` | `backend\app\routes\admin.py` | `org_action` | command | 否 |
 | GET | `/api/participations` | `backend\app\routes\reference.py` | `participation_list` | read_operation | 否 |
 | POST | `/api/participations` | `backend\app\routes\reference.py` | `participation_create` | command | 否 |
@@ -143,6 +175,11 @@
 | PUT | `/api/reference/code-tables/{code_type}` | `backend\app\routes\reference.py` | `code_table_import` | command | 否 |
 | GET | `/api/reference/courses` | `backend\app\routes\reference.py` | `courses` | read_operation | 否 |
 | GET | `/api/reference/credit-summary` | `backend\app\routes\reference.py` | `credit_summary_view` | read_operation | 否 |
+| GET | `/api/reference/cx-claims` | `backend\app\routes\reference.py` | `cx_claims_list` | read_operation | 否 |
+| POST | `/api/reference/cx-claims` | `backend\app\routes\reference.py` | `cx_claim_submit` | command | 否 |
+| POST | `/api/reference/cx-claims/decide` | `backend\app\routes\reference.py` | `cx_claim_decide` | command | 否 |
+| GET | `/api/reference/cx-claims/mine` | `backend\app\routes\reference.py` | `cx_claims_mine` | read_operation | 否 |
+| GET | `/api/reference/cx-unmatched.xlsx` | `backend\app\routes\reference.py` | `cx_unmatched_xlsx` | current_actor | 否 |
 | GET | `/api/reference/projects` | `backend\app\routes\reference.py` | `projects` | read_operation | 否 |
 | GET | `/api/reference/school-courses` | `backend\app\routes\reference.py` | `school_courses` | read_operation | 否 |
 | GET | `/api/reference/source-status` | `backend\app\routes\reference.py` | `source_status_view` | read_operation | 否 |
@@ -150,6 +187,8 @@
 | GET | `/api/reference/staff-roster/{staff_no}` | `backend\app\routes\reference.py` | `staff_roster_detail` | read_operation | 否 |
 | GET | `/api/reference/teacher-courses` | `backend\app\routes\reference.py` | `teacher_courses` | read_operation | 否 |
 | GET | `/api/reference/teacher-credits` | `backend\app\routes\reference.py` | `teacher_credits` | read_operation | 否 |
+| POST | `/api/reference/teacher-credits/level` | `backend\app\routes\reference.py` | `teacher_credit_level` | command | 否 |
+| POST | `/api/reference/teacher-credits/review` | `backend\app\routes\reference.py` | `teacher_credit_review` | command | 否 |
 | GET | `/api/reference/teacher-hr` | `backend\app\routes\reference.py` | `teacher_hr` | read_operation | 否 |
 | GET | `/api/roles` | `backend\app\routes\admin.py` | `roles` | read_operation | 否 |
 | POST | `/api/roles` | `backend\app\routes\admin.py` | `copy_role` | command | 否 |
@@ -169,6 +208,7 @@
 | POST | `/api/social/claims` | `backend\app\routes\social.py` | `claim_create` | command | 否 |
 | PUT | `/api/social/claims/{ident}` | `backend\app\routes\social.py` | `claim_edit` | command | 否 |
 | POST | `/api/social/claims/{ident}/actions` | `backend\app\routes\social.py` | `claim_action` | command | 否 |
+| GET | `/api/social/cockpit` | `backend\app\routes\ledgers.py` | `school_cockpit` | read_operation | 否 |
 | GET | `/api/social/conflicts` | `backend\app\routes\ledgers.py` | `conflict_list` | read_operation | 否 |
 | POST | `/api/social/conflicts` | `backend\app\routes\ledgers.py` | `conflict_declare` | command | 否 |
 | POST | `/api/social/conflicts/{ident}/withdraw` | `backend\app\routes\ledgers.py` | `conflict_withdraw` | command | 否 |
@@ -181,6 +221,13 @@
 | GET | `/api/social/departments` | `backend\app\routes\ledgers.py` | `departments` | read_operation | 否 |
 | GET | `/api/social/duties` | `backend\app\routes\social.py` | `duties` | read_operation | 否 |
 | PUT | `/api/social/duties` | `backend\app\routes\social.py` | `set_duties` | command | 否 |
+| GET | `/api/social/duty-options` | `backend\app\routes\social.py` | `duty_options` | read_operation | 否 |
+| GET | `/api/social/history-projects` | `backend\app\routes\ledgers.py` | `history_project_list` | read_operation | 否 |
+| GET | `/api/social/history-projects/{ident}/{row_no}` | `backend\app\routes\ledgers.py` | `history_project_detail` | read_operation | 否 |
+| PUT | `/api/social/history-projects/{ident}/{row_no}/facts` | `backend\app\routes\ledgers.py` | `history_project_facts` | command | 否 |
+| GET | `/api/social/images/{image_id}` | `backend\app\routes\social_images.py` | `show_image` | current_actor | 否 |
+| POST | `/api/social/images/{target}/{ident}` | `backend\app\routes\social_images.py` | `upload_image` | command, current_actor | 否 |
+| POST | `/api/social/images/{target}/{ident}/remove` | `backend\app\routes\social_images.py` | `remove_image` | command | 否 |
 | GET | `/api/social/ledger-summary` | `backend\app\routes\social.py` | `ledger_summary` | read_operation | 否 |
 | GET | `/api/social/ledgers` | `backend\app\routes\ledgers.py` | `ledger_list` | read_operation | 否 |
 | POST | `/api/social/ledgers` | `backend\app\routes\ledgers.py` | `ledger_submit` | command | 否 |
@@ -199,14 +246,21 @@
 | POST | `/api/social/point-reviews/{ident}/actions` | `backend\app\routes\social.py` | `point_review_action` | command | 否 |
 | POST | `/api/social/policies` | `backend\app\routes\social.py` | `policy_create` | command | 否 |
 | POST | `/api/social/policies/recommended` | `backend\app\routes\social.py` | `policy_recommended` | command | 否 |
+| PUT | `/api/social/policies/{ident}` | `backend\app\routes\social.py` | `policy_edit` | command | 否 |
 | POST | `/api/social/policies/{ident}/actions` | `backend\app\routes\social.py` | `policy_action` | command | 否 |
 | PUT | `/api/social/policies/{ident}/calendar` | `backend\app\routes\social.py` | `policy_calendar` | command | 否 |
 | GET | `/api/social/project-options` | `backend\app\routes\social.py` | `project_options` | read_operation | 否 |
 | POST | `/api/social/projects` | `backend\app\routes\social.py` | `project_create` | command | 否 |
 | PUT | `/api/social/projects/{ident}` | `backend\app\routes\social.py` | `project_edit` | command | 否 |
 | POST | `/api/social/projects/{ident}/actions` | `backend\app\routes\social.py` | `project_action` | command | 否 |
+| GET | `/api/social/projects/{ident}/course-options` | `backend\app\routes\social.py` | `project_course_options` | read_operation | 否 |
+| POST | `/api/social/projects/{ident}/courses/link` | `backend\app\routes\social.py` | `project_course_link` | command | 否 |
 | POST | `/api/social/projects/{ident}/notes` | `backend\app\routes\social.py` | `case_note` | command | 否 |
+| PUT | `/api/social/projects/{ident}/prep` | `backend\app\routes\social.py` | `project_prep` | command | 否 |
+| PUT | `/api/social/projects/{ident}/report-info` | `backend\app\routes\social.py` | `project_report_info` | command | 否 |
 | POST | `/api/social/projects/{ident}/units/{operation}` | `backend\app\routes\social.py` | `import_units` | command | 否 |
+| GET | `/api/social/report-export` | `backend\app\routes\social.py` | `report_export` | read_operation | 否 |
+| GET | `/api/social/report-export/check` | `backend\app\routes\social.py` | `report_check` | read_operation | 否 |
 | POST | `/api/social/reports` | `backend\app\routes\social.py` | `report_create` | command | 否 |
 | POST | `/api/social/reports/{ident}/actions` | `backend\app\routes\social.py` | `report_action` | command | 否 |
 | GET | `/api/social/resource-stats` | `backend\app\routes\ledgers.py` | `resource_stats` | read_operation | 否 |
@@ -233,6 +287,7 @@
 | POST | `/api/users` | `backend\app\routes\admin.py` | `create_user` | command | 否 |
 | PUT | `/api/users/{ident}` | `backend\app\routes\admin.py` | `update_user` | command | 否 |
 | POST | `/api/users/{ident}/reset-password` | `backend\app\routes\admin.py` | `reset_user` | command | 否 |
+| POST | `/api/users/{ident}/unlock` | `backend\app\routes\admin.py` | `unlock_user` | command | 否 |
 
 ## 使用边界
 

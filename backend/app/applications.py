@@ -182,7 +182,7 @@ def cards_for(db, rows, details, apps_by_code, owner_id):
         if card is None:
             extra = r.extra or {}
             card = cards[key] = {'identity': ident, 'origin': r.origin, 'id': r.id, 'course_code': r.course_code, 'course_name': r.course_name,
-                                 'credit': d.get('credit', r.credit), 'hours': d.get('hours', r.hours), 'description': str(extra.get('description') or '')[:2000],
+                                 'credit': d.get('credit', r.credit), 'hours': d.get('hours', r.hours), 'source_credit': r.credit, 'source_hours': r.hours, 'source_term_name': r.term_name, 'description': str(extra.get('description') or '')[:2000],
                                  **{k: extra.get(k) for k in ONLINE_KEYS if extra.get(k) not in (None, '')}, 'terms': [],
                                  'application': app_brief(apps_by_code.get(application_code(owner_id, ident))) if owner_id else None}
         card['terms'].append({'id': r.id, 'term_name': r.term_name, 'school_year': d.get('school_year') or school_year_of(r.term_name) or UNKNOWN_YEAR,
@@ -576,7 +576,7 @@ def mine(db, a):
 def trainer_library(db, a):
     """师资库：学校看全部，学院看本院，教研室看本院（申请中的单子只给申请人和办理人，不在库里露出）。老师不开放。"""
     if a.role.kind == 'teacher':
-        raise HTTPException(403, '培训师资库不对老师开放，本人的申报在“我的申请”里查看')
+        raise HTTPException(403, '培训师资不对老师开放，本人的申报在“培训业务 › 培训师资 › 我的申报”里查看')
     q = select(SocialResource).where(SocialResource.kind == 'trainer', SocialResource.state == 'ACTIVE').order_by(SocialResource.code)
     rows = db.scalars(q).all()
     if a.role.kind != 'school':

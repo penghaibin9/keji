@@ -114,6 +114,27 @@ def test_course_detail_keeps_explicit_zero_hours_and_credit():
     assert dict(fields(None, item))['学时'] == '0'
 
 
+def test_my_course_preserves_original_fields_without_expanding_teacher_scope(app2, client2):
+    setup(app2)
+    with app2.state.sessions.begin() as db:
+        row = db.scalar(select(TeacherCourseTerm).where(TeacherCourseTerm.course_code == 'X1'))
+        row.credit = None
+        row.hours = 0
+        row.extra = {**row.extra, 'chapters': 154, 'team_names': '测试教师一', 'team_staff_nos': 'J001',
+                     'created_at_source': '2026-08-05 09:35:53', 'edited_at_source': '2026-10-06 07:50:20'}
+    auth(client2, 'teacher')
+    rows = client2.get('/api/applications/teaching-courses').json()['courses']
+    course = next(x for x in rows if x['course_code'] == 'X1')
+    assert course['source_credit'] is None and float(course['source_hours']) == 0
+    assert course['source_term_name'] == '2025-2026-1'
+    assert course['chapters'] == 154 and course['team_staff_nos'] == 'J001'
+    assert course['created_at_source'] == '2026-08-05 09:35:53'
+    assert course['edited_at_source'] == '2026-10-06 07:50:20'
+    auth(client2, 'otherdept')
+    other = client2.get('/api/applications/teaching-courses').json()['courses']
+    assert not any(x['course_code'] == 'X1' for x in other)
+
+
 def test_teaching_course_goes_dept_college_school_and_resumes_at_returned_level(app2, client2):
     c = client2
     ids = setup(app2)
