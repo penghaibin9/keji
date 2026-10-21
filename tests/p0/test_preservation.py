@@ -16,6 +16,22 @@ def test_preservation_baseline_bytes_match_recorded_hashes():
 def test_existing_models_preserved_except_authorized_security_columns():
     before=ast.parse((BEFORE/'backend/app/models.py').read_text(encoding='utf-8'))
     after=ast.parse((ROOT/'backend/app/models.py').read_text(encoding='utf-8'))
+    # 20261021_0006 adds one private draft table; every original model stays covered below.
+    existing={node.name for node in before.body if isinstance(node,ast.ClassDef)}
+    added_models=[node for node in after.body if isinstance(node,ast.ClassDef) and node.name not in existing]
+    assert [node.name for node in added_models]==['FormDraft']
+    from sqlalchemy import UniqueConstraint
+    from app.models import FormDraft
+    from app.installation import type_signature
+    spec=json.loads((ROOT/'backend/form_draft_schema.json').read_text(encoding='utf-8'))['tables']['form_drafts']
+    table=FormDraft.__table__
+    assert table.name=='form_drafts'
+    assert {c.name:{**type_signature(c.type),'nullable':c.nullable} for c in table.columns}==spec['columns']
+    assert [c.name for c in table.primary_key.columns]==spec['primary_key']
+    assert sorted([list(c.columns.keys()) for c in table.constraints if isinstance(c,UniqueConstraint)])==sorted(spec['unique'])
+    actual_keys={(tuple(c.parent.name for c in f.elements),f.referred_table.name,tuple(c.column.name for c in f.elements)) for f in table.foreign_key_constraints}
+    assert actual_keys=={(tuple(local),target,tuple(remote)) for local,target,remote in spec['foreign_keys']}
+    after.body=[node for node in after.body if node not in added_models]
     additions={'User':{'authorization_pending'},'AuthSession':{'auth_method'}}
     for node in after.body:
         if isinstance(node,ast.ClassDef) and node.name in additions:
