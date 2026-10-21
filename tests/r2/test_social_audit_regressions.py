@@ -32,6 +32,51 @@ def test_export_grade_label_matches_frozen_recognition(state,label):
     assert (label,'合格') in list(book['业务概要'].values)
 
 
+def test_formal_report_exports_numeric_corrected_points_without_changing_snapshot():
+    from app.social_export import workbook
+    rows=[{'teacher_name':'合成教师','org_name':'合成学院','project':'更正后的项目','teaching':'1.10','auxiliary':'0.00','total':'1.10'},
+          {'teacher_name':'合成教师','org_name':'合成学院','project':'其他项目','teaching':'1.00','auxiliary':'0.00','total':'1.00'}]
+    payload={'item':{'kind':'point_report','state':'ARCHIVED','version':3,'data':{'rows':rows}},'state_label':'已归档'}
+    before=deepcopy(payload)
+    views=[]
+    for _ in range(2):
+        book=load_workbook(BytesIO(workbook(payload)));sheet=book['已认定积分汇总']
+        values=list(sheet.values);assert values[1][-1]==1.1
+        assert sum(Decimal(str(r[-1])) for r in values[1:])==Decimal('2.10')
+        for cells in sheet.iter_rows(min_row=2,min_col=4,max_col=6):
+            for cell in cells:assert cell.data_type=='n' and cell.number_format=='0.00'
+        views.append(values);book.close()
+    assert views[0]==views[1] and payload==before
+
+
+@pytest.mark.parametrize('state,expected',[('CLOSED','已结项项目材料'),('FILED','已备案项目材料（结项尚未完成）'),('CLOSE_REVIEW','已备案项目材料（结项尚未完成）'),('DRAFT','项目办理过程材料（尚未完成备案或结项）')])
+def test_project_material_nature_follows_project_milestones(state,expected):
+    from app.social_export import workbook
+    payload={'item':{'state':state,'version':1,'data':{'name':'合成项目'}},'facts':{'units':[]},'state_label':'合成状态'}
+    before=deepcopy(payload);book=load_workbook(BytesIO(workbook(payload)))
+    assert ('正式性',expected) in list(book['业务概要'].values)
+    book.close();assert payload==before
+
+
+def test_public_report_is_labelled_public_not_archived():
+    from app.social_export import workbook
+    payload={'item':{'kind':'point_report','state':'PUBLIC','version':1,'data':{'rows':[]}},'state_label':'公示中'}
+    book=load_workbook(BytesIO(workbook(payload)))
+    assert ('正式性','公示中的积分汇总（尚未归档）') in list(book['业务概要'].values)
+    book.close()
+
+
+def test_invalidated_project_active_resource_and_replaced_report_keep_their_status():
+    from app.social_export import workbook
+    cases=[({'item':{'state':'CLOSED','version':1,'data':{}},'facts':{'units':[],'invalidated':True}},'项目作废后的历史材料（不得作为有效结项依据）'),
+           ({'item':{'state':'ACTIVE','version':1,'data':{}}},'已生效业务资料（当前启用）'),
+           ({'item':{'kind':'point_report','state':'PUBLIC','version':1,'data':{'rows':[],'superseded_by':'new'}}},'已被新公示替代的历史材料')]
+    for payload,expected in cases:
+        payload['state_label']='合成状态';before=deepcopy(payload)
+        book=load_workbook(BytesIO(workbook(payload)));assert ('正式性',expected) in list(book['业务概要'].values)
+        book.close();assert payload==before
+
+
 def test_revoked_qualification_permission_must_also_apply_to_mine(app2, client2):
     with app2.state.sessions.begin() as db:
         db.add(Qualification(teacher_id='teacher', category='双师型初级', name='隔离资质', certificate_no='SYNTHETIC-1', issuer='隔离机构', obtained=date(2026,1,1), state='APPROVED'))
@@ -123,8 +168,10 @@ def test_new_ledger_version_does_not_confuse_row_position_with_project_identity(
     assert len(make(old)['made'])==2
     newer=submit_sheet(client2,[[1,'项目丙',30,8,30,'测试教师一：30','签到表',''],[2,'项目甲',30,8,30,'测试教师一：30','签到表',''],[3,'项目乙',30,8,30,'测试教师一：30','签到表','']])
     make(newer)
-    names=[p['data']['name'] for p in client2.get('/api/social/workspace?section=projects').json()['projects']]
+    projects=client2.get('/api/social/workspace?section=projects').json()['projects']
+    names=[p['data']['name'] for p in projects]
     assert sorted(names)==['项目丙','项目乙','项目甲'], '新版本插入一行后漏掉项目丙并重复项目乙：'+str(names)
+    assert all(p['org_name'] for p in projects)  # 承办学院名称随项目返回
 
 
 def test_identical_names_do_not_share_personal_allocation(app2,client2):

@@ -1,0 +1,112 @@
+{
+  "revision": "20261021_0006",
+  "tables": {
+    "form_drafts": {
+      "checks": [],
+      "columns": {
+        "context_key": {
+          "family": "string",
+          "length": 160,
+          "nullable": false
+        },
+        "created_at": {
+          "family": "datetime",
+          "nullable": false
+        },
+        "id": {
+          "family": "string",
+          "length": 36,
+          "nullable": false
+        },
+        "kind": {
+          "family": "string",
+          "length": 32,
+          "nullable": false
+        },
+        "org_id": {
+          "family": "string",
+          "length": 36,
+          "nullable": false
+        },
+        "payload": {
+          "family": "json",
+          "nullable": false
+        },
+        "role_id": {
+          "family": "string",
+          "length": 36,
+          "nullable": false
+        },
+        "source_version": {
+          "family": "integer",
+          "nullable": true
+        },
+        "state": {
+          "family": "string",
+          "length": 16,
+          "nullable": false
+        },
+        "title": {
+          "family": "string",
+          "length": 200,
+          "nullable": false
+        },
+        "updated_at": {
+          "family": "datetime",
+          "nullable": false
+        },
+        "user_id": {
+          "family": "string",
+          "length": 36,
+          "nullable": false
+        },
+        "version": {
+          "family": "integer",
+          "nullable": false
+        }
+      },
+      "foreign_keys": [
+        [
+          [
+            "user_id"
+          ],
+          "users",
+          [
+            "id"
+          ]
+        ],
+        [
+          [
+            "role_id"
+          ],
+          "roles",
+          [
+            "id"
+          ]
+        ],
+        [
+          [
+            "org_id"
+          ],
+          "organizations",
+          [
+            "id"
+          ]
+        ]
+      ],
+      "indexes": [],
+      "primary_key": [
+        "id"
+      ],
+      "unique": [
+        [
+          "user_id",
+          "role_id",
+          "org_id",
+          "kind",
+          "context_key"
+        ]
+      ]
+    }
+  }
+}

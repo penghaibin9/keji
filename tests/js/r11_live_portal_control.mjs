@@ -1,3 +1,5 @@
+import * as formDrafts from '../../frontend/form-drafts.js';
+import * as formAssist from '../../frontend/form-assist.js';
 // Executed explicitly by run_r11_portal_control.py, not part of node --test *.test.mjs.
 import fs from 'node:fs';import path from 'node:path';import vm from 'node:vm';import assert from 'node:assert/strict';
 import {fileURLToPath} from 'node:url';
@@ -8,7 +10,7 @@ fs.mkdirSync(output,{recursive:true});const snapshots=path.join(output,'rendered
 const original=fs.readFileSync(path.join(root,'frontend/app.js'),'utf8');
 const log=[],checks=[],pagesTested=[],jars=new Map();let activeJar='schooladmin';
 const nodes=new Map();function node(id){if(!nodes.has(id))nodes.set(id,{innerHTML:'',textContent:'',value:'',disabled:false,isConnected:true,classList:{add(){},remove(){},toggle(){}},addEventListener(){},append(){},querySelector(){return null},querySelectorAll(){return []},focus(){}});return nodes.get(id)}
-const c=vm.createContext({console,...ui,...scope,...ledgers,...schoolData,icons,URL,URLSearchParams,Blob,FormData,crypto:globalThis.crypto,setTimeout:()=>0,clearTimeout(){},document:{querySelector:node,querySelectorAll:()=>[],createElement:()=>({click(){},remove(){}}),addEventListener(){},body:node('body')},window:{addEventListener(){}},location:{hash:'',pathname:'/',search:''},history:{replaceState(){}},
+const c=vm.createContext({console,...formDrafts,...formAssist,...ui,...scope,...ledgers,...schoolData,icons,URL,URLSearchParams,Blob,FormData,crypto:globalThis.crypto,setTimeout:()=>0,clearTimeout(){},document:{querySelector:node,querySelectorAll:()=>[],createElement:()=>({click(){},remove(){}}),addEventListener(){},body:node('body')},window:{addEventListener(){}},location:{hash:'',pathname:'/',search:''},history:{replaceState(){}},
  fetch:async(url,opts)=>{
    if(!url.startsWith('/api/'))throw Error('Unexpected external request');
    let jar=jars.get(activeJar);if(!jar){jar=new Map();jars.set(activeJar,jar)}

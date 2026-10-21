@@ -199,6 +199,12 @@ def get_one(ident: str, request: Request):
     return read_operation(request, 'portal.read', lambda db, a, s: apps.detail(db, a, load(db, ident)))
 
 
+@router.get('/{ident}/course-points')
+def course_points(ident: str, request: Request, project_id: str = Query('', max_length=36)):
+    from ..course_points import course_points_progress
+    return read_operation(request, 'points.read', lambda db, a, s: course_points_progress(db, a, load(db, ident), project_id))
+
+
 @router.post('/courses')
 def course_create(data: CourseApplyIn, request: Request):
     def apply(db, a, s):

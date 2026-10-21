@@ -40,9 +40,9 @@ FLOWS = {
                         'done': 'ACTIVE', 'final': '进入培训课程库', 'object_type': 'social_resource'},
     # 培训师遴选（管理办法第十五条）：校内老师本人申报，组织人事部认定资格；外聘培训师由学院登记，教务处审核备案。
     'trainer': {'label': '培训师申报', 'chain': ('dept', 'college', 'school', 'hr'), 'states': {'dept': 'DEPT', 'college': 'COLLEGE', 'school': 'SCHOOL', 'hr': 'HR'},
-                'done': 'ACTIVE', 'final': '进入培训师资库', 'object_type': 'social_resource'},
+                'done': 'ACTIVE', 'final': '进入培训师资', 'object_type': 'social_resource'},
     'trainer_external': {'label': '外聘培训师备案', 'chain': ('jwc',), 'states': {'jwc': 'JWC'},
-                         'done': 'ACTIVE', 'final': '进入培训师资库', 'object_type': 'social_resource'},
+                         'done': 'ACTIVE', 'final': '进入培训师资', 'object_type': 'social_resource'},
     'base': {'label': '培训基地申请', 'chain': ('college', 'school'), 'states': {'college': 'COLLEGE', 'school': 'SCHOOL'},
              'done': 'DRAFT', 'final': '进入基地清单', 'object_type': 'social_resource'},
 }

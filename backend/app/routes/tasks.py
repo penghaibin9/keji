@@ -10,16 +10,17 @@ from starlette.concurrency import run_in_threadpool
 from sqlalchemy import select
 from ..core import *
 from ..schemas import VersionedReason,ExportRequest,TaskRetry
-from ..excel_io import inspect_xlsx,template_bytes,validate_rows,commit_import,error_xlsx,read_export_file,import_preview_digest,import_error_text
+from ..excel_io import inspect_xlsx,template_bytes,validate_rows,commit_import,error_xlsx,read_export_file,import_preview_digest,import_error_text,TEMPLATE_NAMES,EXPORT_FORMAT_VERSION
 from ..settings_catalog import import_row_limit
 from ..import_access import require_import_permission, make_import_proof, require_import_access, public_import, import_summary
-from ..read_queries import RECORD_FILTERS,ASSESSMENT_FILTERS
+from ..read_queries import RECORD_FILTERS,ASSESSMENT_FILTERS,AUDIT_FILTERS
 router=APIRouter(prefix='/api',tags=['Excel、任务与运行状态'])
 
 
 def _public_task(obj):
     data=serial(obj);payload=dict(data.get('payload') or {});payload.pop('authorization',None);data['payload']=payload
     result=dict(data.get('result') or {});result.pop('storage_name',None);data['result']=result
+    if obj.kind=='export':data['historical_report']=obj.state=='DONE' and result.get('report_version')!=EXPORT_FORMAT_VERSION
     return data
 
 
@@ -38,8 +39,7 @@ def import_template(kind:str,request:Request):
     with request.app.state.sessions.begin() as db:
         a,s=current_actor(db,request);require_import_permission(a,kind)
         data=template_bytes(kind);audit(db,a,'imports',kind,'下载Excel导入模板',after={'kind':kind},reason='下载标准空模板')
-    names={'records':'培训业务数据模板.xlsx','participations':'教师参训记录模板.xlsx','qualifications':'教师资质模板.xlsx','teachers':'教师账号模板.xlsx'}
-    return Response(data,media_type='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',headers={'Content-Disposition':"attachment; filename*=UTF-8''"+quote(names.get(kind,'导入模板.xlsx')),'X-Content-Type-Options':'nosniff'})
+    return Response(data,media_type='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',headers={'Content-Disposition':"attachment; filename*=UTF-8''"+quote(TEMPLATE_NAMES[kind]+'模板.xlsx'),'X-Content-Type-Options':'nosniff'})
 
 @router.post('/imports/{kind}/preview')
 async def import_preview(kind:str,request:Request,file:UploadFile=File(...)):
@@ -122,7 +122,7 @@ def import_discard(ident:str,data:VersionedReason,request:Request):
 
 EXPORT_FILTERS={
  'records':set(RECORD_FILTERS),'participations':{'q','teacher_id','org_id','start','end','project_code','course_code'},'qualifications':{'q','state','teacher_id','org_id'},'points':{'teacher_id','period_id','org_id'},
- 'assessments':set(ASSESSMENT_FILTERS),'organization_assessments':{'period_id','target_kind','target_id','state','progress'},'audit':{'q','module','result','start','end','actor','org_id','object_id','request_id'},'handover':set(),
+ 'assessments':set(ASSESSMENT_FILTERS),'organization_assessments':{'period_id','target_kind','target_id','state','progress'},'audit':set(AUDIT_FILTERS),'handover':set(),
 }
 
 @router.post('/exports')

@@ -1,6 +1,10 @@
 import io,zipfile,json,uuid
+from urllib.parse import unquote
+import pytest
 from openpyxl import load_workbook
+from openpyxl.utils import get_column_letter
 from sqlalchemy import select,func
+from app.excel_io import TEMPLATES,inspect_xlsx,template_bytes
 from app.models import TrainingRecord,User,ImportJob,ImportRow,Task,PointEntry,Period
 from datetime import datetime
 from app.worker import run_once
@@ -16,6 +20,39 @@ def fill_template(client,kind,values):
 
 def upload_preview(client,kind,data,name='import.xlsx'):
     return client.post(f'/api/imports/{kind}/preview',files={'file':(name,data,'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')},headers={'Idempotency-Key':str(uuid.uuid4())})
+
+
+@pytest.mark.parametrize('kind,headers,text_headers',[
+    ('records',['来源唯一编号','教师工号','业务日期','项目编码','项目名称','课程编码','课程名称','班级编码','班级名称','授课学时','课程人次','归属培训收入','数据来源'],{'来源唯一编号','教师工号','项目编码','课程编码','班级编码'}),
+    ('participations',['来源唯一编号','教师工号','参训日期','项目编码','项目名称','课程编码','课程名称','参训学时','数据来源'],{'来源唯一编号','教师工号','项目编码','课程编码'}),
+    ('qualifications',['教师工号','资质类别','证书名称','证书编号','发证机构','取得日期','有效期至'],{'教师工号','证书编号'}),
+])
+def test_template_column_help_text_formats_and_existing_import_contract(kind,headers,text_headers):
+    wb=load_workbook(io.BytesIO(template_bytes(kind)));ws=wb.active
+    assert wb.sheetnames==['导入数据'] and ws.max_row==1
+    assert [c.value for c in ws[1]]==headers
+    assert len({c.comment.text for c in ws[1]})==len(headers)
+    for index,cell in enumerate(ws[1],1):
+        assert '禁止公式' in cell.comment.text and ('必填' in cell.comment.text or '选填' in cell.comment.text)
+        column=ws.column_dimensions[get_column_letter(index)]
+        assert column.number_format==('@' if cell.value in text_headers else 'General')
+    values={'external_key':'000001','teacher_staff_no':'00123','event_date':'2026-10-19',
+        'project_code':'000456','project':'合成项目','course_code':'000789','course':'合成课程',
+        'class_code':'000012','class_name':'合成班级','hours':2.5,'participants':12,'income':321.5,'source':'',
+        'category':'职业资格','name':'合成证书','certificate_no':'000987','issuer':'合成发证机构','obtained':'2026-01-01','expires':''}
+    ws.append([values[key] for _,key in TEMPLATES[kind]])
+    out=io.BytesIO();wb.save(out);wb.close()
+    parsed=inspect_xlsx(out.getvalue(),'template.xlsx',kind)
+    assert len(parsed)==1 and parsed[0]['row_no']==2 and not parsed[0]['errors']
+    for title,key in TEMPLATES[kind]:
+        if title in text_headers:assert parsed[0]['normalized'][key]==values[key]
+
+
+def test_three_template_download_filenames_match_page_names(client2):
+    auth(client2,'depthead')
+    for kind,name in [('records','培训授课数据模板.xlsx'),('participations','教师参训记录模板.xlsx'),('qualifications','教师资质草稿模板.xlsx')]:
+        response=client2.get('/api/imports/templates/'+kind);assert response.status_code==200,response.text
+        assert unquote(response.headers['Content-Disposition'])=="attachment; filename*=UTF-8''"+name
 
 
 def test_records_excel_template_preview_confirm_and_repeat_guard(client2,app2):
@@ -90,9 +127,29 @@ def test_record_export_worker_and_download_are_real_xlsx(client2,app2):
     auth(client2,'schooladmin')
     r=post(client2,'/api/exports',{'kind':'records','filters':{'project_code':'P1'},'confirmed':False});assert r.status_code==200,r.text
     task=r.json();result=run_once(app2.state.settings);assert result['status']=='DONE'
+    detail=client2.get('/api/tasks/'+task['id']).json()['task']
+    assert detail['historical_report'] is False and detail['result']['report_version']==2
+    assert detail['result']['rows']==1 and detail['result']['generated_at']
     d=client2.get(f"/api/tasks/{task['id']}/download");assert d.status_code==200,d.text
     wb=load_workbook(io.BytesIO(d.content),read_only=True,data_only=False);rows=list(wb.active.iter_rows(values_only=True));wb.close()
     assert rows[0][0]=='业务日期' and len(rows)==2 and rows[1][4]=='P1'
+
+
+def test_old_export_is_marked_historical_without_rewriting_task_or_file(client2,app2):
+    from copy import deepcopy
+    auth(client2,'schooladmin')
+    job=post(client2,'/api/exports',{'kind':'records','filters':{'project_code':'P1'}}).json()
+    assert run_once(app2.state.settings)['status']=='DONE'
+    with app2.state.sessions.begin() as db:
+        task=db.get(Task,job['id']);task.result={k:v for k,v in task.result.items() if k not in {'report_version','generated_at','rows'}}
+        saved=deepcopy(task.result);version=task.version
+    path=app2.state.settings.storage_dir/'.exports'/saved['storage_name'];original=path.read_bytes()
+    assert client2.get('/api/tasks/'+job['id']).json()['task']['historical_report'] is True
+    listed=client2.get('/api/tasks?kind=export').json()['items']
+    assert next(x for x in listed if x['id']==job['id'])['historical_report'] is True
+    assert client2.get('/api/tasks/'+job['id']+'/download').content==original and path.read_bytes()==original
+    with app2.state.sessions() as db:
+        task=db.get(Task,job['id']);assert task.result==saved and task.version==version
 
 
 def test_points_export_uses_business_names_local_time_and_hidden_trace_columns(client2,app2):

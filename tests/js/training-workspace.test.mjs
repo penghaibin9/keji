@@ -18,6 +18,28 @@ test('只读师资不出现详情办理入口，封面与业务字段转义并�
  const course=renderTrainingWorkspace('courses',{courses:[{code:'c',name:'零学时',cover_url:'javascript:alert(1)'}],course_info:{c:{hours:0}}},c);
  assert.match(course,/0 学时/);assert.doesNotMatch(course,/javascript:/);assert.match(course,/暂无封面/);assert.doesNotMatch(course,/示意图/);
 });
+
+test('课程整卡使用原生按钮且选中状态关联右侧详情，资源入口保持独立',()=>{
+ const c=context('card-select'),w={courses:[{code:'A',name:'甲课程'},{code:'B',name:'乙<课程>'}]};
+ let html=renderTrainingWorkspace('courses',w,c);
+ assert.match(html,/<button type="button" class="btn text tw-card-select" data-action="training-pick" data-id="A" aria-pressed="true" aria-controls="training-detail">甲课程<\/button>/);
+ assert.match(html,/data-id="B" aria-pressed="false"/);
+ trainingChange('courses',c,'pick','B');html=renderTrainingWorkspace('courses',w,c);
+ assert.match(html,/data-id="B" aria-pressed="true" aria-controls="training-detail">乙&lt;课程&gt;/);
+ assert.match(html,/<aside id="training-detail"[\s\S]*?<h3>乙&lt;课程&gt;<\/h3>/);
+ assert.match(html,/data-action="social-course-resources" data-id="B"/);
+});
+
+test('培训数据整行选择更新右侧记录，师资共用行选择且不扩大详情权限',()=>{
+ const c=context('row-select'),w={items:[{id:'r1',project:'甲项目',course:'甲课程',event_date:'2026-10-01',hours:0},{id:'r2',project:'乙项目',course:'乙课程',event_date:'2026-10-02',hours:8}]};
+ let html=renderTrainingWorkspace('records',w,c);
+ assert.match(html,/class="btn text tw-row-select" data-action="training-pick" data-id="r1" aria-pressed="true" aria-controls="training-detail"/);
+ trainingChange('records',c,'pick','r2');html=renderTrainingWorkspace('records',w,c);
+ assert.match(html,/data-id="r1" aria-pressed="false"/);assert.match(html,/data-id="r2" aria-pressed="true"/);
+ assert.match(html,/<aside id="training-detail"[\s\S]*?<h3>乙项目<\/h3>[\s\S]*?乙课程[\s\S]*?2026-10-02/);
+ const trainer=renderTrainingWorkspace('trainers',{items:[{id:'t',name:'只读师资',directions:[],can_view_detail:false}]},c);
+ assert.match(trainer,/class="btn text tw-row-select"/);assert.doesNotMatch(trainer,/data-action="app-detail"/);
+});
 test('待审批不含草稿和退回，结项后显示实际有效人次与到账收入，已结项四步均完成',()=>{
  const school={...context('school-a'),me:{user:{id:'school-a'},role:{kind:'school'}},can:()=>true};
  const w={projects:[{id:'d',state:'DRAFT',data:{name:'草稿项目'}},{id:'r',state:'RETURNED',data:{name:'退回项目'}},{id:'s',state:'SUBMITTED',data:{name:'待备案项目'}},
@@ -46,4 +68,41 @@ test('课程、基地、师资详情按规划展示完整字段，外聘培训�
  for(const t of ['专业特长','茶艺','培训业务类别','授课课程','茶艺实操课'])assert.ok(trainers.includes(t),t);
  const external=renderTrainingWorkspace('trainers',{items:[{id:'t2',name:'外聘',source:'external',unit:'机构',directions:[],specialty:'家政'}]},context('fields2'));
  assert.match(external,/外聘培训师暂无关联课程/);
+});
+
+
+test('培训项目的筛选与选中项按地址恢复，清空不残留旧关键词',async()=>{
+ const {navigationHash,restoreNavigation}=await import('../../frontend/scope.js');
+ const c=context('project-route');c.filter={project_view:'business',history_year:'2025'};
+ c.setProjectViewState=s=>{c.filter={...c.filter,q:s.q,org_id:s.org,project_status:s.tab,project_pick:s.selected}};
+ trainingChange('projects',c,'filter',{q:'项目甲',org:'college-a'});trainingChange('projects',c,'tab','FILED');trainingChange('projects',c,'pick','project-a');
+ const fresh=context('project-route-reloaded');fresh.filter=restoreNavigation(navigationHash('projects',c.filter),{projects:'项目'}).filter;fresh.setProjectViewState=s=>{fresh.filter={...fresh.filter,q:s.q,org_id:s.org,project_status:s.tab,project_pick:s.selected}};
+ assert.deepEqual(trainingState('projects',fresh),{q:'项目甲',org:'college-a',tab:'FILED',selected:'project-a',package:false,oneSkill:false});
+ trainingChange('projects',fresh,'reset');assert.equal(trainingState('projects',fresh).q,'');assert.equal(fresh.filter.history_year,'2025');
+});
+
+test('课程基地师资成果按地址恢复筛选和选中项，重置页码且不串身份',async()=>{
+ const {navigationHash,restoreNavigation}=await import('../../frontend/scope.js');
+ for(const section of ['courses','bases','trainers','outcomes']){
+  const c=context('route-'+section);c.filter={workspace_page:'3'};
+  c.setTrainingViewState=(_section,s)=>{c.filter={...c.filter,q:s.q,org_id:s.org,workspace_status:s.tab,workspace_pick:s.selected,package:s.package?'true':'',one_skill:s.oneSkill?'true':''}};
+  c.setSocialPage=n=>{c.filter.workspace_page=String(n)};
+  trainingChange(section,c,'filter',{q:'茶艺',org:'college-a',package:true,oneSkill:true});
+  assert.equal(c.filter.workspace_page,'1');trainingChange(section,c,'pick','selected-record');
+  c.filter.workspace_page='2';
+  const restored=restoreNavigation(navigationHash(section,c.filter),{[section]:'页面'}).filter;
+  const fresh={...context('new-session-'+section),filter:restored,setTrainingViewState:c.setTrainingViewState};
+  const s=trainingState(section,fresh);
+  assert.equal(s.q,'茶艺');assert.equal(s.org,'college-a');assert.equal(s.selected,'selected-record');
+  assert.equal(s.package,true);assert.equal(s.oneSkill,true);assert.equal(restored.workspace_page,'2');
+  assert.equal(trainingState(section,context('other-user-'+section)).selected,'');
+ }
+});
+
+test('原选中记录不可见时仅显示授权清单并清理旧选择',()=>{
+ const c=context('stale-selection');c.filter={workspace_pick:'hidden-id'};
+ c.setTrainingViewState=(_section,s)=>{c.filter.workspace_pick=s.selected};
+ const html=renderTrainingWorkspace('courses',{courses:[{code:'allowed',name:'授权课程'}]},c);
+ assert.match(html,/先前选中的记录已不在当前清单/);assert.doesNotMatch(html,/hidden-id/);
+ assert.equal(c.filter.workspace_pick,'allowed');
 });

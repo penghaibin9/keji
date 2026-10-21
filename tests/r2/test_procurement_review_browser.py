@@ -35,11 +35,12 @@ def test_dept_summary_void_and_preflight_in_browser(recognized,app2,client2,tmp_
         with sync_playwright() as p:
             browser=p.chromium.launch(headless=True);page=browser.new_page(viewport={'width':1440,'height':1000});errors=[]
             page.on('pageerror',lambda e:errors.append(str(e)))
-            page.goto(origin);page.locator('#username').fill('depthead');page.locator('#password').fill(FIXTURE_PASSWORD);page.get_by_role('button',name='登录工作台').click()
+            page.goto(origin);page.get_by_role('tab',name='本地账号登录').click();page.locator('#username').fill('depthead');page.locator('#password').fill(FIXTURE_PASSWORD);page.get_by_role('button',name='登录工作台').click()
             page.locator('[data-action="nav"][data-id="projects"]').first.click()
-            page.locator('[data-action="social-detail"][data-id="social_project|'+pid+'"]').click()
+            page.locator('[data-action="social-detail"][data-id="social_project|'+pid+'"]').filter(has_text='查看完整资料').click()
             modal=page.locator('#modal-root')
             modal.get_by_text('本教研室核算单元',exact=True).wait_for()
+            modal.locator('details.detail-more-actions > summary').click()
             assert modal.get_by_role('button',name='导出本教研室参与摘要',exact=True).count()==1
             assert not modal.get_by_role('button',name='上传佐证',exact=True).count()
             page.screenshot(path=str(output/'01-教研室项目摘要.png'),animations='disabled')

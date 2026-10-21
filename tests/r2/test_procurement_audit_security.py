@@ -48,6 +48,10 @@ def test_security_alerts_summarise_denials_login_failures_and_raise_todo(client2
     assert todos['total']==1 and todos['items'][0]['title'].startswith('安全提示')
     home=c.get('/api/portal/workbench').json()
     assert any(x['type']=='security' and x['owner_name']=='安全审计' for x in home['tasks']['items']) or home['tasks']['total']>6
+    # 审批中心不列安全提示，但返回其数量，与右上角待办数对得上。
+    center=c.get('/api/approval-center').json()
+    assert [x['type'] for x in center['system_items']]==['security'] and all(x['type']!='security' for x in center['items'])
+    assert c.get('/api/approval-center',params={'tab':'handled'}).json()['system_items']==[]
     assert c.get('/api/audit/security-alerts',params={'days':'0'}).status_code==422
     # Non-admin users never receive the security todo.
     auth(c,'depthead');assert c.get('/api/todos',params={'type':'security'}).json()['total']==0

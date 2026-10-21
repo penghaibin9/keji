@@ -33,5 +33,5 @@ def render(root:Path):
 
 if __name__=='__main__':
     ap=argparse.ArgumentParser();ap.add_argument('--root',default=str(Path(__file__).resolve().parents[1]));ap.add_argument('--output',default='docs/API_ENDPOINT_CATALOG.md');a=ap.parse_args()
-    root=Path(a.root).resolve();text,result=render(root);out=Path(a.output);out.parent.mkdir(parents=True,exist_ok=True);out.write_text(text,encoding='utf-8')
+    root=Path(a.root).resolve();text,result=render(root);out=Path(a.output);out.parent.mkdir(parents=True,exist_ok=True);out.write_text(text,encoding='utf-8', newline='\n')
     print(json.dumps({'status':result['status'],'route_count':result['route_count'],'output':str(out)},ensure_ascii=False))

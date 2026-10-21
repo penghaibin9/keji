@@ -1,0 +1,7 @@
+layDate 5.3.1 (standalone)
+Upstream: https://github.com/layui/laydate
+Pinned commit: f3ccfc871fe6d25b4147e85b8084bdd7474eab7e
+Downloaded: 2026-10-20
+Files copied unchanged from dist/; LICENSE copied from repository root.
+License: MIT (see LICENSE)
+No external CDN is required at runtime.

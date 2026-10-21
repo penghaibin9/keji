@@ -3,7 +3,7 @@ export const IMAGE_ACCEPT = '.png,.jpg,.jpeg,image/png,image/jpeg';
 export const MAX_IMAGE_BYTES = 5 * 1024 * 1024;
 
 export function imageField(c, name, label, hint) {
-  return c.field(name, label, 'file', '', {required: false, accept: IMAGE_ACCEPT, full: true,
+  return c.field(name, label, 'file', '', {required: false, accept: IMAGE_ACCEPT, full: true, uploadKind:'cover',uploadMax:1,
     hint: hint || '选填，PNG 或 JPG，不超过 5MB；仅用于展示，不能代替证明材料。'});
 }
 
