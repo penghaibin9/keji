@@ -2,7 +2,7 @@
 .login-page{min-height:100vh;min-height:100svh;background:#fff;color:#10365d}
 .login-page [hidden]{display:none!important}
 .login-main{display:grid;grid-template-columns:minmax(0,1.75fr) minmax(390px,1fr);min-height:100vh;min-height:100svh}
-.login-intro{display:flex;flex-direction:column;position:relative;min-width:0;min-height:100vh;min-height:100svh;overflow:hidden;padding:42px clamp(40px,4.4vw,88px) 40px;background:#0b3456 url('/assets/assets/login-campus-blue.png') center/cover no-repeat;color:#fff}
+.login-intro{display:flex;flex-direction:column;position:relative;min-width:0;min-height:100vh;min-height:100svh;overflow:hidden;padding:42px clamp(40px,4.4vw,88px) 40px;background:#0b3456 url('/assets/assets/login-campus-blue.jpg') center/cover no-repeat;color:#fff}
 .login-school{display:block;flex:none;width:380px;max-width:100%;aspect-ratio:422/82;overflow:hidden}
 .login-school img{display:block;width:100%;height:auto}
 .login-intro-copy{margin:54px 0 0 28px}
