@@ -16,8 +16,10 @@ x-api: &api
     ND_SECURE_COOKIE: "true"
     ND_SEED_ENABLED: "false"
     ND_MAINTENANCE_DIR: /run/nondegree-maintenance
+    # School-supplied 2025/2026 statistic sheets and evidence for the cockpit and history projects; mounted read-only.
+    ND_SCHOOL_REPORTS_DIR: /var/lib/nondegree/school-reports
   secrets: [runtime_url]
-  volumes: ["../runtime/files:/var/lib/nondegree/files", "../runtime/maintenance:/run/nondegree-maintenance:ro"]
+  volumes: ["../runtime/files:/var/lib/nondegree/files", "../runtime/maintenance:/run/nondegree-maintenance:ro", "../runtime/school-reports:/var/lib/nondegree/school-reports:ro"]
   read_only: true
   tmpfs: ["/tmp:size=256m,mode=1777"]
   cap_drop: [ALL]

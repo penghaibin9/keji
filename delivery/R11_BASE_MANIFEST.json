@@ -1,5 +1,5 @@
 {
- "input_zip_sha256": "ed6348bf32aab5e9ff7a3ff257cea12869c2b954e36b45c70257289c4f4a1aa0",
+ "input_zip_sha256": "573e64f3af2e27637cc86a40cb98c5b0ae268dde1681e0ba757c77eae054bc9e",
  "baseline_note": "program files only; rebuilt by scripts/refresh_launcher_manifest.py",
  "files": {
   ".dockerignore": "3ce289acb5e52c4133ecaa490b8672406f986f409f7397b8a566db497846caad",
@@ -131,7 +131,7 @@
   "backend/teaching_schema.json": "0616696a73ca6cf0256c5c4d15c9c8ff31e684d7f07740a09ccd146f54c197ea",
   "deploy/Dockerfile.api": "6e8d7a211378187e4fe62518de88c98e484014b4e87baa0f7a504f06b1d9401d",
   "deploy/Dockerfile.frontend": "f3ac5ab79e8f1de543bfdd431f931b0753c3bee5bf8bba77a0a9d64f29fc58b5",
-  "deploy/compose.yml": "f44d520e7cc034db3a6e09394186ad212c313becd4bc96fcd17bb4069d12240b",
+  "deploy/compose.yml": "d198e5f52497efe5c949a17090106978280f0eaa8ad2e109ff50ef9f609c6875",
   "deploy/mysql-init/01-users.sh": "f859c870ffe7c545e03b042a622dfe3ea3ef700fb3e317cd1df5b8841224e932",
   "deploy/nginx.conf": "26e6155d40cef6d3ccff7e486abbce37fd8e3d4e7b36c36ffdd10534f84bfd2a",
   "frontend/app.js": "ea87765ea3f4413c11a29ada17ce862b57572e7d712b33db6311e66c2652713c",

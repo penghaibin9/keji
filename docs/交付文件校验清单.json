@@ -1,6 +1,6 @@
 {
   "kind": "school_delivery_working_tree_snapshot",
-  "program_baseline": "ed6348bf32aab5e9ff7a3ff257cea12869c2b954e36b45c70257289c4f4a1aa0",
+  "program_baseline": "573e64f3af2e27637cc86a40cb98c5b0ae268dde1681e0ba757c77eae054bc9e",
   "migration_heads": [
     "20261021_0006"
   ],
@@ -547,7 +547,7 @@
       "size": 5354
     },
     "delivery/R11_BASE_MANIFEST.json": {
-      "sha256": "61aa7e83f506b5472efc0d3179e8fc592b5c9ef2514efe230b451c288aecc136",
+      "sha256": "1e9177f74a6cd76ba7afe402b6d9d5b88a984e7a567fb35c33bb4234c8510799",
       "size": 43779
     },
     "delivery/__init__.py": {
@@ -611,7 +611,7 @@
       "size": 3166
     },
     "delivery/manage.py": {
-      "sha256": "f5da079ffefbf4c7f7b7f46ef0aa71d8bf9d1b67866e4433efa545141dce6608",
+      "sha256": "defa02f6b7902a5c408ad79bd7096ed07328c3898f27e4f7170259deecb82a66",
       "size": 16484
     },
     "delivery/requirements-browser.txt": {
@@ -643,7 +643,7 @@
       "size": 8121
     },
     "delivery/tests/test_deploy_guards.py": {
-      "sha256": "2369695c0c061f274a9aeee382ed6ce310c2d9de4171954e6af45a8e5bce2a5e",
+      "sha256": "ff7727e357dcb77bbbc68326645a73da025c91100b54f56ae5a0c50be410ffdd",
       "size": 5252
     },
     "delivery/validate_integration_profile.py": {
@@ -659,8 +659,8 @@
       "size": 538
     },
     "deploy/compose.yml": {
-      "sha256": "f44d520e7cc034db3a6e09394186ad212c313becd4bc96fcd17bb4069d12240b",
-      "size": 4419
+      "sha256": "d198e5f52497efe5c949a17090106978280f0eaa8ad2e109ff50ef9f609c6875",
+      "size": 4665
     },
     "deploy/mysql-init/01-users.sh": {
       "sha256": "f859c870ffe7c545e03b042a622dfe3ea3ef700fb3e317cd1df5b8841224e932",
