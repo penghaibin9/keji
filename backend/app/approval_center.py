@@ -53,7 +53,7 @@ def readable(db, actor, kind, ident):
     return obj
 
 
-def describe(db, actor, kind, obj, raw=None):
+def describe(db, actor, kind, obj, raw=None, entered_times=None):
     raw = raw or {}
     data = getattr(obj, 'data', None) or {}
     teacher_id = getattr(obj, 'teacher_id', None) or data.get('teacher_id') or getattr(obj, 'owner_id', None)
@@ -88,10 +88,13 @@ def describe(db, actor, kind, obj, raw=None):
             handler = '、'.join(names) or handler_title
     elif kind == 'social_resource':
         title = {'correction': '积分更正', 'point_review': '积分核对', 'point_report': '积分汇总与公示'}.get(obj.kind, title)
-    entered = db.scalar(select(WorkflowEvent.created_at).where(WorkflowEvent.object_type == kind,
-        WorkflowEvent.object_id == obj.id, WorkflowEvent.after['state'].as_string() == obj.state,
-        func.coalesce(WorkflowEvent.before['state'].as_string(), '') != obj.state).order_by(
-        WorkflowEvent.created_at.desc(), WorkflowEvent.id.desc()).limit(1)) or obj.created_at
+    if entered_times is not None and (kind, obj.id) in entered_times:
+        entered = entered_times[kind, obj.id] or obj.created_at
+    else:
+        entered = db.scalar(select(WorkflowEvent.created_at).where(WorkflowEvent.object_type == kind,
+            WorkflowEvent.object_id == obj.id, WorkflowEvent.after['state'].as_string() == obj.state,
+            func.coalesce(WorkflowEvent.before['state'].as_string(), '') != obj.state).order_by(
+            WorkflowEvent.created_at.desc(), WorkflowEvent.id.desc()).limit(1)) or obj.created_at
     current_period = period.name if period else ''
     if kind in {'assessment', 'organization_assessment'} and obj.state == 'ARCHIVED':
         current_period = (obj.archive or {}).get('period', {}).get('name') or current_period
@@ -137,8 +140,53 @@ def waiting_condition(db, actor, obj, row):
     return row
 
 
+def _preload(db, items):
+    """一次取齐待办要读的原单、教师、组织、周期和进入当前环节的时间，代替每条待办各查五六次库。
+
+    取出的对象留在本次数据库会话里，后面 readable()/describe() 里的 db.get() 直接拿到，授权判断和显示内容不变。
+    返回值要在循环期间一直持有：会话只弱引用对象，没人引用就会被回收，又变回逐条查询。
+    """
+    ids = {}
+    for raw in items:
+        actual = 'social_resource' if raw['type'] == 'application' else raw['type']
+        if actual in MODELS and raw.get('id'):
+            ids.setdefault(actual, set()).add(raw['id'])
+    held, by_kind, people = [], {}, set()
+    for kind, keys in ids.items():
+        model, keys = MODELS[kind], sorted(keys)
+        for i in range(0, len(keys), 500):
+            for obj in db.scalars(select(model).where(model.id.in_(keys[i:i + 500]))):
+                held.append(obj)
+                by_kind.setdefault(kind, {})[obj.id] = obj
+                data = getattr(obj, 'data', None) or {}
+                people.update(x for x in (getattr(obj, 'teacher_id', None), getattr(obj, 'owner_id', None),
+                                          data.get('teacher_id'), data.get('created_by')) if isinstance(x, str) and x)
+    people = sorted(people)
+    for i in range(0, len(people), 500):
+        held.extend(db.scalars(select(User).where(User.id.in_(people[i:i + 500]))))
+    held.extend(db.scalars(select(Org)))
+    held.extend(db.scalars(select(Period)))
+    # 与 describe() 里单条查询同一口径：进入当前状态的最近一次流转（时间倒序、同时间按编号倒序），没有就用建单时间。
+    entered = {}
+    for kind, objs in by_kind.items():
+        keys = sorted(objs)
+        for i in range(0, len(keys), 500):
+            for oid, at, eid, before, after in db.execute(select(WorkflowEvent.object_id, WorkflowEvent.created_at, WorkflowEvent.id,
+                    WorkflowEvent.before['state'].as_string(), WorkflowEvent.after['state'].as_string()).where(
+                    WorkflowEvent.object_type == kind, WorkflowEvent.object_id.in_(keys[i:i + 500]))):
+                state = objs[oid].state
+                if after == state and (before or '') != state:
+                    best = entered.get((kind, oid))
+                    if best is None or (at, eid) > best:
+                        entered[kind, oid] = (at, eid)
+    times = {(kind, oid): (entered[kind, oid][0] if (kind, oid) in entered else None)
+             for kind, objs in by_kind.items() for oid in objs}
+    return held, times
+
+
 def pending(db, actor, items):
     out = []
+    held, entered_times = _preload(db, items)
     for raw in items:
         kind = raw['type']
         if kind in {'security', 'sync'} or raw.get('state') == 'EXPIRING':
@@ -153,7 +201,7 @@ def pending(db, actor, items):
         try:
             obj = readable(db, actor, actual, raw['id'])
             if obj:
-                row = waiting_condition(db, actor, obj, describe(db, actor, actual, obj, raw))
+                row = waiting_condition(db, actor, obj, describe(db, actor, actual, obj, raw, entered_times))
                 if actual == 'social_project' and obj.state == 'DRAFT':
                     row.update(action_required=False, action_hint='项目草稿尚未提交，请从原单核对资料后提交', action_label='查看并完善')
                 out.append(row)
