@@ -1,10 +1,10 @@
 import {bindFormDraft} from './form-drafts.js?v=20261021-form-merged1';
 import {coursePointsAction} from './course-points.js?v=20261021-form-merged1';
-import {renderTrainingWorkspace,trainingChange} from './training-workspace.js?v=20261021-form-merged1';
+import {renderTrainingWorkspace,trainingChange} from './training-workspace.js?v=20261021-core-recheck2';
 import {renderSchoolCockpit,bindSchoolCockpit} from './school-cockpit.js?v=20261019-walk3&display=20261019-clean2';
 import {icons} from './icons.js';
-import {socialPage,socialAction,applicationProjectPicker} from './social-training.js?v=20261021-form-merged1';
-import {applicationAction,trainersHtml,applyPageHtml,APPLY_PAGES,myApplicationsHtml,homeApplicationsHtml,myCoursesHtml,libraryHtml,libraryFilterSubmit,homeCoursesHtml,courseAction} from './applications.js?v=20261021-form-merged1';
+import {socialPage,socialAction,applicationProjectPicker} from './social-training.js?v=20261021-core-recheck2';
+import {applicationAction,trainersHtml,applyPageHtml,APPLY_PAGES,myApplicationsHtml,homeApplicationsHtml,myCoursesHtml,libraryHtml,libraryFilterSubmit,homeCoursesHtml,courseAction} from './applications.js?v=20261021-core-recheck2';
 import {nextCode,runBatch,batchStage,batchMode,batchPerformer,BATCH_LABELS,materialUploadForm,checkUploadFiles,uploadEntries,uploadSequential,uploadStatusHtml} from './approval-flow.js?v=20261021-form-merged1';
 import {ledgerPage,resourceStatsPage,homeIndicators,ledgerAction,resetLedgerView,minePage,mineReminders} from './social-ledgers.js?v=20261021-form-merged1';
 import {rosterSection,rosterHandlers,onlineHandlers,showStaffDetail,showCourseDetail,presetRoster,loadCodeTables} from './school-data.js?v=20261019-merge1&display=20261019-clean2';
@@ -931,7 +931,7 @@ const pages={
   const tabbar=`<nav class="section-tabs" aria-label="院系概况分区">${[['overview','运行概览'],['assessment','考核进度'],['roster','教师名册']].map(([k,l])=>`<button type="button" data-action="organization-tab" data-id="${k}" class="${tab===k?'active':''}" aria-pressed="${tab===k}">${l}</button>`).join('')}</nav>`;
   const head=pageHead('按组织自动限定业务范围，集中查看运行指标、待办与考核进度。',act('组织考核排名','org-ranking','','','chart'))+tabbar;
   if(tab==='roster'){view={};return head+await rosterSection({...ledgerContext(),orgs})}
-  const w=await api('/organization-workbench?'+query(scope));const s=w.statistics;view={s,workbench:w};
+  const w=await api('/organization-workbench?'+query({...scope,size:6}));const s=w.statistics;view={s,workbench:w};
   const filters=`<div class="card mt20 mb16">${filtersBar({period:true,organization:true,teacher:true,dates:true,project:true,states:['TEACHER','DEPARTMENT','COLLEGE','SCHOOL','READY','ARCHIVED'],returned:true,exportKind:'records'})}${note(s.state_filter_note,false,'筛选口径')}</div>`;
   if(tab==='assessment')return head+filters+`<div class="card mt20"><div class="card-head"><h2>教师考核处理进度</h2><span class="subtle">当前筛选范围</span></div>${table(['环节','教师数量'],Object.entries(w.assessment_states).map(([k,v])=>[badge(k),link(String(v),'drill-state',k)]))}</div>`+scoreBandsHTML(s,'本范围教师考核分值汇总与分档');
   return head+filters+metricsHTML(s)+`<div class="card mt20"><div class="card-head"><h2>本范围待处理事项</h2><span class="subtle">${w.todos.total} 项</span></div>${todosHTML(w.todos.items)}</div><div class="card mt20"><div class="card-head"><h2>组织运行概览</h2></div>${table(['组织','归属培训收入（元）','课程人次','参与教师','查看'],s.ranking.map(x=>[esc(x.name),number(x.income,2),number(x.participants),x.teachers,link('穿透业务明细','drill-org',x.org_id)]))}<div class="card-foot">考核进度与指标按当前条件筛选；待办按组织授权范围显示，避免遗漏其他周期的事项。筛选不改正式考核结果。</div></div>`},

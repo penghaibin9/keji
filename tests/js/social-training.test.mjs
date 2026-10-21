@@ -356,6 +356,16 @@ test('基地卡片显示用途、设立日期、共建单位，统计思政基�
  assert.match(html,/data-action="app-detail" data-id="c">看进度/);
 });
 
+test('成果学院与级别传给服务端，空结果保留筛选并采用匹配总数',async()=>{
+ const c=renderContext({resources:[],outcome_orgs:[{id:'college1',name:'甲学院'},{id:'college2',name:'乙学院'}],pagination:{total:0,page:1,size:200,filters_applied:true}});
+ c.filter={org_id:'college1',workspace_status:'national'};c.setTrainingViewState=()=>{};
+ const html=await socialPage('outcomes',c),url=new URL(c.requests.at(-1),'http://localhost');
+ assert.equal(url.searchParams.get('org_id'),'college1');assert.equal(url.searchParams.get('level'),'national');
+ assert.match(html,/共 0 项 · 第 1 页/);assert.doesNotMatch(html,/仅作用于当前页/);
+ assert.match(html,/没有符合条件的记录/);assert.match(html,/清除筛选/);
+ assert.match(html,/<option value="college1" selected>甲学院/);assert.match(html,/<option value="college2">乙学院/);
+});
+
 test('分页统计区分授权总数、本页记录和本页已结项',async()=>{
  const projects=[{id:'p1',cohort:'第一期',state:'CLOSED',state_label:'已结项',data:{name:'项目一',code:'P1',mode:'module'}},{id:'p2',cohort:'第二期',state:'DRAFT',data:{name:'项目二',code:'P2',mode:'module'}}];
  const html=await renderSocial('projects',renderContext({projects,pagination:{total:82,page:3,size:20}}));

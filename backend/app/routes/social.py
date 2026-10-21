@@ -76,7 +76,7 @@ def project_options(request:Request,q:str=Query('',max_length=100),page:int=Quer
 
 
 @router.get('/workspace')
-def workspace(request:Request,section:str=Query('projects',pattern='^(projects|courses|bases|outcomes|recognition|annual|policy)$'),page:int=Query(1,ge=1),q:str=Query('',max_length=100),resource_page:int=Query(1,ge=1)):
+def workspace(request:Request,section:str=Query('projects',pattern='^(projects|courses|bases|outcomes|recognition|annual|policy)$'),page:int=Query(1,ge=1),q:str=Query('',max_length=100),resource_page:int=Query(1,ge=1),org_id:str=Query('',max_length=36),level:str=Query('',pattern='^(|national|province|school)$')):
     def load(db,a,s):
         totals={};size=200
         def listing(query,key,search):
@@ -112,6 +112,11 @@ def workspace(request:Request,section:str=Query('projects',pattern='^(projects|c
         if section in {'bases','outcomes'}:resource_query=resource_query.where(SocialResource.kind==('base' if section=='bases' else 'achievement'))
         elif section=='recognition':resource_query=resource_query.where(SocialResource.kind.in_(['correction','point_report','point_review']))
         elif section=='courses':resource_query=resource_query.where(SocialResource.kind=='course_resource')
+        if section=='outcomes':
+            if org_id:
+                if org_id not in resource_scope:raise HTTPException(403,'所选学院不在当前查看范围内')
+                resource_query=resource_query.where(SocialResource.org_id==org_id)
+            if level:resource_query=resource_query.where(SocialResource.data['level'].as_string()==level)
         resources=listing(resource_query.order_by(SocialResource.code),section if section in {'bases','outcomes'} else 'resources',[SocialResource.code,SocialResource.name])
         policies=listing(select(SocialPolicy).order_by(SocialPolicy.created_at.desc(),SocialPolicy.id),'policy',[SocialPolicy.name])
         course_query=st.visible_courses(db,a)
@@ -153,7 +158,8 @@ def workspace(request:Request,section:str=Query('projects',pattern='^(projects|c
         return {'projects':project_items,'history_available':a.role.kind in ('school','college') and request.app.state.settings.school_reports_dir is not None,'claims':claim_items,'annuals':[{**st.annual_read_item(a,row),'org_name':resource_orgs.get(row.org_id,'—')} for row in annuals],'resources':[{**st.resource_read_item(a,row),'state_label':st.state_label(row),'org_name':resource_orgs[row.org_id]} for row in resources],
                 'policies':display(policies),'courses':serial(courses),'course_stats':serial(course_stats),'course_info':serial(course_info),'states':st.STATES,'decisions':st.DECISIONS,
                 'my_duties':[k for k,v in st.assignments(db).items() if a.id in v],
-                'pagination':{'page':page,'size':size,'total':totals.get(section,0),'q':q},'resource_pagination':{'page':resource_page,'size':size,'total':totals.get('resources',0)}}
+                'outcome_orgs':serial(db.scalars(select(Org).where(Org.id.in_(resource_scope),Org.kind=='college')).all()) if section=='outcomes' else [],
+                'pagination':{'page':page,'size':size,'total':totals.get(section,0),'q':q,'filters_applied':section=='outcomes'},'resource_pagination':{'page':resource_page,'size':size,'total':totals.get('resources',0)}}
     return read_operation(request,'records.read',load)
 
 

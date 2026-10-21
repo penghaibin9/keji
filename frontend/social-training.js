@@ -1,11 +1,11 @@
 import {parseCalendarDates,calendarDateError,normalizeDate,dateError,setFieldCondition,actionPhrases,validateFormAssists} from './form-assist.js?v=20261021-form-merged1';
 // School business pages reuse the portal's forms, permissions, navigation and attachments.
 import {checkUploadFiles,uploadEntries,uploadSequential,uploadStatusHtml,failedEntries,MAX_ATTACHMENTS} from './approval-flow.js?v=20261021-form-merged1';
-import {renderTrainingWorkspace,trainingChange} from './training-workspace.js?v=20261021-form-merged1';
+import {renderTrainingWorkspace,trainingChange} from './training-workspace.js?v=20261021-core-recheck2';
 import {imageField,takeImage,saveImageAfter,coverButton} from './display-image.js?v=20261021-form-merged1';
 import {historyProjectsPage,projectViewTabs} from './history-projects.js?v=20261019-walk3&display=20261019-clean2&history_dates=20261020-images1';
 const COPY_KEYS=['name','org_id','owner_id','category','high_risk','expected_income','expected_participants','expected_outcomes','mode','class_type','level','level_basis','scene','target_groups','one_skill','province_report','province_basis','auxiliary_standard','auxiliary_daily_cap','total_hours','audiences','audience_other','service_types','teaching_methods','video_minutes','base_count','venue','quality'];
-import {progressHtml,AUDIENCE,TEACHING_MODES,IDEOLOGY} from './applications.js?v=20261021-form-merged1';
+import {progressHtml,AUDIENCE,TEACHING_MODES,IDEOLOGY} from './applications.js?v=20261021-core-recheck2';
 const names={module:'模块式',person_day:'人天式',technical:'技术类',lecture:'讲座类',province:'省级',city:'市级或企业定制',school:'校级',dispatched:'统一委派异地送教',full_day:'全天实操或脱产',ordinary:'常规',subsidy:'补贴性培训',enterprise:'企业定制培训',community:'社区公益培训',rural:'乡村帮扶培训',other:'其他非学历培训',national:'国家级'};
 let workspace,context,opened,workspaceUser;
 let listSection='',listPage=1,listSearch='',resourcePage=1;
@@ -169,7 +169,7 @@ async function deadlinesModal(){
 }
 
 export async function socialPage(section,c){
- context=c;if(listSection!==section){listPage=1;listSearch='';resourcePage=1;listSection=section}if(['projects','courses','bases','outcomes'].includes(section)&&(c.setProjectViewState||c.setTrainingViewState)){listSearch=c.filter?.project_view!=='history'?(c.filter?.q||''):'';listPage=/^[1-9]\d{0,3}$/.test(c.filter?.workspace_page||'')?Number(c.filter.workspace_page):1;resourcePage=/^[1-9]\d{0,3}$/.test(c.filter?.resource_page||'')?Number(c.filter.resource_page):1;}workspace=await c.api('/social/workspace?section='+section+'&page='+listPage+'&q='+encodeURIComponent(listSearch)+'&resource_page='+resourcePage);workspaceUser=c.me?.user?.id;const {esc,act,table,note,pageHead}=c;
+ context=c;if(listSection!==section){listPage=1;listSearch='';resourcePage=1;listSection=section}if(['projects','courses','bases','outcomes'].includes(section)&&(c.setProjectViewState||c.setTrainingViewState)){listSearch=c.filter?.project_view!=='history'?(c.filter?.q||''):'';listPage=/^[1-9]\d{0,3}$/.test(c.filter?.workspace_page||'')?Number(c.filter.workspace_page):1;resourcePage=/^[1-9]\d{0,3}$/.test(c.filter?.resource_page||'')?Number(c.filter.resource_page):1;}workspace=await c.api('/social/workspace?section='+section+'&page='+listPage+'&q='+encodeURIComponent(listSearch)+'&resource_page='+resourcePage+(section==='outcomes'?'&org_id='+encodeURIComponent(c.filter?.org_id||'')+'&level='+encodeURIComponent(c.filter?.workspace_status||''):''));workspaceUser=c.me?.user?.id;const {esc,act,table,note,pageHead}=c;
  if(section==='projects'&&workspace.history_available&&['school','college'].includes(c.me?.role?.kind)&&c.filter?.project_view==='history')return historyProjectsPage(c);
  // 教研室查看项目和资源，不直接登记；课程、基地仍可走本人申请流程。
  const can=p=>c.can(p)&&!(p==='records.write'&&c.me?.role?.kind==='dept'&&['projects','courses','bases','outcomes'].includes(section));
