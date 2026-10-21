@@ -63,7 +63,7 @@ def make_plan(target,port,out):
     verify_baseline(ROOT)
     report=inspect_host(target,port)
     p={'format':'R11_RESTRICTED_PLAN_1','created_at':now().isoformat(),'expires_at':(now()+dt.timedelta(hours=12)).isoformat(),
-       'host_id':host_id(),'source_baseline':'573e64f3af2e27637cc86a40cb98c5b0ae268dde1681e0ba757c77eae054bc9e',
+       'host_id':host_id(),'source_baseline':'c789c96425a1f7107568252dee16211ab4eb34c8cbe2599064b8e4349c959174',
        'nonce':secrets.token_hex(12),'proposal':report,'approval_scope':['create_new_dedicated_directory','create_local_CA_and_TLS',
        'build_unique_images','start_new_mysql_8_4_instance','canonical_empty_school_install','seed_synthetic_data_through_authorized_API'],
        'excluded':['host_nginx_changes','firewall_changes','production_DB','existing_directories','public_port_publication','external_adapters'],

@@ -1,6 +1,6 @@
 {
   "kind": "school_delivery_working_tree_snapshot",
-  "program_baseline": "573e64f3af2e27637cc86a40cb98c5b0ae268dde1681e0ba757c77eae054bc9e",
+  "program_baseline": "c789c96425a1f7107568252dee16211ab4eb34c8cbe2599064b8e4349c959174",
   "migration_heads": [
     "20261021_0006"
   ],
@@ -547,7 +547,7 @@
       "size": 5354
     },
     "delivery/R11_BASE_MANIFEST.json": {
-      "sha256": "1e9177f74a6cd76ba7afe402b6d9d5b88a984e7a567fb35c33bb4234c8510799",
+      "sha256": "4b858b1b3ab16a22758103ddf655a0c16ce281a5dd5533b736a6c35dafc18fc2",
       "size": 43779
     },
     "delivery/__init__.py": {
@@ -611,7 +611,7 @@
       "size": 3166
     },
     "delivery/manage.py": {
-      "sha256": "defa02f6b7902a5c408ad79bd7096ed07328c3898f27e4f7170259deecb82a66",
+      "sha256": "b037b18b94644e799e7dd09a0926800552f87ff2bc5587dc954b7996f9f4a118",
       "size": 16484
     },
     "delivery/requirements-browser.txt": {
@@ -643,7 +643,7 @@
       "size": 8121
     },
     "delivery/tests/test_deploy_guards.py": {
-      "sha256": "ff7727e357dcb77bbbc68326645a73da025c91100b54f56ae5a0c50be410ffdd",
+      "sha256": "704148912edc83cfbed5dde8751d279603b1cc19fafe83a0970f392288770660",
       "size": 5252
     },
     "delivery/validate_integration_profile.py": {
@@ -651,7 +651,7 @@
       "size": 3242
     },
     "deploy/Dockerfile.api": {
-      "sha256": "6e8d7a211378187e4fe62518de88c98e484014b4e87baa0f7a504f06b1d9401d",
+      "sha256": "4007b1cb1c84fcefc42329c2223bb6b4c375dd95a7ee93d824abe66e02bcda74",
       "size": 1334
     },
     "deploy/Dockerfile.frontend": {
