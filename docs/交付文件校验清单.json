@@ -1,6 +1,6 @@
 {
   "kind": "school_delivery_working_tree_snapshot",
-  "program_baseline": "907739d2826c750a5555d7941ba8cae51255924d3ab804fa997071b64a69d7fa",
+  "program_baseline": "9d63b4863294c0210c54f11156d9c4982f1e8a2896cdb5eea5399f307f87236c",
   "migration_heads": [
     "20261021_0006"
   ],
@@ -147,8 +147,8 @@
       "size": 36926
     },
     "backend/app/approval_center.py": {
-      "sha256": "84efff2e97ccfcd5cd7a46b52450e4be6604f7b27b14a041b1306537cc6c067d",
-      "size": 18745
+      "sha256": "707001690af582b72a89be5cc4003977b89fcc4458b34bee182324a0a9d48a60",
+      "size": 19196
     },
     "backend/app/approvals.py": {
       "sha256": "79ec56fbf233ced98276d5e2d78e2a6ac2040400823ffa01d352b8925e224d6d",
@@ -547,7 +547,7 @@
       "size": 5354
     },
     "delivery/R11_BASE_MANIFEST.json": {
-      "sha256": "a13de79bd02160474fe79b816bf158ac4cf8a672eb699b218232ccb4cd9986ee",
+      "sha256": "83c2c525be19c3182cc6a288d5866dac5798290a0f51bf1ae18371b7774e0074",
       "size": 43779
     },
     "delivery/__init__.py": {
@@ -611,7 +611,7 @@
       "size": 3166
     },
     "delivery/manage.py": {
-      "sha256": "18d5ffb881f3447b08884cf73b893ac61e4427a44d9b3086eee3ab4d538c2866",
+      "sha256": "f612c9b7d46f59ca43dbf401a661d2b941547ecb2671736b3a713ef9503b54fa",
       "size": 16484
     },
     "delivery/requirements-browser.txt": {
@@ -643,7 +643,7 @@
       "size": 8121
     },
     "delivery/tests/test_deploy_guards.py": {
-      "sha256": "3f8c189cd850a334539aef893a3b145b48f448e16ea25771b4080ceaee4d3044",
+      "sha256": "f4a0b6cf64c13b236c3c109a338fc6afc41181b877417a90e5960a32f3e18f47",
       "size": 5252
     },
     "delivery/validate_integration_profile.py": {
@@ -799,8 +799,8 @@
       "size": 14687
     },
     "frontend/app.js": {
-      "sha256": "4312e2ccc0b100f84c243c892bb244fade1927fdfd0c57a6c7a028407661166c",
-      "size": 516741
+      "sha256": "4c79d042d8cf6e23aaf34deb6e9e834944c8af0f00aedeb9fe7f0d0df49d4758",
+      "size": 517869
     },
     "frontend/applications.js": {
       "sha256": "e235ef6b57ae68dea4a042c5985b06387a1a39c8e3d1b046bf051915321de7c2",
@@ -1431,8 +1431,8 @@
       "size": 16302
     },
     "tests/r2/test_approval_center.py": {
-      "sha256": "438de220d7cdf30c63ab466977a0a625224d29922cb0d5c1125025bc9d2dda79",
-      "size": 10900
+      "sha256": "b63f35d22333a6a7bb8d11a6b52007f456bf898e753694bbe36ba4b4a67579f2",
+      "size": 12225
     },
     "tests/r2/test_approval_streamline.py": {
       "sha256": "526ce9dfe52dd5ea0b7931b7a189735f23efd6baf5f5d5d8fe1a17404a81a7e9",

@@ -1,6 +1,6 @@
 from datetime import date, datetime
 from conftest import auth
-from app.models import Qualification, WorkflowEvent, Role, Setting
+from app.models import Qualification, WorkflowEvent, Role, Setting, User
 from app.social_models import SocialResource, SocialPolicy, SocialAnnual, SocialProject
 from app.reference_data import TrainingProjectMaster
 from app import approval_center as center
@@ -168,3 +168,26 @@ def test_unsubmitted_project_draft_does_not_inflate_approval_count(client2, app2
     assert result['waiting_items'][0]['id']=='center-draft'
     assert result['waiting_items'][0]['business_code']=='CENTER-DRAFT'
     assert '尚未提交' in result['waiting_items'][0]['action_hint']
+
+
+def test_co_head_still_sees_item_after_other_head_approved(client2, app2):
+    with app2.state.sessions.begin() as db:
+        first=db.get(User,'collegehead')
+        db.add(User(id='collegehead2',username='collegehead2',name='隔离学院负责人二',org_id='college1',role_id=first.role_id,
+            password_hash=first.password_hash,active=True,must_change_password=False))
+        db.add(User(id='collegehead3',username='collegehead3',name='隔离另一学院负责人',org_id='college2',role_id=first.role_id,
+            password_hash=first.password_hash,active=True,must_change_password=False))
+        qualification(db,'shared',state='APPROVED')
+        event(db,'shared',actor='collegehead',day=3)
+    auth(client2,'collegehead')
+    mine=client2.get('/api/approval-center?tab=handled').json()['items']
+    assert [x['id'] for x in mine]==['shared'] and 'handled_by' not in mine[0]
+    # 另一位同学院负责人没有自己办过，也能看到，并知道是谁办的
+    auth(client2,'collegehead2')
+    seen=client2.get('/api/approval-center?tab=handled').json()['items']
+    assert [x['id'] for x in seen]==['shared'] and seen[0]['my_action']=='资质审核通过'
+    assert seen[0]['handled_by']=='测试学院负责人'
+    # 别的学院的负责人、本级教研室负责人看不到这位的办理记录
+    for user in ('collegehead3','depthead'):
+        auth(client2,user)
+        assert client2.get('/api/approval-center?tab=handled').json()['total']==0

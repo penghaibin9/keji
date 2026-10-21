@@ -1,5 +1,5 @@
 {
- "input_zip_sha256": "907739d2826c750a5555d7941ba8cae51255924d3ab804fa997071b64a69d7fa",
+ "input_zip_sha256": "9d63b4863294c0210c54f11156d9c4982f1e8a2896cdb5eea5399f307f87236c",
  "baseline_note": "program files only; rebuilt by scripts/refresh_launcher_manifest.py",
  "files": {
   ".dockerignore": "3ce289acb5e52c4133ecaa490b8672406f986f409f7397b8a566db497846caad",
@@ -29,7 +29,7 @@
   "backend/app/adapters/rest.py": "9fc928c0effcd8b04cb376abed755d7b1faad1727674662cc34e7fedd8d50c0a",
   "backend/app/adapters/sso_configurable.py": "8c371f198da8f3962e9bca2cb624a52428a720b4423683549f66e8fe665f4865",
   "backend/app/applications.py": "e0ba9603bb0677e13455801a68ac1addef2c7b7cd765a264a354a296993a860f",
-  "backend/app/approval_center.py": "84efff2e97ccfcd5cd7a46b52450e4be6604f7b27b14a041b1306537cc6c067d",
+  "backend/app/approval_center.py": "707001690af582b72a89be5cc4003977b89fcc4458b34bee182324a0a9d48a60",
   "backend/app/approvals.py": "79ec56fbf233ced98276d5e2d78e2a6ac2040400823ffa01d352b8925e224d6d",
   "backend/app/assessment_evidence.py": "d513bf688edb566dc691ba2cf52a82e7d0c5964d169965af7323c920fd23294f",
   "backend/app/calculation_freshness.py": "594ff4371ab9bfdd986b8019b218a3f809990e1138062a4de60879e88f4897e9",
@@ -134,7 +134,7 @@
   "deploy/compose.yml": "d198e5f52497efe5c949a17090106978280f0eaa8ad2e109ff50ef9f609c6875",
   "deploy/mysql-init/01-users.sh": "f859c870ffe7c545e03b042a622dfe3ea3ef700fb3e317cd1df5b8841224e932",
   "deploy/nginx.conf": "26e6155d40cef6d3ccff7e486abbce37fd8e3d4e7b36c36ffdd10534f84bfd2a",
-  "frontend/app.js": "4312e2ccc0b100f84c243c892bb244fade1927fdfd0c57a6c7a028407661166c",
+  "frontend/app.js": "4c79d042d8cf6e23aaf34deb6e9e834944c8af0f00aedeb9fe7f0d0df49d4758",
   "frontend/applications.js": "e235ef6b57ae68dea4a042c5985b06387a1a39c8e3d1b046bf051915321de7c2",
   "frontend/approval-flow.js": "bdccc2555c957329069ca27b4dac5de13917b9ae0d87ddb8f90b490f7b4be3cd",
   "frontend/assets/campus-linework.png": "7d93c1ad15413141240b4e03de3088ed7194d1230a7991e8f8fa78bca822c966",
@@ -292,7 +292,7 @@
   "tests/r2/test_annual_review_todos.py": "da0c430e3d68cc48b443d903aa54c45acfa2527307227b77423ac26925ab26f8",
   "tests/r2/test_api.py": "2943c7513b502788adb3015bf6c5d152f54ead6bbcedf2b44030d19e01edd57f",
   "tests/r2/test_applications.py": "2ce143916f2e41008629de88be84cc6a9c050bacb675f36f933da7b48327f3ae",
-  "tests/r2/test_approval_center.py": "438de220d7cdf30c63ab466977a0a625224d29922cb0d5c1125025bc9d2dda79",
+  "tests/r2/test_approval_center.py": "b63f35d22333a6a7bb8d11a6b52007f456bf898e753694bbe36ba4b4a67579f2",
   "tests/r2/test_approval_streamline.py": "526ce9dfe52dd5ea0b7931b7a189735f23efd6baf5f5d5d8fe1a17404a81a7e9",
   "tests/r2/test_assessment_blocker_guidance.py": "82fceaea1bd79faee8c780281c6b753599ea7c1b8350b56d83111c8628dfa36f",
   "tests/r2/test_auth_session_provenance.py": "9d92d5c6e1cb9b409a84331180c0f42c85a8daee12641b3d5f1da55902527721",

@@ -214,10 +214,17 @@ def pending(db, actor, items):
 def records(db, actor, tab):
     # Only the actor's business events are candidates; current read permission is checked again below.
     # shortcut: 复用原单授权逐条过滤后分页；单人已办超过1000条时改为授权联查分页。
+    # 同一学院/教研室可设几位负责人，任何一位办理后，其余负责人仍要在“已办”里看到这条并知道是谁办的；
+    # 原单可见范围仍由下面的 readable 按当前身份逐条复核。“我发起的”只看本人。
+    handlers = {actor.id}
+    if tab == 'handled' and actor.role.kind in {'dept', 'college'}:
+        from .identities import org_heads
+        handlers |= {h['user_id'] for h in org_heads(db, (actor.role.kind,)).get(actor.org.id, []) if h['usable']}
     query = select(WorkflowEvent.object_type, WorkflowEvent.object_id, WorkflowEvent.action,
-        WorkflowEvent.created_at, WorkflowEvent.before['state'].as_string().label('before_state'),
+        WorkflowEvent.created_at, WorkflowEvent.actor_id, WorkflowEvent.actor_name,
+        WorkflowEvent.before['state'].as_string().label('before_state'),
         WorkflowEvent.after['state'].as_string().label('after_state')).where(
-        WorkflowEvent.actor_id == actor.id, WorkflowEvent.object_type.in_(MODELS))
+        WorkflowEvent.actor_id.in_(handlers), WorkflowEvent.object_type.in_(MODELS))
     if tab == 'mine':
         query = query.where(WorkflowEvent.action.in_(CREATED_ACTIONS))
     # 同秒事件按业务版本排序；历史事件缺少版本时仍按时间和事件编号稳定回退。
@@ -251,6 +258,8 @@ def records(db, actor, tab):
                 action = {('COLLEGE','SUBMITTED'):'学院审批通过', ('SUBMITTED','FILED'):'完成学校备案',
                           ('CLOSE_COLLEGE','CLOSE_REVIEW'):'学院结项核验通过', ('CLOSE_REVIEW','CLOSED'):'学校核验结项'}.get((event.before_state,event.after_state), action)
             row.update(my_action=action, handled_at=serial(event.created_at), action_label='查看记录')
+            if event.actor_id != actor.id:
+                row['handled_by'] = (db.get(User, event.actor_id).name if db.get(User, event.actor_id) else event.actor_name) or ''
             out.append(row)
         except HTTPException as error:
             if error.status_code not in (403, 404):
