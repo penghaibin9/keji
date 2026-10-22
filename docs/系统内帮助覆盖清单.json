@@ -12,7 +12,7 @@
         "怎么用"
       ],
       "forms": [],
-      "video": false,
+      "video": true,
       "filling_video": false
     },
     {
@@ -611,7 +611,5 @@
       "filling_video": false
     }
   ],
-  "media_errors": [
-    "quickstart:缺少视频"
-  ]
+  "media_errors": []
 }

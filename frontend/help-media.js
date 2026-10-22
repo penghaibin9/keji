@@ -6,25 +6,26 @@ export const HELP_MEDIA={
     "captions": "/assets/assets/help/20261022/home.vtt",
     "chapters": [
       {
-        "title": "入口与用途",
+        "title": "这页做什么",
         "time": 0.0
       },
       {
-        "title": "操作顺序",
-        "time": 12.89
+        "title": "操作步骤",
+        "time": 14.24
       },
       {
-        "title": "填写或查看说明",
-        "time": 28.4
+        "title": "数据怎么看",
+        "time": 55.68
       },
       {
-        "title": "完成标志与常见问题",
-        "time": 39.36
+        "title": "怎样算办好",
+        "time": 65.6
       }
     ],
-    "duration": 52.18,
+    "duration": 81.0,
     "version": "20261022",
-    "description": "真实页面与填写说明演示（虚构资料）；本段未提交业务，不作为完整审批验收。"
+    "description": "真实页面与填写说明演示（虚构资料）；本段未提交业务，不作为完整审批验收。",
+    "paced": true
   },
   "todos": {
     "src": "/assets/assets/help/20261022/todos.mp4",
@@ -32,25 +33,26 @@ export const HELP_MEDIA={
     "captions": "/assets/assets/help/20261022/todos.vtt",
     "chapters": [
       {
-        "title": "入口与用途",
+        "title": "这页做什么",
         "time": 0.0
       },
       {
-        "title": "操作顺序",
-        "time": 12.86
+        "title": "操作步骤",
+        "time": 11.44
       },
       {
-        "title": "填写或查看说明",
-        "time": 29.88
+        "title": "数据怎么看",
+        "time": 35.92
       },
       {
-        "title": "完成标志与常见问题",
-        "time": 40.84
+        "title": "怎样算办好",
+        "time": 45.84
       }
     ],
-    "duration": 55.85,
+    "duration": 63.4,
     "version": "20261022",
-    "description": "真实页面与填写说明演示（虚构资料）；本段未提交业务，不作为完整审批验收。"
+    "description": "真实页面与填写说明演示（虚构资料）；本段未提交业务，不作为完整审批验收。",
+    "paced": true
   },
   "apply_course": {
     "src": "/assets/assets/help/20261022/course-flow.mp4",
@@ -58,43 +60,43 @@ export const HELP_MEDIA={
     "captions": "/assets/assets/help/20261022/course-flow.vtt",
     "chapters": [
       {
-        "title": "教师填写时查看帮助",
-        "time": 2.41
+        "title": "教师填写课程申报",
+        "time": 2.59
       },
       {
-        "title": "教师提交后进入教研室审核",
-        "time": 20.39
+        "title": "提交后等待教研室审核",
+        "time": 23.59
       },
       {
-        "title": "教研室退回补正，教研室负责人",
-        "time": 33.49
+        "title": "教研室负责人退回补正",
+        "time": 36.17
       },
       {
-        "title": "教师补正保存，仍需重新提交",
-        "time": 46.75
+        "title": "教师补正资料",
+        "time": 52.52
       },
       {
         "title": "教师重新提交",
-        "time": 60.33
+        "time": 68.81
       },
       {
-        "title": "审批通过，教研室负责人",
-        "time": 68.96
+        "title": "教研室负责人审核通过",
+        "time": 78.12
       },
       {
-        "title": "审批通过，学院负责人",
-        "time": 79.62
+        "title": "学院负责人审批通过",
+        "time": 87.54
       },
       {
-        "title": "审批通过，学校归口复审人员",
-        "time": 90.68
+        "title": "学校归口复审通过",
+        "time": 96.47
       },
       {
-        "title": "教师回看最终入库结果",
-        "time": 102.22
+        "title": "教师查看入库结果",
+        "time": 104.09
       }
     ],
-    "duration": 116.48,
+    "duration": 120.52,
     "version": "20261022",
     "description": "真实录屏：教师填写提交、教研室退回、教师补正重提、教研室与学院通过、学校归口复审及最终入库。使用独立虚构资料。",
     "filling": {
@@ -102,7 +104,8 @@ export const HELP_MEDIA={
       "captions": "/assets/assets/help/20261022/apply_course-filling.vtt",
       "poster": "/assets/assets/help/20261022/apply_course.jpg",
       "version": "20261022",
-      "duration": 410.63,
+      "paced": true,
+      "duration": 199.16,
       "chapters": [
         {
           "title": "新填一门培训课程（教师） / 新填一门培训课程",
@@ -110,146 +113,82 @@ export const HELP_MEDIA={
         },
         {
           "title": "新填一门培训课程（教师） / 课程编号",
-          "time": 15.74
+          "time": 10.64
         },
         {
           "title": "新填一门培训课程（教师） / 课程名称",
-          "time": 30.41
+          "time": 21.72
         },
         {
           "title": "新填一门培训课程（教师） / 学时",
-          "time": 43.87
+          "time": 30.44
         },
         {
           "title": "新填一门培训课程（教师） / 教学方式（单选）",
-          "time": 55.22
+          "time": 41.4
         },
         {
           "title": "新填一门培训课程（教师） / 思政属性（单选）",
-          "time": 63.07
+          "time": 49.24
         },
         {
           "title": "新填一门培训课程（教师） / 课程简介",
-          "time": 71.78
+          "time": 55.8
         },
         {
           "title": "新填一门培训课程（教师） / 选择关联项目",
-          "time": 80.92
+          "time": 66.68
         },
         {
           "title": "新填一门培训课程（教师） / 培训包",
-          "time": 91.81
+          "time": 79.2
         },
         {
           "title": "新填一门培训课程（教师） / “一人一技”专项",
-          "time": 99.28
+          "time": 85.36
         },
         {
           "title": "新填一门培训课程（教师） / 重点群体与行动对接",
-          "time": 108.65
+          "time": 95.4
         },
         {
           "title": "新填一门培训课程（教师） / 课件审查状态",
-          "time": 126.06
+          "time": 112.4
         },
         {
           "title": "新填一门培训课程（教师） / 审查人或审查组",
-          "time": 134.83
+          "time": 120.32
         },
         {
           "title": "新填一门培训课程（教师） / 审查日期",
-          "time": 147.31
+          "time": 131.96
         },
         {
           "title": "新填一门培训课程（教师） / 审查记录编号",
-          "time": 157.47
+          "time": 137.36
         },
         {
           "title": "新填一门培训课程（教师） / 课程封面（选填）",
-          "time": 170.87
+          "time": 149.2
         },
         {
           "title": "新填一门培训课程（教师） / 本次申报说明",
-          "time": 182.63
+          "time": 165.68
         },
         {
-          "title": "新填一门培训课程（教研室负责人） / 新填一门培训课程",
-          "time": 197.23
+          "title": "新填一门培训课程（教研室负责人） / 教研室负责人版本",
+          "time": 178.12
         },
         {
           "title": "新填一门培训课程（教研室负责人） / 主讲教师（输入工号或姓名检索）",
-          "time": 212.97
-        },
-        {
-          "title": "新填一门培训课程（教研室负责人） / 课程编号",
-          "time": 229.14
-        },
-        {
-          "title": "新填一门培训课程（教研室负责人） / 课程名称",
-          "time": 243.81
-        },
-        {
-          "title": "新填一门培训课程（教研室负责人） / 学时",
-          "time": 257.27
-        },
-        {
-          "title": "新填一门培训课程（教研室负责人） / 教学方式（单选）",
-          "time": 268.62
-        },
-        {
-          "title": "新填一门培训课程（教研室负责人） / 思政属性（单选）",
-          "time": 276.48
-        },
-        {
-          "title": "新填一门培训课程（教研室负责人） / 课程简介",
-          "time": 285.18
-        },
-        {
-          "title": "新填一门培训课程（教研室负责人） / 选择关联项目",
-          "time": 294.32
-        },
-        {
-          "title": "新填一门培训课程（教研室负责人） / 培训包",
-          "time": 305.21
-        },
-        {
-          "title": "新填一门培训课程（教研室负责人） / “一人一技”专项",
-          "time": 312.68
-        },
-        {
-          "title": "新填一门培训课程（教研室负责人） / 重点群体与行动对接",
-          "time": 322.05
-        },
-        {
-          "title": "新填一门培训课程（教研室负责人） / 课件审查状态",
-          "time": 339.46
-        },
-        {
-          "title": "新填一门培训课程（教研室负责人） / 审查人或审查组",
-          "time": 348.23
-        },
-        {
-          "title": "新填一门培训课程（教研室负责人） / 审查日期",
-          "time": 360.71
-        },
-        {
-          "title": "新填一门培训课程（教研室负责人） / 审查记录编号",
-          "time": 370.87
-        },
-        {
-          "title": "新填一门培训课程（教研室负责人） / 课程封面（选填）",
-          "time": 384.27
-        },
-        {
-          "title": "新填一门培训课程（教研室负责人） / 本次申报说明",
-          "time": 396.03
+          "time": 184.12
         }
       ],
-      "description": "真实表单逐项讲解，说明字段含义、示例和条件；使用虚构资料，不提交业务。可通过章节直接跳到某一栏。",
       "covered_forms": [
         "新填一门培训课程",
         "新填一门培训课程"
-      ]
+      ],
+      "description": "真实表单逐项讲解，说明字段含义、示例和条件；使用虚构资料，不提交业务。可通过章节直接跳到某一栏。"
     }
   },
   "apply_project": {
@@ -258,23 +197,23 @@ export const HELP_MEDIA={
     "captions": "/assets/assets/help/20261022/apply_project.vtt",
     "chapters": [
       {
-        "title": "入口与用途",
+        "title": "这页做什么",
         "time": 0.0
       },
       {
-        "title": "操作顺序",
-        "time": 13.76
+        "title": "操作步骤",
+        "time": 14.76
       },
       {
-        "title": "填写或查看说明",
-        "time": 37.28
+        "title": "填写说明",
+        "time": 42.24
       },
       {
-        "title": "完成标志与常见问题",
-        "time": 52.61
+        "title": "怎样算办好",
+        "time": 54.12
       }
     ],
-    "duration": 66.61,
+    "duration": 69.96,
     "version": "20261022",
     "description": "真实页面与填写说明演示（虚构资料）；本段未提交业务，不作为完整审批验收。",
     "filling": {
@@ -282,7 +221,8 @@ export const HELP_MEDIA={
       "captions": "/assets/assets/help/20261022/apply_project-filling.vtt",
       "poster": "/assets/assets/help/20261022/apply_project.jpg",
       "version": "20261022",
-      "duration": 680.43,
+      "paced": true,
+      "duration": 519.52,
       "chapters": [
         {
           "title": "申报培训项目（教师） / 申报培训项目",
@@ -290,235 +230,163 @@ export const HELP_MEDIA={
         },
         {
           "title": "申报培训项目（教师） / 项目编号",
-          "time": 15.2
+          "time": 10.08
         },
         {
           "title": "申报培训项目（教师） / 项目名称",
-          "time": 29.68
+          "time": 22.64
         },
         {
           "title": "申报培训项目（教师） / 项目期次",
-          "time": 44.32
+          "time": 32.52
         },
         {
           "title": "申报培训项目（教师） / 项目负责人",
-          "time": 56.6
+          "time": 42.08
         },
         {
           "title": "申报培训项目（教师） / 培训类别（单选）",
-          "time": 65.52
+          "time": 53.16
         },
         {
-          "title": "申报培训项目（教师） / 企业职工",
-          "time": 74.28
-        },
-        {
-          "title": "申报培训项目（教师） / 社区居民",
-          "time": 82.16
-        },
-        {
-          "title": "申报培训项目（教师） / 退役军人",
-          "time": 90.08
-        },
-        {
-          "title": "申报培训项目（教师） / 新型职业农民",
-          "time": 98.04
-        },
-        {
-          "title": "申报培训项目（教师） / 中小学教师",
-          "time": 106.52
-        },
-        {
-          "title": "申报培训项目（教师） / 机关事业单位人员",
-          "time": 114.72
-        },
-        {
-          "title": "申报培训项目（教师） / 待业及转岗人员",
-          "time": 123.44
-        },
-        {
-          "title": "申报培训项目（教师） / 老年学员",
-          "time": 132.04
+          "title": "申报培训项目（教师） / 受众群体",
+          "time": 59.72
         },
         {
           "title": "申报培训项目（教师） / 其他受众群体",
-          "time": 140.08
+          "time": 70.0
         },
         {
-          "title": "申报培训项目（教师） / 国家战略",
-          "time": 151.84
-        },
-        {
-          "title": "申报培训项目（教师） / 区域发展",
-          "time": 159.52
-        },
-        {
-          "title": "申报培训项目（教师） / 行业发展",
-          "time": 167.24
-        },
-        {
-          "title": "申报培训项目（教师） / 其他",
-          "time": 175.0
+          "title": "申报培训项目（教师） / 服务面向类型",
+          "time": 81.52
         },
         {
           "title": "申报培训项目（教师） / 高风险项目",
-          "time": 182.4
+          "time": 91.24
         },
         {
           "title": "申报培训项目（教师） / 项目封面（选填）",
-          "time": 193.56
+          "time": 103.0
         },
         {
           "title": "申报培训项目（教师） / 项目方案材料（可一次选多份）",
-          "time": 205.36
+          "time": 119.48
         },
         {
           "title": "申报培训项目（教师） / 开始日期",
-          "time": 224.72
+          "time": 144.68
         },
         {
           "title": "申报培训项目（教师） / 结束日期",
-          "time": 237.24
+          "time": 149.28
         },
         {
           "title": "申报培训项目（教师） / 预计收入（元，公益类填0）",
-          "time": 249.32
+          "time": 155.92
         },
         {
           "title": "申报培训项目（教师） / 预计人次",
-          "time": 266.72
+          "time": 175.56
         },
         {
           "title": "申报培训项目（教师） / 预期成果",
-          "time": 278.6
+          "time": 189.0
         },
         {
           "title": "申报培训项目（教师） / “一人一技”专项",
-          "time": 297.6
+          "time": 207.4
         },
         {
           "title": "申报培训项目（教师） / 是否需要报省",
-          "time": 307.0
+          "time": 217.44
         },
         {
           "title": "申报培训项目（教师） / 报省要求与依据",
-          "time": 317.28
+          "time": 227.24
         },
         {
           "title": "申报培训项目（教师） / 重点群体与行动对接",
-          "time": 336.0
+          "time": 246.88
         },
         {
           "title": "申报培训项目（教师） / 总学时",
-          "time": 351.0
+          "time": 269.32
         },
         {
           "title": "申报培训项目（教师） / 视频资源总时长（分钟）",
-          "time": 361.08
+          "time": 285.48
         },
         {
           "title": "申报培训项目（教师） / 实践教学基地数量（个）",
-          "time": 372.96
+          "time": 298.24
         },
         {
-          "title": "申报培训项目（教师） / 课堂教学",
-          "time": 381.0
-        },
-        {
-          "title": "申报培训项目（教师） / 案例教学",
-          "time": 389.32
-        },
-        {
-          "title": "申报培训项目（教师） / 现场教学",
-          "time": 397.52
-        },
-        {
-          "title": "申报培训项目（教师） / 实地考察",
-          "time": 405.88
-        },
-        {
-          "title": "申报培训项目（教师） / 交流研讨",
-          "time": 414.12
-        },
-        {
-          "title": "申报培训项目（教师） / 实验实训",
-          "time": 422.4
-        },
-        {
-          "title": "申报培训项目（教师） / 岗位实习",
-          "time": 430.64
-        },
-        {
-          "title": "申报培训项目（教师） / 学习者互助",
-          "time": 438.92
-        },
-        {
-          "title": "申报培训项目（教师） / 其他",
-          "time": 447.36
+          "title": "申报培训项目（教师） / 教学实施方式",
+          "time": 308.6
         },
         {
           "title": "申报培训项目（教师） / 培训场地",
-          "time": 455.2
+          "time": 317.56
         },
         {
           "title": "申报培训项目（教师） / 具体地点（基地名称、楼宇教室或外出地点）",
-          "time": 465.76
+          "time": 328.48
         },
         {
           "title": "申报培训项目（教师） / 校外培训的外出理由（一事一议）",
-          "time": 480.6
+          "time": 341.08
         },
         {
           "title": "申报培训项目（教师） / 议定文号或会议日期",
-          "time": 497.28
+          "time": 357.68
         },
         {
           "title": "申报培训项目（教师） / 核算方式（单选）",
-          "time": 514.0
+          "time": 374.76
         },
         {
           "title": "申报培训项目（教师） / 标准班类型（单选）",
-          "time": 523.96
+          "time": 385.08
         },
         {
           "title": "申报培训项目（教师） / 项目层级（单选）",
-          "time": 534.64
+          "time": 396.0
         },
         {
           "title": "申报培训项目（教师） / 授课场景（单选）",
-          "time": 544.2
+          "time": 409.68
         },
         {
           "title": "申报培训项目（教师） / 专项层级认定依据",
-          "time": 554.68
+          "time": 420.6
         },
         {
           "title": "申报培训项目（教师） / 随项目备案的辅助积分细则",
-          "time": 576.76
+          "time": 437.92
         },
         {
           "title": "申报培训项目（教师） / 个人辅助积分每日上限",
-          "time": 594.36
+          "time": 455.24
         },
         {
           "title": "申报培训项目（教师） / 申报说明",
-          "time": 608.04
+          "time": 466.04
         },
         {
           "title": "申报培训项目（教师） / 依据说明或材料编号（选填）",
-          "time": 622.24
+          "time": 476.32
         },
         {
-          "title": "申报培训项目（学院负责人） / 申报培训项目",
-          "time": 643.08
+          "title": "申报培训项目（学院负责人） / 学院负责人版本",
+          "time": 496.4
         },
         {
           "title": "申报培训项目（学院负责人） / 承办学院",
-          "time": 657.98
+          "time": 502.24
         },
         {
           "title": "申报培训项目（学院负责人） / 项目负责人（输入工号或姓名检索）",
-          "time": 667.92
+          "time": 507.32
         }
       ],
       "covered_forms": [
@@ -526,7 +394,8 @@ export const HELP_MEDIA={
         "申报培训项目"
       ],
       "description": "真实表单逐项讲解，说明字段含义、示例和条件；使用虚构资料，不提交业务。可通过章节直接跳到某一栏。"
-    }
+    },
+    "paced": true
   },
   "apply_base": {
     "src": "/assets/assets/help/20261022/apply_base.mp4",
@@ -534,23 +403,23 @@ export const HELP_MEDIA={
     "captions": "/assets/assets/help/20261022/apply_base.vtt",
     "chapters": [
       {
-        "title": "入口与用途",
+        "title": "这页做什么",
         "time": 0.0
       },
       {
-        "title": "操作顺序",
-        "time": 11.99
+        "title": "操作步骤",
+        "time": 15.28
       },
       {
-        "title": "填写或查看说明",
-        "time": 30.72
+        "title": "填写说明",
+        "time": 36.6
       },
       {
-        "title": "完成标志与常见问题",
-        "time": 46.06
+        "title": "怎样算办好",
+        "time": 48.48
       }
     ],
-    "duration": 56.89,
+    "duration": 63.68,
     "version": "20261022",
     "description": "真实页面与填写说明演示（虚构资料）；本段未提交业务，不作为完整审批验收。",
     "filling": {
@@ -558,7 +427,8 @@ export const HELP_MEDIA={
       "captions": "/assets/assets/help/20261022/apply_base-filling.vtt",
       "poster": "/assets/assets/help/20261022/apply_base.jpg",
       "version": "20261022",
-      "duration": 359.86,
+      "paced": true,
+      "duration": 174.8,
       "chapters": [
         {
           "title": "申请培训基地（教师） / 申请培训基地",
@@ -566,131 +436,76 @@ export const HELP_MEDIA={
         },
         {
           "title": "申请培训基地（教师） / 来源编号",
-          "time": 15.22
+          "time": 10.12
         },
         {
           "title": "申请培训基地（教师） / 基地名称",
-          "time": 29.64
+          "time": 19.0
         },
         {
           "title": "申请培训基地（教师） / 基地负责人",
-          "time": 43.75
+          "time": 30.04
         },
         {
           "title": "申请培训基地（教师） / 实践教学基地",
-          "time": 57.71
+          "time": 43.28
         },
         {
           "title": "申请培训基地（教师） / 思政实践教学基地",
-          "time": 66.68
+          "time": 52.48
         },
         {
           "title": "申请培训基地（教师） / 基地级别（单选）",
-          "time": 76.16
+          "time": 61.76
         },
         {
           "title": "申请培训基地（教师） / 校内 / 校外（单选）",
-          "time": 85.6
+          "time": 69.76
         },
         {
           "title": "申请培训基地（教师） / 共建单位",
-          "time": 95.42
+          "time": 79.44
         },
         {
           "title": "申请培训基地（教师） / 设立日期",
-          "time": 103.93
+          "time": 87.8
         },
         {
           "title": "申请培训基地（教师） / 认定日期",
-          "time": 113.22
+          "time": 92.84
         },
         {
           "title": "申请培训基地（教师） / 具体地点",
-          "time": 128.28
+          "time": 104.92
         },
         {
           "title": "申请培训基地（教师） / 基地封面（选填）",
-          "time": 137.26
+          "time": 113.12
         },
         {
           "title": "申请培训基地（教师） / 基地认定依据",
-          "time": 148.99
+          "time": 132.4
         },
         {
           "title": "申请培训基地（教师） / 本次申请说明",
-          "time": 157.16
+          "time": 143.44
         },
         {
-          "title": "申请培训基地（教研室负责人） / 申请培训基地",
-          "time": 171.79
+          "title": "申请培训基地（教研室负责人） / 教研室负责人版本",
+          "time": 155.64
         },
         {
           "title": "申请培训基地（教研室负责人） / 基地负责人（输入工号或姓名检索）",
-          "time": 187.01
-        },
-        {
-          "title": "申请培训基地（教研室负责人） / 来源编号",
-          "time": 203.29
-        },
-        {
-          "title": "申请培训基地（教研室负责人） / 基地名称",
-          "time": 217.71
-        },
-        {
-          "title": "申请培训基地（教研室负责人） / 基地负责人",
-          "time": 231.82
-        },
-        {
-          "title": "申请培训基地（教研室负责人） / 实践教学基地",
-          "time": 245.78
-        },
-        {
-          "title": "申请培训基地（教研室负责人） / 思政实践教学基地",
-          "time": 254.75
-        },
-        {
-          "title": "申请培训基地（教研室负责人） / 基地级别（单选）",
-          "time": 264.23
-        },
-        {
-          "title": "申请培训基地（教研室负责人） / 校内 / 校外（单选）",
-          "time": 273.67
-        },
-        {
-          "title": "申请培训基地（教研室负责人） / 共建单位",
-          "time": 283.49
-        },
-        {
-          "title": "申请培训基地（教研室负责人） / 设立日期",
-          "time": 292.0
-        },
-        {
-          "title": "申请培训基地（教研室负责人） / 认定日期",
-          "time": 301.29
-        },
-        {
-          "title": "申请培训基地（教研室负责人） / 具体地点",
-          "time": 316.35
-        },
-        {
-          "title": "申请培训基地（教研室负责人） / 基地封面（选填）",
-          "time": 325.33
-        },
-        {
-          "title": "申请培训基地（教研室负责人） / 基地认定依据",
-          "time": 337.06
-        },
-        {
-          "title": "申请培训基地（教研室负责人） / 本次申请说明",
-          "time": 345.22
+          "time": 161.64
         }
       ],
-      "description": "真实表单逐项讲解，说明字段含义、示例和条件；使用虚构资料，不提交业务。可通过章节直接跳到某一栏。",
       "covered_forms": [
         "申请培训基地",
         "申请培训基地"
-      ]
-    }
+      ],
+      "description": "真实表单逐项讲解，说明字段含义、示例和条件；使用虚构资料，不提交业务。可通过章节直接跳到某一栏。"
+    },
+    "paced": true
   },
   "apply_trainer": {
     "src": "/assets/assets/help/20261022/apply_trainer.mp4",
@@ -698,23 +513,23 @@ export const HELP_MEDIA={
     "captions": "/assets/assets/help/20261022/apply_trainer.vtt",
     "chapters": [
       {
-        "title": "入口与用途",
+        "title": "这页做什么",
         "time": 0.0
       },
       {
-        "title": "操作顺序",
-        "time": 13.41
+        "title": "操作步骤",
+        "time": 14.32
       },
       {
-        "title": "填写或查看说明",
-        "time": 30.87
+        "title": "填写说明",
+        "time": 35.0
       },
       {
-        "title": "完成标志与常见问题",
-        "time": 46.2
+        "title": "怎样算办好",
+        "time": 46.88
       }
     ],
-    "duration": 59.51,
+    "duration": 62.36,
     "version": "20261022",
     "description": "真实页面与填写说明演示（虚构资料）；本段未提交业务，不作为完整审批验收。",
     "filling": {
@@ -722,7 +537,8 @@ export const HELP_MEDIA={
       "captions": "/assets/assets/help/20261022/apply_trainer-filling.vtt",
       "poster": "/assets/assets/help/20261022/apply_trainer.jpg",
       "version": "20261022",
-      "duration": 150.48,
+      "paced": true,
+      "duration": 91.72,
       "chapters": [
         {
           "title": "申报培训师（教师） / 申报培训师",
@@ -730,58 +546,39 @@ export const HELP_MEDIA={
         },
         {
           "title": "申报培训师（教师） / 职称或职务",
-          "time": 15.07
+          "time": 10.0
         },
         {
           "title": "申报培训师（教师） / 专业特长",
-          "time": 23.82
+          "time": 18.76
         },
         {
-          "title": "申报培训师（教师） / 补贴性培训",
-          "time": 34.06
-        },
-        {
-          "title": "申报培训师（教师） / 社会化自主培训",
-          "time": 44.59
-        },
-        {
-          "title": "申报培训师（教师） / 社区公益培训",
-          "time": 55.47
-        },
-        {
-          "title": "申报培训师（教师） / 对口帮扶培训",
-          "time": 66.19
-        },
-        {
-          "title": "申报培训师（教师） / 其他非学历培训",
-          "time": 76.94
-        },
-        {
-          "title": "申报培训师（教师） / “一人一技”专项",
-          "time": 87.9
+          "title": "申报培训师（教师） / 培训业务类别（可多选）",
+          "time": 30.76
         },
         {
           "title": "申报培训师（教师） / 资格依据",
-          "time": 98.53
+          "time": 42.4
         },
         {
           "title": "申报培训师（教师） / 培训师头像（选填）",
-          "time": 113.97
+          "time": 54.0
         },
         {
           "title": "申报培训师（教师） / 授课经历",
-          "time": 126.01
+          "time": 70.44
         },
         {
           "title": "申报培训师（教师） / 本次申报说明",
-          "time": 135.88
+          "time": 79.28
         }
       ],
       "covered_forms": [
         "申报培训师"
       ],
       "description": "真实表单逐项讲解，说明字段含义、示例和条件；使用虚构资料，不提交业务。可通过章节直接跳到某一栏。"
-    }
+    },
+    "paced": true
   },
   "projects": {
     "src": "/assets/assets/help/20261022/projects.mp4",
@@ -789,23 +586,23 @@ export const HELP_MEDIA={
     "captions": "/assets/assets/help/20261022/projects.vtt",
     "chapters": [
       {
-        "title": "入口与用途",
+        "title": "这页做什么",
         "time": 0.0
       },
       {
-        "title": "操作顺序",
-        "time": 13.91
+        "title": "操作步骤",
+        "time": 15.48
       },
       {
-        "title": "填写或查看说明",
-        "time": 36.6
+        "title": "数据怎么看",
+        "time": 39.48
       },
       {
-        "title": "完成标志与常见问题",
-        "time": 47.56
+        "title": "怎样算办好",
+        "time": 49.4
       }
     ],
-    "duration": 61.26,
+    "duration": 66.28,
     "version": "20261022",
     "description": "真实页面与填写说明演示（虚构资料）；本段未提交业务，不作为完整审批验收。",
     "filling": {
@@ -813,7 +610,8 @@ export const HELP_MEDIA={
       "captions": "/assets/assets/help/20261022/projects-filling.vtt",
       "poster": "/assets/assets/help/20261022/projects.jpg",
       "version": "20261022",
-      "duration": 302.64,
+      "paced": true,
+      "duration": 218.76,
       "chapters": [
         {
           "title": "提交项目结项（学院负责人） / 提交项目结项",
@@ -821,106 +619,79 @@ export const HELP_MEDIA={
         },
         {
           "title": "提交项目结项（学院负责人） / 结项日期",
-          "time": 15.12
+          "time": 10.04
         },
         {
           "title": "提交项目结项（学院负责人） / 满意度（百分比）",
-          "time": 26.92
+          "time": 19.52
         },
         {
           "title": "提交项目结项（学院负责人） / 培训地点类型",
-          "time": 37.76
+          "time": 37.52
         },
         {
           "title": "提交项目结项（学院负责人） / 成果报告",
-          "time": 47.32
+          "time": 48.8
         },
         {
           "title": "提交项目结项（学院负责人） / 整改报告与期限",
-          "time": 54.52
+          "time": 59.68
         },
         {
           "title": "提交项目结项（学院负责人） / 整改办理期限",
-          "time": 67.92
+          "time": 75.64
         },
         {
           "title": "提交项目结项（学院负责人） / 财务确认到账收入（元）",
-          "time": 82.12
+          "time": 83.84
         },
         {
           "title": "提交项目结项（学院负责人） / 财务确认的资金来源",
-          "time": 91.04
+          "time": 96.28
         },
         {
           "title": "提交项目结项（学院负责人） / 财务核验凭据",
-          "time": 101.84
+          "time": 107.16
         },
         {
           "title": "提交项目结项（学院负责人） / 隐性成本（元）",
-          "time": 108.36
+          "time": 113.8
         },
         {
           "title": "提交项目结项（学院负责人） / 经费结算日期",
-          "time": 117.32
+          "time": 123.96
         },
         {
           "title": "提交项目结项（学院负责人） / 学校留存（元）",
-          "time": 128.68
+          "time": 131.52
         },
         {
           "title": "提交项目结项（学院负责人） / 校内人员支出（元）",
-          "time": 140.8
+          "time": 144.16
         },
         {
           "title": "提交项目结项（学院负责人） / 政府专项主管部门规定及财务核验依据",
-          "time": 152.72
+          "time": 154.84
         },
         {
-          "title": "提交项目结项（学院负责人） / 培训方案",
-          "time": 165.0
-        },
-        {
-          "title": "提交项目结项（学院负责人） / 学校制式备案登记表",
-          "time": 177.6
-        },
-        {
-          "title": "提交项目结项（学院负责人） / 学员名册",
-          "time": 191.24
-        },
-        {
-          "title": "提交项目结项（学院负责人） / 实名签到",
-          "time": 203.92
-        },
-        {
-          "title": "提交项目结项（学院负责人） / 学时记录",
-          "time": 216.6
-        },
-        {
-          "title": "提交项目结项（学院负责人） / 培训过程影像",
-          "time": 229.16
-        },
-        {
-          "title": "提交项目结项（学院负责人） / 结业考核",
-          "time": 242.28
-        },
-        {
-          "title": "提交项目结项（学院负责人） / 培训成果",
-          "time": 255.0
+          "title": "提交项目结项（学院负责人） / 结项材料核对",
+          "time": 171.8
         },
         {
           "title": "提交项目结项（学院负责人） / 办理说明",
-          "time": 267.68
+          "time": 190.08
         },
         {
           "title": "提交项目结项（学院负责人） / 依据说明或材料编号（选填）",
-          "time": 281.8
+          "time": 198.68
         }
       ],
       "covered_forms": [
         "提交项目结项"
       ],
       "description": "真实表单逐项讲解，说明字段含义、示例和条件；使用虚构资料，不提交业务。可通过章节直接跳到某一栏。"
-    }
+    },
+    "paced": true
   },
   "courses": {
     "src": "/assets/assets/help/20261022/courses.mp4",
@@ -928,23 +699,23 @@ export const HELP_MEDIA={
     "captions": "/assets/assets/help/20261022/courses.vtt",
     "chapters": [
       {
-        "title": "入口与用途",
+        "title": "这页做什么",
         "time": 0.0
       },
       {
-        "title": "操作顺序",
-        "time": 12.81
+        "title": "操作步骤",
+        "time": 14.08
       },
       {
-        "title": "填写或查看说明",
-        "time": 31.84
+        "title": "数据怎么看",
+        "time": 30.32
       },
       {
-        "title": "完成标志与常见问题",
-        "time": 42.8
+        "title": "怎样算办好",
+        "time": 40.24
       }
     ],
-    "duration": 56.35,
+    "duration": 57.72,
     "version": "20261022",
     "description": "真实页面与填写说明演示（虚构资料）；本段未提交业务，不作为完整审批验收。",
     "filling": {
@@ -952,7 +723,8 @@ export const HELP_MEDIA={
       "captions": "/assets/assets/help/20261022/courses-filling.vtt",
       "poster": "/assets/assets/help/20261022/courses.jpg",
       "version": "20261022",
-      "duration": 175.36,
+      "paced": true,
+      "duration": 161.92,
       "chapters": [
         {
           "title": "登记培训课程（学校办理人员） / 登记培训课程",
@@ -960,70 +732,71 @@ export const HELP_MEDIA={
         },
         {
           "title": "登记培训课程（学校办理人员） / 课程编号",
-          "time": 15.21
+          "time": 10.12
         },
         {
           "title": "登记培训课程（学校办理人员） / 课程名称",
-          "time": 25.11
+          "time": 21.2
         },
         {
           "title": "登记培训课程（学校办理人员） / 选择关联项目",
-          "time": 34.68
+          "time": 29.92
         },
         {
           "title": "登记培训课程（学校办理人员） / 学时",
-          "time": 45.56
+          "time": 42.44
         },
         {
           "title": "登记培训课程（学校办理人员） / 教学方式",
-          "time": 56.91
+          "time": 53.4
         },
         {
           "title": "登记培训课程（学校办理人员） / 思政属性",
-          "time": 63.94
+          "time": 60.44
         },
         {
           "title": "登记培训课程（学校办理人员） / 培训包",
-          "time": 71.8
+          "time": 66.16
         },
         {
           "title": "登记培训课程（学校办理人员） / “一人一技”专项",
-          "time": 79.28
+          "time": 72.32
         },
         {
           "title": "登记培训课程（学校办理人员） / 重点群体与行动对接",
-          "time": 88.64
+          "time": 82.36
         },
         {
           "title": "登记培训课程（学校办理人员） / 主讲教师（输入工号或姓名检索）",
-          "time": 97.22
+          "time": 97.52
         },
         {
           "title": "登记培训课程（学校办理人员） / 课件审查",
-          "time": 113.39
+          "time": 112.56
         },
         {
           "title": "登记培训课程（学校办理人员） / 审查人",
-          "time": 121.71
+          "time": 120.0
         },
         {
           "title": "登记培训课程（学校办理人员） / 审查日期",
-          "time": 129.24
+          "time": 126.0
         },
         {
           "title": "登记培训课程（学校办理人员） / 办理说明",
-          "time": 140.44
+          "time": 131.4
         },
         {
           "title": "登记培训课程（学校办理人员） / 依据说明或材料编号（选填）",
-          "time": 154.54
+          "time": 141.84
         }
       ],
       "covered_forms": [
         "登记培训课程"
       ],
       "description": "真实表单逐项讲解，说明字段含义、示例和条件；使用虚构资料，不提交业务。可通过章节直接跳到某一栏。"
-    }
+    },
+    "paced": true
   },
   "bases": {
     "src": "/assets/assets/help/20261022/bases.mp4",
@@ -1031,25 +804,26 @@ export const HELP_MEDIA={
     "captions": "/assets/assets/help/20261022/bases.vtt",
     "chapters": [
       {
-        "title": "入口与用途",
+        "title": "这页做什么",
         "time": 0.0
       },
       {
-        "title": "操作顺序",
-        "time": 12.57
+        "title": "操作步骤",
+        "time": 12.28
       },
       {
-        "title": "填写或查看说明",
-        "time": 29.66
+        "title": "数据怎么看",
+        "time": 29.8
       },
       {
-        "title": "完成标志与常见问题",
-        "time": 40.62
+        "title": "怎样算办好",
+        "time": 39.72
       }
     ],
-    "duration": 54.26,
+    "duration": 55.2,
     "version": "20261022",
-    "description": "真实页面与填写说明演示（虚构资料）；本段未提交业务，不作为完整审批验收。"
+    "description": "真实页面与填写说明演示（虚构资料）；本段未提交业务，不作为完整审批验收。",
+    "paced": true
   },
   "trainers": {
     "src": "/assets/assets/help/20261022/trainers.mp4",
@@ -1057,23 +831,23 @@ export const HELP_MEDIA={
     "captions": "/assets/assets/help/20261022/trainers.vtt",
     "chapters": [
       {
-        "title": "入口与用途",
+        "title": "这页做什么",
         "time": 0.0
       },
       {
-        "title": "操作顺序",
-        "time": 15.26
+        "title": "操作步骤",
+        "time": 15.64
       },
       {
-        "title": "填写或查看说明",
-        "time": 33.84
+        "title": "数据怎么看",
+        "time": 37.76
       },
       {
-        "title": "完成标志与常见问题",
-        "time": 44.8
+        "title": "怎样算办好",
+        "time": 47.68
       }
     ],
-    "duration": 57.32,
+    "duration": 62.16,
     "version": "20261022",
     "description": "真实页面与填写说明演示（虚构资料）；本段未提交业务，不作为完整审批验收。",
     "filling": {
@@ -1081,7 +855,8 @@ export const HELP_MEDIA={
       "captions": "/assets/assets/help/20261022/trainers-filling.vtt",
       "poster": "/assets/assets/help/20261022/trainers.jpg",
       "version": "20261022",
-      "duration": 168.77,
+      "paced": true,
+      "duration": 106.44,
       "chapters": [
         {
           "title": "登记外聘培训师（学院负责人） / 登记外聘培训师",
@@ -1089,66 +864,47 @@ export const HELP_MEDIA={
         },
         {
           "title": "登记外聘培训师（学院负责人） / 姓名",
-          "time": 15.47
+          "time": 10.4
         },
         {
           "title": "登记外聘培训师（学院负责人） / 工作单位",
-          "time": 24.7
+          "time": 16.0
         },
         {
           "title": "登记外聘培训师（学院负责人） / 职称或职务",
-          "time": 33.36
+          "time": 24.72
         },
         {
           "title": "登记外聘培训师（学院负责人） / 专业特长",
-          "time": 42.11
+          "time": 33.48
         },
         {
-          "title": "登记外聘培训师（学院负责人） / 补贴性培训",
-          "time": 52.35
-        },
-        {
-          "title": "登记外聘培训师（学院负责人） / 社会化自主培训",
-          "time": 62.88
-        },
-        {
-          "title": "登记外聘培训师（学院负责人） / 社区公益培训",
-          "time": 73.76
-        },
-        {
-          "title": "登记外聘培训师（学院负责人） / 对口帮扶培训",
-          "time": 84.48
-        },
-        {
-          "title": "登记外聘培训师（学院负责人） / 其他非学历培训",
-          "time": 95.23
-        },
-        {
-          "title": "登记外聘培训师（学院负责人） / “一人一技”专项",
-          "time": 106.19
+          "title": "登记外聘培训师（学院负责人） / 培训业务类别（可多选）",
+          "time": 45.48
         },
         {
           "title": "登记外聘培训师（学院负责人） / 资格依据",
-          "time": 116.82
+          "time": 57.12
         },
         {
           "title": "登记外聘培训师（学院负责人） / 培训师头像（选填）",
-          "time": 132.26
+          "time": 68.72
         },
         {
           "title": "登记外聘培训师（学院负责人） / 授课经历",
-          "time": 144.3
+          "time": 85.16
         },
         {
           "title": "登记外聘培训师（学院负责人） / 本次申报说明",
-          "time": 154.17
+          "time": 94.0
         }
       ],
       "covered_forms": [
         "登记外聘培训师"
       ],
       "description": "真实表单逐项讲解，说明字段含义、示例和条件；使用虚构资料，不提交业务。可通过章节直接跳到某一栏。"
-    }
+    },
+    "paced": true
   },
   "mine": {
     "src": "/assets/assets/help/20261022/mine.mp4",
@@ -1156,25 +912,26 @@ export const HELP_MEDIA={
     "captions": "/assets/assets/help/20261022/mine.vtt",
     "chapters": [
       {
-        "title": "入口与用途",
+        "title": "这页做什么",
         "time": 0.0
       },
       {
-        "title": "操作顺序",
-        "time": 13.05
+        "title": "操作步骤",
+        "time": 12.56
       },
       {
-        "title": "填写或查看说明",
-        "time": 31.59
+        "title": "数据怎么看",
+        "time": 31.48
       },
       {
-        "title": "完成标志与常见问题",
-        "time": 42.55
+        "title": "怎样算办好",
+        "time": 41.4
       }
     ],
-    "duration": 55.73,
+    "duration": 57.44,
     "version": "20261022",
-    "description": "真实页面与填写说明演示（虚构资料）；本段未提交业务，不作为完整审批验收。"
+    "description": "真实页面与填写说明演示（虚构资料）；本段未提交业务，不作为完整审批验收。",
+    "paced": true
   },
   "recognition": {
     "src": "/assets/assets/help/20261022/recognition.mp4",
@@ -1182,23 +939,23 @@ export const HELP_MEDIA={
     "captions": "/assets/assets/help/20261022/recognition.vtt",
     "chapters": [
       {
-        "title": "入口与用途",
+        "title": "这页做什么",
         "time": 0.0
       },
       {
-        "title": "操作顺序",
-        "time": 14.53
+        "title": "操作步骤",
+        "time": 14.12
       },
       {
-        "title": "填写或查看说明",
-        "time": 36.53
+        "title": "数据怎么看",
+        "time": 42.84
       },
       {
-        "title": "完成标志与常见问题",
-        "time": 47.5
+        "title": "怎样算办好",
+        "time": 52.76
       }
     ],
-    "duration": 60.86,
+    "duration": 71.52,
     "version": "20261022",
     "description": "真实页面与填写说明演示（虚构资料）；本段未提交业务，不作为完整审批验收。",
     "filling": {
@@ -1206,7 +963,8 @@ export const HELP_MEDIA={
       "captions": "/assets/assets/help/20261022/recognition-filling.vtt",
       "poster": "/assets/assets/help/20261022/recognition.jpg",
       "version": "20261022",
-      "duration": 93.71,
+      "paced": true,
+      "duration": 101.64,
       "chapters": [
         {
           "title": "本人积分申报（教师） / 本人积分申报",
@@ -1214,34 +972,35 @@ export const HELP_MEDIA={
         },
         {
           "title": "本人积分申报（教师） / 选择关联项目",
-          "time": 15.14
+          "time": 10.04
         },
         {
           "title": "本人积分申报（教师） / 认定周期",
-          "time": 27.69
+          "time": 23.64
         },
         {
           "title": "本人积分申报（教师） / 制度执行口径",
-          "time": 38.0
+          "time": 33.4
         },
         {
           "title": "本人积分申报（教师） / 学校制式积分认定表及其他材料（可一次选多份）",
-          "time": 45.43
+          "time": 41.24
         },
         {
           "title": "本人积分申报（教师） / 申报说明",
-          "time": 58.72
+          "time": 69.44
         },
         {
           "title": "本人积分申报（教师） / 依据说明或材料编号（选填）",
-          "time": 72.89
+          "time": 81.56
         }
       ],
       "covered_forms": [
         "本人积分申报"
       ],
       "description": "真实表单逐项讲解，说明字段含义、示例和条件；使用虚构资料，不提交业务。可通过章节直接跳到某一栏。"
-    }
+    },
+    "paced": true
   },
   "qualifications": {
     "src": "/assets/assets/help/20261022/qualifications.mp4",
@@ -1249,23 +1008,23 @@ export const HELP_MEDIA={
     "captions": "/assets/assets/help/20261022/qualifications.vtt",
     "chapters": [
       {
-        "title": "入口与用途",
+        "title": "这页做什么",
         "time": 0.0
       },
       {
-        "title": "操作顺序",
-        "time": 12.39
+        "title": "操作步骤",
+        "time": 11.72
       },
       {
-        "title": "填写或查看说明",
-        "time": 31.65
+        "title": "填写说明",
+        "time": 30.8
       },
       {
-        "title": "完成标志与常见问题",
-        "time": 46.99
+        "title": "怎样算办好",
+        "time": 42.68
       }
     ],
-    "duration": 60.31,
+    "duration": 57.84,
     "version": "20261022",
     "description": "真实页面与填写说明演示（虚构资料）；本段未提交业务，不作为完整审批验收。",
     "filling": {
@@ -1273,7 +1032,8 @@ export const HELP_MEDIA={
       "captions": "/assets/assets/help/20261022/qualifications-filling.vtt",
       "poster": "/assets/assets/help/20261022/qualifications.jpg",
       "version": "20261022",
-      "duration": 98.55,
+      "paced": true,
+      "duration": 89.36,
       "chapters": [
         {
           "title": "申报我的资质（教师） / 申报我的资质",
@@ -1281,42 +1041,43 @@ export const HELP_MEDIA={
         },
         {
           "title": "申报我的资质（教师） / 资质类别",
-          "time": 15.04
+          "time": 9.96
         },
         {
           "title": "申报我的资质（教师） / 证书名称",
-          "time": 22.88
+          "time": 15.08
         },
         {
           "title": "申报我的资质（教师） / 证书编号",
-          "time": 32.41
+          "time": 20.48
         },
         {
           "title": "申报我的资质（教师） / 发证机构",
-          "time": 39.78
+          "time": 27.96
         },
         {
           "title": "申报我的资质（教师） / 取得日期",
-          "time": 46.23
+          "time": 33.32
         },
         {
           "title": "申报我的资质（教师） / 有效期至",
-          "time": 57.45
+          "time": 38.2
         },
         {
           "title": "申报我的资质（教师） / 证书图片或扫描件（可一次选多份）",
-          "time": 72.26
+          "time": 50.68
         },
         {
           "title": "申报我的资质（教师） / 申报说明",
-          "time": 84.38
+          "time": 77.24
         }
       ],
-      "description": "真实表单逐项讲解，说明字段含义、示例和条件；使用虚构资料，不提交业务。可通过章节直接跳到某一栏。",
       "covered_forms": [
         "申报我的资质"
-      ]
-    }
+      ],
+      "description": "真实表单逐项讲解，说明字段含义、示例和条件；使用虚构资料，不提交业务。可通过章节直接跳到某一栏。"
+    },
+    "paced": true
   },
   "credits": {
     "src": "/assets/assets/help/20261022/credits.mp4",
@@ -1324,25 +1085,26 @@ export const HELP_MEDIA={
     "captions": "/assets/assets/help/20261022/credits.vtt",
     "chapters": [
       {
-        "title": "入口与用途",
+        "title": "这页做什么",
         "time": 0.0
       },
       {
-        "title": "操作顺序",
-        "time": 13.45
+        "title": "操作步骤",
+        "time": 12.8
       },
       {
-        "title": "填写或查看说明",
-        "time": 35.15
+        "title": "数据怎么看",
+        "time": 38.96
       },
       {
-        "title": "完成标志与常见问题",
-        "time": 46.11
+        "title": "怎样算办好",
+        "time": 48.88
       }
     ],
-    "duration": 59.77,
+    "duration": 66.08,
     "version": "20261022",
-    "description": "真实页面与填写说明演示（虚构资料）；本段未提交业务，不作为完整审批验收。"
+    "description": "真实页面与填写说明演示（虚构资料）；本段未提交业务，不作为完整审批验收。",
+    "paced": true
   },
   "creditreview": {
     "src": "/assets/assets/help/20261022/creditreview.mp4",
@@ -1350,25 +1112,26 @@ export const HELP_MEDIA={
     "captions": "/assets/assets/help/20261022/creditreview.vtt",
     "chapters": [
       {
-        "title": "入口与用途",
+        "title": "这页做什么",
         "time": 0.0
       },
       {
-        "title": "操作顺序",
-        "time": 13.06
+        "title": "操作步骤",
+        "time": 12.2
       },
       {
-        "title": "填写或查看说明",
-        "time": 32.64
+        "title": "数据怎么看",
+        "time": 32.08
       },
       {
-        "title": "完成标志与常见问题",
-        "time": 43.6
+        "title": "怎样算办好",
+        "time": 42.0
       }
     ],
-    "duration": 57.25,
+    "duration": 58.08,
     "version": "20261022",
-    "description": "真实页面与填写说明演示（虚构资料）；本段未提交业务，不作为完整审批验收。"
+    "description": "真实页面与填写说明演示（虚构资料）；本段未提交业务，不作为完整审批验收。",
+    "paced": true
   },
   "points": {
     "src": "/assets/assets/help/20261022/points.mp4",
@@ -1376,25 +1139,26 @@ export const HELP_MEDIA={
     "captions": "/assets/assets/help/20261022/points.vtt",
     "chapters": [
       {
-        "title": "入口与用途",
+        "title": "这页做什么",
         "time": 0.0
       },
       {
-        "title": "操作顺序",
-        "time": 12.3
+        "title": "操作步骤",
+        "time": 12.48
       },
       {
-        "title": "填写或查看说明",
-        "time": 29.94
+        "title": "数据怎么看",
+        "time": 32.24
       },
       {
-        "title": "完成标志与常见问题",
-        "time": 40.91
+        "title": "怎样算办好",
+        "time": 42.16
       }
     ],
-    "duration": 53.9,
+    "duration": 56.72,
     "version": "20261022",
-    "description": "真实页面与填写说明演示（虚构资料）；本段未提交业务，不作为完整审批验收。"
+    "description": "真实页面与填写说明演示（虚构资料）；本段未提交业务，不作为完整审批验收。",
+    "paced": true
   },
   "assessment": {
     "src": "/assets/assets/help/20261022/assessment.mp4",
@@ -1402,25 +1166,26 @@ export const HELP_MEDIA={
     "captions": "/assets/assets/help/20261022/assessment.vtt",
     "chapters": [
       {
-        "title": "入口与用途",
+        "title": "这页做什么",
         "time": 0.0
       },
       {
-        "title": "操作顺序",
-        "time": 14.34
+        "title": "操作步骤",
+        "time": 13.72
       },
       {
-        "title": "填写或查看说明",
-        "time": 32.88
+        "title": "数据怎么看",
+        "time": 32.8
       },
       {
-        "title": "完成标志与常见问题",
-        "time": 43.85
+        "title": "怎样算办好",
+        "time": 42.72
       }
     ],
-    "duration": 57.68,
+    "duration": 58.96,
     "version": "20261022",
-    "description": "真实页面与填写说明演示（虚构资料）；本段未提交业务，不作为完整审批验收。"
+    "description": "真实页面与填写说明演示（虚构资料）；本段未提交业务，不作为完整审批验收。",
+    "paced": true
   },
   "annual": {
     "src": "/assets/assets/help/20261022/annual.mp4",
@@ -1428,23 +1193,23 @@ export const HELP_MEDIA={
     "captions": "/assets/assets/help/20261022/annual.vtt",
     "chapters": [
       {
-        "title": "入口与用途",
+        "title": "这页做什么",
         "time": 0.0
       },
       {
-        "title": "操作顺序",
-        "time": 14.82
+        "title": "操作步骤",
+        "time": 13.52
       },
       {
-        "title": "填写或查看说明",
-        "time": 36.04
+        "title": "填写说明",
+        "time": 34.08
       },
       {
-        "title": "完成标志与常见问题",
-        "time": 51.37
+        "title": "怎样算办好",
+        "time": 45.96
       }
     ],
-    "duration": 65.87,
+    "duration": 63.84,
     "version": "20261022",
     "description": "真实页面与填写说明演示（虚构资料）；本段未提交业务，不作为完整审批验收。",
     "filling": {
@@ -1452,7 +1217,8 @@ export const HELP_MEDIA={
       "captions": "/assets/assets/help/20261022/annual-filling.vtt",
       "poster": "/assets/assets/help/20261022/annual.jpg",
       "version": "20261022",
-      "duration": 194.2,
+      "paced": true,
+      "duration": 188.24,
       "chapters": [
         {
           "title": "学院年度自评（学院负责人） / 学院年度自评",
@@ -1460,74 +1226,71 @@ export const HELP_MEDIA={
         },
         {
           "title": "学院年度自评（学院负责人） / 承办学院",
-          "time": 15.24
-        },
-        {
-          "title": "学院年度自评（学院负责人） / 制度执行口径",
-          "time": 25.2
+          "time": 16.56
         },
         {
           "title": "学院年度自评（学院负责人） / 到账收入目标",
-          "time": 32.64
+          "time": 21.64
         },
         {
           "title": "学院年度自评（学院负责人） / 有效人次目标",
-          "time": 41.92
+          "time": 32.68
         },
         {
           "title": "学院年度自评（学院负责人） / 重点群体人次目标",
-          "time": 50.72
+          "time": 41.8
         },
         {
           "title": "学院年度自评（学院负责人） / 组织人数基准",
-          "time": 60.12
+          "time": 51.44
         },
         {
           "title": "学院年度自评（学院负责人） / 年度任务下达依据",
-          "time": 68.68
+          "time": 60.28
         },
         {
           "title": "学院年度自评（学院负责人） / 组织人数依据",
-          "time": 79.76
+          "time": 72.72
         },
         {
           "title": "学院年度自评（学院负责人） / 单位自评报告",
-          "time": 90.64
+          "time": 84.0
         },
         {
           "title": "学院年度自评（学院负责人） / 其他加分",
-          "time": 104.68
+          "time": 100.2
         },
         {
           "title": "学院年度自评（学院负责人） / 其他加分依据",
-          "time": 113.76
+          "time": 113.0
         },
         {
           "title": "学院年度自评（学院负责人） / 其他已确认不合规次数（不含项目结算核验）",
-          "time": 126.12
+          "time": 123.92
         },
         {
           "title": "学院年度自评（学院负责人） / 正式处理或处分依据",
-          "time": 138.6
+          "time": 136.52
         },
         {
           "title": "学院年度自评（学院负责人） / 一票否决",
-          "time": 150.8
+          "time": 148.0
         },
         {
           "title": "学院年度自评（学院负责人） / 办理说明",
-          "time": 159.24
+          "time": 157.72
         },
         {
           "title": "学院年度自评（学院负责人） / 依据说明或材料编号（选填）",
-          "time": 173.36
+          "time": 168.16
         }
       ],
       "covered_forms": [
         "学院年度自评"
       ],
       "description": "真实表单逐项讲解，说明字段含义、示例和条件；使用虚构资料，不提交业务。可通过章节直接跳到某一栏。"
-    }
+    },
+    "paced": true
   },
   "disputes": {
     "src": "/assets/assets/help/20261022/disputes.mp4",
@@ -1535,25 +1298,26 @@ export const HELP_MEDIA={
     "captions": "/assets/assets/help/20261022/disputes.vtt",
     "chapters": [
       {
-        "title": "入口与用途",
+        "title": "这页做什么",
         "time": 0.0
       },
       {
-        "title": "操作顺序",
-        "time": 13.13
+        "title": "操作步骤",
+        "time": 13.76
       },
       {
-        "title": "填写或查看说明",
-        "time": 30.27
+        "title": "数据怎么看",
+        "time": 30.28
       },
       {
-        "title": "完成标志与常见问题",
-        "time": 41.24
+        "title": "怎样算办好",
+        "time": 40.2
       }
     ],
-    "duration": 55.38,
+    "duration": 57.0,
     "version": "20261022",
-    "description": "真实页面与填写说明演示（虚构资料）；本段未提交业务，不作为完整审批验收。"
+    "description": "真实页面与填写说明演示（虚构资料）；本段未提交业务，不作为完整审批验收。",
+    "paced": true
   },
   "records": {
     "src": "/assets/assets/help/20261022/records.mp4",
@@ -1561,23 +1325,23 @@ export const HELP_MEDIA={
     "captions": "/assets/assets/help/20261022/records.vtt",
     "chapters": [
       {
-        "title": "入口与用途",
+        "title": "这页做什么",
         "time": 0.0
       },
       {
-        "title": "操作顺序",
-        "time": 12.0
+        "title": "操作步骤",
+        "time": 11.16
       },
       {
-        "title": "填写或查看说明",
-        "time": 32.16
+        "title": "数据怎么看",
+        "time": 33.04
       },
       {
-        "title": "完成标志与常见问题",
-        "time": 43.12
+        "title": "怎样算办好",
+        "time": 42.96
       }
     ],
-    "duration": 56.5,
+    "duration": 58.52,
     "version": "20261022",
     "description": "真实页面与填写说明演示（虚构资料）；本段未提交业务，不作为完整审批验收。",
     "filling": {
@@ -1585,7 +1349,8 @@ export const HELP_MEDIA={
       "captions": "/assets/assets/help/20261022/records-filling.vtt",
       "poster": "/assets/assets/help/20261022/records.jpg",
       "version": "20261022",
-      "duration": 176.82,
+      "paced": true,
+      "duration": 164.24,
       "chapters": [
         {
           "title": "新增培训业务记录（教研室负责人） / 新增培训业务记录",
@@ -1593,70 +1358,71 @@ export const HELP_MEDIA={
         },
         {
           "title": "新增培训业务记录（教研室负责人） / 教师（输入工号或姓名检索）",
-          "time": 15.57
+          "time": 10.48
         },
         {
           "title": "新增培训业务记录（教研室负责人） / 来源唯一编号",
-          "time": 31.39
+          "time": 21.56
         },
         {
           "title": "新增培训业务记录（教研室负责人） / 业务日期",
-          "time": 40.71
+          "time": 32.28
         },
         {
           "title": "新增培训业务记录（教研室负责人） / 人工来源说明",
-          "time": 52.31
+          "time": 39.76
         },
         {
           "title": "新增培训业务记录（教研室负责人） / 培训项目（名称或编号检索）",
-          "time": 61.44
+          "time": 51.56
         },
         {
           "title": "新增培训业务记录（教研室负责人） / 项目名称",
-          "time": 73.87
+          "time": 61.56
         },
         {
           "title": "新增培训业务记录（教研室负责人） / 培训课程（名称或编号检索）",
-          "time": 80.1
+          "time": 71.44
         },
         {
           "title": "新增培训业务记录（教研室负责人） / 课程名称",
-          "time": 92.14
+          "time": 80.56
         },
         {
           "title": "新增培训业务记录（教研室负责人） / 培训班级（名称或编号检索）",
-          "time": 98.45
+          "time": 89.28
         },
         {
           "title": "新增培训业务记录（教研室负责人） / 班级名称",
-          "time": 108.62
+          "time": 99.52
         },
         {
           "title": "新增培训业务记录（教研室负责人） / 授课学时",
-          "time": 116.5
+          "time": 107.0
         },
         {
           "title": "新增培训业务记录（教研室负责人） / 课程人次",
-          "time": 128.2
+          "time": 119.16
         },
         {
           "title": "新增培训业务记录（教研室负责人） / 归属培训收入（元）",
-          "time": 139.62
+          "time": 131.12
         },
         {
           "title": "新增培训业务记录（教研室负责人） / 办理意见 / 调整原因",
-          "time": 149.21
+          "time": 142.92
         },
         {
           "title": "新增培训业务记录（教研室负责人） / 依据说明或材料编号（选填）",
-          "time": 164.14
+          "time": 151.32
         }
       ],
       "covered_forms": [
         "新增培训业务记录"
       ],
       "description": "真实表单逐项讲解，说明字段含义、示例和条件；使用虚构资料，不提交业务。可通过章节直接跳到某一栏。"
-    }
+    },
+    "paced": true
   },
   "outcomes": {
     "src": "/assets/assets/help/20261022/outcomes.mp4",
@@ -1664,23 +1430,23 @@ export const HELP_MEDIA={
     "captions": "/assets/assets/help/20261022/outcomes.vtt",
     "chapters": [
       {
-        "title": "入口与用途",
+        "title": "这页做什么",
         "time": 0.0
       },
       {
-        "title": "操作顺序",
-        "time": 12.9
+        "title": "操作步骤",
+        "time": 13.0
       },
       {
-        "title": "填写或查看说明",
-        "time": 30.06
+        "title": "数据怎么看",
+        "time": 32.32
       },
       {
-        "title": "完成标志与常见问题",
-        "time": 41.03
+        "title": "怎样算办好",
+        "time": 42.24
       }
     ],
-    "duration": 53.41,
+    "duration": 56.88,
     "version": "20261022",
     "description": "真实页面与填写说明演示（虚构资料）；本段未提交业务，不作为完整审批验收。",
     "filling": {
@@ -1688,7 +1454,8 @@ export const HELP_MEDIA={
       "captions": "/assets/assets/help/20261022/outcomes-filling.vtt",
       "poster": "/assets/assets/help/20261022/outcomes.jpg",
       "version": "20261022",
-      "duration": 128.93,
+      "paced": true,
+      "duration": 116.68,
       "chapters": [
         {
           "title": "登记培训成果（学院负责人） / 登记培训成果",
@@ -1696,50 +1463,51 @@ export const HELP_MEDIA={
         },
         {
           "title": "登记培训成果（学院负责人） / 承办学院",
-          "time": 15.19
+          "time": 10.12
         },
         {
           "title": "登记培训成果（学院负责人） / 来源唯一编号",
-          "time": 25.13
+          "time": 15.2
         },
         {
           "title": "登记培训成果（学院负责人） / 名称",
-          "time": 35.41
+          "time": 25.92
         },
         {
           "title": "登记培训成果（学院负责人） / 地点或资源说明",
-          "time": 44.58
+          "time": 32.68
         },
         {
           "title": "登记培训成果（学院负责人） / 认定或登记依据",
-          "time": 54.24
+          "time": 41.76
         },
         {
           "title": "登记培训成果（学院负责人） / 成果等级",
-          "time": 62.7
+          "time": 50.28
         },
         {
           "title": "登记培训成果（学院负责人） / 成果正式认定日期",
-          "time": 71.41
+          "time": 58.68
         },
         {
           "title": "登记培训成果（学院负责人） / 成果封面（选填）",
-          "time": 82.22
+          "time": 70.08
         },
         {
           "title": "登记培训成果（学院负责人） / 办理说明",
-          "time": 94.01
+          "time": 86.16
         },
         {
           "title": "登记培训成果（学院负责人） / 依据说明或材料编号（选填）",
-          "time": 108.12
+          "time": 96.6
         }
       ],
-      "description": "真实表单逐项讲解，说明字段含义、示例和条件；使用虚构资料，不提交业务。可通过章节直接跳到某一栏。",
       "covered_forms": [
         "登记培训成果"
-      ]
-    }
+      ],
+      "description": "真实表单逐项讲解，说明字段含义、示例和条件；使用虚构资料，不提交业务。可通过章节直接跳到某一栏。"
+    },
+    "paced": true
   },
   "resources": {
     "src": "/assets/assets/help/20261022/resources.mp4",
@@ -1747,25 +1515,26 @@ export const HELP_MEDIA={
     "captions": "/assets/assets/help/20261022/resources.vtt",
     "chapters": [
       {
-        "title": "入口与用途",
+        "title": "这页做什么",
         "time": 0.0
       },
       {
-        "title": "操作顺序",
-        "time": 12.8
+        "title": "操作步骤",
+        "time": 11.8
       },
       {
-        "title": "填写或查看说明",
-        "time": 28.93
+        "title": "数据怎么看",
+        "time": 26.6
       },
       {
-        "title": "完成标志与常见问题",
-        "time": 39.89
+        "title": "怎样算办好",
+        "time": 36.52
       }
     ],
-    "duration": 53.65,
+    "duration": 52.04,
     "version": "20261022",
-    "description": "真实页面与填写说明演示（虚构资料）；本段未提交业务，不作为完整审批验收。"
+    "description": "真实页面与填写说明演示（虚构资料）；本段未提交业务，不作为完整审批验收。",
+    "paced": true
   },
   "organization": {
     "src": "/assets/assets/help/20261022/organization.mp4",
@@ -1773,25 +1542,26 @@ export const HELP_MEDIA={
     "captions": "/assets/assets/help/20261022/organization.vtt",
     "chapters": [
       {
-        "title": "入口与用途",
+        "title": "这页做什么",
         "time": 0.0
       },
       {
-        "title": "操作顺序",
-        "time": 11.95
+        "title": "操作步骤",
+        "time": 11.04
       },
       {
-        "title": "填写或查看说明",
-        "time": 28.69
+        "title": "数据怎么看",
+        "time": 25.92
       },
       {
-        "title": "完成标志与常见问题",
-        "time": 39.65
+        "title": "怎样算办好",
+        "time": 35.84
       }
     ],
-    "duration": 53.1,
+    "duration": 50.48,
     "version": "20261022",
-    "description": "真实页面与填写说明演示（虚构资料）；本段未提交业务，不作为完整审批验收。"
+    "description": "真实页面与填写说明演示（虚构资料）；本段未提交业务，不作为完整审批验收。",
+    "paced": true
   },
   "ledgers": {
     "src": "/assets/assets/help/20261022/ledgers.mp4",
@@ -1799,25 +1569,26 @@ export const HELP_MEDIA={
     "captions": "/assets/assets/help/20261022/ledgers.vtt",
     "chapters": [
       {
-        "title": "入口与用途",
+        "title": "这页做什么",
         "time": 0.0
       },
       {
-        "title": "操作顺序",
-        "time": 12.06
+        "title": "操作步骤",
+        "time": 11.0
       },
       {
-        "title": "填写或查看说明",
-        "time": 27.19
+        "title": "数据怎么看",
+        "time": 25.44
       },
       {
-        "title": "完成标志与常见问题",
-        "time": 38.15
+        "title": "怎样算办好",
+        "time": 35.36
       }
     ],
-    "duration": 51.11,
+    "duration": 50.16,
     "version": "20261022",
-    "description": "真实页面与填写说明演示（虚构资料）；本段未提交业务，不作为完整审批验收。"
+    "description": "真实页面与填写说明演示（虚构资料）；本段未提交业务，不作为完整审批验收。",
+    "paced": true
   },
   "cockpit": {
     "src": "/assets/assets/help/20261022/cockpit.mp4",
@@ -1825,25 +1596,26 @@ export const HELP_MEDIA={
     "captions": "/assets/assets/help/20261022/cockpit.vtt",
     "chapters": [
       {
-        "title": "入口与用途",
+        "title": "这页做什么",
         "time": 0.0
       },
       {
-        "title": "操作顺序",
-        "time": 12.06
+        "title": "操作步骤",
+        "time": 11.92
       },
       {
-        "title": "填写或查看说明",
-        "time": 29.21
+        "title": "数据怎么看",
+        "time": 27.68
       },
       {
-        "title": "完成标志与常见问题",
-        "time": 40.17
+        "title": "怎样算办好",
+        "time": 37.6
       }
     ],
-    "duration": 54.51,
+    "duration": 50.36,
     "version": "20261022",
-    "description": "真实页面与填写说明演示（虚构资料）；本段未提交业务，不作为完整审批验收。"
+    "description": "真实页面与填写说明演示（虚构资料）；本段未提交业务，不作为完整审批验收。",
+    "paced": true
   },
   "permissions": {
     "src": "/assets/assets/help/20261022/permissions.mp4",
@@ -1851,23 +1623,23 @@ export const HELP_MEDIA={
     "captions": "/assets/assets/help/20261022/permissions.vtt",
     "chapters": [
       {
-        "title": "入口与用途",
+        "title": "这页做什么",
         "time": 0.0
       },
       {
-        "title": "操作顺序",
-        "time": 13.52
+        "title": "操作步骤",
+        "time": 14.96
       },
       {
-        "title": "填写或查看说明",
-        "time": 34.4
+        "title": "填写说明",
+        "time": 66.64
       },
       {
-        "title": "完成标志与常见问题",
-        "time": 49.73
+        "title": "怎样算办好",
+        "time": 78.52
       }
     ],
-    "duration": 64.04,
+    "duration": 95.52,
     "version": "20261022",
     "description": "真实页面与填写说明演示（虚构资料）；本段未提交业务，不作为完整审批验收。",
     "filling": {
@@ -1875,7 +1647,8 @@ export const HELP_MEDIA={
       "captions": "/assets/assets/help/20261022/permissions-filling.vtt",
       "poster": "/assets/assets/help/20261022/permissions.jpg",
       "version": "20261022",
-      "duration": 169.46,
+      "paced": true,
+      "duration": 147.44,
       "chapters": [
         {
           "title": "新增组织机构（学校办理人员） / 新增组织机构",
@@ -1883,59 +1656,59 @@ export const HELP_MEDIA={
         },
         {
           "title": "新增组织机构（学校办理人员） / 组织编码",
-          "time": 15.16
+          "time": 10.08
         },
         {
           "title": "新增组织机构（学校办理人员） / 组织层级",
-          "time": 24.97
+          "time": 19.12
         },
         {
           "title": "新增组织机构（学校办理人员） / 组织名称",
-          "time": 36.36
+          "time": 29.24
         },
         {
           "title": "新增组织机构（学校办理人员） / 上级组织",
-          "time": 45.89
+          "time": 37.4
         },
         {
           "title": "新增组织机构（学校办理人员） / 办理意见 / 调整原因",
-          "time": 56.21
+          "time": 46.68
         },
         {
           "title": "新增组织机构（学校办理人员） / 依据说明或材料编号",
-          "time": 71.15
+          "time": 56.92
         },
         {
-          "title": "新增本地账号（学校办理人员） / 新增本地账号",
-          "time": 91.01
+          "title": "新增本地账号（学校办理人员） / 学校办理人员版本",
+          "time": 76.04
         },
         {
           "title": "新增本地账号（学校办理人员） / 登录账号",
-          "time": 105.95
+          "time": 82.52
         },
         {
           "title": "新增本地账号（学校办理人员） / 教师工号",
-          "time": 113.12
+          "time": 90.0
         },
         {
           "title": "新增本地账号（学校办理人员） / 临时密码（至少 12 位）",
-          "time": 121.23
+          "time": 100.56
         },
         {
           "title": "新增本地账号（学校办理人员） / 姓名",
-          "time": 134.2
+          "time": 113.52
         },
         {
           "title": "新增本地账号（学校办理人员） / 职称 / 岗位",
-          "time": 143.43
+          "time": 119.12
         },
         {
           "title": "新增本地账号（学校办理人员） / 角色",
-          "time": 151.99
+          "time": 126.96
         },
         {
           "title": "新增本地账号（学校办理人员） / 所属组织",
-          "time": 159.56
+          "time": 135.16
         }
       ],
       "covered_forms": [
@@ -1943,7 +1716,8 @@ export const HELP_MEDIA={
         "新增本地账号"
       ],
       "description": "真实表单逐项讲解，说明字段含义、示例和条件；使用虚构资料，不提交业务。可通过章节直接跳到某一栏。"
-    }
+    },
+    "paced": true
   },
   "policy": {
     "src": "/assets/assets/help/20261022/policy.mp4",
@@ -1951,23 +1725,23 @@ export const HELP_MEDIA={
     "captions": "/assets/assets/help/20261022/policy.vtt",
     "chapters": [
       {
-        "title": "入口与用途",
+        "title": "这页做什么",
         "time": 0.0
       },
       {
-        "title": "操作顺序",
-        "time": 13.71
+        "title": "操作步骤",
+        "time": 18.28
       },
       {
-        "title": "填写或查看说明",
-        "time": 33.94
+        "title": "填写说明",
+        "time": 71.56
       },
       {
-        "title": "完成标志与常见问题",
-        "time": 49.27
+        "title": "怎样算办好",
+        "time": 83.44
       }
     ],
-    "duration": 62.85,
+    "duration": 106.2,
     "version": "20261022",
     "description": "真实页面与填写说明演示（虚构资料）；本段未提交业务，不作为完整审批验收。",
     "filling": {
@@ -1975,7 +1749,8 @@ export const HELP_MEDIA={
       "captions": "/assets/assets/help/20261022/policy-filling.vtt",
       "poster": "/assets/assets/help/20261022/policy.jpg",
       "version": "20261022",
-      "duration": 367.06,
+      "paced": true,
+      "duration": 391.36,
       "chapters": [
         {
           "title": "登记学校制度执行口径（学校办理人员） / 登记学校制度执行口径",
@@ -1983,139 +1758,143 @@ export const HELP_MEDIA={
         },
         {
           "title": "登记学校制度执行口径（学校办理人员） / 规则版本名称",
-          "time": 15.95
+          "time": 17.28
         },
         {
           "title": "登记学校制度执行口径（学校办理人员） / 适用周期",
-          "time": 25.91
+          "time": 27.68
         },
         {
           "title": "登记学校制度执行口径（学校办理人员） / 单次积分封顶",
-          "time": 36.19
+          "time": 37.4
         },
         {
           "title": "登记学校制度执行口径（学校办理人员） / 人天式单次范围",
-          "time": 44.12
+          "time": 45.52
         },
         {
           "title": "登记学校制度执行口径（学校办理人员） / 单元积分及汇总精度",
-          "time": 54.11
+          "time": 55.28
         },
         {
           "title": "登记学校制度执行口径（学校办理人员） / 舍入方式",
-          "time": 63.53
+          "time": 64.16
         },
         {
           "title": "登记学校制度执行口径（学校办理人员） / 辅助工作重叠",
-          "time": 71.52
+          "time": 71.44
         },
         {
           "title": "登记学校制度执行口径（学校办理人员） / 不足计分步长",
-          "time": 81.39
+          "time": 81.36
         },
         {
           "title": "登记学校制度执行口径（学校办理人员） / 学院考核模型",
-          "time": 90.07
+          "time": 89.76
         },
         {
           "title": "登记学校制度执行口径（学校办理人员） / 总加分规则",
-          "time": 99.64
+          "time": 99.32
         },
         {
           "title": "登记学校制度执行口径（学校办理人员） / 考核等次",
-          "time": 108.81
+          "time": 108.52
         },
         {
           "title": "登记学校制度执行口径（学校办理人员） / 恰好95%满意度",
-          "time": 116.0
+          "time": 117.64
         },
         {
           "title": "登记学校制度执行口径（学校办理人员） / 成果去重",
-          "time": 127.67
+          "time": 128.64
         },
         {
           "title": "登记学校制度执行口径（学校办理人员） / 年度总分上限",
-          "time": 136.08
+          "time": 137.24
         },
         {
           "title": "登记学校制度执行口径（学校办理人员） / 三等制优秀门槛",
-          "time": 144.27
+          "time": 149.4
         },
         {
           "title": "登记学校制度执行口径（学校办理人员） / 三等制合格门槛",
-          "time": 152.96
+          "time": 157.76
         },
         {
           "title": "登记学校制度执行口径（学校办理人员） / 职称折算范围",
-          "time": 161.52
+          "time": 166.08
         },
         {
           "title": "登记学校制度执行口径（学校办理人员） / 学院人次口径",
-          "time": 169.74
+          "time": 174.28
         },
         {
           "title": "登记学校制度执行口径（学校办理人员） / 年度归属",
-          "time": 179.84
+          "time": 184.4
         },
         {
           "title": "登记学校制度执行口径（学校办理人员） / 职称折算小数位",
-          "time": 186.89
+          "time": 193.56
         },
         {
           "title": "登记学校制度执行口径（学校办理人员） / 职称折算舍入",
-          "time": 195.72
+          "time": 200.04
         },
         {
           "title": "登记学校制度执行口径（学校办理人员） / 退回补正期限依据",
-          "time": 203.47
+          "time": 207.8
         },
         {
           "title": "登记学校制度执行口径（学校办理人员） / 本口径适用开始日期",
-          "time": 212.81
+          "time": 218.28
         },
         {
           "title": "登记学校制度执行口径（学校办理人员） / 校历开始日期",
-          "time": 226.37
+          "time": 227.64
         },
         {
           "title": "登记学校制度执行口径（学校办理人员） / 校历结束日期",
-          "time": 236.6
+          "time": 233.36
         },
         {
           "title": "登记学校制度执行口径（学校办理人员） / 放假日期（每行一个）",
-          "time": 248.58
+          "time": 241.36
         },
         {
           "title": "登记学校制度执行口径（学校办理人员） / 周末补班日期（每行一个）",
-          "time": 259.68
+          "time": 254.04
         },
         {
           "title": "登记学校制度执行口径（学校办理人员） / 学校工作日历依据",
-          "time": 270.0
+          "time": 264.44
         },
         {
           "title": "登记学校制度执行口径（学校办理人员） / 学校书面解释依据",
-          "time": 279.5
+          "time": 274.08
         },
         {
           "title": "登记学校制度执行口径（学校办理人员） / 办理说明",
-          "time": 289.35
+          "time": 283.52
         },
         {
           "title": "登记学校制度执行口径（学校办理人员） / 依据说明或材料编号（选填）",
-          "time": 303.45
+          "time": 293.96
         },
         {
-          "title": "学校社会培训审批职责（学校办理人员） / 学校社会培训审批职责",
-          "time": 324.27
+          "title": "学校社会培训审批职责（学校办理人员） / 学校办理人员版本",
+          "time": 314.04
         },
         {
           "title": "学校社会培训审批职责（学校办理人员） / 选择要调整的职责",
-          "time": 340.13
+          "time": 321.36
         },
         {
           "title": "学校社会培训审批职责（学校办理人员） / 搜索姓名、工号或账号",
-          "time": 353.51
+          "time": 339.4
+        },
+        {
+          "title": "学校社会培训审批职责（学校办理人员） / 选择办理人（可多选）",
+          "time": 353.48
         }
       ],
       "covered_forms": [
@@ -2123,7 +1902,8 @@ export const HELP_MEDIA={
         "学校社会培训审批职责"
       ],
       "description": "真实表单逐项讲解，说明字段含义、示例和条件；使用虚构资料，不提交业务。可通过章节直接跳到某一栏。"
-    }
+    },
+    "paced": true
   },
   "rules": {
     "src": "/assets/assets/help/20261022/rules.mp4",
@@ -2131,23 +1911,23 @@ export const HELP_MEDIA={
     "captions": "/assets/assets/help/20261022/rules.vtt",
     "chapters": [
       {
-        "title": "入口与用途",
+        "title": "这页做什么",
         "time": 0.0
       },
       {
-        "title": "操作顺序",
-        "time": 13.83
+        "title": "操作步骤",
+        "time": 12.84
       },
       {
-        "title": "填写或查看说明",
-        "time": 31.92
+        "title": "填写说明",
+        "time": 34.36
       },
       {
-        "title": "完成标志与常见问题",
-        "time": 47.25
+        "title": "怎样算办好",
+        "time": 46.24
       }
     ],
-    "duration": 60.8,
+    "duration": 62.52,
     "version": "20261022",
     "description": "真实页面与填写说明演示（虚构资料）；本段未提交业务，不作为完整审批验收。",
     "filling": {
@@ -2155,7 +1935,8 @@ export const HELP_MEDIA={
       "captions": "/assets/assets/help/20261022/rules-filling.vtt",
       "poster": "/assets/assets/help/20261022/rules.jpg",
       "version": "20261022",
-      "duration": 363.82,
+      "paced": true,
+      "duration": 280.96,
       "chapters": [
         {
           "title": "新建考核周期（学校办理人员） / 新建考核周期",
@@ -2163,123 +1944,111 @@ export const HELP_MEDIA={
         },
         {
           "title": "新建考核周期（学校办理人员） / 周期名称",
-          "time": 15.29
+          "time": 16.64
         },
         {
           "title": "新建考核周期（学校办理人员） / 开始日期",
-          "time": 24.83
+          "time": 24.32
         },
         {
           "title": "新建考核周期（学校办理人员） / 结束日期",
-          "time": 37.33
+          "time": 28.92
         },
         {
           "title": "新建考核周期（学校办理人员） / 办理意见 / 调整原因",
-          "time": 49.39
+          "time": 35.56
         },
         {
           "title": "新建考核周期（学校办理人员） / 依据说明或材料编号",
-          "time": 64.33
+          "time": 45.8
         },
         {
-          "title": "新建组织考核规则（学校办理人员） / 新建组织考核规则",
-          "time": 84.19
+          "title": "新建组织考核规则（学校办理人员） / 学校办理人员版本",
+          "time": 64.92
         },
         {
           "title": "新建组织考核规则（学校办理人员） / 考核对象",
-          "time": 99.53
+          "time": 71.72
         },
         {
           "title": "新建组织考核规则（学校办理人员） / 规则名称",
-          "time": 108.85
+          "time": 79.52
         },
         {
           "title": "新建组织考核规则（学校办理人员） / 适用周期",
-          "time": 118.37
+          "time": 88.24
         },
         {
           "title": "新建组织考核规则（学校办理人员） / 指标名称",
-          "time": 128.65
+          "time": 97.96
         },
         {
           "title": "新建组织考核规则（学校办理人员） / 数据来源",
-          "time": 137.39
+          "time": 106.28
         },
         {
           "title": "新建组织考核规则（学校办理人员） / 考核权重",
-          "time": 147.67
+          "time": 118.08
         },
         {
           "title": "新建组织考核规则（学校办理人员） / 目标值",
-          "time": 155.53
+          "time": 131.88
         },
         {
           "title": "新建组织考核规则（学校办理人员） / 评分方式",
-          "time": 167.47
+          "time": 143.92
         },
         {
           "title": "新建组织考核规则（学校办理人员） / 分档（门槛:分值，逗号分隔）",
-          "time": 176.92
+          "time": 154.08
         },
         {
           "title": "新建组织考核规则（学校办理人员） / 分档计分方式",
-          "time": 199.51
+          "time": 170.96
         },
         {
           "title": "新建组织考核规则（学校办理人员） / 起始分",
-          "time": 210.06
+          "time": 180.16
         },
         {
           "title": "新建组织考核规则（学校办理人员） / 计数单位",
-          "time": 220.11
+          "time": 190.16
         },
         {
           "title": "新建组织考核规则（学校办理人员） / 每次扣/加分",
-          "time": 231.97
+          "time": 200.2
         },
         {
           "title": "新建组织考核规则（学校办理人员） / 保底",
-          "time": 243.66
+          "time": 212.08
         },
         {
           "title": "新建组织考核规则（学校办理人员） / 封顶",
-          "time": 254.68
+          "time": 219.08
         },
         {
-          "title": "新建规则版本（学校办理人员） / 新建规则版本",
-          "time": 265.74
+          "title": "新建规则版本（学校办理人员） / 学校办理人员版本",
+          "time": 225.56
         },
         {
           "title": "新建规则版本（学校办理人员） / 规则类型",
-          "time": 280.66
-        },
-        {
-          "title": "新建规则版本（学校办理人员） / 指标名称",
-          "time": 292.01
+          "time": 232.04
         },
         {
           "title": "新建规则版本（学校办理人员） / 指标数据来源",
-          "time": 303.52
+          "time": 238.76
         },
         {
           "title": "新建规则版本（学校办理人员） / 积分系数",
-          "time": 314.24
-        },
-        {
-          "title": "新建规则版本（学校办理人员） / 考核权重",
-          "time": 321.35
+          "time": 248.2
         },
         {
           "title": "新建规则版本（学校办理人员） / 考核达标值",
-          "time": 329.21
+          "time": 259.32
         },
         {
           "title": "新建规则版本（学校办理人员） / 上限 / 封顶",
-          "time": 337.51
-        },
-        {
-          "title": "新建规则版本（学校办理人员） / 办理意见 / 调整原因",
-          "time": 348.88
+          "time": 271.04
         }
       ],
       "covered_forms": [
@@ -2288,7 +2057,8 @@ export const HELP_MEDIA={
         "新建规则版本"
       ],
       "description": "真实表单逐项讲解，说明字段含义、示例和条件；使用虚构资料，不提交业务。可通过章节直接跳到某一栏。"
-    }
+    },
+    "paced": true
   },
   "imports": {
     "src": "/assets/assets/help/20261022/imports.mp4",
@@ -2296,23 +2066,23 @@ export const HELP_MEDIA={
     "captions": "/assets/assets/help/20261022/imports.vtt",
     "chapters": [
       {
-        "title": "入口与用途",
+        "title": "这页做什么",
         "time": 0.0
       },
       {
-        "title": "操作顺序",
-        "time": 13.02
+        "title": "操作步骤",
+        "time": 13.24
       },
       {
-        "title": "填写或查看说明",
-        "time": 31.95
+        "title": "填写说明",
+        "time": 31.48
       },
       {
-        "title": "完成标志与常见问题",
-        "time": 47.28
+        "title": "怎样算办好",
+        "time": 43.36
       }
     ],
-    "duration": 61.49,
+    "duration": 59.52,
     "version": "20261022",
     "description": "真实页面与填写说明演示（虚构资料）；本段未提交业务，不作为完整审批验收。",
     "filling": {
@@ -2320,7 +2090,8 @@ export const HELP_MEDIA={
       "captions": "/assets/assets/help/20261022/imports-filling.vtt",
       "poster": "/assets/assets/help/20261022/imports.jpg",
       "version": "20261022",
-      "duration": 76.26,
+      "paced": true,
+      "duration": 32.88,
       "chapters": [
         {
           "title": "上传表格并生成校验预览（教研室负责人） / 上传表格并生成校验预览",
@@ -2328,31 +2099,20 @@ export const HELP_MEDIA={
         },
         {
           "title": "上传表格并生成校验预览（教研室负责人） / 导入类型",
-          "time": 16.27
+          "time": 11.2
         },
         {
           "title": "上传表格并生成校验预览（教研室负责人） / 标准电子表格文件",
-          "time": 27.64
-        },
-        {
-          "title": "上传表格并生成校验预览（学校办理人员） / 上传表格并生成校验预览",
-          "time": 38.13
-        },
-        {
-          "title": "上传表格并生成校验预览（学校办理人员） / 导入类型",
-          "time": 54.4
-        },
-        {
-          "title": "上传表格并生成校验预览（学校办理人员） / 标准电子表格文件",
-          "time": 65.77
+          "time": 20.8
         }
       ],
-      "description": "真实表单逐项讲解，说明字段含义、示例和条件；使用虚构资料，不提交业务。可通过章节直接跳到某一栏。",
       "covered_forms": [
         "上传表格并生成校验预览",
         "上传表格并生成校验预览"
-      ]
-    }
+      ],
+      "description": "真实表单逐项讲解，说明字段含义、示例和条件；使用虚构资料，不提交业务。可通过章节直接跳到某一栏。"
+    },
+    "paced": true
   },
   "exports": {
     "src": "/assets/assets/help/20261022/exports.mp4",
@@ -2360,25 +2120,26 @@ export const HELP_MEDIA={
     "captions": "/assets/assets/help/20261022/exports.vtt",
     "chapters": [
       {
-        "title": "入口与用途",
+        "title": "这页做什么",
         "time": 0.0
       },
       {
-        "title": "操作顺序",
-        "time": 12.77
+        "title": "操作步骤",
+        "time": 11.8
       },
       {
-        "title": "填写或查看说明",
-        "time": 31.97
+        "title": "数据怎么看",
+        "time": 31.12
       },
       {
-        "title": "完成标志与常见问题",
-        "time": 42.93
+        "title": "怎样算办好",
+        "time": 41.04
       }
     ],
-    "duration": 56.14,
+    "duration": 56.44,
     "version": "20261022",
-    "description": "真实页面与填写说明演示（虚构资料）；本段未提交业务，不作为完整审批验收。"
+    "description": "真实页面与填写说明演示（虚构资料）；本段未提交业务，不作为完整审批验收。",
+    "paced": true
   },
   "settings": {
     "src": "/assets/assets/help/20261022/settings.mp4",
@@ -2386,25 +2147,26 @@ export const HELP_MEDIA={
     "captions": "/assets/assets/help/20261022/settings.vtt",
     "chapters": [
       {
-        "title": "入口与用途",
+        "title": "这页做什么",
         "time": 0.0
       },
       {
-        "title": "操作顺序",
-        "time": 12.59
+        "title": "操作步骤",
+        "time": 10.76
       },
       {
-        "title": "填写或查看说明",
-        "time": 28.42
+        "title": "数据怎么看",
+        "time": 26.12
       },
       {
-        "title": "完成标志与常见问题",
-        "time": 39.38
+        "title": "怎样算办好",
+        "time": 36.04
       }
     ],
-    "duration": 51.41,
+    "duration": 50.0,
     "version": "20261022",
-    "description": "真实页面与填写说明演示（虚构资料）；本段未提交业务，不作为完整审批验收。"
+    "description": "真实页面与填写说明演示（虚构资料）；本段未提交业务，不作为完整审批验收。",
+    "paced": true
   },
   "notices": {
     "src": "/assets/assets/help/20261022/notices.mp4",
@@ -2412,23 +2174,23 @@ export const HELP_MEDIA={
     "captions": "/assets/assets/help/20261022/notices.vtt",
     "chapters": [
       {
-        "title": "入口与用途",
+        "title": "这页做什么",
         "time": 0.0
       },
       {
-        "title": "操作顺序",
-        "time": 12.35
+        "title": "操作步骤",
+        "time": 11.68
       },
       {
-        "title": "填写或查看说明",
-        "time": 28.82
+        "title": "数据怎么看",
+        "time": 28.44
       },
       {
-        "title": "完成标志与常见问题",
-        "time": 39.78
+        "title": "怎样算办好",
+        "time": 38.36
       }
     ],
-    "duration": 52.67,
+    "duration": 53.2,
     "version": "20261022",
     "description": "真实页面与填写说明演示（虚构资料）；本段未提交业务，不作为完整审批验收。",
     "filling": {
@@ -2436,7 +2198,8 @@ export const HELP_MEDIA={
       "captions": "/assets/assets/help/20261022/notices-filling.vtt",
       "poster": "/assets/assets/help/20261022/notices.jpg",
       "version": "20261022",
-      "duration": 127.17,
+      "paced": true,
+      "duration": 80.32,
       "chapters": [
         {
           "title": "发布通知公告（学校办理人员） / 发布通知公告",
@@ -2444,54 +2207,39 @@ export const HELP_MEDIA={
         },
         {
           "title": "发布通知公告（学校办理人员） / 通知标题",
-          "time": 15.1
+          "time": 10.0
         },
         {
           "title": "发布通知公告（学校办理人员） / 分类",
-          "time": 23.69
+          "time": 19.76
         },
         {
-          "title": "发布通知公告（学校办理人员） / 测试学院一二级学院",
-          "time": 31.19
-        },
-        {
-          "title": "发布通知公告（学校办理人员） / 测试学院二二级学院",
-          "time": 41.23
-        },
-        {
-          "title": "发布通知公告（学校办理人员） / 测试教研室一教研室",
-          "time": 51.27
-        },
-        {
-          "title": "发布通知公告（学校办理人员） / 测试教研室二教研室",
-          "time": 61.45
-        },
-        {
-          "title": "发布通知公告（学校办理人员） / 隔离测试学校学校管理部门",
-          "time": 71.58
+          "title": "发布通知公告（学校办理人员） / 发布范围（可多选）",
+          "time": 25.96
         },
         {
           "title": "发布通知公告（学校办理人员） / 通知正文",
-          "time": 82.37
+          "time": 42.32
         },
         {
           "title": "发布通知公告（学校办理人员） / 发布状态",
-          "time": 92.5
+          "time": 52.56
         },
         {
           "title": "发布通知公告（学校办理人员） / 办理原因",
-          "time": 101.37
+          "time": 61.88
         },
         {
           "title": "发布通知公告（学校办理人员） / 依据说明或材料编号",
-          "time": 115.45
+          "time": 68.36
         }
       ],
       "covered_forms": [
         "发布通知公告"
       ],
       "description": "真实表单逐项讲解，说明字段含义、示例和条件；使用虚构资料，不提交业务。可通过章节直接跳到某一栏。"
-    }
+    },
+    "paced": true
   },
   "audit": {
     "src": "/assets/assets/help/20261022/audit.mp4",
@@ -2499,25 +2247,26 @@ export const HELP_MEDIA={
     "captions": "/assets/assets/help/20261022/audit.vtt",
     "chapters": [
       {
-        "title": "入口与用途",
+        "title": "这页做什么",
         "time": 0.0
       },
       {
-        "title": "操作顺序",
-        "time": 12.49
+        "title": "操作步骤",
+        "time": 11.6
       },
       {
-        "title": "填写或查看说明",
-        "time": 29.73
+        "title": "数据怎么看",
+        "time": 27.92
       },
       {
-        "title": "完成标志与常见问题",
-        "time": 40.69
+        "title": "怎样算办好",
+        "time": 37.84
       }
     ],
-    "duration": 53.52,
+    "duration": 52.84,
     "version": "20261022",
-    "description": "真实页面与填写说明演示（虚构资料）；本段未提交业务，不作为完整审批验收。"
+    "description": "真实页面与填写说明演示（虚构资料）；本段未提交业务，不作为完整审批验收。",
+    "paced": true
   },
   "sync": {
     "src": "/assets/assets/help/20261022/sync.mp4",
@@ -2525,25 +2274,26 @@ export const HELP_MEDIA={
     "captions": "/assets/assets/help/20261022/sync.vtt",
     "chapters": [
       {
-        "title": "入口与用途",
+        "title": "这页做什么",
         "time": 0.0
       },
       {
-        "title": "操作顺序",
-        "time": 12.99
+        "title": "操作步骤",
+        "time": 12.36
       },
       {
-        "title": "填写或查看说明",
-        "time": 31.99
+        "title": "数据怎么看",
+        "time": 30.76
       },
       {
-        "title": "完成标志与常见问题",
-        "time": 42.95
+        "title": "怎样算办好",
+        "time": 40.68
       }
     ],
-    "duration": 56.51,
+    "duration": 56.8,
     "version": "20261022",
-    "description": "真实页面与填写说明演示（虚构资料）；本段未提交业务，不作为完整审批验收。"
+    "description": "真实页面与填写说明演示（虚构资料）；本段未提交业务，不作为完整审批验收。",
+    "paced": true
   },
   "implementation": {
     "src": "/assets/assets/help/20261022/implementation.mp4",
@@ -2551,25 +2301,26 @@ export const HELP_MEDIA={
     "captions": "/assets/assets/help/20261022/implementation.vtt",
     "chapters": [
       {
-        "title": "入口与用途",
+        "title": "这页做什么",
         "time": 0.0
       },
       {
-        "title": "操作顺序",
-        "time": 13.15
+        "title": "操作步骤",
+        "time": 12.32
       },
       {
-        "title": "填写或查看说明",
-        "time": 32.51
+        "title": "数据怎么看",
+        "time": 29.44
       },
       {
-        "title": "完成标志与常见问题",
-        "time": 43.47
+        "title": "怎样算办好",
+        "time": 39.36
       }
     ],
-    "duration": 55.49,
+    "duration": 53.76,
     "version": "20261022",
-    "description": "真实页面与填写说明演示（虚构资料）；本段未提交业务，不作为完整审批验收。"
+    "description": "真实页面与填写说明演示（虚构资料）；本段未提交业务，不作为完整审批验收。",
+    "paced": true
   },
   "sso": {
     "src": "/assets/assets/help/20261022/sso.mp4",
@@ -2577,25 +2328,26 @@ export const HELP_MEDIA={
     "captions": "/assets/assets/help/20261022/sso.vtt",
     "chapters": [
       {
-        "title": "入口与用途",
+        "title": "这页做什么",
         "time": 0.0
       },
       {
-        "title": "操作顺序",
-        "time": 12.23
+        "title": "操作步骤",
+        "time": 11.32
       },
       {
-        "title": "填写或查看说明",
-        "time": 31.05
+        "title": "数据怎么看",
+        "time": 29.68
       },
       {
-        "title": "完成标志与常见问题",
-        "time": 42.02
+        "title": "怎样算办好",
+        "time": 39.6
       }
     ],
-    "duration": 56.5,
+    "duration": 56.44,
     "version": "20261022",
-    "description": "真实页面与填写说明演示（虚构资料）；本段未提交业务，不作为完整审批验收。"
+    "description": "真实页面与填写说明演示（虚构资料）；本段未提交业务，不作为完整审批验收。",
+    "paced": true
   },
   "hub": {
     "src": "/assets/assets/help/20261022/hub.mp4",
@@ -2603,25 +2355,26 @@ export const HELP_MEDIA={
     "captions": "/assets/assets/help/20261022/hub.vtt",
     "chapters": [
       {
-        "title": "入口与用途",
+        "title": "这页做什么",
         "time": 0.0
       },
       {
-        "title": "操作顺序",
-        "time": 13.15
+        "title": "操作步骤",
+        "time": 12.16
       },
       {
-        "title": "填写或查看说明",
-        "time": 29.74
+        "title": "数据怎么看",
+        "time": 28.24
       },
       {
-        "title": "完成标志与常见问题",
-        "time": 40.7
+        "title": "怎样算办好",
+        "time": 38.16
       }
     ],
-    "duration": 54.51,
+    "duration": 53.8,
     "version": "20261022",
-    "description": "真实页面与填写说明演示（虚构资料）；本段未提交业务，不作为完整审批验收。"
+    "description": "真实页面与填写说明演示（虚构资料）；本段未提交业务，不作为完整审批验收。",
+    "paced": true
   },
   "province": {
     "src": "/assets/assets/help/20261022/province.mp4",
@@ -2629,25 +2382,26 @@ export const HELP_MEDIA={
     "captions": "/assets/assets/help/20261022/province.vtt",
     "chapters": [
       {
-        "title": "入口与用途",
+        "title": "这页做什么",
         "time": 0.0
       },
       {
-        "title": "操作顺序",
-        "time": 12.44
+        "title": "操作步骤",
+        "time": 12.0
       },
       {
-        "title": "填写或查看说明",
-        "time": 27.75
+        "title": "数据怎么看",
+        "time": 26.32
       },
       {
-        "title": "完成标志与常见问题",
-        "time": 38.72
+        "title": "怎样算办好",
+        "time": 36.24
       }
     ],
-    "duration": 52.53,
+    "duration": 52.2,
     "version": "20261022",
-    "description": "真实页面与填写说明演示（虚构资料）；本段未提交业务，不作为完整审批验收。"
+    "description": "真实页面与填写说明演示（虚构资料）；本段未提交业务，不作为完整审批验收。",
+    "paced": true
   },
   "guide": {
     "src": "/assets/assets/help/20261022/guide.mp4",
@@ -2655,25 +2409,26 @@ export const HELP_MEDIA={
     "captions": "/assets/assets/help/20261022/guide.vtt",
     "chapters": [
       {
-        "title": "入口与用途",
+        "title": "这页做什么",
         "time": 0.0
       },
       {
-        "title": "操作顺序",
-        "time": 13.32
+        "title": "操作步骤",
+        "time": 12.24
       },
       {
-        "title": "填写或查看说明",
-        "time": 29.62
+        "title": "数据怎么看",
+        "time": 27.88
       },
       {
-        "title": "完成标志与常见问题",
-        "time": 40.58
+        "title": "怎样算办好",
+        "time": 37.8
       }
     ],
-    "duration": 53.72,
+    "duration": 53.32,
     "version": "20261022",
-    "description": "真实页面与填写说明演示（虚构资料）；本段未提交业务，不作为完整审批验收。"
+    "description": "真实页面与填写说明演示（虚构资料）；本段未提交业务，不作为完整审批验收。",
+    "paced": true
   },
   "operations": {
     "src": "/assets/assets/help/20261022/operations.mp4",
@@ -2681,25 +2436,26 @@ export const HELP_MEDIA={
     "captions": "/assets/assets/help/20261022/operations.vtt",
     "chapters": [
       {
-        "title": "入口与用途",
+        "title": "这页做什么",
         "time": 0.0
       },
       {
-        "title": "操作顺序",
-        "time": 14.4
+        "title": "操作步骤",
+        "time": 13.32
       },
       {
-        "title": "填写或查看说明",
-        "time": 34.09
+        "title": "数据怎么看",
+        "time": 31.56
       },
       {
-        "title": "完成标志与常见问题",
-        "time": 45.05
+        "title": "怎样算办好",
+        "time": 41.48
       }
     ],
-    "duration": 58.99,
+    "duration": 57.64,
     "version": "20261022",
-    "description": "真实页面与填写说明演示（虚构资料）；本段未提交业务，不作为完整审批验收。"
+    "description": "真实页面与填写说明演示（虚构资料）；本段未提交业务，不作为完整审批验收。",
+    "paced": true
   },
   "help": {
     "src": "/assets/assets/help/20261022/help.mp4",
@@ -2707,25 +2463,26 @@ export const HELP_MEDIA={
     "captions": "/assets/assets/help/20261022/help.vtt",
     "chapters": [
       {
-        "title": "入口与用途",
+        "title": "这页做什么",
         "time": 0.0
       },
       {
-        "title": "操作顺序",
-        "time": 13.29
+        "title": "操作步骤",
+        "time": 12.28
       },
       {
-        "title": "填写或查看说明",
-        "time": 30.75
+        "title": "数据怎么看",
+        "time": 33.24
       },
       {
-        "title": "完成标志与常见问题",
-        "time": 41.71
+        "title": "怎样算办好",
+        "time": 43.16
       }
     ],
-    "duration": 55.58,
+    "duration": 59.56,
     "version": "20261022",
-    "description": "真实页面与填写说明演示（虚构资料）；本段未提交业务，不作为完整审批验收。"
+    "description": "真实页面与填写说明演示（虚构资料）；本段未提交业务，不作为完整审批验收。",
+    "paced": true
   },
   "account": {
     "src": "/assets/assets/help/20261022/account.mp4",
@@ -2733,24 +2490,68 @@ export const HELP_MEDIA={
     "captions": "/assets/assets/help/20261022/account.vtt",
     "chapters": [
       {
-        "title": "入口与用途",
+        "title": "这页做什么",
         "time": 0.0
       },
       {
-        "title": "操作顺序",
-        "time": 14.95
+        "title": "操作步骤",
+        "time": 14.2
       },
       {
-        "title": "填写或查看说明",
-        "time": 46.18
+        "title": "数据怎么看",
+        "time": 50.16
       },
       {
-        "title": "完成标志与常见问题",
-        "time": 57.14
+        "title": "怎样算办好",
+        "time": 60.08
       }
     ],
-    "duration": 71.23,
+    "duration": 79.8,
     "version": "20261022",
-    "description": "真实页面与填写说明演示（虚构资料）；本段未提交业务，不作为完整审批验收。"
+    "description": "真实页面与填写说明演示（虚构资料）；本段未提交业务，不作为完整审批验收。",
+    "paced": true
+  },
+  "quickstart": {
+    "src": "/assets/assets/help/20261022/quickstart.mp4",
+    "poster": "/assets/assets/help/20261022/quickstart.jpg",
+    "captions": "/assets/assets/help/20261022/quickstart.vtt",
+    "chapters": [
+      {
+        "title": "开始",
+        "time": 0.0
+      },
+      {
+        "title": "登录",
+        "time": 19.56
+      },
+      {
+        "title": "切换身份",
+        "time": 38.64
+      },
+      {
+        "title": "申报课程",
+        "time": 56.0
+      },
+      {
+        "title": "看退回意见",
+        "time": 75.04
+      },
+      {
+        "title": "重新提交",
+        "time": 87.4
+      },
+      {
+        "title": "找待办",
+        "time": 103.48
+      },
+      {
+        "title": "小结",
+        "time": 117.64
+      }
+    ],
+    "duration": 132.64,
+    "version": "20261022",
+    "paced": true,
+    "description": "新手上手演示：登录、切换身份、申报课程、看退回意见、重新提交、找待办（虚构资料，未提交业务）。"
   }
 };

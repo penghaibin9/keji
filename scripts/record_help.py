@@ -2,8 +2,9 @@
 
 Requires the owned synthetic lab. These are page tutorials, not evidence that
 unconnected school integrations or every approval workflow have been accepted.
-Each narrated scene is captured briefly, then held on its last frame for the
-length of its narration, so picture and speech stay in step without real-time waits.
+Each narrated scene is a screenshot of the real browser taken after its action has
+settled, shown for exactly the length of its narration, so picture and speech stay in step.
+(Browser screen recordings start a variable moment late on this machine; screenshots do not drift.)
 """
 from pathlib import Path
 import argparse,json,subprocess,time,wave,re,msvcrt
@@ -50,11 +51,13 @@ def _cut(text,limit):
         if i<=0 or i>=len(text):return False
         if TOKEN.match(text[i-1]) and TOKEN.match(text[i]):return False  # never split a code such as SOC-2026-001
         if text[i-1] in '“（《「' or text[i] in '”）》」':return False
-        return len(text)-i>=3
+        return len(text.rstrip('，、：；。！？'))-i>=4  # no orphan word such as “登录” on its own line
     def quoted(i):return text[:i].count('“')>text[:i].count('”')
     for i in range(min(limit,len(text)-1),limit//2,-1):
         if safe(i) and text[i-1] in BREAK_AFTER and not quoted(i):return i
-    for i in range(min(limit,len(text)-1),limit//2,-1):
+    for i in range(min(limit,len(text)-1),3,-1):
+        if safe(i) and text[i-1] in BREAK_AFTER and not quoted(i):return i
+    for i in range(min(limit,len(text)-1),3,-1):
         if safe(i) and not quoted(i):return i
     for i in range(min(limit,len(text)-1),0,-1):
         if safe(i):return i
@@ -69,7 +72,7 @@ def caption_chunks(text,limit=20):
             if not clause:continue
             if len(current)+len(clause)<=limit:current+=clause;continue
             if current:lines.append(current);current=''
-            while len(clause)>limit:
+            while len(clause.rstrip('，、：；。！？'))>limit+2:
                 cut=_cut(clause,limit);lines.append(clause[:cut]);clause=clause[cut:]
             current=clause
         if current:lines.append(current)
@@ -83,8 +86,11 @@ def caption_cues(text,start,duration,captions):
 def audio(segments,directory):
     directory.mkdir(parents=True,exist_ok=True)
     for segment in segments:segment['text']=tidy(segment['text'])
-    source=directory/'speech.json';source.write_text(json.dumps(segments,ensure_ascii=False),encoding='utf-8')
-    subprocess.run(['powershell','-NoProfile','-File',str(ROOT/'scripts/render_help_speech.ps1'),'-InputFile',str(source),'-OutputDirectory',str(directory)],check=True,stdout=subprocess.DEVNULL)
+    source=directory/'speech.json';spoken=[{k:v for k,v in s.items() if k!='duration'} for s in segments]
+    # Unchanged narration keeps its existing speech files; only new or edited text is synthesized again.
+    cached=source.is_file() and json.loads(source.read_text(encoding='utf-8'))==spoken and all((directory/f'{i}.wav').is_file() for i in range(len(segments)))
+    source.write_text(json.dumps(spoken,ensure_ascii=False),encoding='utf-8')
+    if not cached:subprocess.run(['powershell','-NoProfile','-File',str(ROOT/'scripts/render_help_speech.ps1'),'-InputFile',str(source),'-OutputDirectory',str(directory)],check=True,stdout=subprocess.DEVNULL)
     params=None;frames=[]
     for i,segment in enumerate(segments):
         with wave.open(str(directory/f'{i}.wav'),'rb') as f:
@@ -100,15 +106,18 @@ def audio(segments,directory):
 def probe_duration(ffprobe,path):
     return float(json.loads(subprocess.check_output([ffprobe,'-v','error','-show_format','-of','json',str(path)]))['format']['duration'])
 
-def assemble(ffmpeg,raw,trim,scenes,narration,folder,target,total):
-    """Cut each captured scene from the raw recording and hold its last frame while it is narrated."""
+def assemble(ffmpeg,stills,narration,folder,target,total):
+    """Show each scene's screenshot for exactly as long as its narration, then add the narration track."""
     parts=[]
-    for i,(begin,finish,spoken) in enumerate(scenes):
+    for i,(image,spoken) in enumerate(stills):
         part=folder/f'scene-{i}.mp4';parts.append(part)
-        subprocess.run([ffmpeg,'-hide_banner','-loglevel','error','-y','-ss',f'{trim+begin:.3f}','-t',f'{max(.2,finish-begin):.3f}','-threads','1','-i',str(raw),'-an','-vf','tpad=stop_mode=clone:stop_duration='+str(spoken),'-t',str(spoken),'-r','25','-c:v','libx264','-preset','veryfast','-crf','27','-threads','1','-pix_fmt','yuv420p',str(part)],check=True)
+        subprocess.run([ffmpeg,'-hide_banner','-loglevel','error','-y','-loop','1','-framerate','25','-t',str(spoken),'-i',str(image),'-vf','scale=1360:900,format=yuv420p','-r','25','-c:v','libx264','-preset','veryfast','-tune','stillimage','-crf','27','-threads','1',str(part)],check=True)
     listing=folder/'scenes.txt';listing.write_text(''.join("file '"+p.as_posix()+"'\n" for p in parts),encoding='utf-8')
     subprocess.run([ffmpeg,'-hide_banner','-loglevel','error','-y','-f','concat','-safe','0','-i',str(listing),'-i',str(narration),'-map','0:v:0','-map','1:a:0','-c:v','copy','-c:a','aac','-b:a','80k','-t',str(total),'-movflags','+faststart',str(target)],check=True)
     for part in parts:part.unlink(missing_ok=True)
+
+def still(p,folder,index):
+    image=folder/f'scene-{index}.png';p.screenshot(path=str(image));return image
 
 def demo_branding(lab):
     """Fictional school mark and plain background used in place of the real school's logo and campus photo."""
@@ -117,9 +126,9 @@ def demo_branding(lab):
     logo,background=folder/'school-brand.png',folder/'login-campus-blue.jpg'
     if not logo.is_file():
         image=Image.new('RGBA',(422,118),(0,0,0,0));draw=ImageDraw.Draw(image)
-        big=ImageFont.truetype('C:/Windows/Fonts/msyhbd.ttc',34);small=ImageFont.truetype('C:/Windows/Fonts/msyh.ttc',20)
-        draw.ellipse((6,14,96,104),outline=(255,255,255,235),width=4);draw.text((51,59),'演',font=big,fill=(255,255,255,240),anchor='mm')
-        draw.text((112,34),'操作教学演示学校',font=big,fill=(255,255,255,245),anchor='lm');draw.text((114,84),'虚构资料 · 仅供操作教学',font=small,fill=(225,236,248,235),anchor='lm')
+        big=ImageFont.truetype('C:/Windows/Fonts/msyhbd.ttc',30)
+        draw.ellipse((6,24,76,94),outline=(255,255,255,235),width=4);draw.text((41,59),'演',font=big,fill=(255,255,255,240),anchor='mm')
+        draw.text((92,59),'演示学校（虚构资料）',font=big,fill=(255,255,255,245),anchor='lm')
         image.save(logo)
     if not background.is_file():
         image=Image.new('RGB',(1600,1000));draw=ImageDraw.Draw(image)
@@ -128,7 +137,8 @@ def demo_branding(lab):
     return {'**/assets/assets/school-brand.png':logo,'**/assets/assets/school-brand-header.png':logo,'**/assets/assets/login-campus-blue.jpg':background,'**/assets/assets/login-campus-blue.png':background}
 
 def use_demo_branding(context,lab):
-    for pattern,path in demo_branding(lab).items():context.route(pattern,lambda route,path=path:route.fulfill(path=str(path)))
+    def serve(path):return lambda route:route.fulfill(path=str(path))  # Playwright passes (route, request) to two-argument handlers
+    for pattern,path in demo_branding(lab).items():context.route(pattern,serve(path))
 
 def open_help(p,selector):
     if not p.locator('.help-panel').count():p.locator(selector).first.click()
@@ -156,22 +166,24 @@ def quickstart_action(p,scene,state):
     try:
         if scene=='login-local':p.locator('#login-local-tab').click()
         elif scene=='identity':
-            p.context.add_cookies(state['cookies']);p.goto(ORIGIN+'/#home');p.locator('#content h1').wait_for();p.locator('.busy-panel').wait_for(state='detached')
+            # Same-URL hash changes do not reload; reload so the app starts with the signed-in session.
+            p.context.add_cookies(state['cookies']);p.goto(ORIGIN+'/#home');p.reload();p.locator('#content h1').wait_for();p.locator('.busy-panel').wait_for(state='detached')
             menu=p.locator('#account-menu summary')
             if menu.count():menu.first.click()
         elif scene=='apply':
             if p.locator('#account-menu[open] summary').count():p.locator('#account-menu summary').first.click()
-            nav(p,'apply_course');p.locator('#content [data-action="teacher-apply"]').first.click()
+            nav(p,'apply_course')  # 停在“我的申报”页，画面上能看到“新申报一门培训课程”按钮和申请列表
         elif scene=='returned':
-            if p.locator('#modal-root:not(.hidden) [data-action=close]').count():p.locator('#modal-root [data-action=close]:visible').last.click()
+            # “我的申请”在待办中心；筛选“待补正”就是被退回、等你补正的申请。
+            nav(p,'todos');p.locator('#content [data-action="todos-tab"][data-id="mine"]').first.click();p.wait_for_timeout(400)
             p.locator('#content [data-action="app-mine-filter"][data-id="returned"]').first.click()
         elif scene=='resubmit':
-            p.locator('#content [data-action="app-mine-filter"][data-id=""]').first.click()
+            p.locator('#content [data-action="app-mine-filter"][data-id=""]').first.click();p.wait_for_timeout(400)
             detail=p.locator('#content [data-action=app-detail]')
             if detail.count():detail.first.click()
         elif scene=='todos':
             if p.locator('#modal-root:not(.hidden) [data-action=close]').count():p.locator('#modal-root [data-action=close]:visible').last.click()
-            nav(p,'todos')
+            p.locator('#content [data-action="todos-tab"][data-id="handle"]').first.click()
         elif scene=='todos-mine':p.locator('#content [data-action="todos-tab"][data-id="mine"]').first.click()
     except Exception as error:
         print('  画面动作未完成（不影响配音）：',scene,type(error).__name__,flush=True)
@@ -211,11 +223,11 @@ def run(args):
             if ident=='apply_course' and not args.topic:continue  # 课程申报使用完整流程录屏（check_help_course_flow.py）
             if ident not in available or (not args.redo and ident in manifest and manifest[ident].get('version')==VERSION and manifest[ident].get('paced')):continue
             user=available[ident]['user'];workspace=lab/'recordings'/ident;workspace.mkdir(parents=True,exist_ok=True)
-            for old in workspace.glob('*.webm'):old.unlink()
+            for old in [*workspace.glob('*.webm'),*workspace.glob('scene-*.png')]:old.unlink()
             state=None
             if ident!='account':
                 ctx,p=login(browser,user,password);state=ctx.storage_state();ctx.close()
-            rec=browser.new_context(storage_state=None if ident in ('account','quickstart') else state,viewport={'width':1360,'height':900},record_video_dir=str(workspace),record_video_size={'width':1360,'height':900})
+            rec=browser.new_context(storage_state=None if ident in ('account','quickstart') else state,viewport={'width':1360,'height':900})
             use_demo_branding(rec,lab)
             p=rec.new_page();p.set_default_timeout(12000)
             if ident in ('account','quickstart'):p.goto(ORIGIN);p.locator('#login-heading').wait_for();p.wait_for_timeout(300)
@@ -228,20 +240,18 @@ def run(args):
             segments=quickstart_segments(topic) if ident=='quickstart' else page_segments(topic,bool(selector))
             audio(segments,workspace)
             if ident!='quickstart':p.screenshot(path=str(output/f'{ident}.jpg'),type='jpeg',quality=78)
-            start=time.monotonic();recording=p.video;scenes=[];marks=[];captions=['WEBVTT',''];elapsed=0.0
-            for segment in segments:
-                began=time.monotonic()
+            stills=[];marks=[];captions=['WEBVTT',''];elapsed=0.0
+            for index,segment in enumerate(segments):
                 if ident=='quickstart':quickstart_action(p,segment['scene'],state)
                 else:page_action(p,segment['scene'],ident,page_help,selector)
                 p.wait_for_timeout(SCENE_SETTLE_MS)
                 if ident=='quickstart' and segment['scene']=='identity':p.screenshot(path=str(output/'quickstart.jpg'),type='jpeg',quality=78)
-                scenes.append((began-start,time.monotonic()-start,segment['duration']))
+                stills.append((still(p,workspace,index),segment['duration']))
                 marks.append({'title':segment['title'],'time':round(elapsed,2)})
                 caption_cues(segment['text'],elapsed,segment['duration'],captions)
                 elapsed+=segment['duration']
-            end=time.monotonic();rec.close();raw=Path(recording.path())
-            trim=max(0,probe_duration(args.ffprobe,raw)-(end-start))
-            assemble(args.ffmpeg,raw,trim,scenes,workspace/'narration.wav',workspace,output/f'{ident}.mp4',elapsed)
+            rec.close()
+            assemble(args.ffmpeg,stills,workspace/'narration.wav',workspace,output/f'{ident}.mp4',elapsed)
             (output/f'{ident}.vtt').write_text('\n'.join(captions),encoding='utf-8')
             manifest[ident]={'src':f'/assets/assets/help/{VERSION}/{ident}.mp4','poster':f'/assets/assets/help/{VERSION}/{ident}.jpg','captions':f'/assets/assets/help/{VERSION}/{ident}.vtt','chapters':marks,'duration':round(elapsed,2),'version':VERSION,'paced':True,'description':'新手上手演示：登录、切换身份、申报课程、看退回意见、重新提交、找待办（虚构资料，未提交业务）。' if ident=='quickstart' else '真实页面与填写说明演示（虚构资料）；本段未提交业务，不作为完整审批验收。'}
             save_manifest(lab,manifest_file,ident,manifest[ident])

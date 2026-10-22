@@ -3,7 +3,7 @@ from pathlib import Path
 import argparse,json,subprocess,time,wave
 from playwright.sync_api import sync_playwright
 from check_help_browser import ROOT,login,nav,click_action
-from record_help import VERSION,audio,save_manifest,caption_cues,unique_sentences,assemble,probe_duration,use_demo_branding,SCENE_SETTLE_MS
+from record_help import VERSION,audio,save_manifest,caption_cues,unique_sentences,assemble,still,use_demo_branding,SCENE_SETTLE_MS
 
 ROLE_TITLES={'teacher':'教师','dept':'教研室负责人','college':'学院负责人','school':'学校办理人员'}
 # 合成的分组字段在页面上没有同名控件，按下面的位置定位。
@@ -74,12 +74,12 @@ def run(args):
                 if len(segments)==1:continue
                 if reusable(folder,segments):print('复用已录制片段：'+display_title,flush=True)
                 else:
-                    for old in folder.glob('*.webm'):old.unlink()
+                    for old in [*folder.glob('*.webm'),*folder.glob('scene-*.png')]:old.unlink()
                     audio(segments,folder)
                     (folder/'timings.json').write_text(json.dumps([s['duration'] for s in segments]),encoding='utf-8')
                     browser=pw.chromium.launch(args=['--renderer-process-limit=1'])
                     ctx,p=login(browser,form['user'],password);state=ctx.storage_state();ctx.close()
-                    rec=browser.new_context(storage_state=state,viewport={'width':1360,'height':900},record_video_dir=str(folder),record_video_size={'width':1360,'height':900})
+                    rec=browser.new_context(storage_state=state,viewport={'width':1360,'height':900})
                     use_demo_branding(rec,lab)
                     p=rec.new_page();p.set_default_timeout(12000);nav(p,topic)
                     for setup in form.get('setup',[]):
@@ -87,18 +87,16 @@ def run(args):
                     target=p.locator(f'{form.get("scope","#content")} [data-action="{form["action"]}"][data-id="{form["action_id"]}"]').first
                     if not target.is_visible():target.locator('xpath=ancestor::details[1]').locator('summary').first.click()
                     target.click();p.locator('#edit-form').wait_for();p.wait_for_timeout(400)
-                    start=time.monotonic();video=p.video;scenes=[]
-                    for segment in segments:
-                        began=time.monotonic()
+                    stills=[]
+                    for index,segment in enumerate(segments):
                         if segment['key']:
                             try:show_field(p,segment['key'],segment['title'])
                             except Exception as error:print('  画面定位未完成（不影响配音）：',segment['title'],type(error).__name__,flush=True)
                         p.wait_for_timeout(SCENE_SETTLE_MS)
-                        scenes.append((began-start,time.monotonic()-start,segment['duration']))
+                        stills.append((still(p,folder,index),segment['duration']))
                         if p.locator('.help-panel').count():p.locator('[data-help-close]').click()
-                    end=time.monotonic();rec.close();raw=Path(video.path());browser.close()
-                    trim=max(0,probe_duration(args.ffprobe,raw)-(end-start))
-                    assemble(args.ffmpeg,raw,trim,scenes,folder/'narration.wav',folder,folder/'final.mp4',sum(s['duration'] for s in segments))
+                    rec.close();browser.close()
+                    assemble(args.ffmpeg,stills,folder/'narration.wav',folder,folder/'final.mp4',sum(s['duration'] for s in segments))
                     print('逐项填写录制完成：'+display_title,flush=True)
                 at=offset
                 for segment in segments:
