@@ -84,12 +84,15 @@ def run(args):
             # Read current menu links, including grouped navigation, without granting permissions.
             nav(p,'help')
             allowed=p.locator('[data-help-library] [data-action=nav]').evaluate_all("es=>es.map(e=>e.dataset.id)")+['help']
+            # 负责人也能用“我的申报”页签替本人或本组织申报；直接打开这些页签，采集不同身份的表单差异。
+            extra=[x for x in ['apply_course','apply_project','apply_base','apply_trainer'] if x not in allowed];allowed+=extra
             for t in topics:
                 ident=t['id']
                 if ident not in allowed or (ident in available and ident not in FORM_ACTIONS):continue
                 nav(p,ident)
                 if not p.locator('#content [data-open-help]').count():
-                    report['errors'].append(ident+':缺少帮助入口');continue
+                    if ident not in extra:report['errors'].append(ident+':缺少帮助入口')
+                    continue
                 p.locator('#content [data-open-help]').click();p.locator('.help-panel').wait_for()
                 assert p.locator('#context-help-title').inner_text()
                 p.keyboard.press('Escape');assert not p.locator('.help-panel').count()

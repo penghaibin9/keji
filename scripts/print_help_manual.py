@@ -11,7 +11,7 @@ from reportlab.lib.styles import ParagraphStyle
 from reportlab.platypus import SimpleDocTemplate,Paragraph,Spacer,PageBreak,LongTable,Table,TableStyle,Image,KeepTogether
 from pypdf import PdfReader
 ROOT=Path(__file__).resolve().parents[1]
-DATA=json.loads(subprocess.check_output(['node','--input-type=module','-e',"import {HELP_VERSION,HELP_TOPICS,HELP_FAQS,ROLE_NAMES} from './frontend/help-content.js';import {HELP_FORMS} from './frontend/help-forms.js';import {HELP_MEDIA} from './frontend/help-media.js';console.log(JSON.stringify({version:HELP_VERSION,topics:HELP_TOPICS,faqs:HELP_FAQS,roles:ROLE_NAMES,forms:HELP_FORMS,media:HELP_MEDIA}))"],cwd=ROOT))
+DATA=json.loads(subprocess.check_output(['node','--input-type=module','-e',"import {HELP_VERSION,HELP_TOPICS,HELP_FAQS,ROLE_NAMES} from './frontend/help-content.js';import {HELP_FORMS} from './frontend/help-forms.js';import {HELP_MEDIA} from './frontend/help-media.js';import {fieldSentences,requirementText} from './frontend/help-system.js';for(const forms of Object.values(HELP_FORMS))for(const f of forms)for(const x of f.fields){x.sentences=fieldSentences(x);x.requirement_text=requirementText(x)}console.log(JSON.stringify({version:HELP_VERSION,topics:HELP_TOPICS,faqs:HELP_FAQS,roles:ROLE_NAMES,forms:HELP_FORMS,media:HELP_MEDIA}))"],cwd=ROOT))
 VERSION=DATA['version'];TARGET=ROOT/'frontend/assets/help'/VERSION
 pdfmetrics.registerFont(TTFont('HelpCN','C:/Windows/Fonts/msyh.ttc',subfontIndex=0))
 pdfmetrics.registerFont(TTFont('HelpCNBold','C:/Windows/Fonts/msyhbd.ttc',subfontIndex=0))
@@ -56,11 +56,7 @@ def run():
             story.extend([paragraph(form['title']+'（'+role+'）：每项怎么填','sub'),paragraph('下列必填性为采集时的表单条件。实际填写时，条件会随选项变化，以当前表单提示为准。','small')])
             rows=[[paragraph('填写项','cell'),paragraph('含义、示例和限制','cell')]]
             for field in form['fields']:
-                details=[field['explanation'],*[h for h in field['hints'] if h!=field['explanation']]]
-                if field['example']:details.append('提示／示例：'+field['example'])
-                if field['limits']:details.append('；'.join(field['limits']))
-                if field['options']:details.append('可选内容：'+'、'.join(field['options']))
-                rows.append([paragraph(field['label']+'\n'+field['requirement'],'cell'),paragraph('\n'.join(details),'cell')])
+                rows.append([paragraph(field['label']+('\n'+field['requirement_text'] if field['requirement_text'] else ''),'cell'),paragraph('\n'.join(field['sentences']),'cell')])
             table=LongTable(rows,colWidths=[width*.27,width*.73],repeatRows=1,hAlign='LEFT',rowSplitRange=(2,-2))
             table.setStyle(TableStyle([('BACKGROUND',(0,0),(-1,0),colors.HexColor('#eaf2fa')),('GRID',(0,0),(-1,-1),.4,colors.HexColor('#d1dce6')),('VALIGN',(0,0),(-1,-1),'TOP'),('LEFTPADDING',(0,0),(-1,-1),7),('RIGHTPADDING',(0,0),(-1,-1),7),('TOPPADDING',(0,0),(-1,-1),6),('BOTTOMPADDING',(0,0),(-1,-1),6)]));story.append(table)
     story.extend([PageBreak(),paragraph('常见问题','chapter')])

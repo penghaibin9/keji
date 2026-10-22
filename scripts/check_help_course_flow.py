@@ -1,9 +1,13 @@
 """Real UI submit/return/amend/approve regression in the owned synthetic help lab."""
 from pathlib import Path
-import argparse,json,time,wave,subprocess,re
+import argparse,json,time,wave,subprocess
 from playwright.sync_api import sync_playwright
 from check_help_browser import ROOT,login,nav,ORIGIN
-from record_help import audio,stamp,save_manifest,VERSION
+from record_help import audio,save_manifest,caption_cues,use_demo_branding,VERSION
+
+# 章节标题给人看；配音是完整的自然句子，不把章节标题和账号名念出来。
+CHAPTERS={'教师填写时查看帮助':'教师填写课程申报','教师提交后进入教研室审核':'提交后等待教研室审核','教研室退回补正：depthead':'教研室负责人退回补正','教师补正保存，仍需重新提交':'教师补正资料','教师重新提交':'教师重新提交','审批通过：depthead':'教研室负责人审核通过','审批通过：collegehead':'学院负责人审批通过','审批通过：reviewer':'学校归口复审通过','教师回看最终入库结果':'教师查看入库结果'}
+NARRATION={'教师填写时查看帮助':'先看老师怎么申报一门培训课程。填好课程编号、名称、学时和课程简介，选好教学方式和思政属性。不确定怎么填时，点“填写说明”逐项查看；关掉说明，已经填的内容还在。','教师提交后进入教研室审核':'点“提交申报”以后，详情里会显示现在由谁办理。这时只需要等待审核，不要再新建一份。','教研室退回补正：depthead':'接着，教研室负责人审核时发现内容不全，就把申请退回给老师，并写清楚要补什么。这次要求补充学员学完后能掌握的技能。','教师补正保存，仍需重新提交':'老师打开被退回的申请，点“补正资料”。原来正确的内容都还在，只补充课程简介，再点“保存补正”。注意，保存以后还要重新提交。','教师重新提交':'点“重新提交”，申请就回到退回它的那一环节，继续往下办理。','审批通过：depthead':'教研室负责人核对补正后的内容，审核通过，申请交给学院。','审批通过：collegehead':'学院负责人核对课程资料后审批通过，交给学校归口复审。','审批通过：reviewer':'学校归口复审通过后，课程正式进入培训课程库。','教师回看最终入库结果':'最后，老师在详情里看到“已入培训课程库”，退回、补正和每一级通过的记录都保留着。课程入库本身不产生培训积分，积分按培训项目里的授课人次另行认定。'}
 
 def run(args):
     lab=Path(args.lab).resolve()
@@ -17,7 +21,7 @@ def run(args):
             if args.record:
                 state=ctx.storage_state();ctx.close()
                 folder=out/f'clip-{len(movies)}';folder.mkdir(exist_ok=True)
-                ctx=browser.new_context(storage_state=state,viewport={'width':1360,'height':900},record_video_dir=str(folder),record_video_size={'width':1360,'height':900})
+                ctx=browser.new_context(storage_state=state,viewport={'width':1360,'height':900},record_video_dir=str(folder),record_video_size={'width':1360,'height':900});use_demo_branding(ctx,lab)
                 started=time.monotonic();p=ctx.new_page();p.set_default_timeout(12000)
                 entry={'ctx':ctx,'p':p,'start':started,'events':[],'folder':folder};movies.append(entry);active[id(ctx)]=entry
             return ctx,p
@@ -28,10 +32,8 @@ def run(args):
             p.screenshot(path=str(out/f'{len(proof)+1:02}.png'));proof.append({'step':label,'screen':f'{len(proof)+1:02}.png'})
             if args.record:
                 entry=active[id(p.context)]
-                spoken=label.replace('：depthead','，教研室负责人').replace('：collegehead','，学院负责人').replace('：reviewer','，学校归口复审人员')
-                detail={'教师填写时查看帮助':'填写课程编号、名称、学时及课程简介，选择实际教学方式和思政属性。打开填写说明可核对每一项，关闭后已填内容仍在。','教师提交后进入教研室审核':'提交后显示实际办理方。此时申请人等待审核，不要重复新建。','教研室退回补正：depthead':'审核人写清缺少的内容，这次要求补充学员完成培训后掌握的技能。','教师补正保存，仍需重新提交':'原来正确的信息保留。补充课程简介并保存后，仍要点击重新提交。','教师重新提交':'重新提交后从退回环节继续办理。','审批通过：depthead':'教研室核对补正资料后通过，进入学院审批。','审批通过：collegehead':'学院负责人核对资料后通过，进入学校归口复审。','审批通过：reviewer':'学校归口核对后通过，课程进入培训课程库。','教师回看最终入库结果':'详情显示已入培训课程库，办理记录保留退回、补正和各级通过的过程。课程入库不直接产生培训积分。'}[label]
-                segments=[{'text':spoken+'。'+detail}];folder=entry['folder']/f'voice-{len(entry["events"])}';audio(segments,folder)
-                start=time.monotonic()-entry['start'];entry['events'].append({'title':spoken,'start':start,'duration':segments[0]['duration'],'text':segments[0]['text'],'wav':folder/'narration.wav'})
+                segments=[{'text':NARRATION[label]}];folder=entry['folder']/f'voice-{len(entry["events"])}';audio(segments,folder)
+                start=time.monotonic()-entry['start'];entry['events'].append({'title':CHAPTERS[label],'start':start,'duration':segments[0]['duration'],'text':segments[0]['text'],'wav':folder/'narration.wav'})
                 p.wait_for_timeout(segments[0]['duration']*1000)
             (out/'progress.json').write_text(json.dumps(proof,ensure_ascii=False,indent=2),encoding='utf-8')
             print(label,flush=True)
@@ -80,9 +82,7 @@ def run(args):
                 with wave.open(str(e['wav']),'rb') as w:data=w.readframes(w.getnframes())
                 start=round(e['start']*rate)*frame_size;pcm[start:start+len(data)]=data
                 chapters.append({'title':e['title'],'time':round(offset+e['start'],2)})
-                chunks=re.findall(r'.{1,28}',e['text']);at=offset+e['start'];total=sum(map(len,chunks))
-                for chunk in chunks:
-                    span=e['duration']*len(chunk)/total;captions.extend([f'{stamp(at)} --> {stamp(at+span)}',chunk,'']);at+=span
+                caption_cues(e['text'],offset+e['start'],e['duration'],captions)
             wav=entry['folder']/'mixed.wav'
             with wave.open(str(wav),'wb') as w:w.setparams(params);w.writeframes(bytes(pcm))
             clip=entry['folder']/'final.mp4';subprocess.run([args.ffmpeg,'-hide_banner','-loglevel','error','-y','-threads','1','-i',str(entry['raw']),'-i',str(wav),'-t',str(duration),'-map','0:v:0','-map','1:a:0','-c:v','libx264','-preset','veryfast','-crf','26','-threads','1','-pix_fmt','yuv420p','-c:a','aac','-movflags','+faststart',str(clip)],check=True)

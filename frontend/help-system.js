@@ -1,4 +1,4 @@
-import {HELP_VERSION,HELP_TOPICS,HELP_FAQS,FIELD_HELP,FIELD_LABEL_HELP,ROLE_NAMES,helpTopic} from './help-content.js?v=20261022';
+import {HELP_VERSION,HELP_TOPICS,HELP_FAQS,HELP_ALIASES,GENERAL_TOPICS,FIELD_HELP,FIELD_LABEL_HELP,ROLE_NAMES,helpTopic} from './help-content.js?v=20261022';
 import {HELP_MEDIA} from './help-media.js?v=20261022';
 import {HELP_FORMS} from './help-forms.js?v=20261022';
 const escape=v=>String(v??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
@@ -22,24 +22,95 @@ export function inferHelpPage(page,title=''){
  const matches=[[/结项/,'projects'],[/外聘/,'trainers'],[/课程申报|申请培训课程|申报培训课程/,'apply_course'],[/基地申请|申请培训基地|申报培训基地/,'apply_base'],[/校内.*培训师|申报培训师/,'apply_trainer'],[/申报培训项目|项目申请/,'apply_project'],[/积分.*申报|积分.*认定|积分.*更正/,'recognition'],[/授课认定/,'creditreview'],[/资质/,'qualifications'],[/年度.*考核/,'annual'],[/考核/,'assessment']];
  return matches.find(([re])=>re.test(title))?.[1]||page;
 }
-export function describeField(input){
- const wrap=input.closest('.rule-control,.form-field')||input.parentElement;
- const group=input.type==='radio'?wrap?.querySelector(':scope > label,legend'):null;
- const label=(group?.textContent||input.getAttribute('aria-label')||input.labels?.[0]?.textContent||wrap?.querySelector('label,legend')?.textContent||input.placeholder||'').replace(/\s*\*\s*/g,' ').trim();
- if(!label||input.type==='hidden'||['submit','button','reset'].includes(input.type)||input.dataset.assistControl)return null;
- const hints=cleanHelpHints([...(wrap?.querySelectorAll('.hint')||[])].map(x=>x.textContent.trim()).filter(Boolean));
- const key=(input.name||input.dataset.r||input.dataset.or||'').replace(/_search$/,'');
- const grouped=/^checked_/.test(key)?'逐项核对对应材料，确认清晰完整且内容一致后再勾选；缺少材料时先补齐，不用勾选代替真实核验。':/^aud_/.test(key)?'按本次培训实际面向的人群勾选，可以选择多类对象。':/^tm_/.test(key)?'按实际采用的教学方式勾选，可多选，与培训方案一致。':/^svc_/.test(key)?'按项目实际服务方向勾选，相关依据在方案中说明。':/^dir_/.test(key)?'按本人实际能够承担的培训业务类别勾选，可多选；类别与专业特长分别填写。':!key&&input.type==='checkbox'?'选择具备本职责有效身份的办理人；本人的业务须由其他有权人员办理。':!key&&input.type==='search'?'输入姓名、工号或账号查找人员，再核对组织和有效身份。':'';
- const explanation=(key==='password'&&input.closest('#login-form')?'输入本人本地账号的密码；忘记密码请联系学校管理员，不向他人提供密码。':'')||FIELD_LABEL_HELP[label]||FIELD_HELP[key]||hints.join(' ')||grouped||({date:'按原始材料填写实际日期，核对起止顺序。',number:'按真实业务依据填写数值，注意页面单位；没有数据时不要随意填零。',file:'按该事项要求选择清晰、完整的佐证材料，查看逐份上传结果。',password:'按账号安全要求输入，不向他人提供或写入业务材料。',checkbox:'根据真实情况勾选，勾选后注意是否出现额外必填项。',radio:'选择与实际业务一致的选项，核对后续关联字段。'}[input.type])||'按实际业务材料填写“'+label+'”，不要照抄演示值；不清楚学校口径时先向业务负责部门核实。';
- const requirement=input.disabled?'当前不可填写':input.readOnly?'自动带出／只读':input.required?'当前必填':'当前选填';
- const limits=[];for(const [attr,name] of [['min','最小值'],['max','最大值'],['step','步长'],['maxlength','最多字数'],['accept','允许文件类型']]){const v=input.getAttribute(attr);if(v!==null&&v!=='')limits.push(name+'：'+v)}
- const max=input.dataset.textLimit;if(max)limits.push('最多 '+max+' 字');
- if(input.multiple)limits.push('可多选');
- if(input.dataset.uploadMax)limits.push('最多 '+input.dataset.uploadMax+' 份（含已上传）');
- const options=input.tagName==='SELECT'?[...input.options].filter(o=>!o.disabled&&o.value).map(o=>o.textContent.trim()):[];
- return {key,label,explanation,requirement,hints,limits,options,example:input.type==='password'?'':input.placeholder||'',documented:!!FIELD_LABEL_HELP[label]||!!FIELD_HELP[key]||hints.length>0||!!grouped};
+// 一组同类勾选项（受众、教学方式、材料核对等）合成一项说明；候选人名单、组织名单是实时数据，只说明怎么选，不逐个列出。
+const FIELD_GROUPS=[
+ [i=>/^aud_\d+$/.test(i.name),'aud','面向对象',false],
+ [i=>/^svc_/.test(i.name),'svc','服务面向类型',false],
+ [i=>/^tm_/.test(i.name),'tm','教学实施方式',false],
+ [i=>/^dir_/.test(i.name),'dir','培训业务类别',false],
+ [i=>/^checked_/.test(i.name)||i.id==='close-check-all','checked','结项材料核对',false],
+ [i=>i.name==='org_ids'||i.id==='notice-all','org_ids','发布范围',true],
+ [i=>!!i.closest('#duty-options'),'duty_people','选择办理人（可多选）',true],
+ [i=>i.name==='head_pick'||!!i.closest('#head-results'),'head_pick','选择负责人（可多选）',true],
+];
+const LIVE_OPTIONS=['project_code','project_id','policy_id','period_id','teacher_id','owner_id','org_id','parent_id','course_code','class_code','role_id','target_id','user_id','reviewer_id'];
+const clean=t=>String(t||'').replace(/\s*\*\s*/g,' ').replace(/\s+/g,' ').trim();
+function fieldGroup(input){
+ if(!['checkbox','radio'].includes(input.type))return null;
+ const rule=FIELD_GROUPS.find(([test])=>test(input));if(!rule)return null;
+ const [test,key,fallback,dynamic]=rule,holder=input.closest('[role=group],[role=radiogroup]'),fieldset=input.closest('fieldset');
+ const named=holder?.getAttribute('aria-labelledby')?document.getElementById(holder.getAttribute('aria-labelledby')):null;
+ const raw=(dynamic?holder?.getAttribute('aria-label')||named?.textContent:named?.textContent||fieldset?.querySelector('legend')?.textContent)||'';
+ const root=input.form||input.closest('form,#modal-root')||document;
+ const members=[...root.querySelectorAll('input')].filter(i=>['checkbox','radio'].includes(i.type)&&test(i));
+ const options=dynamic?[]:members.filter(i=>i.id!=='close-check-all').map(i=>clean(i.labels?.[0]?.textContent||i.closest('label')?.textContent)).filter(Boolean);
+ return {key,label:clean(raw)||fallback,required:/\*/.test(raw)||members.some(i=>i.required),options,dynamic,wrap:holder||fieldset||input.parentElement};
 }
-export function cleanHelpHints(hints){return hints.filter(h=>!/^已填\s*\d+\s*\/|^常用语\s*[·・]/.test(h)).map(h=>h.replace(/\bPNG\b(?!（)/g,'PNG（图片）').replace(/\bJPG\b(?!（)/g,'JPG（照片）').replace(/\bPDF\b(?!（)/g,'PDF（便携文档）').replace(/(\d+)\s*MB\b(?!（)/g,'$1 MB（兆字节）'))}
+// 去掉和主说明意思重复的页面提示，避免“同一句话写两遍”。
+const core=t=>String(t||'').replace(/[\s，。；、：:,.;！？“”"'（）()《》]/g,'');
+function similar(a,b){
+ const x=core(a),y=core(b);if(!x||!y)return false;if(x.includes(y)||y.includes(x))return true;
+ const pairs=t=>new Set([...t].slice(1).map((c,i)=>t[i]+c)),p=pairs(x),q=pairs(y);let same=0;for(const v of p)if(q.has(v))same++;
+ return same/Math.max(1,Math.min(p.size,q.size))>=0.6;
+}
+const FILE_NAMES=[[/pdf/,'PDF'],[/png/,'PNG'],[/jpe?g/,'JPG'],[/xlsx/,'Excel 表格（.xlsx）']];
+// 把最小值、步长、文件类型等技术限制写成老师看得懂的话。
+function plainLimits(input,label,hints){
+ const attr=k=>{const v=input.getAttribute(k);return v===null||v===''?null:v},out=[];
+ if(input.type==='number'){
+  const min=attr('min'),max=attr('max'),step=attr('step');
+  if(min!==null)out.push(Number(min)===0?'不能填负数':'不能小于 '+min);
+  if(max!==null)out.push('不能大于 '+max);
+  if(step==='0.5')out.push(/学时/.test(label)?'可以填 0.5 学时这样的半学时':'最小可以填到 0.5');
+  else if(step==='1')out.push('只能填整数');
+  else if(step&&step.includes('.')){const d=step.split('.')[1].length;out.push('最多保留'+('一两三四'[d-1]||d)+'位小数')}
+ }else if(input.type==='file'){
+  const accept=(attr('accept')||'').toLowerCase(),kinds=FILE_NAMES.filter(([re])=>re.test(accept)).map(([,n])=>n);
+  const size=hints.join(' ').match(/(\d+)\s*(?:MB|兆字节)/i);
+  if(kinds.length)out.push('支持 '+kinds.join('、')+(size?'，单个不超过 '+size[1]+'MB':''));else if(size)out.push('单个文件不超过 '+size[1]+'MB');
+  if(input.multiple)out.push('可以一次选多个文件');
+  if(input.dataset.uploadMax)out.push(Number(input.dataset.uploadMax)===1?'只能上传 1 份':'最多 '+input.dataset.uploadMax+' 份（含已上传的）');
+ }else{
+  const max=input.dataset.textLimit||attr('maxlength');if(max)out.push('最多 '+max+' 字');
+  if(input.multiple)out.push('可以多选');
+ }
+ return out;
+}
+function plainExample(input){
+ if(['date','password','search'].includes(input.type))return '';
+ const m=String(input.placeholder||'').match(/(?:^|\s)(?:例如|例|如)[：:\s]*(.+)$/),value=m?m[1].trim():'';
+ return /^\d{4}-\d{2}-\d{2}$/.test(value)?'':value;  // 日期占位“例：2026-10-20”只是格式提示
+}
+export function describeField(input){
+ if(input.type==='hidden'||['submit','button','reset'].includes(input.type)||input.dataset.assistControl)return null;
+ const group=fieldGroup(input);
+ const wrap=group?.wrap||input.closest('.rule-control,.form-field')||input.parentElement;
+ const radio=input.type==='radio'?wrap?.querySelector(':scope > label,legend'):null;
+ const label=group?group.label:clean(radio?.textContent||input.getAttribute('aria-label')||input.labels?.[0]?.textContent||wrap?.querySelector('label,legend')?.textContent||input.placeholder||'');
+ if(!label)return null;
+ // 实时名单旁的提示（如“尚未选择办理人”）是当前状态，不是填写说明。
+ const hints=group?.dynamic?[]:cleanHelpHints([...(wrap?.querySelectorAll('.hint')||[])].map(x=>x.textContent.trim()).filter(Boolean));
+ const key=group?group.key:(input.name||input.dataset.r||input.dataset.or||({'duty-query':'duty_query','head-q':'head_query'}[input.id])||'').replace(/_search$/,'');
+ const special=key==='password'&&input.closest('#login-form')?'输入本人账号的密码；忘记密码请联系学校管理员重置，不要把密码告诉别人。':'';
+ const own=special||FIELD_LABEL_HELP[key+'|'+label]||FIELD_LABEL_HELP[label]||'',general=FIELD_HELP[key]||'';
+ const fallback={date:'按原始材料填写实际日期，注意开始和结束的先后。',number:'按真实依据填写数值，注意页面上的单位；没有数据时不要随意填 0。',file:'上传清晰、完整、与填写内容一致的材料，并查看每一份的上传结果。',password:'按账号安全要求输入，不要告诉别人。',checkbox:'按实际情况勾选，勾选后注意是否出现新的必填项。',radio:'选择与实际情况一致的一项，并核对后面相关的填写项。'}[input.type]||'按实际材料填写“'+label+'”，不要照抄示例；不清楚学校口径时先问业务负责部门。';
+ const explanation=own||general||hints[0]||fallback;
+ // 有按名称写好的说明时，它已包含页面提示的意思；只有通用说明时，补上不重复的页面提示。
+ const extra=own?[]:hints.filter(h=>h!==explanation&&!similar(h,explanation)).filter((h,i,a)=>a.findIndex(x=>similar(x,h))===i);
+ const required=group?group.required:input.required;
+ const requirement=input.disabled&&!group?'当前不可填写':input.readOnly?'自动带出／只读':required?'当前必填':'当前选填';
+ // 项目、周期、组织、人员等下拉框的选项是实时业务数据，不写进说明。
+ const options=group?group.options:input.tagName==='SELECT'&&!LIVE_OPTIONS.includes(key)?[...input.options].filter(o=>!o.disabled&&o.value).map(o=>o.textContent.trim()):[];
+ return {key,label,explanation,requirement,hints:extra,limits:group?[]:plainLimits(input,label,hints),options,example:group?'':plainExample(input),documented:!!(own||general||hints.length)};
+}
+export function cleanHelpHints(hints){return hints.filter(h=>!/^已填\s*\d+\s*\/|^常用语\s*[·・]/.test(h)).map(h=>h.replace(/(\d+)\s*兆字节/g,'$1MB').replace(/(\d+)\s+MB\b/g,'$1MB'))}
+// 一个字段的完整说明，按句子排好、句号结尾，不用“。；”拼接；手册、打印版、帮助面板和视频配音共用。
+export function fieldSentences(f,{options=true,limits=true}={}){
+ const end=s=>{s=String(s||'').trim().replace(/[；;，,、\s]+$/,'');return !s||/[。！？]$/.test(s)?s:s+'。'};
+ const parts=[f.explanation,...(f.hints||[]),f.example&&!core(f.explanation).includes(core(f.example))?'示例：'+f.example:'',limits&&f.limits?.length?f.limits.join('，'):'',options&&f.options?.length?'可选：'+f.options.join(f.options.some(o=>o.includes('、'))?'；':'、'):''];
+ return parts.filter(Boolean).map(end).filter((s,i,a)=>a.findIndex(x=>similar(x,s))===i).map(s=>s.replace(/。{2,}/g,'。'));
+}
+export function requirementText(f){return /选填/.test(f.label)&&f.requirement==='当前选填'?'':f.requirement==='当前不可填写'?'按前面的选择才需要填':f.requirement}
 export function fieldsIn(root){
  const seen=new Set();return [...(root?.querySelectorAll('input,select,textarea')||[])].filter(i=>!i.closest('[data-help-library],.help-panel,.field-how')&&i.getAttribute('aria-hidden')!=='true').map(describeField).filter(f=>f&&!seen.has(f.key+'|'+f.label)&&seen.add(f.key+'|'+f.label));
 }
@@ -54,19 +125,21 @@ export function fieldError(input){
  if(v.customError&&/[\u4e00-\u9fff]/.test(input.validationMessage))return input.validationMessage;
  return '填写格式不符合要求，请核对本项说明。';
 }
-function fieldHTML(f){return `<section class="help-field"><h3>${escape(f.label)} <small>${escape(f.requirement)}</small></h3><p>${escape(f.explanation)}</p>${f.hints.filter(h=>h!==f.explanation).map(h=>`<p>${escape(h)}</p>`).join('')}${f.example?`<p class="help-example">填写提示／示例：${escape(f.example)}</p>`:''}${f.limits.length?`<p>${escape(f.limits.join('；'))}</p>`:''}${f.options.length?`<details><summary>可选内容</summary><p>${escape(f.options.join('、'))}</p></details>`:''}</section>`}
+function fieldHTML(f){return `<section class="help-field"><h3>${escape(f.label)} <small>${escape(requirementText(f))}</small></h3>${fieldSentences(f,{options:false}).map(s=>`<p>${escape(s)}</p>`).join('')}${f.options.length?`<details><summary>可选内容</summary><p>${escape(f.options.join('、'))}</p></details>`:''}</section>`}
 function storedFieldGuide(page){return (HELP_FORMS[page]||[]).map(form=>`<details class="help-faq"><summary>${escape(form.title)}（${escape(ROLE_NAMES[form.role]||'对应办理人员')}）：填写指南</summary><p>此处为教学采集时的条件；当前实际必填项会随选项变化，请以正在填写的表单提示为准。</p>${form.fields.map(fieldHTML).join('')}</details>`).join('')}
 export function helpSearch(query,aliases={}){
  const q=query.trim().toLowerCase();if(!q)return HELP_TOPICS;
- return HELP_TOPICS.filter(t=>[t.title,t.purpose,t.done,...t.steps,...(aliases[t.id]||[]),...(HELP_FORMS[t.id]||[]).flatMap(f=>[f.title,...f.fields.map(x=>x.label+' '+x.explanation)])].join(' ').toLowerCase().includes(q)||(t.id==='help'&&HELP_FAQS.some(([a,b])=>(a+b).toLowerCase().includes(q))));
+ return HELP_TOPICS.filter(t=>[t.title,t.purpose,t.done,...t.steps,...(HELP_ALIASES[t.id]||[]),...(aliases[t.id]||[]),...(HELP_FORMS[t.id]||[]).flatMap(f=>[f.title,...f.fields.map(x=>x.label+' '+x.explanation)])].join(' ').toLowerCase().includes(q)||(t.id==='help'&&HELP_FAQS.some(([a,b])=>(a+b).toLowerCase().includes(q))));
 }
 const audienceTopics={teacher:['home','todos','apply_course','apply_project','apply_base','apply_trainer','mine','recognition','qualifications','credits','points','assessment','disputes','records','outcomes','exports','notices','help'],dept:['home','todos','projects','courses','bases','trainers','credits','creditreview','qualifications','assessment','disputes','records','organization','imports','exports','notices','help'],college:['home','todos','projects','courses','bases','trainers','annual','recognition','assessment','ledgers','resources','organization','records','outcomes','imports','exports','notices','help']};
-export function helpLibraryHTML(c){const items=HELP_TOPICS.filter(t=>t.id==='account'||c.allowed(t.id)&&(!audienceTopics[c.role]||audienceTopics[c.role].includes(t.id)));return `<section class="card help-library" data-help-library><div class="card-head"><div><h2>操作手册与视频</h2><p>默认推荐当前身份可办理的事项；填写时也可随时打开页面旁的帮助。</p></div><div class="help-downloads"><a class="btn" href="/assets/assets/help/${HELP_VERSION}/manual.html" target="_blank" rel="noopener">阅读图文手册</a><a class="btn" href="/assets/assets/help/${HELP_VERSION}/manual.pdf" download="系统操作手册_${HELP_VERSION}.pdf">下载打印版</a></div></div><div class="card-pad"><label for="help-audience">按使用身份查找</label><select id="help-audience"><option value="current">我的当前身份</option><option value="teacher">教师</option><option value="dept">教研室负责人</option><option value="college">学院负责人</option><option value="school">学校办理人员</option><option value="all">全部教程</option></select><label for="help-query">按业务、页面、字段或问题查找</label><input id="help-query" type="search" placeholder="例如：课程申报、共建单位、材料上传失败"><div class="help-search-results" aria-live="polite">${items.map(t=>topicCard(t,c)).join('')}</div></div></section>`}
-function topicCard(t,c){return `<article class="help-topic-card"><h3>${escape(t.title)}</h3><p>${escape(t.purpose)}</p><div>${button('图文与视频',`data-help-topic="${t.id}"`)}${c.allowed(t.id)&&t.id!=='help'?button('进入办理',`data-action="nav" data-id="${t.id}"`):t.id==='account'?'<span class="muted">适用于所有使用人员</span>':'<span class="muted">由相应授权人员办理</span>'}</div></article>`}
+const general=id=>GENERAL_TOPICS.includes(id);
+const usable=(c,id)=>general(id)||c.allowed(id);
+export function helpLibraryHTML(c){const items=HELP_TOPICS.filter(t=>general(t.id)||c.allowed(t.id)&&(!audienceTopics[c.role]||audienceTopics[c.role].includes(t.id)));return `<section class="card help-library" data-help-library><div class="card-head"><div><h2>操作手册与视频</h2><p>默认推荐当前身份可办理的事项；填写时也可随时打开页面旁的帮助。</p></div><div class="help-downloads"><a class="btn" href="/assets/assets/help/${HELP_VERSION}/manual.html" target="_blank" rel="noopener">阅读图文手册</a><a class="btn" href="/assets/assets/help/${HELP_VERSION}/manual.pdf" download="系统操作手册_${HELP_VERSION}.pdf">下载打印版</a></div></div><div class="card-pad"><label for="help-audience">按使用身份查找</label><select id="help-audience"><option value="current">我的当前身份</option><option value="teacher">教师</option><option value="dept">教研室负责人</option><option value="college">学院负责人</option><option value="school">学校办理人员</option><option value="all">全部教程</option></select><label for="help-query">按业务、页面、字段或问题查找</label><input id="help-query" type="search" placeholder="例如：课程申报、共建单位、材料上传失败"><div class="help-search-results" aria-live="polite">${items.map(t=>topicCard(t,c)).join('')}</div></div></section>`}
+function topicCard(t,c){return `<article class="help-topic-card"><h3>${escape(t.title)}</h3><p>${escape(t.purpose)}</p><div>${button('图文与视频',`data-help-topic="${t.id}"`)}${c.allowed(t.id)&&t.id!=='help'?button('进入办理',`data-action="nav" data-id="${t.id}"`):general(t.id)?'<span class="muted">适用于所有使用人员</span>':'<span class="muted">由相应授权人员办理</span>'}</div></article>`}
 function bindLibrary(root,c){
  const library=root.querySelector('[data-help-library]');if(!library)return;
  const input=library.querySelector('input'),audience=library.querySelector('#help-audience'),results=library.querySelector('.help-search-results');
- const update=()=>{const q=input.value.trim(),topics=helpSearch(q,c.aliases).filter(t=>audience.value==='current'?(t.id==='account'||c.allowed(t.id)&&(!audienceTopics[c.role]||audienceTopics[c.role].includes(t.id))):!audienceTopics[audience.value]||audienceTopics[audience.value].includes(t.id));topics.sort((a,b)=>Number(c.allowed(b.id))-Number(c.allowed(a.id)));results.innerHTML=(topics.length?topics.map(t=>topicCard(t,c)).join(''):'<p>没有匹配的页面，请尝试业务名称或旧菜单名称。</p>')+HELP_FAQS.filter(([a,b])=>!q||(a+b).includes(q)).map(([a,b])=>`<details class="help-faq"><summary>${escape(a)}</summary><p>${escape(b)}</p></details>`).join('');};input.addEventListener('input',update);audience.addEventListener('change',update);update();
+ const update=()=>{const q=input.value.trim(),topics=helpSearch(q,c.aliases).filter(t=>audience.value==='current'?(general(t.id)||c.allowed(t.id)&&(!audienceTopics[c.role]||audienceTopics[c.role].includes(t.id))):general(t.id)||!audienceTopics[audience.value]||audienceTopics[audience.value].includes(t.id));topics.sort((a,b)=>Number(general(b.id))-Number(general(a.id))||Number(usable(c,b.id))-Number(usable(c,a.id)));results.innerHTML=(topics.length?topics.map(t=>topicCard(t,c)).join(''):'<p>没有匹配的页面，请尝试业务名称或旧菜单名称。</p>')+HELP_FAQS.filter(([a,b])=>!q||(a+b).includes(q)).map(([a,b])=>`<details class="help-faq"><summary>${escape(a)}</summary><p>${escape(b)}</p></details>`).join('');};input.addEventListener('input',update);audience.addEventListener('change',update);update();
  library.addEventListener('click',e=>{const b=e.target.closest('[data-help-topic]');if(b)openHelp({...c,page:b.dataset.helpTopic,root:null},b)});
 }
 function existingNotes(root){return [...root.querySelectorAll('.page-help p,.page-help-part,.business-guide,.social-guide,.workflow-context')].map(e=>e.textContent.trim()).filter(Boolean).slice(0,12)}

@@ -2,8 +2,30 @@
   "version": "20261022",
   "pages": [
     {
+      "page": "quickstart",
+      "title": "老师 5 分钟上手",
+      "menu_title": "",
+      "old_names": [
+        "新手入门",
+        "快速上手",
+        "第一次使用",
+        "怎么用"
+      ],
+      "forms": [],
+      "video": false,
+      "filling_video": false
+    },
+    {
       "page": "account",
       "title": "登录、身份与密码",
+      "menu_title": "",
+      "old_names": [
+        "登录",
+        "密码",
+        "修改密码",
+        "忘记密码",
+        "切换身份"
+      ],
       "forms": [],
       "video": true,
       "filling_video": false
@@ -11,6 +33,13 @@
     {
       "page": "home",
       "title": "首页",
+      "menu_title": "首页",
+      "old_names": [
+        "工作总览",
+        "教师工作台",
+        "我的超星课",
+        "超星课程卡片"
+      ],
       "forms": [],
       "video": true,
       "filling_video": false
@@ -18,13 +47,27 @@
     {
       "page": "todos",
       "title": "待办中心",
+      "menu_title": "待办中心",
+      "old_names": [
+        "审批中心",
+        "我的待办",
+        "我的申请",
+        "待我处理",
+        "要我处理"
+      ],
       "forms": [],
       "video": true,
       "filling_video": false
     },
     {
       "page": "apply_course",
-      "title": "培训课程申报",
+      "title": "培训课程（我的申报）",
+      "menu_title": "培训课程",
+      "old_names": [
+        "培训课程申报",
+        "申报培训课程",
+        "课程申报"
+      ],
       "forms": [
         {
           "title": "新填一门培训课程",
@@ -42,16 +85,22 @@
     },
     {
       "page": "apply_project",
-      "title": "培训项目申请",
+      "title": "培训项目（我的申报）",
+      "menu_title": "培训项目",
+      "old_names": [
+        "培训项目申请",
+        "申报培训项目",
+        "项目申请"
+      ],
       "forms": [
         {
           "title": "申报培训项目",
-          "fields": 55,
+          "fields": 37,
           "needs_business_explanation": []
         },
         {
           "title": "申报培训项目",
-          "fields": 56,
+          "fields": 38,
           "needs_business_explanation": []
         }
       ],
@@ -60,7 +109,12 @@
     },
     {
       "page": "apply_base",
-      "title": "培训基地申请",
+      "title": "培训基地（我的申请）",
+      "menu_title": "培训基地",
+      "old_names": [
+        "培训基地申请",
+        "申请培训基地"
+      ],
       "forms": [
         {
           "title": "申请培训基地",
@@ -78,11 +132,16 @@
     },
     {
       "page": "apply_trainer",
-      "title": "校内培训师申报",
+      "title": "培训师资（我的申报）",
+      "menu_title": "培训师资",
+      "old_names": [
+        "校内培训师申报",
+        "申报培训师"
+      ],
       "forms": [
         {
           "title": "申报培训师",
-          "fields": 12,
+          "fields": 7,
           "needs_business_explanation": []
         }
       ],
@@ -91,11 +150,17 @@
     },
     {
       "page": "projects",
-      "title": "培训项目与结项",
+      "title": "培训项目（项目办理）",
+      "menu_title": "培训项目",
+      "old_names": [
+        "培训项目与结项",
+        "项目结项",
+        "培训项目管理"
+      ],
       "forms": [
         {
           "title": "提交项目结项",
-          "fields": 25,
+          "fields": 17,
           "needs_business_explanation": []
         }
       ],
@@ -104,7 +169,12 @@
     },
     {
       "page": "courses",
-      "title": "培训课程库",
+      "title": "培训课程（课程库）",
+      "menu_title": "培训课程",
+      "old_names": [
+        "培训课程库",
+        "培训课程管理"
+      ],
       "forms": [
         {
           "title": "登记培训课程",
@@ -117,18 +187,29 @@
     },
     {
       "page": "bases",
-      "title": "培训基地清单",
+      "title": "培训基地（基地清单）",
+      "menu_title": "培训基地",
+      "old_names": [
+        "培训基地清单",
+        "培训基地管理"
+      ],
       "forms": [],
       "video": true,
       "filling_video": false
     },
     {
       "page": "trainers",
-      "title": "外聘培训师备案与师资库",
+      "title": "培训师资（师资库）",
+      "menu_title": "培训师资",
+      "old_names": [
+        "外聘培训师备案与师资库",
+        "外聘培训师",
+        "培训师资库"
+      ],
       "forms": [
         {
           "title": "登记外聘培训师",
-          "fields": 14,
+          "fields": 9,
           "needs_business_explanation": []
         }
       ],
@@ -138,13 +219,21 @@
     {
       "page": "mine",
       "title": "我的培训明细",
+      "menu_title": "我的培训明细",
+      "old_names": [],
       "forms": [],
       "video": true,
       "filling_video": false
     },
     {
       "page": "recognition",
-      "title": "培训积分申报与认定",
+      "title": "申报与认定（教师积分）",
+      "menu_title": "申报与认定",
+      "old_names": [
+        "培训积分申报与认定",
+        "积分申报",
+        "积分认定"
+      ],
       "forms": [
         {
           "title": "本人积分申报",
@@ -158,6 +247,8 @@
     {
       "page": "qualifications",
       "title": "教师资质",
+      "menu_title": "教师资质",
+      "old_names": [],
       "forms": [
         {
           "title": "申报我的资质",
@@ -171,6 +262,13 @@
     {
       "page": "credits",
       "title": "授课学分",
+      "menu_title": "授课学分",
+      "old_names": [
+        "超星课程认领",
+        "认领我的超星课程",
+        "我的课程",
+        "授课与学分"
+      ],
       "forms": [],
       "video": true,
       "filling_video": false
@@ -178,13 +276,20 @@
     {
       "page": "creditreview",
       "title": "授课认定",
+      "menu_title": "授课认定",
+      "old_names": [],
       "forms": [],
       "video": true,
       "filling_video": false
     },
     {
       "page": "points",
-      "title": "教师积分",
+      "title": "教师积分（积分明细）",
+      "menu_title": "教师积分",
+      "old_names": [
+        "教师积分激励",
+        "积分明细"
+      ],
       "forms": [],
       "video": true,
       "filling_video": false
@@ -192,17 +297,24 @@
     {
       "page": "assessment",
       "title": "三级考核",
+      "menu_title": "三级考核",
+      "old_names": [],
       "forms": [],
       "video": true,
       "filling_video": false
     },
     {
       "page": "annual",
-      "title": "学院社会培训年度考核",
+      "title": "学院年度考核",
+      "menu_title": "学院年度考核",
+      "old_names": [
+        "学院社会培训年度考核",
+        "年度自评"
+      ],
       "forms": [
         {
           "title": "学院年度自评",
-          "fields": 16,
+          "fields": 15,
           "needs_business_explanation": []
         }
       ],
@@ -212,6 +324,8 @@
     {
       "page": "disputes",
       "title": "数据核对",
+      "menu_title": "数据核对",
+      "old_names": [],
       "forms": [],
       "video": true,
       "filling_video": false
@@ -219,6 +333,8 @@
     {
       "page": "records",
       "title": "培训数据",
+      "menu_title": "培训数据",
+      "old_names": [],
       "forms": [
         {
           "title": "新增培训业务记录",
@@ -232,6 +348,8 @@
     {
       "page": "outcomes",
       "title": "培训成果",
+      "menu_title": "培训成果",
+      "old_names": [],
       "forms": [
         {
           "title": "登记培训成果",
@@ -245,6 +363,8 @@
     {
       "page": "resources",
       "title": "课程资源统计",
+      "menu_title": "课程资源统计",
+      "old_names": [],
       "forms": [],
       "video": true,
       "filling_video": false
@@ -252,6 +372,8 @@
     {
       "page": "organization",
       "title": "院系概况",
+      "menu_title": "院系概况",
+      "old_names": [],
       "forms": [],
       "video": true,
       "filling_video": false
@@ -259,6 +381,8 @@
     {
       "page": "ledgers",
       "title": "学院台账",
+      "menu_title": "学院台账",
+      "old_names": [],
       "forms": [],
       "video": true,
       "filling_video": false
@@ -266,13 +390,23 @@
     {
       "page": "cockpit",
       "title": "管理驾驶舱",
+      "menu_title": "管理驾驶舱",
+      "old_names": [],
       "forms": [],
       "video": true,
       "filling_video": false
     },
     {
       "page": "permissions",
-      "title": "用户、角色与审批职责",
+      "title": "用户与权限",
+      "menu_title": "用户与权限",
+      "old_names": [
+        "用户、角色与审批职责",
+        "账号与权限",
+        "设置负责人",
+        "负责人",
+        "组织机构"
+      ],
       "forms": [
         {
           "title": "新增组织机构",
@@ -291,6 +425,14 @@
     {
       "page": "policy",
       "title": "学校制度执行口径",
+      "menu_title": "学校制度执行口径",
+      "old_names": [
+        "审批职责",
+        "配置审批职责",
+        "学校级审核配置",
+        "社会培训制度口径",
+        "制度口径"
+      ],
       "forms": [
         {
           "title": "登记学校制度执行口径",
@@ -299,7 +441,7 @@
         },
         {
           "title": "学校社会培训审批职责",
-          "fields": 11,
+          "fields": 5,
           "needs_business_explanation": []
         }
       ],
@@ -309,6 +451,11 @@
     {
       "page": "rules",
       "title": "考核周期与规则",
+      "menu_title": "考核周期与规则",
+      "old_names": [
+        "规则与配置",
+        "规则配置"
+      ],
       "forms": [
         {
           "title": "新建考核周期",
@@ -332,6 +479,8 @@
     {
       "page": "imports",
       "title": "表格导入",
+      "menu_title": "表格导入",
+      "old_names": [],
       "forms": [
         {
           "title": "上传表格并生成校验预览",
@@ -350,6 +499,8 @@
     {
       "page": "exports",
       "title": "导出下载",
+      "menu_title": "导出下载",
+      "old_names": [],
       "forms": [],
       "video": true,
       "filling_video": false
@@ -357,6 +508,8 @@
     {
       "page": "settings",
       "title": "字典与参数",
+      "menu_title": "字典与参数",
+      "old_names": [],
       "forms": [],
       "video": true,
       "filling_video": false
@@ -364,10 +517,12 @@
     {
       "page": "notices",
       "title": "通知公告",
+      "menu_title": "通知公告",
+      "old_names": [],
       "forms": [
         {
           "title": "发布通知公告",
-          "fields": 12,
+          "fields": 7,
           "needs_business_explanation": []
         }
       ],
@@ -377,6 +532,8 @@
     {
       "page": "audit",
       "title": "安全提示与操作日志",
+      "menu_title": "安全提示与操作日志",
+      "old_names": [],
       "forms": [],
       "video": true,
       "filling_video": false
@@ -384,6 +541,8 @@
     {
       "page": "sync",
       "title": "系统对接",
+      "menu_title": "系统对接",
+      "old_names": [],
       "forms": [],
       "video": true,
       "filling_video": false
@@ -391,6 +550,8 @@
     {
       "page": "implementation",
       "title": "接口实施工具",
+      "menu_title": "接口实施工具",
+      "old_names": [],
       "forms": [],
       "video": true,
       "filling_video": false
@@ -398,6 +559,8 @@
     {
       "page": "sso",
       "title": "学校统一认证",
+      "menu_title": "学校统一认证",
+      "old_names": [],
       "forms": [],
       "video": true,
       "filling_video": false
@@ -405,6 +568,8 @@
     {
       "page": "hub",
       "title": "学校数据中台",
+      "menu_title": "学校数据中台",
+      "old_names": [],
       "forms": [],
       "video": true,
       "filling_video": false
@@ -412,6 +577,8 @@
     {
       "page": "province",
       "title": "湘培直通车",
+      "menu_title": "湘培直通车",
+      "old_names": [],
       "forms": [],
       "video": true,
       "filling_video": false
@@ -419,6 +586,8 @@
     {
       "page": "guide",
       "title": "对接怎么开始",
+      "menu_title": "对接怎么开始",
+      "old_names": [],
       "forms": [],
       "video": true,
       "filling_video": false
@@ -426,6 +595,8 @@
     {
       "page": "operations",
       "title": "运行与备份",
+      "menu_title": "运行与备份",
+      "old_names": [],
       "forms": [],
       "video": true,
       "filling_video": false
@@ -433,10 +604,14 @@
     {
       "page": "help",
       "title": "帮助中心",
+      "menu_title": "帮助中心",
+      "old_names": [],
       "forms": [],
       "video": true,
       "filling_video": false
     }
   ],
-  "media_errors": []
+  "media_errors": [
+    "quickstart:缺少视频"
+  ]
 }
