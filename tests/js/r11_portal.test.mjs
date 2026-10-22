@@ -1,3 +1,4 @@
+import * as helpSystem from '../../frontend/help-system.js';
 import * as formDrafts from '../../frontend/form-drafts.js';
 import * as formAssist from '../../frontend/form-assist.js';
 import {renderTrainingWorkspace,trainingChange} from '../../frontend/training-workspace.js';
@@ -90,7 +91,7 @@ function engine(responder=async()=>({items:[],total:0,page:1,size:20}), role='sc
  const requests=[], nodes=new Map();
  function node(id){if(!nodes.has(id)){const classes=new Set(),attrs=new Map();nodes.set(id,{innerHTML:'',textContent:'',value:'',classList:{add(v){classes.add(v)},remove(v){classes.delete(v)},contains(v){return classes.has(v)},toggle(v,force){const on=force??!classes.has(v);if(on)classes.add(v);else classes.delete(v);return on}},setAttribute(k,v){attrs.set(k,v)},getAttribute(k){return attrs.get(k)??null},removeAttribute(k){attrs.delete(k)},focus(){},addEventListener(){},append(){},querySelector(){return node(id+'-child')},querySelectorAll(){return []}})}return nodes.get(id)}
  const ctx=vm.createContext({renderTrainingWorkspace,trainingChange,renderSchoolCockpit,bindSchoolCockpit,console,URLSearchParams,URL,Blob,FormData,Number,String,Object,Array,Date,Math,Set,Map,JSON,RegExp,Error,Promise,crypto:globalThis.crypto,setTimeout:()=>0,clearTimeout(){},
-  ...formDrafts,...formAssist,...scope,...socialTraining,...workspace,...drafts,...ledgers,...schoolData,...approvalFlow,...applications,renderBusinessHistory,connectorInfo,connectorCards,connectorStatus,incomeChart,guideCards,scopedDateFilters,incomeParticipantsChart,barChart,syncStatusChart,rankRows,percentChange,RANK_METRICS,icons,
+  ...helpSystem,...formDrafts,...formAssist,...scope,...socialTraining,...workspace,...drafts,...ledgers,...schoolData,...approvalFlow,...applications,renderBusinessHistory,connectorInfo,connectorCards,connectorStatus,incomeChart,guideCards,scopedDateFilters,incomeParticipantsChart,barChart,syncStatusChart,rankRows,percentChange,RANK_METRICS,icons,
   document:{querySelector:node,querySelectorAll:()=>[],addEventListener(){},createElement:()=>node('created'),body:node('body')},window:{addEventListener(){}},location:{hash:'',pathname:'/',search:''},history:{replaceState(){}},
   fetch:async(url,options)=>{requests.push({url,options});let answer=await responder(url,options);if(url.endsWith('/draft')&&options.method==='GET'&&!answer.connection){const cat=await responder('/api/connections/catalog',options),ident=url.split('/').at(-2),entry=cat.items.find(x=>x.connection.id===ident);answer={connection:entry.connection,draft_version:0,active_version:entry.connection.version||1}}if(url.endsWith('/implementation')&&!answer.statuses){const cat=await responder('/api/connections/catalog',options),ident=url.split('/').at(-2),entry=cat.items.find(x=>x.connection.id===ident);answer={connection_id:ident,code:entry.connection.code,name:entry.connection.name,statuses:{materials:'资料待登记',configuration:'配置待完善',tests:'待真实测试',published:'未发布或授权失效',health:'未检查',acceptance:'待学校签认'}}}return {ok:true,status:200,json:async()=>answer}},
  });
@@ -445,11 +446,11 @@ test('audit changes still expose both before and after business evidence',()=>{
  const e=engine();vm.runInContext("view={items:[{id:'a',module:'settings',action:'PUT',actor_name:'合成账号',result:'SUCCESS',before:{name:'原名称'},after:{name:'新名称'}}]}",e.ctx);e.t.handlers['audit-detail']('a');const html=e.node('#modal-root').innerHTML;assert.match(html,/变更前/);assert.match(html,/原名称/);assert.match(html,/新名称/);
 });
 test('help role selection never grants the current user additional navigation',async()=>{
- const e=engine(undefined,'teacher');e.t.setUser({user:{id:'u'},role:{kind:'teacher'},permissions:['portal.read','records.read']});e.t.setState('help');vm.runInContext("helpAudience='school'",e.ctx);const html=await e.t.pages.help();assert.match(html,/维护组织、账号与角色/);assert.match(html,/当前账号没有此办理入口/);assert.doesNotMatch(html,/data-action="nav" data-id="permissions"/);
+ const e=engine(undefined,'teacher');e.t.setUser({user:{id:'u'},role:{kind:'teacher'},permissions:['portal.read','records.read']});e.t.setState('help');const html=await e.t.pages.help();assert.match(html,/操作手册与视频/);assert.match(html,/按使用身份查找/);assert.doesNotMatch(html,/data-action="nav" data-id="permissions"/);
 });
 test('帮助中心按新菜单写路径，并列出原菜单名称对照',async()=>{
- const e=engine(undefined,'teacher');e.t.setUser({user:{id:'u'},role:{kind:'teacher'},permissions:['portal.read','records.read','qualification.read','points.read']});e.t.setState('help');vm.runInContext("helpAudience='current'",e.ctx);
- const html=await e.t.pages.help();assert.match(html,/教师发展 › 教师资质/);assert.match(html,/菜单说明/);assert.match(html,/原菜单名称对照/);
+ const e=engine(undefined,'teacher');e.t.setUser({user:{id:'u'},role:{kind:'teacher'},permissions:['portal.read','records.read','qualification.read','points.read']});e.t.setState('help');
+ const html=await e.t.pages.help();assert.match(html,/教师资质/);assert.match(html,/菜单说明/);assert.match(html,/原菜单名称对照/);
  assert.match(html,/个人数据看板|教师工作台/);assert.match(html,/表格导入导出、表格导入中心/);assert.match(html,/<td>导入导出<\/td>|>导入导出</);assert.doesNotMatch(html,/我要申报|我的培训数据，选择/);
  assert.ok(vm.runInContext("navAliases.todos.includes('审批中心')&&navAliases.cockpit.includes('学校管理驾驶舱')",e.ctx));
 });

@@ -4,6 +4,7 @@ from __future__ import annotations
 import argparse, ipaddress, json, os, re, zipfile
 from pathlib import Path, PurePosixPath
 from refresh_launcher_manifest import PRIVATE_DIRS, PRIVATE_SUFFIXES, ROOT_FILES, DEMO_ROOT_FILES
+from help_assets import validate_help_assets
 
 FOLDERS=('backend','frontend','deploy','scripts','tests','delivery','docs','acceptance')
 EXCLUDED_FILES={
@@ -51,6 +52,7 @@ def package_names(root):
 
 def scan_package(root,names):
     root=Path(root); blockers=[]; retained=[]; selected=set(names)
+    blockers.extend({'path':'frontend/assets/help/','reason':issue} for issue in validate_help_assets(root,selected))
     for name in sorted(names):
         reason=excluded_reason(name)
         if reason:

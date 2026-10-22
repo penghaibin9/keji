@@ -1,0 +1,442 @@
+{
+  "version": "20261022",
+  "pages": [
+    {
+      "page": "account",
+      "title": "登录、身份与密码",
+      "forms": [],
+      "video": true,
+      "filling_video": false
+    },
+    {
+      "page": "home",
+      "title": "首页",
+      "forms": [],
+      "video": true,
+      "filling_video": false
+    },
+    {
+      "page": "todos",
+      "title": "待办中心",
+      "forms": [],
+      "video": true,
+      "filling_video": false
+    },
+    {
+      "page": "apply_course",
+      "title": "培训课程申报",
+      "forms": [
+        {
+          "title": "新填一门培训课程",
+          "fields": 16,
+          "needs_business_explanation": []
+        },
+        {
+          "title": "新填一门培训课程",
+          "fields": 17,
+          "needs_business_explanation": []
+        }
+      ],
+      "video": true,
+      "filling_video": true
+    },
+    {
+      "page": "apply_project",
+      "title": "培训项目申请",
+      "forms": [
+        {
+          "title": "申报培训项目",
+          "fields": 55,
+          "needs_business_explanation": []
+        },
+        {
+          "title": "申报培训项目",
+          "fields": 56,
+          "needs_business_explanation": []
+        }
+      ],
+      "video": true,
+      "filling_video": true
+    },
+    {
+      "page": "apply_base",
+      "title": "培训基地申请",
+      "forms": [
+        {
+          "title": "申请培训基地",
+          "fields": 14,
+          "needs_business_explanation": []
+        },
+        {
+          "title": "申请培训基地",
+          "fields": 15,
+          "needs_business_explanation": []
+        }
+      ],
+      "video": true,
+      "filling_video": true
+    },
+    {
+      "page": "apply_trainer",
+      "title": "校内培训师申报",
+      "forms": [
+        {
+          "title": "申报培训师",
+          "fields": 12,
+          "needs_business_explanation": []
+        }
+      ],
+      "video": true,
+      "filling_video": true
+    },
+    {
+      "page": "projects",
+      "title": "培训项目与结项",
+      "forms": [
+        {
+          "title": "提交项目结项",
+          "fields": 25,
+          "needs_business_explanation": []
+        }
+      ],
+      "video": true,
+      "filling_video": true
+    },
+    {
+      "page": "courses",
+      "title": "培训课程库",
+      "forms": [
+        {
+          "title": "登记培训课程",
+          "fields": 15,
+          "needs_business_explanation": []
+        }
+      ],
+      "video": true,
+      "filling_video": true
+    },
+    {
+      "page": "bases",
+      "title": "培训基地清单",
+      "forms": [],
+      "video": true,
+      "filling_video": false
+    },
+    {
+      "page": "trainers",
+      "title": "外聘培训师备案与师资库",
+      "forms": [
+        {
+          "title": "登记外聘培训师",
+          "fields": 14,
+          "needs_business_explanation": []
+        }
+      ],
+      "video": true,
+      "filling_video": true
+    },
+    {
+      "page": "mine",
+      "title": "我的培训明细",
+      "forms": [],
+      "video": true,
+      "filling_video": false
+    },
+    {
+      "page": "recognition",
+      "title": "培训积分申报与认定",
+      "forms": [
+        {
+          "title": "本人积分申报",
+          "fields": 6,
+          "needs_business_explanation": []
+        }
+      ],
+      "video": true,
+      "filling_video": true
+    },
+    {
+      "page": "qualifications",
+      "title": "教师资质",
+      "forms": [
+        {
+          "title": "申报我的资质",
+          "fields": 9,
+          "needs_business_explanation": []
+        }
+      ],
+      "video": true,
+      "filling_video": true
+    },
+    {
+      "page": "credits",
+      "title": "授课学分",
+      "forms": [],
+      "video": true,
+      "filling_video": false
+    },
+    {
+      "page": "creditreview",
+      "title": "授课认定",
+      "forms": [],
+      "video": true,
+      "filling_video": false
+    },
+    {
+      "page": "points",
+      "title": "教师积分",
+      "forms": [],
+      "video": true,
+      "filling_video": false
+    },
+    {
+      "page": "assessment",
+      "title": "三级考核",
+      "forms": [],
+      "video": true,
+      "filling_video": false
+    },
+    {
+      "page": "annual",
+      "title": "学院社会培训年度考核",
+      "forms": [
+        {
+          "title": "学院年度自评",
+          "fields": 16,
+          "needs_business_explanation": []
+        }
+      ],
+      "video": true,
+      "filling_video": true
+    },
+    {
+      "page": "disputes",
+      "title": "数据核对",
+      "forms": [],
+      "video": true,
+      "filling_video": false
+    },
+    {
+      "page": "records",
+      "title": "培训数据",
+      "forms": [
+        {
+          "title": "新增培训业务记录",
+          "fields": 15,
+          "needs_business_explanation": []
+        }
+      ],
+      "video": true,
+      "filling_video": true
+    },
+    {
+      "page": "outcomes",
+      "title": "培训成果",
+      "forms": [
+        {
+          "title": "登记培训成果",
+          "fields": 10,
+          "needs_business_explanation": []
+        }
+      ],
+      "video": true,
+      "filling_video": true
+    },
+    {
+      "page": "resources",
+      "title": "课程资源统计",
+      "forms": [],
+      "video": true,
+      "filling_video": false
+    },
+    {
+      "page": "organization",
+      "title": "院系概况",
+      "forms": [],
+      "video": true,
+      "filling_video": false
+    },
+    {
+      "page": "ledgers",
+      "title": "学院台账",
+      "forms": [],
+      "video": true,
+      "filling_video": false
+    },
+    {
+      "page": "cockpit",
+      "title": "管理驾驶舱",
+      "forms": [],
+      "video": true,
+      "filling_video": false
+    },
+    {
+      "page": "permissions",
+      "title": "用户、角色与审批职责",
+      "forms": [
+        {
+          "title": "新增组织机构",
+          "fields": 6,
+          "needs_business_explanation": []
+        },
+        {
+          "title": "新增本地账号",
+          "fields": 9,
+          "needs_business_explanation": []
+        }
+      ],
+      "video": true,
+      "filling_video": true
+    },
+    {
+      "page": "policy",
+      "title": "学校制度执行口径",
+      "forms": [
+        {
+          "title": "登记学校制度执行口径",
+          "fields": 31,
+          "needs_business_explanation": []
+        },
+        {
+          "title": "学校社会培训审批职责",
+          "fields": 11,
+          "needs_business_explanation": []
+        }
+      ],
+      "video": true,
+      "filling_video": true
+    },
+    {
+      "page": "rules",
+      "title": "考核周期与规则",
+      "forms": [
+        {
+          "title": "新建考核周期",
+          "fields": 5,
+          "needs_business_explanation": []
+        },
+        {
+          "title": "新建组织考核规则",
+          "fields": 17,
+          "needs_business_explanation": []
+        },
+        {
+          "title": "新建规则版本",
+          "fields": 18,
+          "needs_business_explanation": []
+        }
+      ],
+      "video": true,
+      "filling_video": true
+    },
+    {
+      "page": "imports",
+      "title": "表格导入",
+      "forms": [
+        {
+          "title": "上传表格并生成校验预览",
+          "fields": 2,
+          "needs_business_explanation": []
+        },
+        {
+          "title": "上传表格并生成校验预览",
+          "fields": 2,
+          "needs_business_explanation": []
+        }
+      ],
+      "video": true,
+      "filling_video": true
+    },
+    {
+      "page": "exports",
+      "title": "导出下载",
+      "forms": [],
+      "video": true,
+      "filling_video": false
+    },
+    {
+      "page": "settings",
+      "title": "字典与参数",
+      "forms": [],
+      "video": true,
+      "filling_video": false
+    },
+    {
+      "page": "notices",
+      "title": "通知公告",
+      "forms": [
+        {
+          "title": "发布通知公告",
+          "fields": 12,
+          "needs_business_explanation": []
+        }
+      ],
+      "video": true,
+      "filling_video": true
+    },
+    {
+      "page": "audit",
+      "title": "安全提示与操作日志",
+      "forms": [],
+      "video": true,
+      "filling_video": false
+    },
+    {
+      "page": "sync",
+      "title": "系统对接",
+      "forms": [],
+      "video": true,
+      "filling_video": false
+    },
+    {
+      "page": "implementation",
+      "title": "接口实施工具",
+      "forms": [],
+      "video": true,
+      "filling_video": false
+    },
+    {
+      "page": "sso",
+      "title": "学校统一认证",
+      "forms": [],
+      "video": true,
+      "filling_video": false
+    },
+    {
+      "page": "hub",
+      "title": "学校数据中台",
+      "forms": [],
+      "video": true,
+      "filling_video": false
+    },
+    {
+      "page": "province",
+      "title": "湘培直通车",
+      "forms": [],
+      "video": true,
+      "filling_video": false
+    },
+    {
+      "page": "guide",
+      "title": "对接怎么开始",
+      "forms": [],
+      "video": true,
+      "filling_video": false
+    },
+    {
+      "page": "operations",
+      "title": "运行与备份",
+      "forms": [],
+      "video": true,
+      "filling_video": false
+    },
+    {
+      "page": "help",
+      "title": "帮助中心",
+      "forms": [],
+      "video": true,
+      "filling_video": false
+    }
+  ],
+  "media_errors": []
+}

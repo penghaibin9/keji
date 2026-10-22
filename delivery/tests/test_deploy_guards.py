@@ -50,7 +50,7 @@ def test_secret_file_mode_required(tmp_path):
     with pytest.raises(Blocked):load_private(p)
     p.chmod(0o600);assert load_private(p)=={}
 
-def test_original_r11_unchanged():assert verify_baseline(ROOT)=='dd938989030f217851667c487f64234cfe3ec95acf4a589351e4add12358d546'
+def test_original_r11_unchanged():assert verify_baseline(ROOT)=='e0c87c474e70ec05e7d24fbb4eadc0d5dcf34e735b73554b651a184b95d0bce6'
 
 def test_real_tls_and_file_config_prepare_only(tmp_path,monkeypatch):
     # File/TLS test: mock only inventory; never claim Docker or MySQL was executed.
