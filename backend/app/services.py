@@ -134,7 +134,7 @@ def evaluate_rule(rule,raw):
 
 def point_source_changes(db,teacher_id,period,current=None):
     current=current or facts(db,teacher_id,period)[1]
-    entries=db.scalars(select(PointEntry).where(PointEntry.teacher_id==teacher_id,PointEntry.period_id==period.id,PointEntry.kind.notin_(['MANUAL','SOCIAL'])).order_by(PointEntry.created_at,PointEntry.id)).all()
+    entries=db.scalars(select(PointEntry).where(PointEntry.teacher_id==teacher_id,PointEntry.period_id==period.id,PointEntry.kind.notin_(['MANUAL','SOCIAL','TEACHING'])).order_by(PointEntry.created_at,PointEntry.id)).all()
     latest={p.item_key:p for p in entries};items=[]
     for key,entry in latest.items():
         frozen=entry.source_snapshot or {}
@@ -181,7 +181,7 @@ def calculate_points(db,actor,period,teacher_ids,item_keys,reason):
         entries=db.scalars(select(PointEntry).where(PointEntry.teacher_id==teacher_id,PointEntry.period_id==period.id)).all()
         old={};latest={}
         for e in entries:
-            if e.kind not in {"MANUAL", "SOCIAL"}:
+            if e.kind not in {"MANUAL", "SOCIAL", "TEACHING"}:  # 授课认定积分由三级认定直接入账，不参与规则重算
                 old[e.item_key]=old.get(e.item_key,D(0))+D(str(e.amount))
                 if e.item_key not in latest or (e.created_at,e.id)>(latest[e.item_key].created_at,latest[e.item_key].id):latest[e.item_key]=e
         targets={d["key"]:d for d in details if not item_keys or d["key"] in item_keys}

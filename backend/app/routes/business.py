@@ -270,14 +270,16 @@ def _todo_items(db,a):
                     if x.state=='REVIEWED' and x.reviewed_by!=a.id:add('organization_assessment',x,'学校审核组织考核：'+name,target_id=x.target_id)
                     elif x.state=='SCHOOL_APPROVED':add('organization_assessment',x,'归档组织考核：'+name,target_id=x.target_id)
     from ..reference_data import can_review_credits
-    if can_review_credits(db,a):
+    if can_review_credits(db,a) or (a.role.kind in ('dept','college') and 'assessment.review' in a.permissions):
+        # 授课认定三级：教研室、学院负责人（含经办人）看本级待办，学校授课认定人看学校这一级。
         from types import SimpleNamespace
         from ..reference_data import pending_credit_reviews
         groups=pending_credit_reviews(db,a)
         names=dict(db.execute(select(User.id,User.name).where(User.id.in_(sorted({g['user_id'] for g in groups if g['user_id']})))).all()) if groups else {}
+        verb={'dept':'待审核','college':'待审批'}.get(a.role.kind,'待认定') if not can_review_credits(db,a) else '待认定'
         for g in groups:
             add('credit_review',SimpleNamespace(id=g['staff_no']+'~'+g['school_year'],teacher_id=g['user_id']),
-                '授课认定：'+(names.get(g['user_id']) or g['teacher_name'] or g['staff_no'])+' '+g['school_year']+' 学年 '+str(g['pending_courses'])+' 门课待认定','待认定')
+                '授课认定：'+(names.get(g['user_id']) or g['teacher_name'] or g['staff_no'])+' '+g['school_year']+' 学年 '+str(g['mine_courses'])+' 门课'+verb,verb)
     if 'dispute.write' in a.permissions:
         for x in db.scalars(select(Dispute).where(a.scope(Dispute.teacher_id),Dispute.state=='OPEN')):
             if x.teacher_id==a.id or 'dispute.resolve' in a.permissions:

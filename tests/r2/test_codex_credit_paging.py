@@ -61,6 +61,17 @@ def full_result(app,params,users=None):
     return {'items':items,'total':total,'page':page,'size':size,'years':years}
 
 
+ANNOTATION={'can_return'};DETAIL_ANNOTATION={'handler','handler_label','acting_for','can_act'}
+
+def plain(body):
+    """授课认定三级给明细加的“谁在办、当前账号能不能办”是按查看人算的，比较分页口径时去掉。"""
+    for row in body.get('items',[]):
+        for k in ANNOTATION:row.pop(k,None)
+        for d in row.get('details',[]):
+            for k in DETAIL_ANNOTATION:d.pop(k,None)
+    return body
+
+
 @pytest.mark.parametrize('detail',[None,'false','true'])
 @pytest.mark.parametrize('problem',[None,'false','true'])
 def test_pages_match_full_aggregation(client2,credit_data,detail,problem):
@@ -75,7 +86,7 @@ def test_pages_match_full_aggregation(client2,credit_data,detail,problem):
             params['page']=page
             response=client2.get('/api/reference/teacher-credits',params=params)
             assert response.status_code==200,response.text
-            assert response.json()==full_result(credit_data,params)
+            assert plain(response.json())==full_result(credit_data,params)
             assert all(('details' in row)==(detail=='true') for row in response.json()['items'])
 
 
@@ -94,7 +105,7 @@ def test_page_queries_keep_row_scope(client2,credit_data,viewer,admin,users):
             params={'detail':'true','problem':problem,'size':2,'page':page}
             response=client2.get('/api/reference/teacher-credits',params=params)
             assert response.status_code==200,response.text
-            assert response.json()==full_result(credit_data,params,users)
+            assert plain(response.json())==full_result(credit_data,params,users)
 
 
 @pytest.mark.parametrize('problem',['false','true'])
@@ -117,7 +128,7 @@ def test_only_page_rows_build_details(client2,credit_data,monkeypatch,problem,de
     try:response=client2.get('/api/reference/teacher-credits',params=params)
     finally:event.remove(data.TeacherCourseTerm,'load',capture)
     assert response.status_code==200,response.text
-    assert response.json()==expected
+    assert plain(response.json())==expected
     assert len(details)==sum(len(x.get('details',[])) for x in expected['items'])
     if problem=='false':
         assert set(loaded)=={key[0] for key in page_keys}
@@ -134,4 +145,4 @@ def test_empty_page_skips_course_loading(client2,credit_data,monkeypatch):
     monkeypatch.setattr(reference,'annual_teaching_credits',no_aggregation)
     response=client2.get('/api/reference/teacher-credits',params=params)
     assert response.status_code==200,response.text
-    assert response.json()==expected
+    assert plain(response.json())==expected

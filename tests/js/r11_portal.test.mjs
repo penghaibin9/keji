@@ -375,12 +375,12 @@ test('入站预览复用三列业务布局，组合编号保留在默认折叠�
  assert.match(html,/<details class="implementation-details compact-details"><summary>实施人员使用：本行技术内容<\/summary>[\s\S]*JW\|J001\|COURSE-1\|第一学期/);assert.doesNotMatch(html,/<details[^>]* open/);
 });
 
-test('两个授课认定入口共用教师学年和所选课程提示，保留零学分并转义文字',async()=>{
+test('两个授课认定入口共用教师学年和所选课程提示，保留零积分并转义文字',async()=>{
  for(const [action,id] of [['creditreview-do','exclude'],['credit-review','approve|T1|2026-2027']]){
   const e=engine();e.ctx.document.querySelectorAll=()=>[{value:'chosen'}];
-  vm.runInContext("modalContext={teacher_name:'<老师>',staff_no:'T1',school_year:'2026-2027',details:[{id:'chosen',course_name:'<零值课>',term_name:'第一学期',credit:0},{id:'other',course_name:'未选课程',credit:5}]}",e.ctx);
+  vm.runInContext("modalContext={teacher_name:'<老师>',staff_no:'T1',school_year:'2026-2027',details:[{id:'chosen',course_name:'<零值课>',term_name:'第一学期',credit:0,points:'0.00'},{id:'other',course_name:'未选课程',credit:5}]}",e.ctx);
   e.t.captureForm();await e.t.handlers[action](id);const body=e.t.getForm().body;
-  assert.match(body,/本次认定对象/);assert.match(body,/&lt;老师&gt; · 2026-2027 学年/);assert.match(body,/T1 · 已选 1 门课/);assert.match(body,/&lt;零值课&gt; · 第一学期 · 0.00 学分/);assert.doesNotMatch(body,/未选课程|<老师>|<零值课>/);assert.equal(e.requests.length,0);
+  assert.match(body,/本次办理对象/);assert.match(body,/&lt;老师&gt; · 2026-2027 学年/);assert.match(body,/T1 · 已选 1 门课/);assert.match(body,/&lt;零值课&gt; · 第一学期 · 0.00 分/);assert.doesNotMatch(body,/未选课程|<老师>|<零值课>/);assert.equal(e.requests.length,0);
  }
 });
 

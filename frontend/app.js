@@ -1,14 +1,14 @@
-import {mountHelp,closeHelp,helpLibraryHTML,helpSearch,openHelp} from './help-system.js?v=20261022';
+import {mountHelp,closeHelp,helpLibraryHTML,helpSearch,openHelp} from './help-system.js?v=20261102-credit3';
 import {bindFormDraft} from './form-drafts.js?v=20261021-form-merged1';
 import {coursePointsAction} from './course-points.js?v=20261021-form-merged1';
 import {renderTrainingWorkspace,trainingChange} from './training-workspace.js?v=20261021-core-recheck2';
 import {renderSchoolCockpit,bindSchoolCockpit} from './school-cockpit.js?v=20261019-walk3&display=20261019-clean2';
 import {icons} from './icons.js';
 import {socialPage,socialAction,applicationProjectPicker} from './social-training.js?v=20261021-core-recheck2';
-import {applicationAction,trainersHtml,applyPageHtml,APPLY_PAGES,myApplicationsHtml,homeApplicationsHtml,myCoursesHtml,libraryHtml,libraryFilterSubmit,homeCoursesHtml,courseAction} from './applications.js?v=20261102-agent2';
+import {applicationAction,trainersHtml,applyPageHtml,APPLY_PAGES,myApplicationsHtml,homeApplicationsHtml,myCoursesHtml,libraryHtml,libraryFilterSubmit,homeCoursesHtml,courseAction} from './applications.js?v=20261102-credit3';
 import {nextCode,runBatch,batchStage,batchMode,batchPerformer,BATCH_LABELS,materialUploadForm,checkUploadFiles,uploadEntries,uploadSequential,uploadStatusHtml} from './approval-flow.js?v=20261021-form-merged1';
 import {ledgerPage,resourceStatsPage,homeIndicators,ledgerAction,resetLedgerView,minePage,mineReminders} from './social-ledgers.js?v=20261021-form-merged1';
-import {rosterSection,rosterHandlers,onlineHandlers,showStaffDetail,showCourseDetail,presetRoster,loadCodeTables} from './school-data.js?v=20261019-merge1&display=20261019-clean2';
+import {rosterSection,rosterHandlers,onlineHandlers,showStaffDetail,showCourseDetail,presetRoster,loadCodeTables,courseFactsHtml,codeLabel} from './school-data.js?v=20261019-merge1&display=20261019-clean2';
 import {renderCenterStatus,renderImplementationWorkspace,renderSsoMaintenance,handleImplementationAction} from './integration-workspace.js?v=20261013-remediation2';
 import {readDraftEntry,saveDraft,previewDraft} from './integration-drafts.js';
 import {renderBusinessHistory} from './business-history.js?v=20261018-participation-history1';
@@ -414,52 +414,106 @@ async function showCreditDetail(code){
  const termKey=r=>r.term_no?'#'+r.term_no:r.term_name,termLabel=k=>({'#1':'第一学期','#2':'第二学期'})[k]||k;
  const terms=[...new Set(x.details.map(termKey))].sort();
  const from={source:'数据中台自带',catalogue:'课程总库'};
- const reviewer=canReviewCredits(x),pickCell=r=>r.counted&&r.review?`<input type="checkbox" name="credit-pick" value="${esc(r.id)}" aria-label="选择 ${esc(r.course_name)}" ${r.review==='pending'?'checked':''}>`:'';
+ const reviewer=false,pickCell=r=>r.counted&&r.review?`<input type="checkbox" name="credit-pick" value="${esc(r.id)}" aria-label="选择 ${esc(r.course_name)}" ${r.review==='pending'?'checked':''}>`:'';
  const block=t=>{const rows=x.details.filter(r=>termKey(r)===t),sum=rows.filter(r=>r.counted&&r.review==='approved'&&r.credit!=null).reduce((a,r)=>a+Number(r.credit),0);
   return `<h3 class="mt16">${esc(termLabel(t))} · 已认定 ${number(sum,2)} 学分</h3>`+table([...(reviewer?['选择']:[]),'来源','课程','学期名称','学分','学时','级别','认定','说明'],rows.map(r=>[...(reviewer?[pickCell(r)]:[]),originBadge(r.origin),`${esc(r.course_name)}<p class="cell-sub mono">${r.origin==='JW'?link(r.course_code,'course-detail',encodeURIComponent(r.course_code)+'|'+code):esc(r.course_code)}</p>`,`<span class="small muted">${esc(r.term_name)}</span>`,!r.counted?'<span class="muted small">不计</span>':r.credit==null?'<span class="badge red-b">缺学分</span>':`<span class="nowrap">${number(r.credit,2)}</span>`,r.hours==null?'—':`<span class="nowrap">${number(r.hours,2)}</span>`,levelBadge(r.level),creditReviewCell(r),!r.counted?(r.linked_course_code?`与教务课 ${esc(r.linked_course_code)} 重复，不重复计分`:'同一学期重复记录，只算一次'):r.credit==null?'课程总库中没有该课程或学分为空，请联系教务核对':'学分来自'+from[r.credit_from]]))};
- modal(`${x.teacher_name||x.staff_no} · ${x.school_year} 学年授课学分`,`<div class="summary-row"><div class="summary-item"><label>已认定学分</label><strong>${number(x.total_credit,2)}</strong></div><div class="summary-item"><label>其中 教务 / 超星</label><strong>${number(x.jw_credit,2)}<small>/ ${number(x.cx_credit,2)}</small></strong></div><div class="summary-item"><label>已认定学时</label><strong>${number(x.hours,2)}</strong></div><div class="summary-item"><label>待认定</label><strong>${number(x.pending_credit,2)}<small>学分 · ${number(x.pending_courses)} 门</small></strong></div></div>`+(x.pending_courses?note(reviewer?'勾选课程后点“认定计分”或“不计分”（待认定的课已默认勾选）。认定后才计学分学时和积分；以后重新拉取时学分学时有变化的课会自动回到待认定。':'标“待认定”的课要等学校（教务处）认定后才计学分和积分。',!reviewer):'')+(x.excluded_courses?note(`有 ${x.excluded_courses} 门课认定为不计分，原因见“认定”一列。`,false):'')+(x.in_staff_table?'':note('该工号不在学校教职工表里，按学校规定这些学分不计入积分和考核。',true))+(x.user_id?'':note('该工号还没有对应的本地教师账号，学分已统计，但不会出现在该教师本人页面。',true))+terms.map(block).join('')+note('学分有误怎么办：数据来自教务系统和超星，本系统不能直接修改。教务课程请联系教务处、线上课程请联系超星管理员在源头更正，下一次数据同步后这里会自动更新。如果已经影响到积分或考核结果，可以在“数据核对与复核”里对那条积分或考核发起核对，复核通过后重新计算。',false,'学分有误怎么办'),(returnToStaff?act('返回教师信息','staff-detail',staff):'')+(reviewer?act('改回待认定','credit-review','reset|'+code,'text')+act('不计分','credit-review','exclude|'+code)+act('认定计分','credit-review','approve|'+code,'primary'):''),true);
+ modal(`${x.teacher_name||x.staff_no} · ${x.school_year} 学年授课学分`,`<div class="summary-row"><div class="summary-item"><label>已认定学分</label><strong>${number(x.total_credit,2)}</strong></div><div class="summary-item"><label>其中 教务 / 超星</label><strong>${number(x.jw_credit,2)}<small>/ ${number(x.cx_credit,2)}</small></strong></div><div class="summary-item"><label>已认定学时</label><strong>${number(x.hours,2)}</strong></div><div class="summary-item"><label>待认定</label><strong>${number(x.pending_credit,2)}<small>学分 · ${number(x.pending_courses)} 门</small></strong></div></div>`+(x.pending_courses?note(reviewer?'勾选课程后点“认定计分”或“不计分”（待认定的课已默认勾选）。认定后才计学分学时和积分；以后重新拉取时学分学时有变化的课会自动回到待认定。':'标“待认定”的课要经教研室审核、学院审批、学校认定后才计积分；办理请到“授课认定”菜单。',!reviewer):'')+(x.excluded_courses?note(`有 ${x.excluded_courses} 门课认定为不计分，原因见“认定”一列。`,false):'')+(x.in_staff_table?'':note('该工号不在学校教职工表里，按学校规定这些学分不计入积分和考核。',true))+(x.user_id?'':note('该工号还没有对应的本地教师账号，学分已统计，但不会出现在该教师本人页面。',true))+terms.map(block).join('')+note('学分有误怎么办：数据来自教务系统和超星，本系统不能直接修改。教务课程请联系教务处、线上课程请联系超星管理员在源头更正，下一次数据同步后这里会自动更新。如果已经影响到积分或考核结果，可以在“数据核对与复核”里对那条积分或考核发起核对，复核通过后重新计算。',false,'学分有误怎么办'),(returnToStaff?act('返回教师信息','staff-detail',staff):'')+(reviewer?act('改回待认定','credit-review','reset|'+code,'text')+act('不计分','credit-review','exclude|'+code)+act('认定计分','credit-review','approve|'+code,'primary'):''),true);
 }
 // 授课认定：由学校认定（组织页学校那一行指定的授课认定人，以及系统管理员等学校层面审核账号），教研室、学院不认定；本人的课须回避。
 function canReviewCredits(x){
  if(!me||!me.credit_reviewer)return false;
  return !(x.user_id&&x.user_id===me.user.id)&&!(me.user.staff_no&&x.staff_no===me.user.staff_no);
 }
-// ---- 授课认定菜单：选一位老师 → 左右分开看教务课、超星课 → 勾选认定、打级别标签 ----
+// ---- 授课认定菜单（三级）：教研室审核 → 学院审批 → 学校认定。每门课按学时算建议积分，每一级可改积分、写审批意见 ----
 const LEVELS={national:'国家级',province:'省级',school:'校级'};
 const levelBadge=l=>l?`<span class="badge ${({national:'red-b',province:'orange-b',school:'blue-b'})[l]||'gray-b'}">${esc(LEVELS[l]||l)}</span>`:'<span class="muted small">未标</span>';
+const CR_LEVEL={dept:'教研室',college:'学院',school:'学校'};
+const CR_STEP={approve:'通过',exclude:'不计分',return:'退回',reset:'改回重审',restart:'学分学时变化，重新审核'};
+const crTabs=()=>[['mine','待我办理'],...(me.credit_reviewer?[['pending','全部待认定']]:[]),['all','全部']];
 async function creditReviewPage(){
- const all=filter.all==='true';
- const list=await api('/reference/teacher-credits?'+query({...pick(filter,['q','school_year','org_id']),...(all?{}:{review:'pending'}),page:tablePage,size:15}));view=list;
+ const tab=crTabs().some(([k])=>k===filter.tab)?filter.tab:'mine';
+ const review={mine:'mine',pending:'pending'}[tab];
+ const list=await api('/reference/teacher-credits?'+query({...pick(filter,['q','school_year','org_id']),...(review?{review}:{}),page:tablePage,size:15}));view=list;
  const picked=filter.pick||'';const [staff,year]=picked.split('|');
  const detail=staff?(await api('/reference/teacher-credits?'+query({staff_no:staff,school_year:year,detail:'true',size:1}))).items[0]:null;
  const years=`<select name="school_year" aria-label="学年"><option value="">全部学年</option>${(list.years||[]).map(y=>`<option value="${esc(y)}" ${filter.school_year===y?'selected':''}>${esc(y)}</option>`).join('')}</select>`;
- const orgPick=me.role.kind==='school'?`<select name="org_id" aria-label="学院或教研室"><option value="">全部学院和教研室</option>${orgs.filter(o=>o.active!==false&&o.kind!=='school').map(o=>`<option value="${esc(o.id)}" ${filter.org_id===o.id?'selected':''}>${o.kind==='dept'?'　':''}${esc(o.name)}</option>`).join('')}</select>`:'';
- const keep=filter.pick?`<input type="hidden" name="pick" value="${esc(filter.pick)}">`:'';
- const bar=`<form id="filters" class="filterbar cr-filter">${keep}<input name="q" placeholder="老师姓名或工号" aria-label="老师姓名或工号" value="${esc(filter.q||'')}">${years}${orgPick}<label class="inline-check"><input type="checkbox" name="all" value="true" ${all?'checked':''}>也显示已认定完的老师</label><button class="btn primary" type="submit">查找</button></form>`;
- const rows=list.items.map(x=>{const id=x.staff_no+'|'+x.school_year;return `<button type="button" class="cr-teacher${id===picked?' active':''}" data-action="creditreview-pick" data-id="${esc(id)}"><span><strong>${esc(x.teacher_name||'—')}</strong> <span class="mono small">${esc(x.staff_no)}</span></span><span class="small muted">${esc(x.school_year)} 学年 · ${number(x.courses)} 门课</span>${x.pending_courses?`<span class="badge orange-b">${number(x.pending_courses)} 门待认定</span>`:'<span class="badge green-b">已处理完</span>'}</button>`}).join('')||`<p class="muted small cr-empty">${all?'没有找到老师。':'没有待认定的课了。勾选“也显示已认定完的老师”可以查看已认定的。'}</p>`;
+ const orgPick=me.role.kind!=='teacher'?`<select name="org_id" aria-label="学院或教研室"><option value="">${me.role.kind==='school'?'全部学院和教研室':'本组织全部'}</option>${orgs.filter(o=>o.active!==false&&o.kind!=='school').map(o=>`<option value="${esc(o.id)}" ${filter.org_id===o.id?'selected':''}>${o.kind==='dept'?'　':''}${esc(o.name)}</option>`).join('')}</select>`:'';
+ const keep=`<input type="hidden" name="tab" value="${esc(tab)}">`+(filter.pick?`<input type="hidden" name="pick" value="${esc(filter.pick)}">`:'');
+ const tabs=`<nav class="section-tabs" aria-label="授课认定范围">${crTabs().map(([k,l])=>`<button type="button" data-action="creditreview-tab" data-id="${k}" class="${k===tab?'active':''}" aria-pressed="${k===tab}">${l}</button>`).join('')}</nav>`;
+ const bar=`<form id="filters" class="filterbar cr-filter">${keep}<input name="q" placeholder="老师姓名或工号" aria-label="老师姓名或工号" value="${esc(filter.q||'')}">${years}${orgPick}<button class="btn primary" type="submit">查找</button></form>`;
+ const badge=x=>tab==='mine'?`<span class="badge orange-b">${number(x.mine_courses)} 门待我办</span>`:x.pending_courses?`<span class="badge orange-b">${number(x.pending_courses)} 门未办结</span>`:'<span class="badge green-b">已办结</span>';
+ const rows=list.items.map(x=>{const id=x.staff_no+'|'+x.school_year;return `<button type="button" class="cr-teacher${id===picked?' active':''}" data-action="creditreview-pick" data-id="${esc(id)}"><span><strong>${esc(x.teacher_name||'—')}</strong> <span class="mono small">${esc(x.staff_no)}</span></span><span class="small muted">${esc(x.school_year)} 学年${x.courses!=null?' · '+number(x.courses)+' 门课':''}</span>${badge(x)}</button>`}).join('')||`<p class="muted small cr-empty">${tab==='mine'?'没有等你办理的课。':'没有找到老师。'}</p>`;
  const left=`<section class="card cr-list"><div class="card-head"><div><h2>选择老师</h2><p>共 ${number(list.total)} 条（一位老师一个学年一条）</p></div></div><div class="cr-teachers">${rows}</div>${pager(list)}</section>`;
- const right=detail?creditReviewDetail(detail):`<section class="card cr-detail cr-placeholder"><p class="muted">在左边选一位老师，这里会分开列出他的教务课和超星课，勾选后认定，还可以给课打国家级、省级、校级标签。</p></section>`;
- return pageHead('从教务处、超星拉来的课先“待认定”，认定后才计学分学时和积分。选一位老师，勾选课程后点“认定计分”或“不计分”；级别标签跟着课程走，同一门课所有老师一起生效。本人的课须回避。')+bar+`<div class="cr-layout">${left}${right}</div>`;
+ const right=detail?creditReviewDetail(detail):`<section class="card cr-detail cr-placeholder"><p class="muted">在左边选一位老师，这里列出他的每门课：课程内容、认定条件、前面各级谁通过、积分怎么改、审批意见，以及你这一级的办理按钮。</p></section>`;
+ return pageHead('教务处、超星同步来的课依次经教研室审核、学院审批、学校认定后计积分（按学时算，1 学时默认 1 分）。每一级都可以改积分，改了要写审批意见；学校认定后课程进入老师的培训课程库。本人的课须回避。')+tabs+bar+`<div class="cr-layout">${left}${right}</div>`;
+}
+function crStepsHtml(steps){
+ if(!steps||!steps.length)return '<p class="cell-sub">还没有人办理</p>';
+ return `<ol class="cr-steps">${steps.map(s=>{const pts=s.points_after!=null&&s.points_before!==s.points_after?` · 积分 ${esc(s.points_before??'—')} → <strong>${esc(s.points_after)}</strong>`:s.points_after!=null?` · 积分 ${esc(s.points_after)}`:'';
+  const tags=[s.acting_for,s.agent?'经办人':'',s.same_person?'同一人连审':'',s.return_to?'退回到'+CR_LEVEL[s.return_to]:''].filter(Boolean).map(t=>`<span class="badge gray-b">${esc(t)}</span>`).join(' ');
+  return `<li class="cr-step cr-step-${esc(s.decision)}"><strong>${esc(CR_LEVEL[s.level]||'')}${esc(CR_STEP[s.decision]||s.decision)}</strong> · ${esc(s.by_name||'')} · <span class="muted">${esc(ts(s.at))}</span>${pts} ${tags}${s.reason?`<p class="cr-step-reason">意见：${esc(s.reason)}</p>`:''}</li>`}).join('')}</ol>`;
+}
+function crStatus(r){
+ if(r.review==='approved')return `<span class="badge green-b">已认定计分 · ${esc(r.points??'—')} 分</span>`;
+ if(r.review==='excluded')return '<span class="badge gray-b">不计分</span>';
+ return `<span class="badge orange-b">${esc(r.handler_label||'待审核')}</span>`+(r.acting_for?` <span class="small muted">${esc(r.acting_for)}</span>`:'')+(r.review_stale?' <span class="small orange">学分学时有变化，重新审核</span>':'');
+}
+function crCourseCard(r,x){
+ const school=r.handler==='school';
+ const pickBox=r.can_act?`<input type="checkbox" name="cr-pick" data-origin="mine" value="${esc(r.id)}" aria-label="选择 ${esc(r.course_name)}">`:'';
+ const head=`<div class="crc-head">${pickBox}<div class="grow"><strong>${esc(r.course_name)}</strong> ${originBadge(r.origin)} ${levelBadge(r.level)}<p class="cell-sub"><span class="mono">${esc(r.course_code)}</span> · ${esc(r.term_name)} · 学分 ${r.credit==null?'缺':number(r.credit,2)} · 学时 ${r.hours==null?'<span class="red">缺</span>':number(r.hours,2)} · 建议积分 ${r.suggested_points==null?'—':esc(r.suggested_points)}</p></div><div class="crc-state">${crStatus(r)}</div></div>`;
+ const more=`<details class="crc-more" data-course="${esc(r.id)}"><summary>课程内容与认定条件</summary><div class="crc-more-body small muted">展开后加载…</div></details>`;
+ const steps=`<div class="crc-steps"><span class="small muted">办理记录</span>${crStepsHtml(r.steps)}</div>`;
+ let action='';
+ if(r.can_act){
+  const verb=school?'认定计分':r.handler==='college'?'学院通过':'教研室通过';
+  action=`<div class="crc-act" data-course="${esc(r.id)}"><label class="crc-points">积分<input type="number" name="crc-points" min="0" max="1000" step="0.5" value="${esc(r.points??'')}" data-original="${esc(r.points??'')}" aria-label="${esc(r.course_name)} 的积分"></label><label class="crc-reason">审批意见<textarea name="crc-reason" rows="2" maxlength="500" placeholder="改了积分或不计分时必须写原因" aria-label="${esc(r.course_name)} 的审批意见"></textarea></label><div class="crc-buttons">${act(verb,'crc-do','approve|'+r.id,'primary')}${act('不计分','crc-do','exclude|'+r.id)}${school?`<select name="crc-return" aria-label="退回到"><option value="college">退回学院</option><option value="dept">退回教研室</option></select>${act('退回','crc-do','return|'+r.id,'text')}`:''}</div></div>`;
+ }else if(x.can_return&&(r.review!=='pending'||r.steps?.length)&&r.counted){
+  action=`<div class="crc-act" data-course="${esc(r.id)}"><label class="crc-reason">原因<textarea name="crc-reason" rows="1" maxlength="500" placeholder="改回重审须写原因" aria-label="${esc(r.course_name)} 改回原因"></textarea></label><div class="crc-buttons">${act('改回重审','crc-do','reset|'+r.id,'text')}</div></div>`;
+ }
+ return `<article class="crc${r.can_act?' crc-mine':''}">${head}${more}${steps}${action}</article>`;
 }
 function creditReviewDetail(x){
- modalContext=x;const mine=!canReviewCredits(x);
- const termLabel=r=>r.term_no?({1:'第一学期',2:'第二学期'})[r.term_no]||r.term_name:r.term_name;
- const section=(origin,title)=>{const rows=x.details.filter(r=>r.origin===origin);const pending=rows.filter(r=>r.counted&&r.review==='pending').length;
-  return `<section class="cr-origin"><h3>${originBadge(origin)} ${title} · ${number(rows.length)} 门${pending?` · <span class="orange">${number(pending)} 门待认定</span>`:''}${mine||!rows.length?'':`<label class="inline-check cr-all"><input type="checkbox" data-cr-all="${origin}">全选${title}</label>`}</h3>`+table([...(mine?[]:['选择']),'课程','学期','学分','学时','级别','认定','说明'],rows.map(r=>[...(mine?[]:[r.counted&&r.review?`<input type="checkbox" name="cr-pick" data-origin="${origin}" value="${esc(r.id)}" aria-label="选择 ${esc(r.course_name)}" ${r.review==='pending'?'checked':''}>`:'']),`${esc(r.course_name)}<p class="cell-sub mono">${esc(r.course_code)}</p>`,`<span class="small">${esc(termLabel(r))}</span><p class="cell-sub">${esc(r.term_name)}</p>`,!r.counted?'<span class="muted small">不计</span>':r.credit==null?'<span class="badge red-b">缺学分</span>':`<span class="nowrap">${number(r.credit,2)}</span>`,r.hours==null?'—':`<span class="nowrap">${number(r.hours,2)}</span>`,levelBadge(r.level),creditReviewCell(r),!r.counted?(r.linked_course_code?`与教务课 ${esc(r.linked_course_code)} 重复，只算一次`:'同一学期重复记录，只算一次'):r.credit==null?'课程总库里没有学分，请教务处补齐':'']),origin==='JW'?'没有教务课':'没有超星课','')+`</section>`};
- const actions=mine?note('这是你本人的课，须回避，请由其他授课认定人认定。',false):`<div class="cr-actions"><span class="small muted">勾选课程后：</span>${act('认定计分','creditreview-do','approve','primary')}${act('不计分','creditreview-do','exclude')}${act('改回待认定','creditreview-do','reset','text')}<span class="cr-sep"></span><span class="small muted">级别标签：</span>${Object.entries(LEVELS).map(([k,l])=>act(l,'creditreview-level',k,'light')).join('')}${act('清除级别','creditreview-level','','text')}</div>`;
- return `<section class="card cr-detail"><div class="card-head"><div><h2>${esc(x.teacher_name||x.staff_no)} · ${esc(x.school_year)} 学年</h2><p class="mono small">${esc(x.staff_no)}${x.in_staff_table?'':' · 不在教职工表，不计分'}${x.user_id?'':' · 工号还没对应账号'}</p></div></div><div class="summary-row"><div class="summary-item"><label>已认定学分</label><strong>${number(x.total_credit,2)}</strong></div><div class="summary-item"><label>教务 / 超星</label><strong>${number(x.jw_credit,2)}<small>/ ${number(x.cx_credit,2)}</small></strong></div><div class="summary-item"><label>已认定学时</label><strong>${number(x.hours,2)}</strong></div><div class="summary-item"><label>待认定</label><strong>${number(x.pending_courses)}<small>门 · ${number(x.pending_credit,2)} 学分</small></strong></div></div>${actions}<div class="cr-origins">${section('JW','教务课程')}${section('CX','超星课程')}</div></section>`;
+ modalContext=x;
+ const counted=x.details.filter(r=>r.counted),skipped=x.details.filter(r=>!r.counted);
+ const minePending=counted.filter(r=>r.can_act).length;
+ const own=me.user?.staff_no&&x.staff_no===me.user.staff_no;
+ const batch=minePending?`<div class="cr-actions"><label class="inline-check"><input type="checkbox" data-cr-all="mine">全选我能办的 ${number(minePending)} 门</label><span class="cr-sep"></span>${act('批量通过（按各自积分）','creditreview-do','approve','primary')}${act('批量不计分','creditreview-do','exclude')}${me.credit_reviewer?`<span class="cr-sep"></span><span class="small muted">级别标签：</span>${Object.entries(LEVELS).map(([k,l])=>act(l,'creditreview-level',k,'light')).join('')}${act('清除级别','creditreview-level','','text')}`:''}</div>`:own?note('这是你本人的课，须回避，由其他人办理。',false):'';
+ const skippedHtml=skipped.length?`<details class="mt16"><summary class="small muted">另有 ${skipped.length} 门重复课按规则只算一次，不用认定</summary><ul class="small muted">${skipped.map(r=>`<li>${esc(r.course_name)} · ${esc(r.term_name)}${r.linked_course_code?' · 与教务课 '+esc(r.linked_course_code)+' 重复':''}</li>`).join('')}</ul></details>`:'';
+ return `<section class="card cr-detail"><div class="card-head"><div><h2>${esc(x.teacher_name||x.staff_no)} · ${esc(x.school_year)} 学年</h2><p class="mono small">${esc(x.staff_no)}${x.in_staff_table?'':' · 不在教职工表，不计分'}${x.user_id?'':' · 工号还没对应账号'}</p></div></div><div class="summary-row"><div class="summary-item"><label>已认定积分</label><strong>${number(x.points,2)}</strong></div><div class="summary-item"><label>已认定学时</label><strong>${number(x.hours,2)}</strong></div><div class="summary-item"><label>未办结</label><strong>${number(x.pending_courses)}<small>门</small></strong></div><div class="summary-item"><label>等你办理</label><strong>${number(minePending)}<small>门</small></strong></div></div>${batch}<div class="crc-list">${counted.map(r=>crCourseCard(r,x)).join('')||'<p class="muted">没有需要认定的课。</p>'}</div>${skippedHtml}</section>`;
+}
+async function crLoadMore(box){
+ const body=box.querySelector('.crc-more-body');if(box.dataset.loaded)return;box.dataset.loaded='1';
+ try{
+  const d=await api('/reference/teacher-credits/course/'+encodeURIComponent(box.dataset.course));const o=d.content,c=ledgerContext();
+  const jw=o.origin==='JW'?`<dl class="cx-info-grid">${[['开课单位',o.dept&&codeLabel(c,'unit',o.dept)],['课程类别',o.category&&codeLabel(c,'category',o.category)],['课程属性',o.attribute&&codeLabel(c,'attribute',o.attribute)],['授课方式',o.teach_mode&&codeLabel(c,'teach_mode',o.teach_mode)],['考核方式',o.exam_mode&&codeLabel(c,'exam_mode',o.exam_mode)],['周学时',o.weekly_hours!=null&&number(o.weekly_hours,2)]].filter(([,v])=>v).map(([k,v])=>`<div class="cx-info-pair"><dt>${k}</dt><dd>${v}</dd></div>`).join('')}</dl>`:'';
+  const cond=`<section class="cx-info-section"><h3>认定条件</h3><ul class="cr-conditions">${d.conditions.map(x=>`<li class="${x.ok?'ok':'bad'}">${x.ok?'✓':'✗'} ${esc(x.label)}${x.note?` <span class="muted">${esc(x.note)}</span>`:''}</li>`).join('')}</ul></section>`;
+  const url=o.course_url&&/^https?:\/\//.test(o.course_url)?`<p class="mt8"><a href="${esc(o.course_url)}" target="_blank" rel="noopener noreferrer">去超星看课</a></p>`:'';
+  body.className='crc-more-body';body.innerHTML=courseFactsHtml(c,o)+jw+url+cond;
+ }catch(e){box.dataset.loaded='';body.textContent='读取失败：'+e.message}
+}
+async function crDo(code){
+ const [decision,id]=code.split('|');const card=$(`.crc-act[data-course="${CSS.escape(id)}"]`);
+ const reason=card?.querySelector('[name=crc-reason]')?.value.trim()||'';
+ const input=card?.querySelector('[name=crc-points]');const points=input&&input.value!==''?input.value:null;
+ if(input&&input.dataset.original!==''&&points!==null&&Number(points)!==Number(input.dataset.original)&&decision==='approve'&&reason.length<2)throw Error('改了积分，请在审批意见里写明原因');
+ if(['exclude','return','reset'].includes(decision)&&reason.length<2)throw Error({exclude:'不计分',return:'退回',reset:'改回重审'}[decision]+'请写明原因');
+ const body={items:[{id,points:decision==='approve'?points:null,reason}],decision,reason};
+ if(decision==='return')body.return_to=card.querySelector('[name=crc-return]').value;
+ const r=await api('/reference/teacher-credits/review',{method:'POST',body});
+ toast(r.updated?{approve:'已办理',exclude:'已认定不计分',return:'已退回',reset:'已改回重审'}[decision]:'没有变化');await render();
 }
 function creditReviewPicked(){const ids=$$('#content input[name=cr-pick]:checked').map(i=>i.value);if(!ids.length)throw Error('请先勾选课程');return ids}
 function creditReviewContext(x,ids){
  const selected=x.details.filter(r=>ids.includes(r.id));
- return `<div class="detail-action-context"><span>本次认定对象</span><strong>${esc(x.teacher_name||x.staff_no)} · ${esc(x.school_year)} 学年</strong><p>${esc(x.staff_no)} · 已选 ${number(selected.length)} 门课</p><ul>${selected.map(r=>`<li>${esc(r.course_name)} · ${esc(r.term_name)} · ${r.credit==null?'缺学分':number(r.credit,2)+' 学分'}</li>`).join('')}</ul></div>`;
+ return `<div class="detail-action-context"><span>本次办理对象</span><strong>${esc(x.teacher_name||x.staff_no)} · ${esc(x.school_year)} 学年</strong><p>${esc(x.staff_no)} · 已选 ${number(selected.length)} 门课</p><ul>${selected.map(r=>`<li>${esc(r.course_name)} · ${esc(r.term_name)} · ${r.points==null?'缺学时，须逐门填积分':esc(r.points)+' 分'}</li>`).join('')}</ul></div>`;
 }
 function creditReviewDo(decision){
- const ids=creditReviewPicked(),title={approve:'认定计分',exclude:'认定不计分',reset:'改回待认定'}[decision];
- formModal(`${title}（${ids.length} 门课）`,creditReviewContext(modalContext,ids)+field('reason',decision==='exclude'?'不计分原因':'认定意见（可不填）','textarea','',{required:decision==='exclude',full:true}),async v=>{
+ const ids=creditReviewPicked(),title={approve:'批量通过',exclude:'批量不计分'}[decision];
+ formModal(`${title}（${ids.length} 门课）`,creditReviewContext(modalContext,ids)+field('reason',decision==='exclude'?'不计分原因':'审批意见（可不填）','textarea','',{required:decision==='exclude',full:true}),async v=>{
   const r=await api('/reference/teacher-credits/review',{method:'POST',body:{ids,decision,reason:v.reason||''}});
-  closeModal();toast(`已${title} ${r.updated} 门课`+(r.unchanged?`，${r.unchanged} 门原本就是这个结果`:''));await render();
- },{submit:title,hint:{approve:'认定后这些课的学分学时计入老师的授课学分。',exclude:'不计分的课不算学分学时，老师能看到你写的原因。',reset:'改回待认定后暂不计分，等再次认定。'}[decision]});
+  closeModal();toast(`已办理 ${r.updated} 门课`+(r.unchanged?`，${r.unchanged} 门没有变化`:''));await render();
+ },{submit:title,hint:{approve:'每门课按卡片上的当前积分通过；要改积分请在课程卡片上逐门办理。到学校这一级即认定计分、积分入账。',exclude:'不计分的课不算积分，老师能看到你写的原因。'}[decision]});
 }
 async function creditReviewLevel(level){
  const ids=creditReviewPicked();
@@ -469,7 +523,7 @@ async function creditReviewLevel(level){
 const CREDIT_REVIEW={approved:['green-b','已认定'],pending:['orange-b','待认定'],excluded:['gray-b','不计分']};
 function creditReviewCell(r){
  if(!r.counted||!r.review)return '<span class="muted small">—</span>';
- const [cls,label]=CREDIT_REVIEW[r.review]||CREDIT_REVIEW.pending;
+ const [cls,label]=r.review==='pending'&&r.handler_label?['orange-b',r.handler_label]:CREDIT_REVIEW[r.review]||CREDIT_REVIEW.pending;
  const who=r.review!=='pending'&&r.reviewed_by?`<p class="cell-sub">${esc(r.reviewed_by)}${r.reviewed_at?' · '+esc(ts(r.reviewed_at)):''}${r.review_reason?' · '+esc(r.review_reason):''}</p>`:'';
  return `<span class="badge ${cls}">${label}</span>`+(r.review_stale?'<p class="cell-sub">学分或学时有变化，需重新认定</p>':who);
 }
@@ -597,8 +651,9 @@ const managerListTabs={projects:'项目办理',courses:'课程库',bases:'基地
 function pageGroupTabs(p){const g=pageGroupOf(p);if(!g)return '';let tabs=pageGroups[g].tabs.filter(([key,,perm])=>can(perm)&&pageAllowed(key));if(tabs.length<2)return '';
  // 管理人员默认在业务列表，列表页签放在前面；教师默认在“我的申报”。
  if(me.role.kind!=='teacher'&&managerListTabs[g])tabs=[...tabs.filter(([k])=>k===g).map(([k,,perm])=>[k,managerListTabs[g],perm]),...tabs.filter(([k])=>k!==g)];return `<nav class="section-tabs page-group-tabs" aria-label="${esc(pageGroups[g].title)}">${tabs.map(([k,l])=>`<button type="button" data-action="nav" data-id="${k}" class="${k===p?'active':''}" aria-pressed="${k===p}">${esc(l)}</button>`).join('')}</nav>`}
-// “授课认定”菜单只给授课认定人和系统管理员等学校审核账号（me.credit_reviewer）。
-const reviewNavItem=()=>me?.credit_reviewer?[['creditreview','check','portal.read']]:[];
+// “授课认定”菜单给三级办理人：教研室、学院负责人（含经办人）和学校授课认定人（me.credit_reviewer）。
+const crHandler=()=>me?.credit_reviewer===true||(['dept','college'].includes(me?.role?.kind)&&can('assessment.review'));
+const reviewNavItem=()=>crHandler()?[['creditreview','check','portal.read']]:[];
 function navItems(){
  // 四种身份共用一棵菜单树：分组和顺序相同，无权的项隐藏。教师的培训业务入口暂指向本人申报页。
  const teacher=me.role.kind==='teacher',business=teacher?[['apply_project','book'],['apply_course','book'],['apply_base','org'],['apply_trainer','cert']].map(([p,i])=>[p,i,'portal.read']):[['projects','book','records.read'],['courses','book','records.read'],['bases','org','records.read'],['trainers','cert','records.read']];
@@ -1606,7 +1661,7 @@ function integrationMaterialPanel(entry){const readiness=integrationReadiness(en
 const applyRoles={apply_project:['teacher','college','school'],apply_course:['teacher','dept','college'],apply_base:['teacher','dept','college'],apply_trainer:['teacher','dept','college','school']};
 function pageAllowed(dest){
  const permission={apply_course:'portal.read',apply_project:'portal.read',apply_base:'portal.read',apply_trainer:'portal.read',mine:'portal.read',ledgers:'records.read',resources:'records.read',projects:'records.read',courses:'records.read',bases:'records.read',trainers:'records.read',outcomes:'records.read',recognition:'points.read',annual:'assessment.read',policy:'rules.manage',home:'portal.read',todos:'portal.read',cockpit:'portal.read',records:'records.read',credits:'records.read',creditreview:'portal.read',qualifications:'qualification.read',points:'points.read',assessment:'assessment.read',disputes:'dispute.write',organization:'organization.read',collegestaff:'assessment.review',rules:'rules.manage',imports:'import',exports:'export',permissions:'users.manage',settings:'settings.manage',audit:'audit.read',sync:'sync.manage',implementation:'sync.manage',sso:'sync.manage',hub:'sync.manage',province:'sync.manage',guide:'sync.manage',operations:'operations.read',notices:'notice.read',help:'portal.read'}[dest];
- return !!permission&&can(permission)&&(dest!=='cockpit'||me.role.kind==='school')&&(dest!=='organization'||me.role.kind!=='teacher')&&(dest!=='trainers'||me.role.kind!=='teacher')&&(dest!=='mine'||me.role.kind==='teacher')&&(!dest.startsWith('apply_')||applyRoles[dest]?.includes(me.role.kind))&&(!['ledgers','resources'].includes(dest)||me.role.kind!=='teacher')&&(dest!=='creditreview'||me.credit_reviewer===true)&&(dest!=='collegestaff'||me.college_dean===true)&&(dest!=='permissions'||(me.role.kind==='school'&&me.user.is_admin===true));
+ return !!permission&&can(permission)&&(dest!=='cockpit'||me.role.kind==='school')&&(dest!=='organization'||me.role.kind!=='teacher')&&(dest!=='trainers'||me.role.kind!=='teacher')&&(dest!=='mine'||me.role.kind==='teacher')&&(!dest.startsWith('apply_')||applyRoles[dest]?.includes(me.role.kind))&&(!['ledgers','resources'].includes(dest)||me.role.kind!=='teacher')&&(dest!=='creditreview'||crHandler())&&(dest!=='collegestaff'||me.college_dean===true)&&(dest!=='permissions'||(me.role.kind==='school'&&me.user.is_admin===true));
 }
 function integrationTabs(code){
  const options=code==='sso'?[['overview','资料与身份'],['mappings','字段对应'],['proof','验证与启用']]:code==='middle'?[['overview','资料与采集规则'],['mappings','字段对应'],['batches','入站预览'],['tasks','采集任务'],['schedules','定时计划'],['proof','验证与启用']]:[['overview','资料与报送规则'],['mappings','字段对应'],['tasks','同步任务'],['items','逐笔结果'],['proof','验证与启用']];
@@ -1855,6 +1910,7 @@ function bindPortalControls(){
   $$('#content input.batch-pick').forEach(input=>input.addEventListener('change',update));update();
  }
  const mineTools=$('.mine-tools');mineTools?.addEventListener('keydown',event=>{if(event.key==='Escape'){mineTools.open=false;mineTools.querySelector('summary')?.focus();event.stopPropagation()}});
+ $$('details.crc-more').forEach(d=>d.addEventListener('toggle',()=>{if(d.open)crLoadMore(d)}));
  $$('[data-cr-all]').forEach(b=>{
   const boxes=$$(`input[name=cr-pick][data-origin="${b.dataset.crAll}"]`),sync=()=>{b.checked=boxes.length>0&&boxes.every(i=>i.checked);b.indeterminate=boxes.some(i=>i.checked)&&!b.checked};
   b.addEventListener('change',()=>{boxes.forEach(i=>{i.checked=b.checked});sync()});boxes.forEach(i=>i.addEventListener('change',sync));sync();
@@ -1994,7 +2050,7 @@ const handlers={
  'qual-action':async code=>{const[action,id]=code.split('|'),x=(await api('/qualifications/'+id)).qualification;actionForm({submit:'提交资质审核',withdraw:'撤回修改',approve:'审核通过',return:'退回补充'}[action],'/qualifications/'+id+'/actions',x,action,{contextLabel:('教师资质')+' / '+({submit:'提交审核',withdraw:'撤回修改',approve:'审核通过',return:'退回补充'}[action]),intro:`<div class="detail-action-context"><span>本次办理资质</span><strong>${esc(x.name)}</strong><p>${esc(x.certificate_no||'')} · ${esc(labels[x.state]||x.state)}</p></div>`,returnTo:()=>showQualification(id),after:async()=>{await render();await showQualification(id)}})},
  'balance-action':id=>{const x=view.balances.find(x=>x.id===id);if(x.locked)throw Error(x.lock_reason||'该周期积分只读');actionForm(x.confirmed?'留痕解锁积分':'确认本人积分','/point-balances/'+id+'/actions',x,x.confirmed?'reopen':'confirm',{basis:x.confirmed,contextLabel:'教师积分 / '+(x.confirmed?'解锁台账':'本人确认'),intro:`<div class="detail-action-context"><span>本次确认范围</span><strong>${esc(periodName(x.period_id))} · ${esc(teacherName(x.teacher_id))}</strong><p>确认该周期完整积分台账；页面关键词、项目等筛选不会缩小范围。确认后冻结，后续解锁须由授权人员留痕办理。</p></div>`,returnTo:async()=>{closeModal();await render()}})},
  'source-recalculate':recalculateAffected,
- calculate,'organization-tab':id=>{filter={...filter,tab:id};tablePage=1;syncLocation(true);return render()},'credits-tab':id=>{const keep=['all','jw','cx'].includes(filter.tab||'all')&&['all','jw','cx'].includes(id)?pick(filter,['school_year','q']):{};filter={...keep,tab:id};tablePage=1;syncLocation(true);return render()},'credit-detail':showCreditDetail,'creditreview-pick':id=>page==='creditreview'?(filter={...filter,pick:id},syncLocation(true),render()):nav('creditreview',{pick:id}),'creditreview-do':creditReviewDo,'creditreview-level':creditReviewLevel,'credit-review':reviewCredits,'staff-detail':id=>showStaffDetail(ledgerContext(),id),'course-detail':id=>{const [course,...back]=id.split('|');return showCourseDetail(ledgerContext(),back.length?decodeURIComponent(course):course,back.join('|'))},...rosterHandlers,'online-detail':id=>onlineHandlers['online-detail'](id,ledgerContext()),'online-all':id=>onlineHandlers['online-all'](id,ledgerContext()),
+ calculate,'organization-tab':id=>{filter={...filter,tab:id};tablePage=1;syncLocation(true);return render()},'credits-tab':id=>{const keep=['all','jw','cx'].includes(filter.tab||'all')&&['all','jw','cx'].includes(id)?pick(filter,['school_year','q']):{};filter={...keep,tab:id};tablePage=1;syncLocation(true);return render()},'credit-detail':showCreditDetail,'creditreview-pick':id=>page==='creditreview'?(filter={...filter,pick:id},syncLocation(true),render()):nav('creditreview',{pick:id}),'creditreview-do':creditReviewDo,'crc-do':crDo,'creditreview-tab':id=>{filter={...pick(filter,['q','school_year','org_id']),tab:id};tablePage=1;syncLocation(true);return render()},'creditreview-level':creditReviewLevel,'credit-review':reviewCredits,'staff-detail':id=>showStaffDetail(ledgerContext(),id),'course-detail':id=>{const [course,...back]=id.split('|');return showCourseDetail(ledgerContext(),back.length?decodeURIComponent(course):course,back.join('|'))},...rosterHandlers,'online-detail':id=>onlineHandlers['online-detail'](id,ledgerContext()),'online-all':id=>onlineHandlers['online-all'](id,ledgerContext()),
  'assessment-tab':id=>{filter={...(id==='teacher'?filter:{progress:filter.progress}),tab:id};delete filter.state;delete filter.returned;tablePage=1;syncLocation();return render()},'org-assessment-calc':id=>calculateOrgAssessment(id),'org-assessment-action':id=>orgAssessmentAction(id),'point-adjust':pointAdjust,
  'calc-search':async()=>{
   const box=$('#calc-people'),q=$('#calc-search').value,d=await api('/teachers?'+query({q,size:200}));

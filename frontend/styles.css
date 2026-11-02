@@ -42,6 +42,30 @@
 .cr-sep{width:1px;height:24px;background:var(--line,#e5e9f2);margin:0 4px}
 .cr-origins{padding:0 16px 16px}
 .cr-origin h3{display:flex;align-items:center;gap:8px;margin:20px 0 8px}
+/* 授课认定三级：每门课一张卡片（课程信息、内容与条件、办理记录、本级办理） */
+.crc-list{padding:0 16px 16px;display:flex;flex-direction:column;gap:12px;margin-top:12px}
+.crc{border:1px solid var(--line,#e5e9f2);border-radius:8px;padding:12px 14px;background:#fff}
+.crc.crc-mine{border-color:#f0b37e;box-shadow:0 0 0 1px #fde3c8 inset}
+.crc-head{display:flex;gap:10px;align-items:flex-start}
+.crc-head input[type=checkbox]{margin-top:4px}
+.crc-state{text-align:right;flex:none;max-width:45%}
+.crc-more{margin-top:8px}
+.crc-more>summary{cursor:pointer;color:var(--primary,#2f6fed);font-size:13px}
+.crc-more-body{padding:8px 0}
+.crc-steps{margin-top:8px}
+.cr-steps{list-style:none;margin:4px 0 0;padding:0 0 0 12px;border-left:2px solid var(--line,#e5e9f2);font-size:13px}
+.cr-step{position:relative;padding:3px 0 3px 8px}
+.cr-step::before{content:'';position:absolute;left:-18px;top:9px;width:10px;height:10px;border-radius:50%;background:#2e9d5b}
+.cr-step-exclude::before,.cr-step-return::before{background:#d9822b}
+.cr-step-reset::before,.cr-step-restart::before{background:#8a94a6}
+.cr-step-reason{margin:2px 0 0;color:#4a5568}
+.crc-act{display:grid;grid-template-columns:120px 1fr;gap:8px 12px;margin-top:10px;padding-top:10px;border-top:1px dashed var(--line,#e5e9f2);align-items:start}
+.crc-act label{display:flex;flex-direction:column;gap:4px;font-size:13px;color:#4a5568}
+.crc-act input,.crc-act textarea{width:100%}
+.crc-buttons{grid-column:1/-1;display:flex;flex-wrap:wrap;gap:8px;align-items:center}
+.cr-conditions{list-style:none;padding:0;margin:4px 0;font-size:13px}
+.cr-conditions .ok{color:#2e7d4f}.cr-conditions .bad{color:#c0392b}
+@media (max-width:720px){.crc-act{grid-template-columns:1fr}.crc-head{flex-wrap:wrap}.crc-state{max-width:none;text-align:left}}
 .cr-placeholder{padding:48px 24px;text-align:center}
 @media (max-width:900px){.cr-layout{grid-template-columns:1fr}.cr-teachers{max-height:none}}
 .cr-all{margin-left:auto;font-weight:400;font-size:12px}

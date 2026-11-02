@@ -373,6 +373,31 @@ def credit_reviews(db,row_ids):
             out[x.code[3:]]=x
     return out
 
+TEACHING_STAGES=('dept','college','school')
+TEACHING_POINTS_KEY='teaching_points'
+
+def teaching_point_rates(db):
+    """每学时折算几分（教务、超星可分别设），学校在执行口径里设置；没设按 1 学时 1 分。"""
+    row=db.scalar(select(Setting).where(Setting.key==TEACHING_POINTS_KEY))
+    value=(row.value or {}) if row else {}
+    out={}
+    for origin in ('JW','CX'):
+        try:out[origin]=Decimal(str(value.get(origin,'1')))
+        except Exception:out[origin]=Decimal('1')
+    return out
+
+def suggested_points(hours,rate):
+    """建议积分 = 学时 × 每学时积分；缺学时为空，由审核人手工填。"""
+    if hours is None:return None
+    return str((Decimal(str(hours))*rate).quantize(Decimal('0.01'),rounding=ROUND_HALF_UP))
+
+def pending_stage(review,basis,user_id):
+    """还没办结的课当前在哪一级（记下的级别，未计负责人缺位）：没认定记录或学分学时变了从教研室开始；没有本地账号的直接到学校。"""
+    if user_id is None:return 'school'
+    if review is not None and review.state=='PENDING' and review.data.get('basis')==basis and review.data.get('stage') in TEACHING_STAGES:
+        return review.data['stage']
+    return 'dept'
+
 def review_state(review,basis):
     """'approved' / 'excluded' while the recorded basis still matches, else 'pending'."""
     if review is None or review.state not in CREDIT_REVIEW_STATES or review.data.get('basis')!=basis:return 'pending'
@@ -399,13 +424,15 @@ def annual_teaching_credits(db,rows,*,include_details=True,reviews=None):
         staff.update(db.scalars(select(TeacherHrProfile.staff_no).where(TeacherHrProfile.active.is_(True),TeacherHrProfile.staff_no.in_(numbers[i:i+500]))))
     groups={};seen={}
     levels=course_levels(db) if include_details else {}
+    rates=teaching_point_rates(db) if include_details else {}
     repeats=Counter((r.staff_no,r.origin,r.course_code,school_year_of(r.term_name)) for r in rows)
     for r in sorted(rows,key=lambda r:(r.staff_no,r.term_name,r.origin,r.course_code)):
         year=school_year_of(r.term_name)
         g=groups.setdefault((r.staff_no,year or UNKNOWN_YEAR),{'staff_no':r.staff_no,'teacher_name':r.teacher_name,'user_id':r.user_id,
             'school_year':year or UNKNOWN_YEAR,'terms':set(),'jw_credit':Decimal('0'),'cx_credit':Decimal('0'),'hours':Decimal('0'),
             'courses':0,'missing_credit':[],'duplicates_skipped':0,'in_staff_table':r.staff_no in staff,
-            'approved_courses':0,'pending_courses':0,'excluded_courses':0,'pending_credit':Decimal('0'),'pending_hours':Decimal('0')})
+            'approved_courses':0,'pending_courses':0,'excluded_courses':0,'pending_credit':Decimal('0'),'pending_hours':Decimal('0'),
+            'waiting':{'dept':0,'college':0,'school':0},'points':Decimal('0')})
         if r.teacher_name and not g['teacher_name']:g['teacher_name']=r.teacher_name
         if r.user_id and not g['user_id']:g['user_id']=r.user_id
         g['terms'].add(r.term_name)
@@ -433,11 +460,18 @@ def annual_teaching_credits(db,rows,*,include_details=True,reviews=None):
             g['duplicates_skipped']+=1
             if include_details:detail.update(counted=False,linked_course_code=link(r))
             continue
-        review=reviews.get(r.id);state=review_state(review,credit_basis(r,credit,hours))
+        review=reviews.get(r.id);basis=credit_basis(r,credit,hours);state=review_state(review,basis)
+        current=review is not None and review.data.get('basis')==basis
+        stage=pending_stage(review,basis,r.user_id) if state=='pending' else None
+        if stage:g['waiting'][stage]+=1
+        if state=='approved' and current and review.data.get('points') is not None:g['points']+=Decimal(str(review.data['points']))
         if include_details:
-            detail['review']=state
+            detail['review']=state;detail['stage']=stage
+            suggested=suggested_points(hours,rates.get(r.origin,Decimal('1')))
+            detail.update(suggested_points=suggested,points=(review.data.get('points') if current and review.data.get('points') is not None else suggested),
+                          steps=list(review.data.get('steps') or []) if current else [],booked=(review.data.get('booked') or None) if review is not None else None)
             if review is not None:detail.update(reviewed_by=review.data.get('by_name'),reviewed_at=review.data.get('at'),
-                review_reason=review.data.get('reason'),review_stale=state=='pending' and review.state in CREDIT_REVIEW_STATES)
+                review_reason=review.data.get('reason'),review_stale=not current and review.state in ('PENDING',*CREDIT_REVIEW_STATES))
         g['courses']+=1;g[state+'_courses']+=1
         if credit is None:g['missing_credit'].append(r.course_code)
         if state=='approved':
@@ -450,7 +484,7 @@ def annual_teaching_credits(db,rows,*,include_details=True,reviews=None):
     for g in groups.values():
         g['terms']=sorted(g['terms']);g['total_credit']=g['jw_credit']+g['cx_credit']
         g['missing_credit']=sorted(set(g['missing_credit']))
-        for k in ('jw_credit','cx_credit','total_credit','hours','pending_credit','pending_hours'):g[k]=str(g[k].quantize(Decimal('0.01'),rounding=ROUND_HALF_UP))
+        for k in ('jw_credit','cx_credit','total_credit','hours','pending_credit','pending_hours','points'):g[k]=str(g[k].quantize(Decimal('0.01'),rounding=ROUND_HALF_UP))
         out.append(g)
     out.sort(key=lambda g:g['staff_no'])
     out.sort(key=lambda g:(g['school_year']!=UNKNOWN_YEAR,g['school_year']),reverse=True)  # newest year first, unknown last
@@ -544,10 +578,9 @@ def can_review_credits(db,actor):
     return is_credit_reviewer(db,actor)
 
 def pending_credit_reviews(db,actor):
-    """Teacher-years with courses waiting for a school reviewer (own courses excluded: 须回避本人)."""
-    if not can_review_credits(db,actor):return []
-    return [g for g in all_credit_groups(db) if g['pending_courses'] and g['user_id'] and g['user_id']!=actor.id
-            and not (actor.user.staff_no and g['staff_no']==actor.user.staff_no)]
+    """Teacher-years with courses waiting for this actor at 教研室、学院 or 学校 (own courses excluded: 须回避本人)."""
+    from .teaching_review import waiting_for
+    return waiting_for(db,actor,all_credit_groups(db))
 
 def term_anchor(school_year,term_no):
     """Date a term counts on: term 1 of '2025-2026' -> 2025-09-01, term 2 -> 2026-03-01.

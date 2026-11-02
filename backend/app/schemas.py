@@ -327,8 +327,22 @@ class CreditLevelIn(Input):
     ids: list[Ident] = Field(min_length=1,max_length=200)
     level: Literal['national','province','school','']
     reason: str = Field(default='',max_length=500)
+class CreditReviewItem(Input):
+    """一门课单独带的积分和审批意见（不带就用当前积分和整批的意见）。"""
+    id: Ident
+    points: Decimal|None = Field(default=None,ge=0,le=1000,max_digits=8,decimal_places=2,allow_inf_nan=False)
+    reason: str = Field(default='',max_length=500)
+
 class CreditReviewIn(Input):
-    """学校认定授课：一次认定或不计一批课程（教务、超星同步来的授课记录）。"""
-    ids: list[Ident] = Field(min_length=1,max_length=200)
-    decision: Literal['approve','exclude','reset']
+    """授课认定三级办理：教研室审核、学院审批、学校认定；approve 通过、exclude 不计分、return 学校退回、reset 学校改回重审。"""
+    ids: list[Ident] = Field(default_factory=list,max_length=200)
+    items: list[CreditReviewItem] = Field(default_factory=list,max_length=200)
+    decision: Literal['approve','exclude','reset','return']
+    return_to: Literal['dept','college']|None = None
+    reason: str = Field(default='',max_length=500)
+
+class TeachingPointsIn(Input):
+    """每学时折算几分：教务、超星可分别设。"""
+    JW: Decimal = Field(ge=0,le=100,max_digits=6,decimal_places=2,allow_inf_nan=False)
+    CX: Decimal = Field(ge=0,le=100,max_digits=6,decimal_places=2,allow_inf_nan=False)
     reason: str = Field(default='',max_length=500)

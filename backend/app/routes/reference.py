@@ -8,7 +8,7 @@ from types import SimpleNamespace
 from fastapi import APIRouter,Request,HTTPException
 from sqlalchemy import select,func
 from ..core import *
-from ..schemas import ParticipationIn,ParticipationUpdate,Reason,CreditReviewIn,CreditLevelIn,CxClaimIn,CxClaimDecisionIn
+from ..schemas import ParticipationIn,ParticipationUpdate,Reason,CreditReviewIn,CreditLevelIn,CxClaimIn,CxClaimDecisionIn,TeachingPointsIn
 from pydantic import Field
 from .. import code_tables as codes
 from ..reference_data import TrainingProjectMaster,TrainingCourseMaster,TrainingClassMaster,TeacherParticipation,TeacherHrProfile,TeacherCourseTerm,SchoolCourse,annual_teaching_credits,UNKNOWN_YEAR,record_reference_errors,staff_roster,school_year_now,school_year_of,ROSTER_PROBLEMS,HR_PRIVATE_KEYS,credit_summary,source_status,CREDIT_REVIEW_KIND,credit_review_code,credit_reviews,can_review_credits,term_in_scope,year_in_scope,MIN_SCHOOL_YEAR
@@ -312,8 +312,9 @@ def teacher_credits(request:Request):
     f,p,z=filters_from(request,{'q','school_year','staff_no','problem','detail','org_id','review'})
     for key in ('problem','detail'):
         if f.get(key) not in (None,'true','false'):raise HTTPException(422,key+'参数无效')
-    if f.get('review') not in (None,'pending'):raise HTTPException(422,'review参数无效')
+    if f.get('review') not in (None,'pending','mine'):raise HTTPException(422,'review参数无效')
     def load(db,a,s):
+        if f.get('review')=='mine':return _waiting_mine(db,a,f,p,z)
         q=select(TeacherCourseTerm).where(TeacherCourseTerm.active.is_(True))
         # 授课认定人要认定全校的课（包括工号还没对应账号的），不受本人身份的数据范围限制。
         reviewer=can_review_credits(db,a)
@@ -352,58 +353,114 @@ def teacher_credits(request:Request):
             terms={term for staff,term in pairs if (staff,school_year_of(term) or UNKNOWN_YEAR) in keys}
             rows=db.scalars(q.where(TeacherCourseTerm.staff_no.in_({staff for staff,year in keys}),TeacherCourseTerm.term_name.in_(terms)))
             items=annual_teaching_credits(db,(r for r in rows if (r.staff_no,school_year_of(r.term_name) or UNKNOWN_YEAR) in keys),include_details=detail)
+            if detail:
+                from ..teaching_review import annotate
+                items=[annotate(db,a,g) for g in items]
         return {'items':items,'total':total,'page':p,'size':z,'years':years}
     return read_operation(request,'records.read',load)
 
 
 from ..identities import stage_handler
 
-CREDIT_DECISIONS={'approve':('APPROVED','认定计分'),'exclude':('EXCLUDED','认定不计分'),'reset':('PENDING','改回待认定')}
+def _waiting_mine(db,a,f,p,z):
+    """“待我办理”：本人这一级要办的老师学年（教研室、学院看本组织，学校看到学校这一级）。"""
+    from ..reference_data import all_credit_groups
+    from ..teaching_review import waiting_for
+    groups=waiting_for(db,a,all_credit_groups(db))
+    years=sorted({g['school_year'] for g in groups},key=lambda y:(y!=UNKNOWN_YEAR,y),reverse=True)
+    if f.get('school_year'):groups=[g for g in groups if g['school_year']==f['school_year']]
+    if f.get('staff_no'):groups=[g for g in groups if g['staff_no']==f['staff_no']]
+    if f.get('q'):groups=[g for g in groups if f['q'] in (g.get('teacher_name') or '') or f['q'] in g['staff_no']]
+    if f.get('org_id'):
+        scope_of=SimpleNamespace(org_ids=set(db.scalars(select(Org.id)))) if can_review_credits(db,a) else a
+        ids=authorized_org_descendants(db,scope_of,f['org_id'])
+        users=set(db.scalars(select(User.id).where(User.org_id.in_(ids))))
+        groups=[g for g in groups if g.get('user_id') in users]
+    groups=sorted(groups,key=lambda g:g['staff_no'])
+    groups.sort(key=lambda g:(g['school_year']!=UNKNOWN_YEAR,g['school_year']),reverse=True)
+    return {'items':groups[(p-1)*z:p*z],'total':len(groups),'page':p,'size':z,'years':years}
+
 
 @router.post('/reference/teacher-credits/review')
 def teacher_credit_review(data:CreditReviewIn,request:Request):
-    """学校认定教务、超星同步来的授课：认定后才计学分学时和积分。
+    """授课认定三级办理：教研室审核 → 学院审批 → 学校认定，每一级可改积分、写审批意见。
 
-    认定人是系统管理员在组织页指定的“授课认定人”（皮老师、教务处等），以及学校层面有考核审核权限的账号；
-    教研室、学院不认定。本人的课须回避。认定时记下当时的学分学时，重新拉取后有变化会自动回到待认定。
+    规则见 app/teaching_review.py：本人的课回避，教研室缺负责人由学院办、学院缺院长由学校办，
+    院长指定的经办人能办学院这一级；学校认定后积分入账、课程进入老师的培训课程库。
     """
+    from ..teaching_review import apply_review
+    # 教研室、学院负责人和授课认定人可能是不同身份，权限在 apply_review 里按课程当前在哪一级判断。
+    return command(request,data.model_dump(),None,lambda db,a,s:apply_review(db,a,data))
+
+
+@router.get('/reference/teacher-credits/course/{course_id}')
+def teacher_credit_course(course_id:str,request:Request):
+    """一门课的认定详情：课程内容、认定条件、各级办理记录（谁、何时、积分怎么改、审批意见）。"""
+    def load(db,a,s):
+        from ..teaching_review import annotate
+        r=db.get(TeacherCourseTerm,course_id)
+        if r is None or not r.active:raise HTTPException(404,'课程不存在或已不在授课数据里')
+        if not can_review_credits(db,a) and not (r.user_id and db.scalar(select(User.id).where(User.id==r.user_id,a.scope(User.id)))):
+            raise HTTPException(403,'这门课不在你的授权范围')
+        year=school_year_of(r.term_name) or UNKNOWN_YEAR
+        peers=db.scalars(select(TeacherCourseTerm).where(TeacherCourseTerm.active.is_(True),TeacherCourseTerm.staff_no==r.staff_no))
+        group=next((g for g in annual_teaching_credits(db,peers) if g['school_year']==year),None)
+        d=next((x for x in (group or {}).get('details',[]) if x['id']==r.id),None)
+        if d is None:raise HTTPException(404,'这门课不在计分学年范围内')
+        annotate(db,a,{**group,'details':[d]})
+        extra=r.extra or {}
+        content={'course_code':r.course_code,'course_name':r.course_name,'term_name':r.term_name,'origin':r.origin,'credit':d['credit'],'hours':d['hours']}
+        if r.origin=='CX':
+            content.update({k:extra.get(k) for k in ONLINE_EXTRA_KEYS},description=str(extra.get('description') or '')[:4000])
+        else:
+            sc=db.scalar(select(SchoolCourse).where(SchoolCourse.code==r.course_code,SchoolCourse.active.is_(True)).order_by(SchoolCourse.course_version.desc()).limit(1))
+            if sc is not None:content.update(dept=sc.dept,weekly_hours=sc.weekly_hours,course_version=sc.course_version,**{k:v for k,v in (sc.extra or {}).items() if k in ('nature','category','attribute','group','teach_mode','exam_mode','manage_dept')})
+        has_hr=db.scalar(select(TeacherHrProfile.id).where(TeacherHrProfile.staff_no==r.staff_no,TeacherHrProfile.active.is_(True))) is not None
+        mine=bool(a.user.staff_no and r.staff_no==a.user.staff_no) or r.user_id==a.id
+        conditions=[{'label':'在学校教职工表里','ok':has_hr,'note':'' if has_hr else '不在教职工表的工号按学校规定不计积分'},
+                    {'label':'有本地教师账号','ok':bool(r.user_id),'note':'' if r.user_id else '没有账号，不知道所在教研室，直接由学校认定'},
+                    {'label':'有学时','ok':d['hours'] is not None,'note':'' if d['hours'] is not None else '缺学时算不出建议积分，审核时须手工填积分'},
+                    {'label':'有学分','ok':d['credit'] is not None,'note':'' if d['credit'] is not None else '课程总库里没有学分（不影响按学时计分）'},
+                    {'label':'不是重复课','ok':bool(d['counted']),'note':'' if d['counted'] else '同一学年重复，已按规则只算一次'},
+                    {'label':'不是本人的课','ok':not mine,'note':'' if not mine else '须回避，由其他人办理'}]
+        review=credit_reviews(db,[r.id]).get(r.id)
+        history=list((review.data or {}).get('history') or []) if review else []
+        return {'course':d,'school_year':year,'teacher_name':r.teacher_name,'staff_no':r.staff_no,'content':content,'conditions':conditions,'history':history}
+    return read_operation(request,'records.read',load)
+
+
+@router.get('/reference/teacher-credits/points-rule')
+def teaching_points_rule(request:Request):
+    """授课认定的学时积分口径：每学时折算几分（没设按 1 学时 1 分）。"""
+    def load(db,a,s):
+        from ..reference_data import teaching_point_rates
+        return {k:str(v) for k,v in teaching_point_rates(db).items()}
+    return read_operation(request,'records.read',load)
+
+
+@router.put('/reference/teacher-credits/points-rule')
+def teaching_points_rule_save(data:TeachingPointsIn,request:Request):
+    """学校系统管理员设置每学时积分；只影响还没认定计分的课（已入账的不变）。"""
     def apply(db,a,s):
-        state,label=CREDIT_DECISIONS[data.decision]
-        if data.decision=='exclude' and len(data.reason)<2:raise HTTPException(422,'不计分请写明原因')
-        ids=list(dict.fromkeys(data.ids))
-        rows={r.id:r for r in db.scalars(select(TeacherCourseTerm).where(TeacherCourseTerm.id.in_(ids)).with_for_update())}
-        missing=[i for i in ids if i not in rows or not rows[i].active]
-        if missing:raise HTTPException(409,'有 %d 门课已不在当前授课数据里，请刷新后重试'%len(missing))
-        if not can_review_credits(db,a):raise HTTPException(403,'授课由学校指定的授课认定人认定，教研室、学院不办理认定')
-        for r in rows.values():
-            if a.user.staff_no and r.staff_no==a.user.staff_no:raise HTTPException(403,'须回避本人的课，请由其他授课认定人认定')
-            if r.user_id is not None:check_conflicts(db,a,r.user_id)
-        # 用和计分同一套口径算出每门课的学分学时（含课程总库补学分、同年重复只算一次）。
-        staff={r.staff_no for r in rows.values()}
-        peers=db.scalars(select(TeacherCourseTerm).where(TeacherCourseTerm.active.is_(True),TeacherCourseTerm.staff_no.in_(staff)))
-        facts={d['id']:d for g in annual_teaching_credits(db,peers) for d in g['details']}
-        reviews=credit_reviews(db,ids);at=utcnow().isoformat(timespec='seconds');done=0
-        for i in ids:
-            r=rows[i];d=facts.get(i)
-            if d is None or not d['counted']:raise HTTPException(409,r.course_name+' 是重复课程，已按规则只算一次，不用认定')
-            if data.decision=='approve' and d['credit'] is None:raise HTTPException(409,r.course_name+' 缺学分，请先请教务处在课程总库补齐学分再认定；确实不计的可以选“不计分”')
-            basis={'staff_no':r.staff_no,'origin':r.origin,'course_code':r.course_code,'term_name':r.term_name,'credit':d['credit'],'hours':d['hours']}
-            obj=reviews.get(i);before=serial(obj) if obj else {}
-            entry={'decision':state,'by':a.id,'by_name':a.name,'at':at,'reason':data.reason,'basis':basis}
-            if obj is None:
-                user=db.get(User,r.user_id) if r.user_id else None
-                obj=SocialResource(org_id=user.org_id if user else a.org.id,kind=CREDIT_REVIEW_KIND,code=credit_review_code(i),name=r.course_name[:160],state=state,data={})
-                db.add(obj)
-            elif obj.state==state and obj.data.get('basis')==basis:continue
-            else:obj.version+=1
-            obj.state=state
-            obj.data={'course_term_id':i,'external_key':r.external_key,'staff_no':r.staff_no,'teacher_id':r.user_id,'basis':basis,
-                      'reason':data.reason,'by':a.id,'by_name':a.name,'at':at,'history':[*(obj.data or {}).get('history',[]),entry][-50:]}
-            db.flush();audit(db,a,'teacher_course',i,'授课认定：'+label,before=before,after=serial(obj),reason=data.reason or label)
-            done+=1
-        return {'updated':done,'unchanged':len(ids)-done,'decision':data.decision}
-    # 授课认定人可能是普通教师身份，权限在 apply 里按“是否授课认定人”判断。
+        from ..reference_data import TEACHING_POINTS_KEY,teaching_point_rates
+        a.require_admin()
+        before={k:str(v) for k,v in teaching_point_rates(db).items()}
+        value={'JW':str(data.JW),'CX':str(data.CX)}
+        row=db.scalar(select(Setting).where(Setting.key==TEACHING_POINTS_KEY).with_for_update())
+        if row is None:db.add(Setting(key=TEACHING_POINTS_KEY,value=value,version=1))
+        else:row.value=value;row.version+=1
+        db.flush();audit(db,a,'teacher_course','points-rule','授课认定：设置每学时积分',before=before,after=value,reason=data.reason or '设置每学时积分')
+        return value
     return command(request,data.model_dump(),None,apply)
+
+
+@router.get('/reference/teacher-credits/library')
+def teaching_library(request:Request):
+    """本人培训课程库里“授课认定入库”的课（学校已认定计分的教务、超星课）。"""
+    def load(db,a,s):
+        from ..teaching_review import library
+        return {'items':library(db,a.user)}
+    return read_operation(request,'portal.read',load)
 
 
 @router.post('/reference/teacher-credits/level')

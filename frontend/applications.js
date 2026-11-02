@@ -353,7 +353,12 @@ export async function applyPageHtml(ctx, key) {
   if (key === 'apply_trainer') return html + approved('我的培训师资格', '已通过认定并进入培训师资。', ['培训师', '单位 / 职称', '生效日期', '操作'], active.map(x => [`<strong>${e(x.name)}</strong><p class="cell-sub">${e(x.code || '')}</p>`, e([x.info?.unit, x.info?.title].filter(Boolean).join(' · ') || '—'), e(x.info?.effective_on || '—'), c.act('查看详情', 'app-detail', x.id, 'sm')]), '暂无已认定资格，完成认定后显示。');
   if (key !== 'apply_course') return html + '</div>';
   const modeName = Object.fromEntries(TEACHING_MODES);
-  return html + approved('我的培训课程', '已通过审批并进入培训课程库。', ['课程名称 / 编号', '学时', '教学方式', '操作'], active.map(x => [`<strong>${e(x.name)}</strong><p class="cell-sub">${e(x.course?.course_code || x.code || '')}</p>`, x.course?.hours != null && x.course.hours !== '' ? e(x.course.hours) : '—', e(modeName[x.course?.teaching_mode] || '—'), '<div class="action-row">'+c.act('查看课程', 'app-detail', x.id, 'sm')+(c.can?.('points.read')?c.act('积分办理','course-points',x.id,'sm primary'):'')+'</div>']), '暂无已入库课程，完成审批后显示。');
+  // 教务、超星的课经教研室、学院、学校三级认定后进入培训课程库，按学时记积分，不用关联培训项目。
+  let taught = [];
+  try { taught = (await c.api('/reference/teacher-credits/library')).items || []; } catch { taught = []; }
+  const teachingRows = taught.map(x => [`<strong>${e(x.course_name)}</strong><p class="cell-sub">${x.origin === 'JW' ? '教务' : '超星'} · ${e(x.course_code)}</p>`, e(x.term_name), x.hours != null ? e(x.hours) : '—', `<strong>${e(x.points ?? '—')}</strong>${x.booked && x.booked.booked === false ? `<p class="cell-sub">${e(x.booked.note || '暂未入账')}</p>` : ''}`, `${e(x.approved_by || '')}<p class="cell-sub">${e(c.ts ? c.ts(x.approved_at) : (x.approved_at || ''))}</p>`]);
+  const teaching = approved('授课认定入库的课程', '教务、超星同步来的课，经教研室审核、学院审批、学校认定后入库，按学时记积分（不用关联培训项目）。', ['课程', '学期', '学时', '积分', '学校认定'], teachingRows, '暂无认定入库的课程。学校认定后显示。').replace(/<\/div>$/, '');
+  return html + approved('我的培训课程', '已通过审批并进入培训课程库。', ['课程名称 / 编号', '学时', '教学方式', '操作'], active.map(x => [`<strong>${e(x.name)}</strong><p class="cell-sub">${e(x.course?.course_code || x.code || '')}</p>`, x.course?.hours != null && x.course.hours !== '' ? e(x.course.hours) : '—', e(modeName[x.course?.teaching_mode] || '—'), '<div class="action-row">'+c.act('查看课程', 'app-detail', x.id, 'sm')+(c.can?.('points.read')?c.act('积分办理','course-points',x.id,'sm primary'):'')+'</div>']), '暂无已入库课程，完成审批后显示。').replace(/<\/div>$/, '') + teaching + '</div>';
 }
 
 // 首页卡片：只列还没办结的申请（最多 3 条），没有就不显示。
