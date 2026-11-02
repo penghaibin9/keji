@@ -1,0 +1,126 @@
+{
+  "documents": [
+    {
+      "file": "基于Nginx代理方式的集成\\Troubleshooting.docx",
+      "technical_terms": [
+        "CAS",
+        "uid"
+      ]
+    },
+    {
+      "file": "基于Nginx代理方式的集成\\基于Nginx认证代理部署手册.docx",
+      "technical_terms": []
+    },
+    {
+      "file": "标准集成文档\\CAIMS与.NET应用集成.docx",
+      "technical_terms": [
+        "CAS",
+        "CAIMS",
+        "user",
+        "name",
+        "casServerLoginUrl",
+        "casServerUrlPrefix",
+        "serverName",
+        "HTTPS"
+      ]
+    },
+    {
+      "file": "标准集成文档\\CAIMS与Apache Http Server集成.docx",
+      "technical_terms": [
+        "CAS",
+        "CAIMS",
+        "user",
+        "serverName",
+        "SSO",
+        "证书",
+        "HTTPS"
+      ]
+    },
+    {
+      "file": "标准集成文档\\CAIMS与IIS集成（基于ISAPI）.docx",
+      "technical_terms": [
+        "CAS",
+        "CAIMS",
+        "service",
+        "uid",
+        "cn",
+        "SSO",
+        "证书"
+      ]
+    },
+    {
+      "file": "标准集成文档\\CAIMS与Java Web App集成.docx",
+      "technical_terms": [
+        "CAS",
+        "CAIMS",
+        "/login",
+        "name",
+        "casServerLoginUrl",
+        "casServerUrlPrefix",
+        "serverName",
+        "SingleSignOutFilter",
+        "AuthenticationFilter",
+        "Cas20ProxyReceivingTicketValidationFilter",
+        "getPrincipal",
+        "证书",
+        "HTTPS"
+      ]
+    },
+    {
+      "file": "标准集成文档\\CAIMS与PHP应用集成.docx",
+      "technical_terms": [
+        "CAS",
+        "CAIMS",
+        "serverName",
+        "HTTPS"
+      ]
+    },
+    {
+      "file": "标准集成文档\\CAIMS与Spring Security集成.docx",
+      "technical_terms": [
+        "CAS",
+        "CAIMS",
+        "service",
+        "user",
+        "name",
+        "casServerLoginUrl",
+        "serverName",
+        "SingleSignOutFilter",
+        "AuthenticationFilter",
+        "Cas20ProxyReceivingTicketValidationFilter",
+        "ticketValidator",
+        "证书",
+        "HTTPS"
+      ]
+    },
+    {
+      "file": "标准集成文档\\CAIMS与Uhrm集成CAS.docx",
+      "technical_terms": [
+        "CAS",
+        "CAIMS",
+        "/login",
+        "service",
+        "name",
+        "SingleSignOutFilter",
+        "ticketValidator",
+        "证书",
+        "HTTPS"
+      ]
+    },
+    {
+      "file": "标准集成文档\\说明.docx",
+      "technical_terms": [
+        "CAS"
+      ]
+    }
+  ],
+  "cas_address_file_exists": true,
+  "url_facts_only": [
+    {
+      "https": true,
+      "known_public_school_cas_host": true,
+      "known_standard_path": null
+    }
+  ],
+  "limits": "Structural text coverage only; no sample values, secrets, hostnames or query values emitted; image-only content not interpreted."
+}

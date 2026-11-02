@@ -362,8 +362,8 @@ def safe_acknowledgement(response):
     code=str(response.get('code','ACK'))
     if not re.fullmatch(r'[A-Za-z0-9_.:-]{1,40}',code):code='ACK'
     safe={'accepted':True,'code':code,'response_digest':digest(serial(response))}
-    receipt_id=str(response.get('receipt_id',''))
-    if re.fullmatch(r'[A-Za-z0-9_.:-]{1,128}',receipt_id):safe['receipt_id']=receipt_id
+    receipt_id=response.get('receipt_id')
+    if type(receipt_id) in (str,int) and re.fullmatch(r'[A-Za-z0-9_.:-]{1,128}',str(receipt_id)):safe['receipt_id']=str(receipt_id)
     return safe
 
 
