@@ -52,6 +52,8 @@
 .crc-more{margin-top:8px}
 .crc-more>summary{cursor:pointer;color:var(--primary,#2f6fed);font-size:13px}
 .crc-more-body{padding:8px 0}
+.crc-more-body .cx-detail-heading{display:none}
+.crc-more-body .cx-info-section h3{font-size:14px;margin:10px 0 6px}
 .crc-steps{margin-top:8px}
 .cr-steps{list-style:none;margin:4px 0 0;padding:0 0 0 12px;border-left:2px solid var(--line,#e5e9f2);font-size:13px}
 .cr-step{position:relative;padding:3px 0 3px 8px}
