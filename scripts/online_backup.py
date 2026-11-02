@@ -84,7 +84,10 @@ class OnlineBackup:
         self.docker('run', '-d', '--name', self.verify_db, '--network', self.network, '--pull', 'never',
                     '-e', 'MYSQL_ROOT_PASSWORD=' + password, '-e', 'MYSQL_DATABASE=' + DB_NAME, '-e', 'TZ=UTC',
                     config['ND_MYSQL_IMAGE'], '--character-set-server=utf8mb4', '--collation-server=utf8mb4_0900_ai_ci',
-                    '--skip-name-resolve', '--local-infile=0', '--secure-file-priv=NULL')
+                    '--skip-name-resolve', '--local-infile=0', '--secure-file-priv=NULL',
+                    # Throwaway copy: skip durability work so a large dump loads well inside the timeout.
+                    '--skip-log-bin', '--innodb-doublewrite=OFF', '--innodb-flush-log-at-trx-commit=0',
+                    '--innodb-buffer-pool-size=1G')
         deadline = self.clock() + 300
         while True:
             try:
@@ -103,7 +106,7 @@ class OnlineBackup:
             raw.flush()
             raw.seek(0)
             self.docker('exec', '-i', '-e', 'MYSQL_PWD=' + password, self.verify_db, 'mysql', '-uroot', DB_NAME,
-                        input_stream=raw, timeout=3600)
+                        input_stream=raw, timeout=10800)
 
     def app_on_verify_db(self, config, password, *module_args):
         url = f'mysql+pymysql://root:{password}@{self.verify_db}:3306/{DB_NAME}'
