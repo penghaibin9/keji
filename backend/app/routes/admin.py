@@ -55,7 +55,15 @@ def head_role(db,org):
     raise HTTPException(409,'没有可用的'+('教研室' if kind=='dept' else '学院')+'负责人角色，请先在角色权限里启用')
 
 def org_members(db,org):
-    return select(User).where(User.org_id.in_(org_scope(db,org,org.kind)),User.staff_no.is_not(None),User.active.is_(True))
+    """本组织在职、有工号的老师：主身份在本组织范围内，或在本组织范围内有一条可用（未到期）的兼任身份。
+
+    后者用于主身份在学校级（学校管理员只能作主身份）、同时兼任本院教师或教研室负责人的人；经办人兼任本身不算，别院的兼任不算。
+    """
+    from ..identities import all_extras
+    scope=org_scope(db,org,org.kind)
+    roles={r.id for r in db.scalars(select(Role).where(Role.active.is_(True)))}
+    extra_ids={x['user_id'] for x in all_extras(db) if x.get('org_id') in scope and x.get('role_id') in roles and not x.get('agent')}
+    return select(User).where(User.org_id.in_(scope)|User.id.in_(extra_ids),User.staff_no.is_not(None),User.active.is_(True))
 
 @router.get('/organizations/{ident}/head-candidates')
 def head_candidates(ident:str,request:Request):

@@ -209,3 +209,43 @@ def test_me_tells_dean_and_agent_apart(app2, client2):
     me = _as_agent(client2, 'agent1')
     assert me['college_dean'] is False and me['college_agent'] == {'on_behalf_of': '测试学院负责人'}
     me = auth(client2, 'depthead'); assert me['college_dean'] is False
+
+
+def _extras(app2, items):
+    with app2.state.sessions.begin() as db:
+        row = db.get(Setting, 'account_identities')
+        if row is None:
+            db.add(Setting(key='account_identities', value={'items': items}))
+        else:
+            row.value = {'items': items}
+
+
+def test_school_level_account_with_teacher_identity_here_can_be_chosen(app2, client2):
+    # 主身份在学校级（学校管理员只能作主身份），兼任本院教研室负责人或教师：院长能搜到并设为经办人；
+    # 别院的兼任、已到期的兼任、别人的经办人兼任都不算。
+    with app2.state.sessions.begin() as db:
+        db.add(User(id='schoolstaff', username='schoolstaff', name='学校级老师', staff_no='J777', org_id='school', role_id='role-school',
+                    password_hash=HASH, must_change_password=False, active=True))
+    c = client2
+    auth(c, 'collegehead')
+
+    def found():
+        return [x['id'] for x in c.get('/api/college/staff/candidates?q=学校级').json()['items']]
+    assert found() == []
+    assert post(c, '/api/college/agents', {'user_id': 'schoolstaff', 'reason': REASON}).status_code == 422
+    for extra in [{'role_id': 'role-dept', 'org_id': 'dept2'}, {'role_id': 'role-teacher', 'org_id': 'dept1', 'valid_until': '2020-01-01'},
+                  {'role_id': 'role-college', 'org_id': 'college1', 'agent': True, 'delegated_by': 'collegehead'}]:
+        _extras(app2, [{'id': 'x1', 'user_id': 'schoolstaff', 'granted_by': 'schooladmin', 'granted_at': '2026-11-02T00:00:00', 'reason': '兼任', **extra}])
+        assert found() == [], extra
+        assert post(c, '/api/college/agents', {'user_id': 'schoolstaff', 'reason': REASON}).status_code in (409, 422)
+    for role in ('role-teacher', 'role-dept'):
+        _extras(app2, [{'id': 'x1', 'user_id': 'schoolstaff', 'role_id': role, 'org_id': 'dept1', 'granted_by': 'schooladmin',
+                        'granted_at': '2026-11-02T00:00:00', 'reason': '兼任本院'}])
+        assert found() == ['schoolstaff'], role
+    assert [x['id'] for x in c.get('/api/college/staff/candidates?q=J777').json()['items']] == ['schoolstaff']
+    assert post(c, '/api/college/agents', {'user_id': 'schoolstaff', 'reason': REASON}).status_code == 200
+    assert [x['user_id'] for x in c.get('/api/college/staff').json()['agents']] == ['schoolstaff']
+    # 别院院长看不到
+    auth(c, 'schooladmin')
+    assert 'schoolstaff' not in [x['id'] for x in c.get('/api/organizations/college2/head-candidates?q=J777').json()['items']]
+    assert 'schoolstaff' in [x['id'] for x in c.get('/api/organizations/dept1/head-candidates?q=J777').json()['items']]
