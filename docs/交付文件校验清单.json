@@ -4,7 +4,7 @@
   "migration_heads": [
     "20261021_0006"
   ],
-  "file_count": 672,
+  "file_count": 673,
   "files": {
     ".dockerignore": {
       "sha256": "3ce289acb5e52c4133ecaa490b8672406f986f409f7397b8a566db497846caad",
@@ -755,7 +755,7 @@
       "size": 12269
     },
     "docs/手册菜单按钮核对表_20261022.md": {
-      "sha256": "ed31c120f6cdfadda081127dbb957a9804d3a0f4969d3fa4d83d5eb551032220",
+      "sha256": "d9b3fa4c9468054eccdab4ea949eb805d224272ab3f07556499f042dd5feb2ca",
       "size": 14728
     },
     "docs/接口异常处理说明.md": {
@@ -815,8 +815,8 @@
       "size": 14316
     },
     "frontend/app.js": {
-      "sha256": "ce2fc62d7cceefb1e2d88ac49b085ef87955d4b7f60133570cc7eee9534bdf61",
-      "size": 519599
+      "sha256": "be4c488b4c871366bc95e226f954aab9b020e1ca779ab63441fac9d5fde26ac0",
+      "size": 521860
     },
     "frontend/applications.js": {
       "sha256": "d46581675867ddefc2f9fabaf7569d0b32a1397344102af1e909aa5080436a8b",
@@ -1583,7 +1583,7 @@
       "size": 3458
     },
     "frontend/help-system.js": {
-      "sha256": "887d02e78f64143c2c82cd81a05291c8ee906571a5c88fd7455e63dc074bc148",
+      "sha256": "fe91bc64bab8b11bfaa4ffe89ea8497ae6003e241aab1ed3391401c86b1240a0",
       "size": 29961
     },
     "frontend/history-projects.js": {
@@ -1595,7 +1595,7 @@
       "size": 2302
     },
     "frontend/index.html": {
-      "sha256": "026cc6c0bcc836f4b42214ae4b80b255c2c3207727358a37bdbf27902fa2bfb2",
+      "sha256": "e9c3a8d5ce792d4f4279b8c828e6b4a1b84f46a141e4e46043155e5e7e1bc264",
       "size": 1890
     },
     "frontend/integration-drafts.js": {
@@ -1659,7 +1659,7 @@
       "size": 71868
     },
     "frontend/social-training.js": {
-      "sha256": "8a3fce48820005d1b1851068e98c1ee1feb3006a6f9cd3f5b87c6e5882556340",
+      "sha256": "d1b16d2ce154ee01b8555a4b07d4360c19bd1abdfce71f001527d0e0d462c3f8",
       "size": 189896
     },
     "frontend/styles.css": {
@@ -2001,6 +2001,10 @@
     "tests/js/business-history.test.mjs": {
       "sha256": "995812d7f13b4a0fdcdb4133d05b1d730485890c14ab2d1f00c8b3f5e93f9c5c",
       "size": 2246
+    },
+    "tests/js/college-agent-header.test.mjs": {
+      "sha256": "5afeb1a32f141dcd4bff067cd37ebd838e57c787650b8dfb80b44175a2a0553f",
+      "size": 1281
     },
     "tests/js/course-points.test.mjs": {
       "sha256": "7f77d36acbbcda2dade13acc34c4e9be6f6480394535a40e2704241c8fec5f9c",
