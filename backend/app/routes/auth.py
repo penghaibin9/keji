@@ -86,11 +86,20 @@ def me(request:Request):
                 'environment':request.app.state.settings.env,'demo_switch':demo_options(a,request.app.state.settings),
                 'sso_session':sso,'identities':identity_choices(db,a,request),
                 'primary_role':serial(a.primary_role),'primary_org':serial(a.primary_org),
-                'credit_reviewer':can_review_credits(db,a)}
+                'credit_reviewer':can_review_credits(db,a),**college_roles(db,a)}
     # csrf deliberately returned only here; generic business serial redacts it.
     with request.app.state.sessions.begin() as db:
         a,s=current_actor(db,request,allow_password=True)
         return result(db,a,s)
+
+def college_roles(db,a):
+    """当前身份是不是本学院院长（可用“本院人员授权”）、是不是经办人（代哪位院长办理）。"""
+    from ..identities import org_heads,agent_principal
+    if a.role.kind!='college' or a.org.kind!='college':return {'college_dean':False,'college_agent':None}
+    principal=agent_principal(db,a)
+    if principal is not None:return {'college_dean':False,'college_agent':{'on_behalf_of':principal.name}}
+    dean=any(h['user_id']==a.id and h['usable'] and not h['agent'] for h in org_heads(db,('college',)).get(a.org.id,[]))
+    return {'college_dean':dean,'college_agent':None}
 
 @router.post('/password')
 def change_password(data:Password,request:Request):

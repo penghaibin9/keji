@@ -120,7 +120,7 @@ def waiting_condition(db, actor, obj, row):
     data = obj.snapshot if isinstance(obj, SocialAnnual) else obj.data
     if isinstance(obj, SocialResource) and obj.kind != 'point_report':
         return row
-    duties = {key for key, users in st.assignments(db).items() if actor.id in users}
+    duties = st.actor_duties(db, actor)
     if obj.state == 'PUBLIC':
         end = data.get('public_end')
         unresolved = any(not x.get('resolved') for x in data.get('disputes', []))

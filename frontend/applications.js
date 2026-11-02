@@ -23,7 +23,7 @@ const time = v => {
 // 三处共用的进度：详情顶部（完整）、我的申请列表和首页（compact，只有节点和一句话）。
 export function progressHtml(p, esc, {compact = false} = {}) {
   if (!p) return '';
-  const tags = n => [n.acting_for, n.same_person].filter(Boolean).map(t => `<span class="handling-tag">${esc(t)}</span>`).join('');
+  const tags = n => [n.agent_for, n.acting_for, n.same_person].filter(Boolean).map(t => `<span class="handling-tag">${esc(t)}</span>`).join('');
   const nodes = p.nodes.map((n, i) => {
     const mark = n.state === 'done' ? '✓' : n.state === 'returned' ? '!' : String(i + 1);
     const sub = compact ? '' : [n.who ? esc(n.who) : '', n.at ? esc(time(n.at)) : '', n.state === 'current' && n.waiting_days ? '已等 ' + n.waiting_days + ' 天' : ''].filter(Boolean).join(' · ');

@@ -37,10 +37,68 @@ def expired(item, today=None):
 
 
 def all_extras(db, lock=False, include_expired=False):
-    """Extra identities in force. Writers (lock=True) and the admin list see expired ones too, so nothing is dropped silently."""
+    """Extra identities in force. Writers (lock=True) and the admin list see expired ones too, so nothing is dropped silently.
+
+    学院经办人（agent=True）跟着授权院长走：院长被撤、停用或到期后，经办人身份随之失效（运行时判断，不改存储）。
+    """
     row = _row(db, lock)
     items = list((row.value or {}).get('items', [])) if row else []
-    return items if (lock or include_expired) else [x for x in items if not expired(x)]
+    if lock or include_expired:
+        return items
+    return _drop_orphan_agents(db, [x for x in items if not expired(x)])
+
+
+# ---- 学院经办人 -------------------------------------------------------------
+# 院长（学院负责人）在本院老师里指定经办人，经办人代院长办理学院一级的全部审批，记录写明“代 某院长 办理”。
+# 存成一条学院负责人兼任身份，多两个字段：agent=True、delegated_by=授权院长的账号。缺位判断只算院长。
+AGENT_ROLE_LABEL = '学院经办人'
+MAX_AGENTS_PER_COLLEGE = 2
+
+
+def _principal_usable(db, user_id, org_id, items, roles):
+    user = db.get(User, user_id) if user_id else None
+    if user is None or not user.active or user.authorization_pending:
+        return False
+    def head(role):
+        return role is not None and role.kind == 'college' and role.active and 'assessment.review' in (role.permissions or [])
+    if user.org_id == org_id and head(roles.get(user.role_id)):
+        return True
+    return any(y['user_id'] == user_id and y['org_id'] == org_id and not y.get('agent') and head(roles.get(y.get('role_id'))) for y in items)
+
+
+def _drop_orphan_agents(db, items):
+    if not any(x.get('agent') for x in items):
+        return items
+    roles = {r.id: r for r in db.scalars(select(Role))}
+    return [x for x in items if not x.get('agent') or _principal_usable(db, x.get('delegated_by'), x['org_id'], items, roles)]
+
+
+def agent_item(db, actor):
+    """当前身份是学院经办人时返回那条兼任记录，否则 None。"""
+    ident = getattr(actor, 'identity_id', None)
+    if not ident:
+        return None
+    item = next((x for x in extras_for(db, actor.user.id) if x.get('id') == ident), None)
+    return item if item and item.get('agent') else None
+
+
+def agent_principal(db, actor):
+    """经办人代办的院长（User），不是经办人时 None。"""
+    item = agent_item(db, actor)
+    return db.get(User, item['delegated_by']) if item else None
+
+
+def agent_tag(db, actor):
+    """写进办理记录的代办说明，例如“经办人代 李院长 办理”。"""
+    principal = agent_principal(db, actor)
+    return '经办人代 ' + principal.name + ' 办理' if principal is not None else None
+
+
+def check_not_principal(db, actor, owner_id):
+    """经办人不能代院长办理院长本人的事项（院长本人提的申请交学校）。"""
+    item = agent_item(db, actor)
+    if item and owner_id and item.get('delegated_by') == owner_id:
+        raise HTTPException(403, '这是授权你的院长本人的事项，经办人须回避，由学校办理')
 
 
 def extras_for(db, user_id, include_expired=False):
@@ -169,7 +227,8 @@ def options(db, actor):
     if not extras:
         return []
     out = [{'id': '', 'primary': True, **describe(db, actor.user.role_id, actor.user.org_id)}]
-    out += [{'id': x['id'], 'primary': False, **describe(db, x['role_id'], x['org_id'])} for x in extras]
+    out += [{'id': x['id'], 'primary': False, **describe(db, x['role_id'], x['org_id']),
+             **({'role_name': AGENT_ROLE_LABEL, 'agent': True} if x.get('agent') else {})} for x in extras]
     for x in out:
         x['current'] = (x['id'] or None) == getattr(actor, 'identity_id', None)
     return out
@@ -195,7 +254,11 @@ def audit_tag(actor):
     """Extra audit field when someone acts under an extra identity."""
     if not getattr(actor, 'identity_id', None):
         return None
-    return {'role': actor.role.name, 'role_kind': actor.role.kind, 'org': actor.org.name}
+    tag = {'role': actor.role.name, 'role_kind': actor.role.kind, 'org': actor.org.name}
+    principal = agent_principal(actor._db, actor)
+    if principal is not None:
+        tag.update(role=AGENT_ROLE_LABEL, on_behalf_of={'id': principal.id, 'name': principal.name})
+    return tag
 
 
 # ---- 组织负责人与缺位上交 -------------------------------------------------
@@ -209,18 +272,21 @@ def org_heads(db, kinds=HEAD_KINDS):
     """{org_id: [head, ...]} for 教研室/学院 heads, from primary and extra identities."""
     roles = {r.id: r for r in db.scalars(select(Role))}
     out = {}
-    def add(user, role, org_id, identity_id):
+    def add(user, role, org_id, identity_id, extra=None):
+        extra = extra or {}
         if role is None or role.kind not in kinds: return
         out.setdefault(org_id, []).append({'user_id': user.id, 'name': user.name, 'staff_no': user.staff_no,
-            'username': user.username, 'role_kind': role.kind, 'role_name': role.name, 'identity_id': identity_id,
-            'primary': identity_id is None, 'usable': _usable(user, role)})
+            'username': user.username, 'role_kind': role.kind, 'role_name': AGENT_ROLE_LABEL if extra.get('agent') else role.name,
+            'identity_id': identity_id, 'primary': identity_id is None, 'usable': _usable(user, role),
+            'agent': bool(extra.get('agent')), 'delegated_by': extra.get('delegated_by'),
+            'valid_until': extra.get('valid_until'), 'granted_at': extra.get('granted_at')})
     head_role_ids = [r.id for r in roles.values() if r.kind in kinds]
     for user in db.scalars(select(User).where(User.role_id.in_(head_role_ids or ['']))):
         add(user, roles.get(user.role_id), user.org_id, None)
     extras = [x for x in all_extras(db) if roles.get(x.get('role_id')) is not None and roles[x['role_id']].kind in kinds]
     users = {u.id: u for u in db.scalars(select(User).where(User.id.in_(sorted({x['user_id'] for x in extras}) or [''])))}
     for x in extras:
-        if x['user_id'] in users: add(users[x['user_id']], roles.get(x['role_id']), x['org_id'], x['id'])
+        if x['user_id'] in users: add(users[x['user_id']], roles.get(x['role_id']), x['org_id'], x['id'], x)
     for heads in out.values():
         heads.sort(key=lambda h: (not h['usable'], h['staff_no'] or '', h['name']))
     return out
@@ -230,11 +296,12 @@ def head_user_ids(db, kind, org_ids=None):
     """Users who are usable heads of the given level (optionally limited to some organizations)."""
     wanted = set(org_ids) if org_ids is not None else None
     return {h['user_id'] for org_id, heads in org_heads(db, (kind,)).items()
-            if wanted is None or org_id in wanted for h in heads if h['usable']}
+            if wanted is None or org_id in wanted for h in heads if h['usable'] and not h['agent']}
 
 
 def _has_head(heads, org_id, kind, exclude_user):
-    return any(h['usable'] and h['role_kind'] == kind and h['user_id'] != exclude_user for h in heads.get(org_id, []))
+    # 缺位只看院长/教研室负责人本人；只有经办人没有院长，学院按缺位交学校。
+    return any(h['usable'] and not h.get('agent') and h['role_kind'] == kind and h['user_id'] != exclude_user for h in heads.get(org_id, []))
 
 
 def org_map(db):

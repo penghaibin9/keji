@@ -70,6 +70,12 @@ class UserUpdate(Reason):
 class OrgHeadIn(Reason):
     user_id: Ident
     valid_until: str|None=Field(default=None,max_length=10)
+    agent: bool=False
+    delegated_by: Ident|None=None
+class CollegeStaffIn(Reason):
+    user_id: Ident
+    org_id: Ident|None=None
+    valid_until: str|None=Field(default=None,max_length=10)
 class CreditReviewerIn(Reason):
     user_id: Ident
 class RoleCopy(Reason):

@@ -157,7 +157,7 @@ def workspace(request:Request,section:str=Query('projects',pattern='^(projects|c
         claim_items=[st.claim_read_item(db,a,c) for c in claims]
         return {'projects':project_items,'history_available':a.role.kind in ('school','college') and request.app.state.settings.school_reports_dir is not None,'claims':claim_items,'annuals':[{**st.annual_read_item(a,row),'org_name':resource_orgs.get(row.org_id,'—')} for row in annuals],'resources':[{**st.resource_read_item(a,row),'state_label':st.state_label(row),'org_name':resource_orgs[row.org_id]} for row in resources],
                 'policies':display(policies),'courses':serial(courses),'course_stats':serial(course_stats),'course_info':serial(course_info),'states':st.STATES,'decisions':st.DECISIONS,
-                'my_duties':[k for k,v in st.assignments(db).items() if a.id in v],
+                'my_duties':sorted(st.actor_duties(db,a)),
                 'outcome_orgs':serial(db.scalars(select(Org).where(Org.id.in_(resource_scope),Org.kind=='college')).all()) if section=='outcomes' else [],
                 'pagination':{'page':page,'size':size,'total':totals.get(section,0),'q':q,'filters_applied':section=='outcomes'},'resource_pagination':{'page':resource_page,'size':size,'total':totals.get('resources',0)}}
     return read_operation(request,'records.read',load)

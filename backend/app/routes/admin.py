@@ -70,53 +70,80 @@ def head_candidates(ident:str,request:Request):
             'authorization_pending':u.authorization_pending} for u in db.scalars(q.order_by(User.staff_no).limit(30))]}
     return read_operation(request,'users.manage',load)
 
+def add_head(db,a,org,user_id,valid_until,reason,agent_of=None):
+    """给本组织一位老师加负责人兼任身份；agent_of=院长账号时加的是学院经办人（代该院长办理学院一级审批）。"""
+    from ..identities import all_extras,save_extras,org_heads,MAX_EXTRA_PER_USER,MAX_AGENTS_PER_COLLEGE,AGENT_ROLE_LABEL,expired,parse_valid_until
+    import uuid
+    if not org or not org.active:raise HTTPException(404,'组织不存在或已停用')
+    role=head_role(db,org);user=db.scalar(org_members(db,org).where(User.id==user_id).with_for_update())
+    label=AGENT_ROLE_LABEL if agent_of else '负责人'
+    if user is None:raise HTTPException(422,'只能从本组织在职、有工号的老师里选'+label)
+    if not set(role.permissions)<=a.permissions:raise HTTPException(403,'不能分配超出本人授权的角色')
+    heads=org_heads(db).get(org.id,[])
+    if any(h['user_id']==user.id for h in heads):raise HTTPException(409,user.name+' 已经是本组织负责人或经办人')
+    if agent_of is not None:
+        if org.kind!='college':raise HTTPException(422,'只有二级学院可以设经办人')
+        if not any(h['user_id']==agent_of and h['usable'] and not h['agent'] for h in heads):raise HTTPException(409,'只有本学院在任的院长（学院负责人）可以指定经办人')
+        if sum(1 for h in heads if h['agent'])>=MAX_AGENTS_PER_COLLEGE:raise HTTPException(409,'每个学院最多 %d 位经办人，请先撤销一位'%MAX_AGENTS_PER_COLLEGE)
+    # 同一职务以前的临时兼任已到期：换成这次新设的，不留重复。
+    items=[x for x in all_extras(db,lock=True) if not (expired(x) and (x['user_id'],x['role_id'],x['org_id'])==(user.id,role.id,org.id))]
+    if sum(1 for x in items if x['user_id']==user.id)>=MAX_EXTRA_PER_USER:raise HTTPException(409,'该老师的兼任身份已达上限')
+    extra={'id':str(uuid.uuid4()),'user_id':user.id,'role_id':role.id,'org_id':org.id,'granted_by':a.id,
+           'granted_at':utcnow().isoformat(timespec='seconds'),'reason':reason[:200]}
+    if agent_of is not None:extra.update(agent=True,delegated_by=agent_of)
+    until=parse_valid_until(valid_until)
+    if until:extra['valid_until']=until
+    save_extras(db,items+[extra]);user.version+=1
+    after={'user_id':user.id,'name':user.name,'staff_no':user.staff_no,'role':AGENT_ROLE_LABEL if agent_of else role.name,'org':org.name,'valid_until':until}
+    if agent_of is not None:
+        principal=db.get(User,agent_of);after['on_behalf_of']={'id':agent_of,'name':principal.name if principal else ''}
+    audit(db,a,'organization',org.id,'设置经办人' if agent_of else '设置负责人',after=after,reason=reason)
+    return {'added':True,**after}
+
+def remove_head(db,a,org,user_id,reason,agent=None):
+    """撤销本组织的负责人/经办人兼任身份；agent=True 只撤经办人，False 只撤负责人，None 都撤。"""
+    from ..identities import all_extras,save_extras
+    if not org:raise HTTPException(404,'组织不存在')
+    user=db.scalar(select(User).where(User.id==user_id).with_for_update())
+    if user is None:raise HTTPException(404,'账号不存在')
+    roles={r.id:r for r in db.scalars(select(Role))}
+    if agent is not True and user.org_id==org.id and roles.get(user.role_id) and roles[user.role_id].kind==org.kind:
+        raise HTTPException(409,'这是该账号的主身份，请到“账号管理”里调整角色')
+    items=all_extras(db,lock=True)
+    mine=[x for x in items if x['user_id']==user.id and x['org_id']==org.id and roles.get(x['role_id']) and roles[x['role_id']].kind==org.kind
+          and (agent is None or bool(x.get('agent'))==agent)]
+    if not mine:raise HTTPException(404,user.name+(' 不是本学院经办人' if agent else ' 不是本组织负责人'))
+    save_extras(db,[x for x in items if x not in mine])
+    # 正在用这个身份的会话随之失效，避免继续以负责人身份办理
+    user.version+=1;user.auth_version+=1;db.execute(delete(AuthSession).where(AuthSession.user_id==user.id))
+    after={'user_id':user.id,'name':user.name,'staff_no':user.staff_no,'org':org.name}
+    is_agent=any(x.get('agent') for x in mine)
+    audit(db,a,'organization',org.id,'撤销经办人' if is_agent and agent is not False else '移除负责人',
+          before={'role':'学院经办人' if is_agent else roles[mine[0]['role_id']].name},after=after,reason=reason)
+    return {'removed':True,**after}
+
 @router.post('/organizations/{ident}/heads')
 def add_org_head(ident:str,data:OrgHeadIn,request:Request):
-    """设置负责人：给本组织的一位老师加一个负责人兼任身份，原来的教师身份不变。"""
+    """设置负责人：给本组织的一位老师加一个负责人兼任身份，原来的教师身份不变。
+    agent=True 时设为学院经办人，代 delegated_by（不填且本院只有一位院长时就是这位）办理。"""
     def apply(db,a,s):
-        from ..identities import all_extras,save_extras,org_heads,MAX_EXTRA_PER_USER
-        import uuid
         need_admin(a);org=db.get(Org,ident)
-        if not org or ident not in a.org_ids or not org.active:raise HTTPException(404,'组织不存在或已停用')
-        role=head_role(db,org);user=db.scalar(org_members(db,org).where(User.id==data.user_id).with_for_update())
-        if user is None:raise HTTPException(422,'只能从本组织在职、有工号的老师里选负责人')
-        if not set(role.permissions)<=a.permissions:raise HTTPException(403,'不能分配超出本人授权的角色')
-        if any(h['user_id']==user.id for h in org_heads(db).get(org.id,[])):raise HTTPException(409,user.name+' 已经是本组织负责人')
-        from ..identities import expired
-        # 同一职务以前的临时兼任已到期：换成这次新设的，不留重复。
-        items=[x for x in all_extras(db,lock=True) if not (expired(x) and (x['user_id'],x['role_id'],x['org_id'])==(user.id,role.id,org.id))]
-        if sum(1 for x in items if x['user_id']==user.id)>=MAX_EXTRA_PER_USER:raise HTTPException(409,'该老师的兼任身份已达上限')
-        extra={'id':str(uuid.uuid4()),'user_id':user.id,'role_id':role.id,'org_id':org.id,'granted_by':a.id,
-               'granted_at':utcnow().isoformat(timespec='seconds'),'reason':data.reason[:200]}
-        from ..identities import parse_valid_until
-        until=parse_valid_until(data.valid_until)
-        if until:extra['valid_until']=until
-        save_extras(db,items+[extra]);user.version+=1
-        after={'user_id':user.id,'name':user.name,'staff_no':user.staff_no,'role':role.name,'org':org.name}
-        audit(db,a,'organization',org.id,'设置负责人',after=after,reason=data.reason)
-        return {'added':True,**after}
+        if not org or ident not in a.org_ids:raise HTTPException(404,'组织不存在或已停用')
+        agent_of=None
+        if data.agent:
+            from ..identities import org_heads
+            deans=[h['user_id'] for h in org_heads(db).get(org.id,[]) if h['usable'] and not h['agent']]
+            agent_of=data.delegated_by or (deans[0] if len(deans)==1 else None)
+            if agent_of is None:raise HTTPException(422,'本学院还没有院长，或有几位院长，请先设院长并选择代哪位院长办理' if deans else '本学院还没有院长（学院负责人），请先设院长再设经办人')
+        return add_head(db,a,org,data.user_id,data.valid_until,data.reason,agent_of)
     return command(request,data.model_dump(),'users.manage',apply)
 
 @router.post('/organizations/{ident}/heads/remove')
 def remove_org_head(ident:str,data:OrgHeadIn,request:Request):
     def apply(db,a,s):
-        from ..identities import all_extras,save_extras
         need_admin(a);org=db.get(Org,ident)
         if not org or ident not in a.org_ids:raise HTTPException(404,'组织不存在')
-        user=db.scalar(select(User).where(User.id==data.user_id).with_for_update())
-        if user is None:raise HTTPException(404,'账号不存在')
-        roles={r.id:r for r in db.scalars(select(Role))}
-        if user.org_id==org.id and roles.get(user.role_id) and roles[user.role_id].kind==org.kind:
-            raise HTTPException(409,'这是该账号的主身份，请到“账号管理”里调整角色')
-        items=all_extras(db,lock=True)
-        mine=[x for x in items if x['user_id']==user.id and x['org_id']==org.id and roles.get(x['role_id']) and roles[x['role_id']].kind==org.kind]
-        if not mine:raise HTTPException(404,user.name+' 不是本组织负责人')
-        save_extras(db,[x for x in items if x not in mine])
-        # 正在用这个身份的会话随之失效，避免继续以负责人身份办理
-        user.version+=1;user.auth_version+=1;db.execute(delete(AuthSession).where(AuthSession.user_id==user.id))
-        after={'user_id':user.id,'name':user.name,'staff_no':user.staff_no,'org':org.name}
-        audit(db,a,'organization',org.id,'移除负责人',before={'role':roles[mine[0]['role_id']].name},after=after,reason=data.reason)
-        return {'removed':True,**after}
+        return remove_head(db,a,org,data.user_id,data.reason)
     return command(request,data.model_dump(),'users.manage',apply)
 
 # ---- 授课认定人 -------------------------------------------------------------

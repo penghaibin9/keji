@@ -241,6 +241,8 @@ def _todo_items(db,a):
         rows=db.scalars(select(Assessment).where(a.scope(Assessment.teacher_id),Assessment.state.in_(['TEACHER','DEPARTMENT','COLLEGE','SCHOOL','READY']))).all()
         # 一次取全组织树、负责人和涉及教师的组织，逐条判断时不再查库。
         heads=orgs=teachers=None
+        from ..identities import agent_item
+        agent=agent_item(db,a);principal_id=agent.get('delegated_by') if agent else None
         if a.role.kind!='teacher' and 'assessment.review' in a.permissions:
             heads=org_heads(db);orgs=org_map(db)
             teachers=teacher_orgs(db,[x.teacher_id for x in rows if x.teacher_id!=a.id and x.state in ('DEPARTMENT','COLLEGE','SCHOOL')])
@@ -248,7 +250,7 @@ def _todo_items(db,a):
             if x.teacher_id==a.id and x.state=='TEACHER' and 'assessment.confirm' in a.permissions:add('assessment',x,'本人考核确认')
             elif x.teacher_id!=a.id and x.state in ('DEPARTMENT','COLLEGE','SCHOOL') and 'assessment.review' in a.permissions and a.role.kind!='teacher':
                 kind,vacant=stage_handler(db,teachers.get(x.teacher_id),x.state,heads,orgs)
-                if kind==a.role.kind:add('assessment',x,'本级考核确认'+('（'+VACANCY_LABEL[vacant]+'）' if vacant else ''))
+                if kind==a.role.kind and x.teacher_id!=principal_id:add('assessment',x,'本级考核确认'+('（'+VACANCY_LABEL[vacant]+'）' if vacant else ''))
             elif x.state=='READY' and 'assessment.archive' in a.permissions and x.teacher_id!=a.id:add('assessment',x,'考核归档')
     if a.role.kind!='teacher' and 'assessment.read' in a.permissions:
         if a.role.kind in {'dept','college'} and 'assessment.review' in a.permissions:

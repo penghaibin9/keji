@@ -72,9 +72,22 @@ def conflicts(db):
     return [x for x in (setting.value if setting else []) if x.get('active', True)]
 
 
+def actor_duties(db, actor):
+    """当前身份能办的职责。学院经办人代授权院长办理“二级学院院长”（dean）职责。"""
+    assigned = assignments(db)
+    out = {k for k, v in assigned.items() if actor.id in v}
+    from .identities import agent_item
+    agent = agent_item(db, actor)
+    if agent and agent.get('delegated_by') in assigned.get('dean', []):
+        out.add('dean')
+    return out
+
+
 def duty(db, actor, code, owner=None, org=None):
     actor.require('assessment.review')
-    if actor.id not in assignments(db).get(code, []): raise HTTPException(403, '尚未获授'+DUTIES[code]+'职责')
+    if code not in actor_duties(db, actor): raise HTTPException(403, '尚未获授'+DUTIES[code]+'职责')
+    from .identities import check_not_principal
+    check_not_principal(db, actor, owner)
     check_conflicts(db,actor,owner,org)
 
 
@@ -107,7 +120,11 @@ def review_staff_blockers(db,obj):
     blocked=[]
     for code in ('dean','coordinator','vice_president','secretary'):
         available=False
-        for ident in assignments(db).get(code,[]):
+        people=list(assignments(db).get(code,[]))
+        if code=='dean':  # 学院经办人代授权院长办理院长初审
+            from .identities import all_extras
+            people+=[x['user_id'] for x in all_extras(db) if x.get('agent') and x.get('delegated_by') in people]
+        for ident in dict.fromkeys(people):
             if ident in {obj.data['created_by'],obj.data['teacher_id']}:continue
             user=db.get(User,ident)
             for actor in active_identities(db,user):
@@ -910,7 +927,7 @@ def open_point_reviews(db, teacher_id):
 
 
 def todo_items(db,a):
-    items=[];duties={k for k,v in assignments(db).items() if a.id in v}
+    items=[];duties=actor_duties(db,a)
     def add(kind,obj,title,state=None,teacher_id=None,due=None,**extra):
         items.append({'type':kind,'id':obj.id,'title':title,'state':state or state_label(obj),'teacher_id':teacher_id,
                       'target_id':None if teacher_id else getattr(obj,'org_id',None),'deadline':serial(due),**extra})

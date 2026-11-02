@@ -380,6 +380,8 @@ def assessment_action(ident:str,data:Action,request:Request):
                 expected={'DEPARTMENT':('dept','COLLEGE'),'COLLEGE':('college','SCHOOL'),'SCHOOL':('school','READY')}.get(obj.state)
                 handler,vacant=stage_handler(db,db.get(User,obj.teacher_id),obj.state)
                 if not expected or handler!=a.role.kind or obj.teacher_id==a.id:raise HTTPException(403,'不能越级审核或审核本人考核')
+                from ..identities import check_not_principal
+                check_not_principal(db,a,obj.teacher_id)
                 handling={'stage':obj.state,'acting_for':VACANCY_LABEL.get(vacant)}
                 previous=db.scalar(select(WorkflowEvent).where(WorkflowEvent.object_type=='assessment',WorkflowEvent.object_id==ident,
                     WorkflowEvent.action=='考核确认').order_by(WorkflowEvent.created_at.desc(),WorkflowEvent.id.desc()).limit(1))
@@ -391,6 +393,8 @@ def assessment_action(ident:str,data:Action,request:Request):
             a.require('assessment.review')
             expected,vacant=stage_handler(db,db.get(User,obj.teacher_id),obj.state)
             if expected is None or obj.state=='TEACHER' or expected!=a.role.kind or obj.teacher_id==a.id:raise HTTPException(403,'不能越级退回或复核本人考核')
+            from ..identities import check_not_principal
+            check_not_principal(db,a,obj.teacher_id)
             handling={'stage':obj.state,'acting_for':VACANCY_LABEL.get(vacant)}
             obj.state='TEACHER';obj.returned=True
             from ..message_push import queue

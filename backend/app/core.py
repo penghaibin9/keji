@@ -180,6 +180,12 @@ def audit(db,actor,module,object_id,action,before=None,after=None,reason='',resu
     return obj
 
 def workflow(db,actor,object_type,object_id,action,before,after,reason,basis=''):
+    if getattr(actor,'identity_id',None):
+        # 学院经办人代院长办理：每条办理记录都写明“经办人代 某院长 办理”，进度、已办和打印件按此显示。
+        from .identities import agent_tag
+        tag=agent_tag(db,actor)
+        if tag:
+            after=dict(after or {});after['handling']=dict(after.get('handling') or {},agent_for=tag)
     ev=WorkflowEvent(object_type=object_type,object_id=object_id,actor_id=actor.id,actor_name=actor.name,
         org_id=actor.org.id,action=action,before=serial(before),after=serial(after),reason=reason,basis=basis)
     db.add(ev); audit(db,actor,object_type,object_id,action,before,after,reason)

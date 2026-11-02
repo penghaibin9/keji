@@ -144,6 +144,8 @@ def create_app(settings: Settings | None = None):
         return JSONResponse(report,200 if report['status']=='ok' else 503)
     for router in (auth.router,sso.router,admin.router,business.router,calculations.router,files.router,tasks.router,integrations.router,reference.router,delivery.router,integration_center.router,integration_intake.router,sso_trial.router):app.include_router(router)
     app.include_router(social.router)
+    from .routes import college_staff
+    app.include_router(college_staff.router)
     app.include_router(ledgers.router)
     app.include_router(applications.router)
     app.include_router(social_images.router)

@@ -17,7 +17,7 @@ from fastapi import HTTPException
 from sqlalchemy import select
 from .core import school_today
 from .models import User, Org, WorkflowEvent
-from .identities import stage_handler, org_heads, VACANCY_LABEL
+from .identities import stage_handler, org_heads, VACANCY_LABEL, check_not_principal
 
 LEVEL_LABEL = {'dept': '教研室', 'college': '学院', 'school': '学校', 'hr': '组织人事部', 'jwc': '教务处'}
 LEVEL_STAGE = {'dept': 'DEPARTMENT', 'college': 'COLLEGE'}
@@ -108,6 +108,7 @@ def check_handler(db, actor, applicant, level, org_id):
             raise HTTPException(403, '这一步由' + LEVEL_LABEL[kind] + '负责人办理，不能越级')
         if applicant.org_id not in actor.org_ids:
             raise HTTPException(403, '申请人不在你负责的' + LEVEL_LABEL[kind])
+        check_not_principal(db, actor, applicant.id)
         st.check_conflicts(db, actor, applicant.id, org_id)
     return {'level': level, 'handled_by_level': kind, 'acting_for': acting}
 
@@ -164,7 +165,10 @@ def handler_names(db, applicant, level):
     if kind == 'college' and org is not None and org.kind == 'college':
         target = org
     rows = heads.get(target.id, []) if target else []
-    names = sorted({h['name'] for h in rows if h['usable'] and h['user_id'] != applicant.id})
+    # 院长在前；经办人标“（经办人）”，授权院长本人的申请不列经办人。
+    names = sorted({h['name'] for h in rows if h['usable'] and not h.get('agent') and h['user_id'] != applicant.id})
+    names += sorted({h['name'] + '（经办人）' for h in rows if h['usable'] and h.get('agent') and h['user_id'] != applicant.id
+                     and h.get('delegated_by') != applicant.id})
     return names, (target.name if target else LEVEL_LABEL[kind]) + '负责人', acting
 
 
@@ -248,7 +252,8 @@ def progress(db, flow, obj, applicant, *, returned_level=None):
             node.update(state='done')
             if ev is not None:
                 h = _handling(ev)
-                node.update(who=ev.actor_name, at=_iso(ev.created_at), acting_for=h.get('acting_for'), same_person=h.get('same_person'))
+                node.update(who=ev.actor_name, at=_iso(ev.created_at), acting_for=h.get('acting_for'), same_person=h.get('same_person'),
+                            agent_for=h.get('agent_for'))
             elif last_submit is not None and _handling(last_submit).get('college_by_registrant'):
                 node.update(who=last_submit.actor_name, acting_for=_handling(last_submit)['college_by_registrant'])
         elif returned and returned_level == level:
