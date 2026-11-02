@@ -2553,5 +2553,32 @@ export const HELP_MEDIA={
     "version": "20261022",
     "paced": true,
     "description": "新手上手演示：登录、切换身份、申报课程、看退回意见、重新提交、找待办（虚构资料，未提交业务）。"
+  },
+  "collegestaff": {
+    "src": "/assets/assets/help/20261022/collegestaff.mp4",
+    "poster": "/assets/assets/help/20261022/collegestaff.jpg",
+    "captions": "/assets/assets/help/20261022/collegestaff.vtt",
+    "chapters": [
+      {
+        "title": "这页做什么",
+        "time": 0.0
+      },
+      {
+        "title": "操作步骤",
+        "time": 16.08
+      },
+      {
+        "title": "数据怎么看",
+        "time": 36.12
+      },
+      {
+        "title": "怎样算办好",
+        "time": 46.04
+      }
+    ],
+    "duration": 67.0,
+    "version": "20261022",
+    "paced": true,
+    "description": "真实页面与填写说明演示（虚构资料）；本段未提交业务，不作为完整审批验收。"
   }
 };

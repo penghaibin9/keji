@@ -274,6 +274,15 @@
       "filling_video": false
     },
     {
+      "page": "collegestaff",
+      "title": "本院人员授权",
+      "menu_title": "本院人员授权",
+      "old_names": [],
+      "forms": [],
+      "video": true,
+      "filling_video": false
+    },
+    {
       "page": "creditreview",
       "title": "授课认定",
       "menu_title": "授课认定",
