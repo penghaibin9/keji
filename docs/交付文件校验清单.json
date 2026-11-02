@@ -4,7 +4,7 @@
   "migration_heads": [
     "20261021_0006"
   ],
-  "file_count": 664,
+  "file_count": 672,
   "files": {
     ".dockerignore": {
       "sha256": "3ce289acb5e52c4133ecaa490b8672406f986f409f7397b8a566db497846caad",
@@ -147,12 +147,12 @@
       "size": 36926
     },
     "backend/app/approval_center.py": {
-      "sha256": "707001690af582b72a89be5cc4003977b89fcc4458b34bee182324a0a9d48a60",
-      "size": 19196
+      "sha256": "beff2fdb29e373c14708d9b88e15cb15441ba0c5cad37e13cb031169b0b4136b",
+      "size": 19151
     },
     "backend/app/approvals.py": {
-      "sha256": "79ec56fbf233ced98276d5e2d78e2a6ac2040400823ffa01d352b8925e224d6d",
-      "size": 17009
+      "sha256": "85eca3340d9c3011d3b64e41c1dbf55e5f59c8b9837f9b82676a87b964743315",
+      "size": 17161
     },
     "backend/app/approver_setup.py": {
       "sha256": "6d1512af7c8d49c4c4402da30039ae5623fad3348e6d5547870eaf84bf9a910e",
@@ -183,8 +183,8 @@
       "size": 4801
     },
     "backend/app/core.py": {
-      "sha256": "7d8b91acb397ac9757fec31b19c8d9b283690d806e8ca1f4b8a385ba4e992a48",
-      "size": 15297
+      "sha256": "45cb713d0366f29dacfd3e73217492a9d2a3bcd47d509100db364a1d1535916d",
+      "size": 15682
     },
     "backend/app/course_points.py": {
       "sha256": "077704b21b9172ca18702e88c750e1df805cfced45711d6fc75bb48c4cf3c643",
@@ -223,8 +223,8 @@
       "size": 10519
     },
     "backend/app/identities.py": {
-      "sha256": "5c7343c6ac35cd5d0c073929a1305e56dc5ca4897d7ccbc009e34374702b551e",
-      "size": 13274
+      "sha256": "eefc7f33ba1a6894b21079b14d67d0317b1f4fbba25dc406d5a0db3fbf223f62",
+      "size": 16677
     },
     "backend/app/import_access.py": {
       "sha256": "4e1c426028d72f4d9ded023b5e17d78ea0b00b8603141adf3c469d6e7674bfda",
@@ -271,16 +271,16 @@
       "size": 4238
     },
     "backend/app/integrations.py": {
-      "sha256": "c69b29623377aae1fe63ad167c514d835d4c46e047de877f1e36b33a14fff794",
-      "size": 31802
+      "sha256": "50fa69f6843cd64a2bbc1d81ab6a9226f58bcdc3ecf4afc8c153c79a11da5d5a",
+      "size": 31838
     },
     "backend/app/ledger_check.py": {
       "sha256": "6787495638e0853ae64665ab393d84babe70090c6d239f3f53d7b881bb043e6a",
       "size": 16133
     },
     "backend/app/main.py": {
-      "sha256": "0107e4bf076cbf660712968144b2f2ab1c60992045b1ac92b0442008a4b279d9",
-      "size": 10857
+      "sha256": "b2fce09ad242969b0fce3db85b7799a44f663eb5d02577ae641aed8ff69bbc05",
+      "size": 10781
     },
     "backend/app/maintenance.py": {
       "sha256": "22cf2f12422482d42d37e9a4b55981c2dc4c5f9f4ba816c266740d3be18ffafb",
@@ -355,24 +355,28 @@
       "size": 86
     },
     "backend/app/routes/admin.py": {
-      "sha256": "db111939309f33273397113159a2a2d38f01d42d99e7b006175bf6f4bd9e965d",
-      "size": 34291
+      "sha256": "9f74c161c861920a09d430e896b92592e20d637d170db2f2cb84a6c61d169153",
+      "size": 36601
     },
     "backend/app/routes/applications.py": {
       "sha256": "d6d20e4a8c66612138dfbd7ff2f01e0e8886c8244507833eb4e9f515b28b131f",
       "size": 23546
     },
     "backend/app/routes/auth.py": {
-      "sha256": "da39c5497a51b955d98a83aa55305b05c296d64c41302afae1884148627f2754",
-      "size": 15038
+      "sha256": "78d0c164cf8b3a999a1e8cebc888b0d42560ab15003785c83457e6f9df0a66c7",
+      "size": 15457
     },
     "backend/app/routes/business.py": {
-      "sha256": "ee85d6d704213d9904161a5a819f4d500ab2131b2b8d15eb97f97a2c155df748",
-      "size": 31112
+      "sha256": "f087443acb8abbb211463b28ecc7806b32670246402e9126c0ff6be27988e698",
+      "size": 30831
     },
     "backend/app/routes/calculations.py": {
-      "sha256": "42b2b48d5b1b235aa6eb6114b556240553c407acfd19dff32dbdcfed9e7c0309",
-      "size": 52638
+      "sha256": "f3f648e80c987ace77bd375a37025d123889ce2716beb784e115f65b57c7d9e8",
+      "size": 52162
+    },
+    "backend/app/routes/college_staff.py": {
+      "sha256": "6be8e1a0885e09d3b29666cb3dbe736fc9571eac179746e01c0bddc73f00c176",
+      "size": 4838
     },
     "backend/app/routes/delivery.py": {
       "sha256": "bf06721aa1aa94f8b042b445d9774f908231363300a21c055a298838caa644f3",
@@ -407,8 +411,8 @@
       "size": 32660
     },
     "backend/app/routes/social.py": {
-      "sha256": "ad53a07168dee95cd0cc56f9058aedf0f1c91143d9a6de3c893cc0f05a687fdc",
-      "size": 92484
+      "sha256": "00a4d38f04d36b5f0069b5a1b1e5deb960fd1489e594c7546052dba2157745fa",
+      "size": 91330
     },
     "backend/app/routes/social_images.py": {
       "sha256": "c02feaea7ea45557f381ac4af77e0c6204b6413d0f7e1b3dcff5ef0410421514",
@@ -431,8 +435,8 @@
       "size": 3593
     },
     "backend/app/schemas.py": {
-      "sha256": "ac9b0d77562f97801748cf67f7b02384c8f89b717f9d3de5fd61421942b4e905",
-      "size": 14433
+      "sha256": "2c46ea26d69cd6e7d11d43b9fd0c2944bb0113b8a5e81087662d5b9c330b8eb5",
+      "size": 14626
     },
     "backend/app/school_cockpit.py": {
       "sha256": "b3b5d63f190d6f7963cf3006ed70bf0bd198063b43622a81440c4605d512d5a7",
@@ -475,8 +479,8 @@
       "size": 33130
     },
     "backend/app/social_training.py": {
-      "sha256": "b32a46bb0c5f4e50eb8b516c9414e917ba8353d361f92193069e3fd58e78f1e2",
-      "size": 74614
+      "sha256": "6356a100d3f952e3d96e29bf829be90feb3009e996a2ff93d19317fec6226b7c",
+      "size": 74371
     },
     "backend/app/sso_identity.py": {
       "sha256": "75a02d9db38d36a48142afa2d65bdcb7ab1aa7ec88ba529ed035ebdf531c031c",
@@ -715,8 +719,8 @@
       "size": 8197
     },
     "docs/USER_MANUAL.md": {
-      "sha256": "f539f0ea393db27a5fb24594cb1551762fa48070181e2f429591d8734b871a74",
-      "size": 12842
+      "sha256": "0e45abe3fc45cd2cecd480dddc990b26ad9a015e6416be0a5d6a74fd7dae40b9",
+      "size": 14690
     },
     "docs/templates/integration-coordination.xlsx": {
       "sha256": "83d705ba9d1b464b8f82d9c8795f9cea6663e84b3668721fa74d1adc744ed2fa",
@@ -775,8 +779,8 @@
       "size": 35460
     },
     "docs/权限配置说明.md": {
-      "sha256": "8186f5c318838a8db48c3597b27d16054d5a053ad2013ecdbd1addb43d118a00",
-      "size": 9753
+      "sha256": "a062ed2fee6b4f97232944711dba461d7773875b73df0284980882b41ae83ca7",
+      "size": 10398
     },
     "docs/测试报告_20261004.md": {
       "sha256": "d9c635c1df29ad8b913636bf9ca36bf5d14a953d266ac1295714644cb7aeb1d9",
@@ -787,8 +791,8 @@
       "size": 6788
     },
     "docs/用户操作手册_系统内版_20261022.md": {
-      "sha256": "7fd632169cf4b876ab6d5c8bc05fef107ff72e063d28e80c07c747439f44ec7b",
-      "size": 84323
+      "sha256": "e99e02b02070b56ea987327ebe734240c156f0f7cee5a6e81f62b06e0eb6f51f",
+      "size": 84892
     },
     "docs/第三方组件与许可证清单.md": {
       "sha256": "8a8a8d3970f1e1dba3e469378042f7f9e0d10ce808c94a8258b6a7a0090da9d6",
@@ -807,16 +811,16 @@
       "size": 14687
     },
     "docs/系统内帮助覆盖清单.json": {
-      "sha256": "3855590331b9368af60e55bb20d8aacd6c9b70c29555d689b87189942232cbcb",
-      "size": 14102
+      "sha256": "c54716a8c72d3ed16635063c728f3fca23a6a19b44421e6d2a9c3fd1e74bffd0",
+      "size": 14316
     },
     "frontend/app.js": {
-      "sha256": "67219e14c464810e6651254f6729354d02612c377372585d4167a5204ae85d40",
-      "size": 512962
+      "sha256": "ce2fc62d7cceefb1e2d88ac49b085ef87955d4b7f60133570cc7eee9534bdf61",
+      "size": 519599
     },
     "frontend/applications.js": {
-      "sha256": "e235ef6b57ae68dea4a042c5985b06387a1a39c8e3d1b046bf051915321de7c2",
-      "size": 71634
+      "sha256": "d46581675867ddefc2f9fabaf7569d0b32a1397344102af1e909aa5080436a8b",
+      "size": 71085
     },
     "frontend/approval-flow.js": {
       "sha256": "bdccc2555c957329069ca27b4dac5de13917b9ae0d87ddb8f90b490f7b4be3cd",
@@ -977,6 +981,18 @@
     "frontend/assets/help/20261022/cockpit.vtt": {
       "sha256": "baee9e337ffe17f352b2a438dfe219feb3e6a40eb71f23de19e3055188caadbd",
       "size": 1057
+    },
+    "frontend/assets/help/20261022/collegestaff.jpg": {
+      "sha256": "c2202fdacdabdc6d21a7926479d451974eb86a9274905628c0cf06612603ced1",
+      "size": 88231
+    },
+    "frontend/assets/help/20261022/collegestaff.mp4": {
+      "sha256": "ae95006c70bb92a809830707b7d0f5410b507b069a1a89347a0cd12982f54408",
+      "size": 1244140
+    },
+    "frontend/assets/help/20261022/collegestaff.vtt": {
+      "sha256": "97660ec8954b6f9892a5784abbf5293d22fab4523898af58d3f12ba583a1778d",
+      "size": 1541
     },
     "frontend/assets/help/20261022/course-flow.mp4": {
       "sha256": "6a64acfcd29a829a47543b4cd876fe5c10268d521242f6d50c9b26018ca63319",
@@ -1147,12 +1163,12 @@
       "size": 1083
     },
     "frontend/assets/help/20261022/manual.html": {
-      "sha256": "9643a75a34aad6baba777c0e8b5fc1005ae295969a448639206ae5fb50c14d35",
-      "size": 141319
+      "sha256": "682d55b5cc5544979448932b07a20809bef69482bd535fca33e3b64078ca035c",
+      "size": 142600
     },
     "frontend/assets/help/20261022/manual.pdf": {
-      "sha256": "ce12ad8e866346126243bd2d2d7aacbcce29baca67a9564056fd82a54ee1f7a0",
-      "size": 5763135
+      "sha256": "c24138fc66a76a005d8ec15e763756ac6052b6dc532b2d55c1dd5110b7143f73",
+      "size": 5876602
     },
     "frontend/assets/help/20261022/mine.jpg": {
       "sha256": "8676404f5402fc62ea61e26cf344a859520bcc6abc40f7b13570c4aa09c1f5af",
@@ -1551,24 +1567,24 @@
       "size": 13144
     },
     "frontend/help-content.js": {
-      "sha256": "c0b2ffc4b1071c70d777885d09e0daf69f550bbb98b54fd851eef57549d7f06f",
-      "size": 55070
+      "sha256": "cbe82bd8f12dff3d15e6526292e02f643df730b26ad242c0e5e79e6a7d1687f1",
+      "size": 55492
     },
     "frontend/help-forms.js": {
       "sha256": "17cb0cbe693cd4d9f1ad6b76874d72c89df48a06551a9ab6c55e3c5ab034143f",
       "size": 156117
     },
     "frontend/help-media.js": {
-      "sha256": "0909586f8f480c015b9c395c09e050f56cb2ba3ffd599622f782d9859fb56e4c",
-      "size": 80385
+      "sha256": "14df2bf4503fb96caf96e6f5e331ae7ee2ceb99a8ee0e4234070b5abef218318",
+      "size": 81142
     },
     "frontend/help-system.css": {
       "sha256": "65606d662ecc091cc1f0aae5fc8a55770b634149a4cc0a428991b908b113d232",
       "size": 3458
     },
     "frontend/help-system.js": {
-      "sha256": "ae953a207fadb0bc443cb2188ae79997cb008aa38b492d9c7e78edfd88880642",
-      "size": 29954
+      "sha256": "887d02e78f64143c2c82cd81a05291c8ee906571a5c88fd7455e63dc074bc148",
+      "size": 29961
     },
     "frontend/history-projects.js": {
       "sha256": "2a354347db4c4d503847dd5aaab85bda4901d5204f93436274d9e1fdf62d7f8f",
@@ -1579,8 +1595,8 @@
       "size": 2302
     },
     "frontend/index.html": {
-      "sha256": "0da6deb41a84be35f540da447a0c9051e83880103845a4b7e72c6464d6e1feaa",
-      "size": 1889
+      "sha256": "026cc6c0bcc836f4b42214ae4b80b255c2c3207727358a37bdbf27902fa2bfb2",
+      "size": 1890
     },
     "frontend/integration-drafts.js": {
       "sha256": "8ecc0ab6a0ce01ac7e922540f902ce75ee295194ed81095923b8b59ad3ccb99d",
@@ -1643,8 +1659,8 @@
       "size": 71868
     },
     "frontend/social-training.js": {
-      "sha256": "b2945aece959e9d0634c95185f83e95fea8441928b4cc980f4f1c0a52019ebdf",
-      "size": 189903
+      "sha256": "8a3fce48820005d1b1851068e98c1ee1feb3006a6f9cd3f5b87c6e5882556340",
+      "size": 189896
     },
     "frontend/styles.css": {
       "sha256": "764753e07c0ad1094bd60ac3b28afe66d13a2554b6d73657198387807ef5a625",
@@ -1797,6 +1813,10 @@
     "scripts/local_demo.py": {
       "sha256": "3ce6e020ddbf4642e4f06ab7ba7098abd6cb5a80bd485d590917b772aafccf05",
       "size": 2571
+    },
+    "scripts/online_backup.py": {
+      "sha256": "f7753d5b2b2c615e8346e0b1975a621db0635129249ea7b2caf8a79342518780",
+      "size": 11741
     },
     "scripts/performance_acceptance.py": {
       "sha256": "88ebb567cfe996d3e09cf79282998169e386e53e4a6f34a0de3f338de73a058c",
@@ -2102,6 +2122,10 @@
       "sha256": "74b6a18796913b289342a15aee2ab3a00b6bf0f6708f967809d6908db4c79b38",
       "size": 874
     },
+    "tests/p0/test_online_backup.py": {
+      "sha256": "96794d5a162248043e70c6863ace968b3025f5acb260ddb92b30653ad40b0578",
+      "size": 3777
+    },
     "tests/p0/test_preservation.py": {
       "sha256": "e637da73002d2347ce50be21f79291d23a6dae741442bbc962a04da28ea4c9c0",
       "size": 5535
@@ -2229,6 +2253,10 @@
     "tests/r2/test_codex_worker_nginx_upload.py": {
       "sha256": "415febf431ee864edbc6c2cc509864720265f7c457c3a553111c10d49b22312c",
       "size": 11992
+    },
+    "tests/r2/test_college_agent.py": {
+      "sha256": "28bdf87119db1770260096e37b96d7639dbb7b4dc95b8d0702383a9b651fe145",
+      "size": 13149
     },
     "tests/r2/test_course_base_apply.py": {
       "sha256": "45e5bf88f678c67ab7c66c261ab418fc49fe8b7c1fdbc400d6f4dc8fa5688b92",
@@ -2661,6 +2689,10 @@
     "tests/test_inbound_field_diagnostics.py": {
       "sha256": "c59a070b43fe004d907de4b49e88e99e421991ffe1ff0c9445a2e0f9616e3a78",
       "size": 3793
+    },
+    "tests/test_safe_acknowledgement_receipt_types.py": {
+      "sha256": "594d7c5021d59ddfcfdc17229ffbd2312c38f101b58b1dd7f8c6025aa5aa9b27",
+      "size": 1219
     }
   },
   "self_excluded": [
