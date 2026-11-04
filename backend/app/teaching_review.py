@@ -277,9 +277,9 @@ def apply_review(db, actor, data):
             if data.decision == 'apply':
                 if stage != TEACHER_APPLY:
                     raise HTTPException(409, r.course_name + ' 已经申请过，正在审核中')
-                if points_now is None:
-                    raise HTTPException(409, r.course_name + ' 缺学时，算不出积分，请先联系教务处或超星管理员补齐学时')
-                entry.update(level='teacher', decision='apply', points_after=str(points_now))
+                if points_now is None and len(reason) < 2:
+                    raise HTTPException(422, r.course_name + ' 缺学时，算不出建议积分：请在申请说明里写明实际学时，由审核人填积分')
+                entry.update(level='teacher', decision='apply', points_after=str(points_now) if points_now is not None else None)
                 stage = 'dept'
             else:
                 if stage != 'dept' or any(s.get('level') != 'teacher' for s in steps):
@@ -297,7 +297,7 @@ def apply_review(db, actor, data):
                 raise HTTPException(403, '改回重审由学校授课认定人办理' if not _own(actor, teacher, r.staff_no) else '须回避本人的课，由其他人办理')
             if len(reason) < 2:
                 raise HTTPException(422, '改回重审请写明原因')
-            if d['review'] == 'pending' and stage == 'dept' and not steps:
+            if d['review'] == 'pending' and stage in ('dept', TEACHER_APPLY) and not steps:
                 continue
             unbook(db, actor, r, booked, reason)
             booked = None

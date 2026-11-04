@@ -204,14 +204,24 @@ def test_vacant_levels_unmapped_staff_recusal_and_missing_hours(client2,app2):
     assert (row['stage'],row['handler_label'])==('apply','待老师申请（还没有本地账号）')
     assert review(c,[row['id']],'approve','人事核对后认定').status_code==409
     auth(c,'depthead');assert review(c,[row['id']],'approve').status_code==409
+    # 学校对还没申请的课“改回重审”什么也不做，不会把课送进教研室。
+    auth(c,'jwc');r=review(c,[row['id']],'reset','核对');assert r.status_code==200 and r.json()['updated']==0,r.text
+    assert course(credits(c,'T9001')['2025-2026'],'K1')['stage']=='apply'
     auth(c,'schooladmin')   # 同步数据要管理员
     # 本人的课须回避，见 test_admin_designates_teacher_as_reviewer_without_changing_role。
-    # 缺学时（课程总库没有这门课）：算不出建议积分，须手工填。
+    # 缺学时（课程总库没有这门课）：老师在申请说明里写实际学时，审核人手工填积分。
     inbound(c,conn,'teacher_course',[{'ZGH':'J001','XM':'测试教师一','KCH':'K9','KCMC':'缺学时课','XQMC':'2025-2026学年第二学期'}])
     auth(c,'teacher')
     k9=course(credits(c,'J001')['2025-2026'],'K9')
     assert k9['suggested_points'] is None
-    r=review(c,[k9['id']],'apply');assert r.status_code==409 and '缺学时' in r.json()['detail'],r.text
+    r=review(c,[k9['id']],'apply');assert r.status_code==422 and '缺学时' in r.json()['detail'],r.text
+    assert review(c,[k9['id']],'apply','实际授课 20 学时').status_code==200
+    auth(c,'depthead')
+    r=review(c,[k9['id']],'approve');assert r.status_code==409 and '缺学时' in r.json()['detail'],r.text
+    assert one(c,k9['id'],'approve',points='20',reason='按老师申请的 20 学时').status_code==200
+    k9=course(credits(c,'J001')['2025-2026'],'K9')
+    assert k9['stage']=='college' and [x['decision'] for x in k9['steps']]==['apply','approve'] and k9['points']=='20.00'
+    auth(c,'teacher')
     # 不存在的课整批拒绝。
     k2=course(credits(c,'J001')['2026-2027'],'K2')
     assert review(c,[k2['id'],'no-such-row'],'approve').status_code==409
@@ -346,3 +356,16 @@ def test_course_level_tags_follow_the_course(client2,app2):
     with Session(app2.state.engine) as db:
         actions=[a.action for a in db.scalars(select(Audit).where(Audit.module=='teacher_course',Audit.action.startswith('课程级别')).order_by(Audit.created_at))]
     assert actions==['课程级别：省级','课程级别：清除级别']
+
+
+def test_courses_already_in_progress_keep_their_stage():
+    """上线前已在走的课（含没有本地账号、直接送到学校的）保持原级；没有记录或撤回的停在待老师申请。"""
+    from types import SimpleNamespace as NS
+    from app.reference_data import pending_stage
+    rv=lambda **d:NS(state='PENDING',data=d)
+    assert pending_stage(rv(basis='b',stage='school'),'b',None)=='school'
+    assert pending_stage(rv(basis='b',stage='college'),'b','u1')=='college'
+    assert pending_stage(None,'b','u1')=='apply' and pending_stage(None,'b',None)=='apply'
+    assert pending_stage(rv(basis='b',stage='apply'),'b','u1')=='apply'
+    assert pending_stage(rv(basis='old',stage='school'),'b','u1')=='dept'   # 学分学时变了，从教研室重审
+    assert pending_stage(rv(basis='old',stage='school'),'b',None)=='apply'

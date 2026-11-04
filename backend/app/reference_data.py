@@ -399,9 +399,11 @@ def pending_stage(review,basis,user_id):
     老师还没申请（没有认定记录、或撤回了申请）停在 apply；没有本地账号的老师登录不了、也申请不了，同样停在 apply。
     申请过的课学分学时在源头变了，从教研室重新审核。
     """
-    if user_id is None or review is None or review.data.get('stage')==TEACHER_APPLY:return TEACHER_APPLY
-    if review.state=='PENDING' and review.data.get('basis')==basis and review.data.get('stage') in TEACHING_STAGES:
+    if review is not None and review.data.get('stage')==TEACHER_APPLY:return TEACHER_APPLY
+    # 已经在走的（含上线前没有本地账号、直接送到学校的）保持原来的一级，不退回老师。
+    if review is not None and review.state=='PENDING' and review.data.get('basis')==basis and review.data.get('stage') in TEACHING_STAGES:
         return review.data['stage']
+    if user_id is None or review is None:return TEACHER_APPLY
     return 'dept'
 
 def review_state(review,basis):

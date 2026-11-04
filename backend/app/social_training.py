@@ -101,7 +101,7 @@ def set_user_duties(db, admin, user, codes, reason):
     codes = list(dict.fromkeys(codes))
     if any(c not in SCHOOL_DUTIES for c in codes):
         raise HTTPException(422, '审批职责不存在，请刷新页面后重选')
-    setting = db.get(Setting, DUTIES_KEY)
+    setting = db.scalar(select(Setting).where(Setting.key == DUTIES_KEY).with_for_update())
     current = {k: list(v) for k, v in (setting.value if setting else {}).items()}
     before_codes = user_school_duties(db, user.id, current)
     if sorted(codes) == sorted(before_codes):
