@@ -91,7 +91,7 @@ def test_approved_course_books_no_points_and_rebook_is_gone(app2, client2):
         db.add(Setting(key='param:social_course_points', value={'name': '每门社会培训课积分', 'type': 'decimal', 'value': '3'}))
     auth(c, 'teacher')
     ident = apply_course(c, ids['K1']).json()['item']['id']
-    for user in ('depthead', 'collegehead', 'reviewer'):
+    for user in ('collegehead', 'reviewer'):
         auth(c, user)
         assert act(c, ident, 'approve').status_code == 200
     assert 'points' not in c.get('/api/applications/' + ident).json()['item']['data']

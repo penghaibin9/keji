@@ -23,7 +23,7 @@ let state=null;
 export function dutyRows(d){
  const people=new Map((d.people||[]).map(p=>[p.id,p]));
  const codes=[...DUTY_ORDER.filter(k=>d.labels?.[k]),...Object.keys(d.labels||{}).filter(k=>!DUTY_ORDER.includes(k))];
- return codes.map(code=>{const ids=d.assignments?.[code]||[],list=ids.map(id=>people.get(id)||{id,name:'原账号已不存在',org_name:'',usable:false}),usable=list.filter(p=>p.usable).length;
+ return codes.map(code=>{const ids=d.assignments?.[code]||[],bad=new Set(d.ineligible?.[code]||[]),list=ids.map(id=>({...(people.get(id)||{id,name:'原账号已不存在',org_name:'',usable:false})})).map(p=>bad.has(p.id)&&p.usable?{...p,usable:false,expired:true}:p),usable=list.filter(p=>p.usable).length;
   return {code,label:d.labels[code],info:DUTY_INFO[code]||{flows:[],stuck:''},people:list,usable,missing:usable===0,single:usable===1}});
 }
 
@@ -34,7 +34,7 @@ export async function dutiesTabHtml(c){
  const body=rows.map(r=>[
   `<strong>${e(r.label)}</strong>${r.missing?'<div class="cell-sub red">缺人</div>':r.single?'<div class="cell-sub">只有 1 人</div>':''}`,
   `<ul class="duty-flows">${r.info.flows.map(f=>`<li>${e(f)}</li>`).join('')}</ul>`,
-  (r.people.length?r.people.map(p=>`<span class="org-head${p.usable?'':' is-unusable'}">${e(p.name)}${p.org_name?' · '+e(p.org_name):''}${p.usable?'':' · 账号不可用'}<button type="button" class="org-head-remove" data-action="duty-remove" data-id="${e(r.code+'|'+p.id)}" aria-label="移除 ${e(p.name)} 的${e(r.label)}职责">移除</button></span>`).join(' '):`<span class="red">尚未配置</span>`)+(r.missing?`<p class="cell-sub red">${e(r.info.stuck)}</p>`:''),
+  (r.people.length?r.people.map(p=>`<span class="org-head${p.usable?'':' is-unusable'}">${e(p.name)}${p.org_name?' · '+e(p.org_name):''}${p.usable?'':p.expired?' · 审核身份已失效，请移除或补身份':' · 账号不可用'}<button type="button" class="org-head-remove" data-action="duty-remove" data-id="${e(r.code+'|'+p.id)}" aria-label="移除 ${e(p.name)} 的${e(r.label)}职责">移除</button></span>`).join(' '):`<span class="red">尚未配置</span>`)+(r.missing?`<p class="cell-sub red">${e(r.info.stuck)}</p>`:''),
   c.act('添加','duty-add',r.code,r.missing?'primary':'light','plus')]);
  return alert+`<section class="card"><div class="card-head"><div><h2>学校审批职责</h2><p>流程走到学校这一级（以及积分认定、年度考核各环节）时，交给担任对应职责的人办理。同一职责任何一位办理即可；本人的申请自动回避，每个职责建议至少两人。被选的人要有学校类型、带审核权限的身份（如“学校业务审核”），没有时添加时可以一步加上。</p></div></div>${c.table(['职责','管哪些流程、哪一级','当前人员（姓名 · 组织）','操作'],body)}</section>`;
 }

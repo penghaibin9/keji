@@ -48,6 +48,11 @@ def test_duty_assignment_accepts_active_extra_identity_but_not_expired(client2,a
     assert next(x for x in options['items'] if x['id']=='teacher')['eligible']
     with app2.state.sessions.begin() as db:
         setting=db.get(Setting,'account_identities');setting.value={'items':[{**setting.value['items'][0],'valid_until':'2000-01-01'}]}
+    # 2026-11-04：已在名单里的人身份到期，不再挡住整份保存（否则一个过期账号会让所有职责都改不了）；
+    # 页签里把他标为“审核身份已失效”提示移除，重新加入时仍被拒，办理时仍按实际身份校验。
+    d=client2.get('/api/social/duties').json();assert d['ineligible']=={'dean':['teacher']}
+    payload['expected_version']=d['version']
+    r=put(client2,'/api/social/duties',{**payload,'assignments':{'dean':[]}});assert r.status_code==200,r.text
     payload['expected_version']=r.json()['version']
     assert put(client2,'/api/social/duties',payload).status_code==422
 

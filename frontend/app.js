@@ -4,7 +4,7 @@ import {coursePointsAction} from './course-points.js?v=20261021-form-merged1';
 import {renderTrainingWorkspace,trainingChange} from './training-workspace.js?v=20261021-core-recheck2';
 import {renderSchoolCockpit,bindSchoolCockpit} from './school-cockpit.js?v=20261019-walk3&display=20261019-clean2';
 import {icons} from './icons.js';
-import {dutiesTabHtml,dutiesAction} from './school-duties.js?v=20261104-simplify1';
+import {dutiesTabHtml,dutiesAction} from './school-duties.js?v=20261104-simplify2';
 import {socialPage,socialAction,applicationProjectPicker} from './social-training.js?v=20261104-simplify1';
 import {applicationAction,trainersHtml,applyPageHtml,APPLY_PAGES,myApplicationsHtml,homeApplicationsHtml,myCoursesHtml,libraryHtml,libraryFilterSubmit,homeCoursesHtml,courseAction} from './applications.js?v=20261104-simplify1';
 import {nextCode,runBatch,batchStage,batchMode,batchPerformer,BATCH_LABELS,materialUploadForm,checkUploadFiles,uploadEntries,uploadSequential,uploadStatusHtml} from './approval-flow.js?v=20261021-form-merged1';

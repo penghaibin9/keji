@@ -60,7 +60,7 @@ def test_dept_summary_void_and_preflight_in_browser(recognized,app2,client2,tmp_
             with app2.state.sessions.begin() as db:
                 setting=db.get(Setting,'social_training_duties');setting.value={**setting.value,'secretary':['depthead']}
             page.reload();page.locator('[data-action="social-detail"][data-id="social_resource|'+draft['id']+'"]').click()
-            modal.get_by_text('教学秘书环节没有具备权限且无需回避的办理人，请学校管理员在社会培训职责设置中配置替代人员',exact=True).wait_for()
+            modal.get_by_text('教学秘书环节没有具备权限且无需回避的办理人，请学校管理员在“用户与权限 › 学校审批职责”中配置替代人员',exact=True).wait_for()
             assert not modal.get_by_role('button',name='发给教师回应',exact=True).count()
             page.screenshot(path=str(output/'03-核对发送前职责检查.png'),animations='disabled')
             assert page.evaluate('document.documentElement.scrollWidth <= innerWidth+1')

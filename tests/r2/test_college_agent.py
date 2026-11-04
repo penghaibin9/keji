@@ -186,7 +186,7 @@ def test_agent_approves_course_application_and_progress_shows_it(app2, client2):
     assert created.status_code == 200, created.text
     ident = created.json()['item']['id']
     current = c.get('/api/applications/' + ident).json()['progress']
-    auth(c, 'depthead'); assert act(c, ident, 'approve').status_code == 200
+    # 2026-11-04 起培训课程没有教研室一级，提交后直接到学院。
     auth(c, 'teacher')
     node = next(n for n in c.get('/api/applications/' + ident).json()['progress']['nodes'] if n['key'] == 'college')
     assert node['state'] == 'current' and node['who'] == '测试学院负责人、教师agent1（经办人）'
@@ -198,7 +198,7 @@ def test_agent_approves_course_application_and_progress_shows_it(app2, client2):
     auth(c, 'teacher')
     node = next(n for n in c.get('/api/applications/' + ident).json()['progress']['nodes'] if n['key'] == 'college')
     assert node['state'] == 'done' and node['who'] == '教师agent1' and node['agent_for'] == '经办人代 测试学院负责人 办理'
-    assert current['nodes'][1]['key'] == 'dept'
+    assert current['nodes'][1]['key'] == 'college'  # 2026-11-04 起课程第一级就是学院
 
 
 def test_me_tells_dean_and_agent_apart(app2, client2):

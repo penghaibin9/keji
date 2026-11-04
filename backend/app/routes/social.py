@@ -186,8 +186,10 @@ def duties(request:Request):
                            'staff_no':user.staff_no if user else '', 'org_name':db.get(Org,user.org_id).name if user and db.get(Org,user.org_id) else '',
                            'usable':bool(user and user.active and not user.authorization_pending)})
         from ..approvals import pending_duty_gaps
+        # 已在名单里、但身份已失效（停用、兼任到期、范围不符）的人：页签标红提示移除；保存其他职责时不挡。
+        ineligible={code:[i for i in ids if not st.duty_eligible(db,db.get(User,i),a,code)] for code,ids in assignments.items() if code in st.DUTIES}
         return {'assignments':assignments,'version':setting.version if setting else 0,'labels':st.DUTIES,'people':people,'gaps':pending_duty_gaps(db),
-                'school_duties':list(st.SCHOOL_DUTIES)}
+                'school_duties':list(st.SCHOOL_DUTIES),'ineligible':{k:v for k,v in ineligible.items() if v}}
     return read_operation(request,'roles.manage',load)
 
 
