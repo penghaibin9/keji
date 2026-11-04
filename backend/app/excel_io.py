@@ -448,6 +448,7 @@ def export_rows(db,actor,kind,filters,policy=None):
         if filters.get('teacher_id'):q=q.where(Qualification.teacher_id==filters['teacher_id'])
         if filters.get('org_id'):q=q.where(Qualification.teacher_id.in_(select(User.id).where(User.org_id.in_(authorized_org_descendants(db,actor,filters['org_id'])))))
         if filters.get('state'):q=q.where(Qualification.state==filters['state'])
+        else:q=q.where(Qualification.state!='DELETED')
         if filters.get('q'):q=q.where(Qualification.name.contains(filters['q'],autoescape=True)|Qualification.certificate_no.contains(filters['q'],autoescape=True))
         items=db.scalars(q.order_by(Qualification.created_at.desc(),Qualification.id)).all();users={u.id:u for u in db.scalars(select(User).where(User.id.in_({x.teacher_id for x in items})))}
         return ['教师工号','教师姓名','资质类别','证书名称','证书编号','发证机构','取得日期','有效期至','状态','版本'],[[staff(users[x.teacher_id]),users[x.teacher_id].name,x.category,x.name,pol.value('certificate_no',x.certificate_no,x.teacher_id),x.issuer,x.obtained,x.expires or '',label(x.state),x.version] for x in items]

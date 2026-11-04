@@ -57,15 +57,15 @@ export async function showApplication(id) {
   const imageLabel = d.flow === 'trainer' || d.flow === 'trainer_external' ? '头像' : '封面';
   const cover = x.data?.cover_id ? `<figure class="detail-cover"><img src="/api/social/images/${e(x.data.cover_id)}" alt="${e(x.name)}${imageLabel}" loading="lazy"></figure>` : '';
   const body = sectioned ? `<div class="application-detail"><section class="detail-status-summary"><div><strong>${e(progress.text)}</strong><p>${e(headline)}</p><small>申请人 ${e(d.applicant?.name||'')} · ${e(d.org_name)}</small></div>${status}</section><details class="detail-fold application-flow"><summary>查看完整审批流程</summary>${progressHtml({...progress,headline},e)}</details>${navigation}<section id="application-info" class="detail-section"><h3>申请资料</h3>${cover}<dl class="detail-facts-grid">${rows}</dl></section><section id="application-materials" class="detail-section"><div class="detail-section-title"><h3>申请材料</h3><span>${d.attachments.length} 份</span></div>${files}</section><section id="application-history" class="detail-section"><h3>办理记录</h3>${events(d.events)}</section>${p.withdraw?'<p class="detail-action-note">撤回后申请暂停审核；修改并重新提交时，将从第一级重新审核。</p>':''}</div>` : `<div class="between"><p class="muted small">${e(d.label)} · 申请人 ${e(d.applicant?.name||'')} · ${e(d.org_name)}</p>${status}</div>${progressHtml({...progress,headline},e)}<dl class="kv mt16">${rows}</dl><h3 class="mt16">申请材料</h3>${files}<h3 class="mt16">办理记录</h3>${events(d.events)}`;
-  const foot = [x.kind==='course_apply'&&x.state==='ACTIVE'&&c.can?.('points.read')?c.act('积分办理','course-points',x.id,'primary'):'',mayImage ? coverButton(c, 'resource', x, imageLabel) : '', p.approve?c.act('通过','app-approve',x.id,'primary'):'',p.return?c.act('退回','app-return',x.id,'danger'):'',p.edit?c.act('补正资料','app-edit',x.id,'primary'):'',p.submit?c.act('重新提交','app-submit',x.id,p.edit?'':'primary'):'',p.upload?c.act('上传材料','app-upload',x.id):'',p.withdraw?c.act('撤回','app-withdraw',x.id,'light'):'',c.act('关闭','close')].join('');
+  const foot = [x.kind==='course_apply'&&x.state==='ACTIVE'&&c.can?.('points.read')?c.act('积分办理','course-points',x.id,'primary'):'',mayImage ? coverButton(c, 'resource', x, imageLabel) : '', p.approve?c.act('通过','app-approve',x.id,'primary'):'',p.return?c.act('退回','app-return',x.id,'danger'):'',p.edit?c.act('补正资料','app-edit',x.id,'primary'):'',p.submit?c.act('重新提交','app-submit',x.id,p.edit?'':'primary'):'',p.upload?c.act('上传材料','app-upload',x.id):'',p.withdraw?c.act('撤回','app-withdraw',x.id,'light'):'',p.delete?c.act('删除','app-delete',x.id,'danger'):'',p.restore?c.act('恢复','app-restore',x.id,'primary'):'',c.act('关闭','close')].join('');
   c.modal(d.label+' · '+x.name,body,foot,true,sectioned?d.label+' / 申请详情':'');
 }
 
 function decide(id, action) {
-  const d = opened, label = {approve: '通过', return: '退回', submit: '重新提交', withdraw: '撤回'}[action];
+  const d = opened, label = {approve: '通过', return: '退回', submit: '重新提交', withdraw: '撤回', delete: '删除', restore: '恢复'}[action];
   const level = (d.progress.nodes.find(n => n.state === 'current') || {}).label || '';
-  const hint = action === 'return' ? '写清楚要补什么。老师补正后从这一级接着审，不从头走。' : action === 'approve' ? (level ? '本次办理：' + level + '。' : '') + '通过后自动转到下一级，最后一级通过即生效。' : action === 'withdraw' ? '撤回后可修改再提交，会从第一级重新审。' : d.item.state === 'WITHDRAWN' ? '撤回后重新提交，会从第一级重新审核。' : '会从退回的那一级接着审。';
-  const value = {approve: '材料齐全，同意', return: '', submit: '已按意见补正，重新提交', withdraw: '撤回修改'}[action];
+  const hint = action === 'return' ? '写清楚要补什么。老师补正后从这一级接着审，不从头走。' : action === 'approve' ? (level ? '本次办理：' + level + '。' : '') + '通过后自动转到下一级，最后一级通过即生效。' : action === 'withdraw' ? '撤回后可修改再提交，会从第一级重新审。' : action === 'delete' ? '删除后不再出现在“我的申请”里，可以在“已删除”里恢复；删除后同一门课（培训师、基地编号）可以重新申报。' : action === 'restore' ? '恢复后回到“已撤回”，修改后可以重新提交，会从第一级重新审。' : d.item.state === 'WITHDRAWN' ? '撤回后重新提交，会从第一级重新审核。' : '会从退回的那一级接着审。';
+  const value = {approve: '材料齐全，同意', return: '', submit: '已按意见补正，重新提交', withdraw: '撤回修改', delete: '不再申报', restore: '恢复后继续申报'}[action];
   const needBasis = action === 'approve' && ['组织人事部认定', '教务处备案审核'].includes(level);
   const fillCourseware = action === 'approve' && ['course','teaching_course'].includes(d.flow) && ['学院审批','学校审批'].includes(level) && !d.item.data?.courseware?.checked;
   const result = c.formModal(label + '：' + d.item.name, `<div class="detail-action-context"><span>办理事项</span><strong>${c.esc(d.item.name)}</strong><p>${c.esc(d.state_label||d.progress.text)}</p></div>` + c.note(needBasis ? hint + '请在“依据说明”里写' + (level === '组织人事部认定' ? '资格认定文号和日期。' : '备案依据。') : hint, action === 'withdraw') + (fillCourseware ? applicationSection('补充课件审查记录', coursewareFields(d.item.data?.courseware), '已在本环节完成审查的，可登记审查人、日期和记录编号；尚未完成请退回补正，不代替实际材料核验。') : '') + c.reasonFields(action === 'return' ? value : '', action === 'return' ? '退回原因' : '办理意见', false, level === '组织人事部认定' ? '例：湘人认〔2026〕12号，2026年10月16日' : level === '教务处备案审核' ? '例：教务处备案〔2026〕7号' : '例：学院会议纪要〔2026〕3号、协议编号、材料编号', action === 'return' ? '例：资格依据不够具体，请补充证书编号和授课经历' : '例：' + value, action !== 'return', action === 'return' ? 'return' : action === 'approve' ? 'approve' : action === 'withdraw' ? 'withdraw' : 'amend'), async v => {
@@ -306,6 +306,12 @@ function applicationOpenButton(x) {
   const label=x.state==='RETURNED'?'去补正':x.progress?.tone==='blue'?'查看进度':'查看详情';
   return x.type==='social_project'?c.act(label,'social-detail','social_project|'+x.id,'sm'):c.act(label,'app-detail',x.id,x.state==='RETURNED'?'sm primary':'sm');
 }
+function deletedApplicationsHtml(items) {
+  if (!items?.length) return '';
+  const e = c.esc;
+  return `<details class="detail-fold deleted-applications"><summary>已删除（${items.length}）· 可以恢复</summary>` +
+    c.table(['申请', '状态', '操作'], items.map(x => [`<strong>${e(x.name)}</strong><p class="cell-sub">${e(x.label)}</p>`, e(x.progress?.text || '已删除'), applicationOpenButton(x)]), '没有已删除的申请', '') + `</details>`;
+}
 export async function myApplicationsHtml(ctx) {
   c = ctx;
   const e = c.esc;
@@ -317,7 +323,7 @@ export async function myApplicationsHtml(ctx) {
 
   return `<div class="card${sharedLayout ? ' teacher-applications' : ''}"><div class="card-head"><div><h2>我的申请</h2><p>课程、项目、基地和培训师申请 · 查看当前进度与办理方</p></div>${chips}</div>` +
     (sharedLayout?`<div class="application-status-filter" role="group" aria-label="申请状态筛选">${[['','全部'],['draft','草稿'],['pending','办理中'],['returned','待补正'],['done','已办结']].map(([key,label])=>`<button type="button" class="btn sm ${applicationFilter===key?'primary':''}" data-action="app-mine-filter" data-id="${key}" aria-pressed="${applicationFilter===key}">${label}</button>`).join('')}</div>`:'')+c.table(['申请', '进度', '操作'], (sharedLayout?visible:m.items).map(x => [`<strong>${e(x.name)}</strong><p class="cell-sub">${e(x.label)} · ${e(x.state_label)}</p>`,
-      sharedLayout ? `<div class="apply-progress-copy"><strong class="apply-current">${e(x.progress.text)}</strong><p class="cell-sub">${e(x.progress.headline || '')}</p></div>` : progressHtml({...x.progress, nodes: x.nodes, label: x.label}, e, {compact: true}), applicationOpenButton(x)]), applicationFilter?'当前状态没有申请':'还没有申请', applicationFilter?'切换状态查看其他申请。':c.me?.role?.kind==='college'?'从“培训课程”“培训基地”或“培训师资”发起申请，提交后在这里查看进度。':c.me?.role?.kind==='dept'?'从“培训课程”或“培训基地”发起申请，提交后在这里查看进度。':'从左侧“我的申报”选择要办理的业务。') + `</div>`;
+      sharedLayout ? `<div class="apply-progress-copy"><strong class="apply-current">${e(x.progress.text)}</strong><p class="cell-sub">${e(x.progress.headline || '')}</p></div>` : progressHtml({...x.progress, nodes: x.nodes, label: x.label}, e, {compact: true}), applicationOpenButton(x)]), applicationFilter?'当前状态没有申请':'还没有申请', applicationFilter?'切换状态查看其他申请。':c.me?.role?.kind==='college'?'从“培训课程”“培训基地”或“培训师资”发起申请，提交后在这里查看进度。':c.me?.role?.kind==='dept'?'从“培训课程”或“培训基地”发起申请，提交后在这里查看进度。':'从左侧“我的申报”选择要办理的业务。') + deletedApplicationsHtml(m.deleted) + `</div>`;
 }
 
 // 老师左侧的四个申报菜单：每个菜单一页，上面是“新建”，下面是本人这一类申请的进度。
@@ -344,7 +350,7 @@ export async function applyPageHtml(ctx, key) {
   const html = `<div class="teacher-apply-page"><section class="card apply-entry"><div class="apply-entry-top"><div><p class="apply-intro">${e(cfg.intro)}</p><p class="apply-entry-hint">${key === 'apply_project' ? '先保存草稿，再上传材料并提交学院审批。' : key === 'apply_course' ? '已有教务或超星课程可导入；课程入库不直接记社会培训积分。' : trainer ? '培训师实行一人一单；后续查看、补正和重新提交均沿原申请办理。' : '填写资料后提交；审核进度和补正意见在下方查看。'}</p></div><div class="apply-entry-actions">${actions}</div></div></section>` +
     `<section class="card teacher-applications apply-list"><div class="card-head"><div><h2>申报记录</h2><p>查看当前办理方；完整流程和材料在详情中保留。</p></div><span class="badge ${back ? 'orange-b' : 'gray-b'}">${back ? '待补正 ' + back + ' 项' : '共 ' + mine.length + ' 项'}</span></div>` +
     (mine.length ? c.table(['申请', '当前进度', '操作'], mine.map(x => [`<strong>${e(x.name)}</strong><p class="cell-sub">${e(x.label)} · ${e(x.state_label)}</p>`,
-      `<div class="apply-progress-copy"><strong class="apply-current">${e(x.progress?.text || x.state_label)}</strong><p class="cell-sub">${e(x.progress?.headline || '')}</p></div>`, open(x)])) : '<p class="apply-empty">还没有申报记录。从上方选择申报方式，提交后会在这里显示进度。</p>') + '</section>';
+      `<div class="apply-progress-copy"><strong class="apply-current">${e(x.progress?.text || x.state_label)}</strong><p class="cell-sub">${e(x.progress?.headline || '')}</p></div>`, open(x)])) : '<p class="apply-empty">还没有申报记录。从上方选择申报方式，提交后会在这里显示进度。</p>') + deletedApplicationsHtml((m.deleted || []).filter(x => cfg.flows.includes(x.flow))) + '</section>';
   const approved = (title, description, headers, rows, empty) => `<details class="card apply-approved"${rows.length ? ' open' : ''}><summary><strong>${title}</strong><span>${rows.length} 项</span></summary><p class="apply-approved-note">${description}</p>${rows.length ? c.table(headers, rows) : `<p class="apply-empty">${empty}</p>`}</details></div>`;
   if (key === 'apply_base') {
     const usage = Object.fromEntries(BASE_USAGES);
@@ -558,7 +564,7 @@ export async function applicationAction(action, id, ctx) {
     await c.api('/applications/trainers/' + id + '/recommend', {method: 'POST', body: {reason: v.reason, basis: v.basis}});
     c.closeModal(); c.toast('已记录推荐'); await c.render();
   }, {submit: '确认推荐'});
-  const map = {'app-approve': 'approve', 'app-return': 'return', 'app-submit': 'submit', 'app-withdraw': 'withdraw'};
+  const map = {'app-approve': 'approve', 'app-return': 'return', 'app-submit': 'submit', 'app-withdraw': 'withdraw', 'app-delete': 'delete', 'app-restore': 'restore'};
   if (map[action]) {
     if (opened?.item?.id !== id) await load(id);
     return decide(id, map[action]);

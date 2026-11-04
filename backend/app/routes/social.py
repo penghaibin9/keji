@@ -37,7 +37,9 @@ def event(db,a,kind,obj,action,before,reason,basis='',handling=None):
 
 
 # 老师可以发起本人负责的培训项目；学院、学校有登记权限的账号可以代登记。
-TEACHER_PROJECT_ACTIONS={'submit','close_submit','refile'}
+TEACHER_PROJECT_ACTIONS={'submit','close_submit','refile','withdraw','delete','restore'}
+# 负责人（或代登记人）自己办的项目动作：撤回审批中的申报、删除/恢复从未备案过的申报草稿。
+OWNER_PROJECT_ACTIONS={'withdraw','delete','restore'}
 
 
 def project_applicant(db,a,p):
@@ -227,6 +229,8 @@ def project_create(data:ProjectIn,request:Request):
         if master and master.name!=p.name:raise HTTPException(409,'项目编码已存在，请使用现有项目名称')
         if not master:
             master=TrainingProjectMaster(code=p.code,name=p.name,start_date=p.start_date,end_date=p.end_date,source='学校项目申报');db.add(master);db.flush()
+        same=db.scalar(select(SocialProject).where(SocialProject.master_id==master.id,SocialProject.cohort==p.cohort))
+        if same is not None:raise HTTPException(409,'这个项目的'+p.cohort+'已经建立过（'+st.state_label(same)+'），请在“我的申请”里继续办理')
         obj=SocialProject(master_id=master.id,org_id=p.org_id,owner_id=p.owner_id,cohort=p.cohort,data=serial(p.model_dump()))
         db.add(obj);db.flush();return event(db,a,'social_project',obj,'建立项目申报',{},data.reason)
     return command(request,data.model_dump(),'portal.read',apply)
@@ -309,8 +313,9 @@ def project_action(ident:str,data:SocialAction,request:Request):
     def apply(db,a,s):
         from .. import approvals as ap
         from ..social_schemas import quality_blockers, application_blockers
-        obj=st.scoped(db,a,'social_project',ident,write=True);check_version(obj,data.expected_version);before=serial(obj)
-        if a.role.kind=='teacher' and data.action not in TEACHER_PROJECT_ACTIONS:raise HTTPException(403,'老师只能提交、结项提交或申请重新备案本人负责的项目')
+        obj=st.scoped(db,a,'social_project',ident,write=True,allow_deleted=data.action=='restore');check_version(obj,data.expected_version);before=serial(obj)
+        if a.role.kind=='teacher' and data.action not in TEACHER_PROJECT_ACTIONS:raise HTTPException(403,'老师只能提交、结项提交、申请重新备案、撤回或删除本人负责的项目')
+        if data.action in OWNER_PROJECT_ACTIONS:return owner_project_action(db,a,obj,data,before)
         if data.action in {'file','return','close'} and obj.state in {'SUBMITTED','CLOSE_REVIEW'}:st.check_project_conflicts(db,a,obj)
         owner=db.get(User,obj.owner_id)
         # 老师、教研室提交的项目先到学院审批；学院、学校账号登记提交的，学院这一级视为登记时已确认。
@@ -396,6 +401,42 @@ def project_action(ident:str,data:SocialAction,request:Request):
             message_push.queue(db,[obj.owner_id],'培训项目被退回',obj.data['name']+'：'+data.reason)
         return result
     return command(request,data.model_dump(),'portal.read',apply)
+
+
+def project_starter(db,obj):
+    """项目申报是谁建立的（代登记时是登记人）：第一条办理记录的人；没有记录就是负责人。"""
+    from .. import approvals as ap
+    evs=ap.events(db,'social_project',obj.id)
+    return evs[0].actor_id if evs else obj.owner_id
+
+
+def owner_project_action(db,a,obj,data,before):
+    """负责人撤回、删除、恢复项目申报。删除不物理删除：状态改为 DELETED，期次让出来以便重新建立，原期次记在 data.deleted_cohort。"""
+    if a.id not in {obj.owner_id,project_starter(db,obj)}:raise HTTPException(403,'只有项目负责人或登记人可以撤回、删除本项目申报')
+    filed=bool(obj.data.get('filed_on'))
+    if data.action=='withdraw':
+        if obj.state not in {'COLLEGE','SUBMITTED'}:raise HTTPException(409,'只有待学院审批或待审核备案的项目可以撤回')
+        # 从未备案的回到草稿；重新备案中途撤回的回到“重新备案补正”。
+        obj.state='RETURNED' if filed else 'DRAFT';obj.data={**obj.data,'returned_level':None}
+        handling={'flow':'project','decision':'refile' if filed else 'withdraw'}
+        label='撤回项目申报'
+    elif data.action=='delete':
+        if obj.state in {'COLLEGE','SUBMITTED'}:raise HTTPException(409,'项目还在审批中，请先撤回再删除')
+        if obj.state not in {'DRAFT','RETURNED'} or filed:raise HTTPException(409,'已备案过的项目不能删除，如需停办请联系学院')
+        if st.units(db,obj.id):raise HTTPException(409,'项目已有培训明细，不能删除')
+        if (obj.data.get('source') or {}).get('ledger_id') or (obj.data.get('source') or {}).get('source_key'):raise HTTPException(409,'从学院台账带入的项目不能在这里删除')
+        obj.data={**obj.data,'deleted_cohort':obj.cohort,'deleted_from':obj.state}
+        obj.cohort='DEL-'+obj.id;obj.state='DELETED'
+        handling={'flow':'project','decision':'delete'};label='删除项目申报'
+    else:
+        if obj.state!='DELETED':raise HTTPException(409,'项目没有被删除')
+        cohort=obj.data.get('deleted_cohort') or ''
+        if not cohort or db.scalar(select(SocialProject.id).where(SocialProject.master_id==obj.master_id,SocialProject.cohort==cohort,SocialProject.id!=obj.id)):
+            raise HTTPException(409,'删除后已经重新建立过同一期项目，不能再恢复这一份')
+        obj.cohort=cohort;obj.state='DRAFT'
+        obj.data={k:v for k,v in obj.data.items() if k not in ('deleted_cohort','deleted_from')}
+        handling={'flow':'project','decision':'restore'};label='恢复已删除的项目申报'
+    return event(db,a,'social_project',obj,label,before,data.reason,data.basis,handling)
 
 
 def project_bases(db,project):
@@ -674,7 +715,7 @@ def course_info(db,a,row,org_id):
 def course_create(data:CourseIn,request:Request):
     def apply(db,a,s):
         school_registrar(a)
-        projects=db.scalars(select(SocialProject).where(SocialProject.org_id.in_(a.org_ids))).all()
+        projects=db.scalars(select(SocialProject).where(SocialProject.org_id.in_(a.org_ids),SocialProject.state!='DELETED')).all()
         project=next((p for p in projects if p.data['code']==data.project_code),None)
         if project is None:raise HTTPException(403,'须先建立本组织项目')
         if db.scalar(select(TrainingCourseMaster.id).where(TrainingCourseMaster.code==data.code)):
@@ -739,7 +780,7 @@ def project_course_link(ident:str,data:CourseLinkIn,request:Request):
 def course_import(operation:str,data:CourseBatchIn,request:Request):
     def apply(db,a,s):
         school_registrar(a)
-        projects=db.scalars(select(SocialProject).where(SocialProject.org_id.in_(a.org_ids))).all()
+        projects=db.scalars(select(SocialProject).where(SocialProject.org_id.in_(a.org_ids),SocialProject.state!='DELETED')).all()
         allowed={p.data['code'] for p in projects};seen=set()
         for row in data.rows:
             if row.project_code not in allowed:raise HTTPException(403,'课程所属项目超出授权范围')
@@ -1047,7 +1088,7 @@ def resource_values(db,a,data):
     college(db,a,data.org_id)
     if data.kind=='course_resource':
         course=db.scalar(select(TrainingCourseMaster).where(TrainingCourseMaster.code==data.course_code))
-        allowed=db.scalars(select(SocialProject).where(SocialProject.org_id==data.org_id)).all()
+        allowed=db.scalars(select(SocialProject).where(SocialProject.org_id==data.org_id,SocialProject.state!='DELETED')).all()
         if not course or not any(p.data['code']==course.project_code for p in allowed):raise HTTPException(422,'课程不属于所选学院项目')
     values=data.model_dump(exclude={'reason','basis','resource_url','expected_version'});values['resource_url']=str(data.resource_url) if data.resource_url else None
     if data.kind=='course_resource':

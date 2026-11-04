@@ -19,6 +19,8 @@ from . import approvals as ap
 
 APP_KINDS = ('course_apply', 'base', 'trainer')
 PENDING_STATES = ('DEPT', 'COLLEGE', 'SCHOOL', 'HR', 'JWC')
+# 申请人可以删除还没生效的申请（被退回、已撤回）。不物理删除：状态改为 DELETED，编号让出来以便重新申报，原编号记在 data.deleted_code。
+DELETABLE_STATES = ('RETURNED', 'WITHDRAWN')
 CX_KEYS = ('course_url', 'cover_url', 'chapters', 'team_names', 'group_name', 'course_type', 'jw_course_code')
 
 
@@ -368,7 +370,7 @@ def state_label(obj):
     if isinstance(obj, SocialResource) and obj.kind in APP_KINDS:
         if obj.state in ap.LEVEL_STATES:
             return ap.LEVEL_STATES[obj.state]
-        return {'RETURNED': '退回补正', 'WITHDRAWN': '已撤回', 'ACTIVE': '已入师资库' if obj.kind == 'trainer' else '已入培训课程库', 'DRAFT': '已生效'}.get(obj.state, obj.state)
+        return {'RETURNED': '退回补正', 'WITHDRAWN': '已撤回', 'DELETED': '已删除', 'ACTIVE': '已入师资库' if obj.kind == 'trainer' else '已入培训课程库', 'DRAFT': '已生效'}.get(obj.state, obj.state)
     from .social_training import state_label as social_label
     return social_label(obj)
 
@@ -438,7 +440,8 @@ def permissions(db, a, obj, applicant):
     mine = a.id in {obj.data.get('teacher_id'), obj.data.get('created_by')}
     handle = bool(level) and ap.can_handle(db, a, applicant, level, obj.org_id)
     return {'approve': handle, 'return': handle, 'edit': can_edit(a, obj), 'submit': mine and obj.state in ('RETURNED', 'WITHDRAWN'),
-            'withdraw': mine and obj.state in PENDING_STATES, 'upload': mine and obj.state in ('RETURNED', 'WITHDRAWN', *PENDING_STATES)}
+            'withdraw': mine and obj.state in PENDING_STATES, 'upload': mine and obj.state in ('RETURNED', 'WITHDRAWN', *PENDING_STATES),
+            'delete': mine and obj.state in DELETABLE_STATES, 'restore': mine and obj.state == 'DELETED'}
 
 
 def detail(db, a, obj):
@@ -465,6 +468,8 @@ def summary(db, obj, applicant=None):
     else:
         name, kind = obj.name, 'application'
     p = ap.progress(db, flow, obj, applicant, returned_level=returned)
+    if obj.state == 'DELETED':
+        p = {**p, 'text': '已删除，可在“已删除”里恢复', 'headline': '已删除', 'tone': 'gray', 'needs_applicant': False}
     d = obj.data or {}
     course = {k: d.get(k) for k in ('course_code', 'hours', 'teaching_mode', 'teacher_name')} if getattr(obj, 'kind', '') == 'course_apply' else None
     kind_of = getattr(obj, 'kind', '')
@@ -566,9 +571,11 @@ def mine(db, a):
     for p in db.scalars(select(SocialProject).where(SocialProject.owner_id == a.id)):
         out.append(summary(db, p))
     out.sort(key=lambda x: str(x['updated_at'] or ''), reverse=True)
+    deleted = [x for x in out if x['state'] == 'DELETED']
+    out = [x for x in out if x['state'] != 'DELETED']
     counts = {'pending': sum(x['progress']['tone'] == 'blue' for x in out), 'returned': sum(x['progress']['tone'] == 'red' for x in out),
               'done': sum(x['progress']['tone'] == 'green' for x in out), 'draft': sum(x['state'] in ('DRAFT', 'WITHDRAWN') and x['progress']['tone'] == 'gray' for x in out)}
-    return {'items': out, 'counts': counts}
+    return {'items': out, 'counts': counts, 'deleted': deleted}
 
 
 # ---- 培训师资库（管理办法第十五条）----

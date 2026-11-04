@@ -384,6 +384,30 @@ def action(ident: str, data: ApplicationAction, request: Request):
                 raise HTTPException(409, '只有申请人可以撤回审批中的申请')
             obj.state = 'WITHDRAWN'
             return record(db, a, obj, '撤回' + f['label'], before, data.reason, {'flow': flow, 'decision': 'withdraw'})
+        if data.action == 'delete':
+            if not mine:
+                raise HTTPException(403, '只有申请人或代登记人可以删除申请')
+            if obj.state in apps.PENDING_STATES:
+                raise HTTPException(409, '申请还在审批中，请先撤回再删除')
+            if obj.state not in apps.DELETABLE_STATES:
+                raise HTTPException(409, '已生效的申请不能删除')
+            # 让出编号，同一门课（同一位培训师、同一个基地编号）可以重新申报；原编号留在 data 里，恢复时取回。
+            obj.data = {**obj.data, 'deleted_code': obj.code, 'deleted_from': obj.state}
+            obj.code = 'DEL-' + obj.id
+            obj.state = 'DELETED'
+            return record(db, a, obj, '删除' + f['label'], before, data.reason, {'flow': flow, 'decision': 'delete'})
+        if data.action == 'restore':
+            if not mine:
+                raise HTTPException(403, '只有申请人或代登记人可以恢复申请')
+            if obj.state != 'DELETED':
+                raise HTTPException(409, '申请没有被删除')
+            code = obj.data.get('deleted_code') or ''
+            if not code or db.scalar(select(SocialResource.id).where(SocialResource.code == code, SocialResource.id != obj.id)):
+                raise HTTPException(409, '删除后已经重新申报过，不能再恢复这一份')
+            obj.code = code
+            obj.state = 'WITHDRAWN'
+            obj.data = {k: v for k, v in obj.data.items() if k not in ('deleted_code', 'deleted_from')}
+            return record(db, a, obj, '恢复已删除的' + f['label'], before, data.reason, {'flow': flow, 'decision': 'restore'})
         level = ap.level_of(flow, obj.state)
         if not level:
             raise HTTPException(409, '申请不在审批中')

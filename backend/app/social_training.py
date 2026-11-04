@@ -14,7 +14,7 @@ STATES = {'DRAFT':'草稿', 'SUBMITTED':'待院长初审', 'DEAN':'待归口复�
           'APPROVED':'待教学秘书归档', 'ARCHIVED':'已归档', 'FILED':'已备案', 'CLOSE_REVIEW':'待结项核验',
           'CLOSED':'已结项', 'RETURNED':'退回补正', 'REVIEW':'待职能部门核验', 'COMMITTEE':'待委员会评分',
           'PUBLIC':'公示中', 'ACTIVE':'已确认启用', 'VOID':'已作废',
-          'DEPT':'待教研室审核', 'COLLEGE':'待学院审批', 'SCHOOL':'待学校审批', 'CLOSE_COLLEGE':'待学院结项核验', 'WITHDRAWN':'已撤回'}
+          'DEPT':'待教研室审核', 'COLLEGE':'待学院审批', 'SCHOOL':'待学校审批', 'CLOSE_COLLEGE':'待学院结项核验', 'WITHDRAWN':'已撤回', 'DELETED':'已删除'}
 REVIEW_STATES = {'DRAFT':'待发送教师','TEACHER':'待教师回应','COLLEGE':'待学院裁定','CLOSED':'已办结'}
 DUTIES = {'dean':'二级学院院长','coordinator':'归口学院复审','vice_president':'分管副校长','secretary':'教学秘书',
           'finance':'财务核验','academic':'成果核验','discipline':'纪检核验','committee':'委员会评审',
@@ -169,7 +169,7 @@ def check_annual_conflicts(db, actor, annual):
     for project in confirmed_projects(db,annual.org_id,period.start_date,period.end_date):check_project_conflicts(db,actor,project)
 
 
-def scoped(db, actor, kind, ident, write=False, allow_participant=False):
+def scoped(db, actor, kind, ident, write=False, allow_participant=False, allow_deleted=False):
     model = KINDS.get(kind)
     if not model: raise HTTPException(422, '业务类型不支持')
     obj = db.get(model, ident)
@@ -216,6 +216,7 @@ def scoped(db, actor, kind, ident, write=False, allow_participant=False):
         elif org_id not in actor.org_ids: raise HTTPException(403, '业务超出组织授权范围')
     if write:
         if obj.state in {'ARCHIVED', 'ACTIVE', 'CLOSED', 'VOID'}: raise HTTPException(409, '已生效、已归档或已作废依据不可覆盖')
+        if obj.state=='DELETED' and not allow_deleted: raise HTTPException(409, '已删除，请先恢复')
         own_project=kind=='social_project' and actor.role.kind=='teacher' and obj.owner_id==actor.id
         if kind not in {'social_claim', 'social_policy'} and not (kind=='social_resource' and obj.kind in ('correction','point_review')) and not own_project:
             actor.require('records.write')
@@ -264,7 +265,7 @@ def unit_membership(db,teacher_id):
 
 
 def visible_projects(db,a):
-    query=select(SocialProject)
+    query=select(SocialProject).where(SocialProject.state!='DELETED')  # 负责人删除的申报草稿只在“我的申请 · 已删除”里
     if a.role.kind=='teacher':
         member=unit_membership(db,a.id)
         participation=select(SocialUnit.id).where(SocialUnit.project_id==SocialProject.id,member).exists()

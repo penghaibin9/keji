@@ -617,7 +617,7 @@ class TrainerApplyIn(Reason):
 
 class ApplicationAction(Reason):
     expected_version: int = Field(ge=1)
-    action: Literal['submit', 'approve', 'return', 'withdraw']
+    action: Literal['submit', 'approve', 'return', 'withdraw', 'delete', 'restore']
     courseware: CoursewareReview | None = None
 
     @model_validator(mode='after')

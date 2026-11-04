@@ -414,7 +414,7 @@ def ledger_detail(ident: str, request: Request):
         can_bind = 'records.write' in a.permissions and a.role.kind in ('school', 'college')
         org_ids = [obj.org_id] + [o.id for o in db.scalars(select(Org).where(Org.parent_id == obj.org_id))]
         teachers = db.scalars(select(User).join(Role, Role.id == User.role_id).where(User.org_id.in_(org_ids), User.active.is_(True), User.authorization_pending.is_(False), Role.kind == 'teacher')).all() if can_bind else []
-        projects = db.scalars(select(SocialProject).where(SocialProject.org_id == obj.org_id)).all() if can_bind else []
+        projects = db.scalars(select(SocialProject).where(SocialProject.org_id == obj.org_id, SocialProject.state != 'DELETED')).all() if can_bind else []
         return {**public(obj), 'org_name': org.name if org else '', 'versions': others, 'submitted_by_name': submitter.name if submitter else '',
                 'note': RECOMMENDED_NOTE, 'can_review': a.role.kind == 'school' and 'records.write' in a.permissions,
                 'can_draft': can_bind, 'teacher_options': [{'id': u.id, 'name': u.name, 'employee_no': u.staff_no} for u in teachers],
@@ -820,7 +820,7 @@ def mine(request: Request, year: int = Query(..., ge=2020, le=2100)):
             for t in u.data.get('teachers', []):
                 if t.get('teacher_id') == a.id: my_roles.setdefault(u.project_id, {}).setdefault(ROLE_LABELS.get(t.get('role'), '授课'), 0); my_roles[u.project_id][ROLE_LABELS.get(t.get('role'), '授课')] += 1
         participant_scope = SocialProject.org_id == a.org.parent_id if a.role.kind == 'teacher' else SocialProject.org_id.in_(a.org_ids)
-        project_query = select(SocialProject).where(or_(SocialProject.owner_id == a.id, and_(SocialProject.id.in_(list(my_roles) or ['']), participant_scope)))
+        project_query = select(SocialProject).where(SocialProject.state != 'DELETED', or_(SocialProject.owner_id == a.id, and_(SocialProject.id.in_(list(my_roles) or ['']), participant_scope)))
         if a.role.kind != 'teacher': project_query = project_query.where(SocialProject.org_id.in_(a.org_ids))
         projects = db.scalars(project_query.order_by(SocialProject.created_at.desc())).all() if allowed['records'] else []
         claims = db.scalars(select(SocialClaim).where(SocialClaim.teacher_id == a.id).order_by(SocialClaim.created_at.desc())).all() if allowed['records'] and allowed['points'] else []
@@ -881,7 +881,7 @@ def mine(request: Request, year: int = Query(..., ge=2020, le=2100)):
         quals = []
         qualification_setting = db.get(Setting, 'qualification')
         expiry_days = qualification_setting.value['expiry_days'] if qualification_setting else 0
-        for q in db.scalars(select(Qualification).where(Qualification.teacher_id == a.id).order_by(Qualification.obtained.desc())) if allowed['qualifications'] else []:
+        for q in db.scalars(select(Qualification).where(Qualification.teacher_id == a.id, Qualification.state != 'DELETED').order_by(Qualification.obtained.desc())) if allowed['qualifications'] else []:
             days = (q.expires - today).days if q.expires else None
             quals.append({'id': q.id, 'category': q.category, 'name': q.name, 'state': q.state, 'expires': q.expires.isoformat() if q.expires else None, 'days_left': days})
             if q.state == 'APPROVED' and days is not None and days <= expiry_days:

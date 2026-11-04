@@ -52,7 +52,7 @@ def course_points_progress(db, actor, application, project_id=''):
         return finish('approval', '待课程入库', '课程审批通过并生效后，继续办理培训项目和积分。', '课程当前审批人')
     if not course.project_code:
         return finish('link', '待关联培训项目', '课程已入库。请选择实际开展培训的项目；尚无项目时可先申报项目，再关联本课程。', '项目负责人或本学院、学校培训管理员')
-    candidates = db.scalars(select(SocialProject).where(SocialProject.data['code'].as_string() == course.project_code)
+    candidates = db.scalars(select(SocialProject).where(SocialProject.data['code'].as_string() == course.project_code, SocialProject.state != 'DELETED')
                            .order_by(SocialProject.created_at.desc(), SocialProject.id)).all()
     visible = []
     for project in candidates:
