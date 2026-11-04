@@ -1,5 +1,5 @@
 <!doctype html>
-<html lang="zh-CN"><head><meta charset="utf-8"><title>审批流程与依据（2026-11-05 流程精简后）</title>
+<html lang="zh-CN"><head><meta charset="utf-8"><title>审批流程、依据与删除规则（2026-11-05 流程精简后）</title>
 <style>
 :root{--teacher:#e8f1fc;--teacher-b:#8db4e2;--dept:#e3f5ef;--dept-b:#6fbf9f;--college:#eeeafb;--college-b:#a79ad9;--school:#fdf2df;--school-b:#e3b25e;--done:#fce9e6;--done-b:#e3a197;--line:#9aa5b1;--ink:#1f2933;--muted:#5f6b7a}
 *{box-sizing:border-box}body{margin:0;background:#fff;color:var(--ink);font:14px/1.55 "Microsoft YaHei","PingFang SC",sans-serif}
@@ -9,7 +9,7 @@ h1{font-size:30px;margin:0 0 14px}h2{font-size:26px;margin:40px 0 12px}
 .legend i{display:inline-block;width:22px;height:22px;border-radius:5px;margin-right:8px;vertical-align:-4px;border:1.5px solid}
 .note{font-size:18px;color:var(--muted);margin:4px 0 22px}.note i{display:inline-block;width:22px;height:22px;border:1.5px dashed #9aa5b1;border-radius:5px;vertical-align:-4px;margin-right:8px}
 .row{display:flex;align-items:center;margin:16px 0}
-.row .name{width:230px;font-size:22px;font-weight:600}.row .name small{display:block;color:#c0601e;font-size:16px;font-weight:600}
+.row .name{width:230px;flex:none;font-size:22px;font-weight:600}.row .name small{display:block;color:#c0601e;font-size:16px;font-weight:600}
 .box{width:236px;height:88px;border-radius:12px;border:2px solid;display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;font-size:21px;font-weight:600}
 .box span{font-size:16px;font-weight:400;color:var(--muted);margin-top:2px}
 .box.dash{border-style:dashed}
@@ -54,6 +54,23 @@ tr.hl td{background:#fffbea}
 <tr><td>教师资质</td><td>采购需求第8项第3款（资质审核流转：提交、审核、退回、重新提交，记录审核人员和意见）</td><td>由“范围内任一负责人”一步审核：采购需求未规定由哪一级审核，系统设计</td><td><code>backend/app/routes/business.py</code> qualification_action</td></tr>
 <tr><td>授课认定</td><td>积分量化管理办法第六条（授课积分的认定范围）；采购需求第9项第2款（积分来源可关联教师授课）</td><td>老师申请、教研室审核、学院审批、学校认定：制度未写明，按学校意见加上，和其他流程一样分级。按学时计积分（1学时1分），每一级都能改分、填意见；认定后进入老师培训课程库</td><td><code>backend/app/teaching_review.py</code> 三级认定与积分入账；<code>reference_data</code> 授课认定</td></tr>
 </table>
+
+<h2>删除、撤回与恢复的原理</h2>
+<div class="src">总原则：系统里没有“物理删除”。删除只是把状态改成“已删除”，原来的资料、附件、办理记录和审计日志全部保留；删除后让出编号或期次，方便重新申报；需要时可以在“已删除”里恢复。已经生效、计分或归档的东西不能删除，只能通过更正、作废或改回重审处理，并留痕。</div>
+<div class="row"><div class="name">申请类<small>课程、培训师、基地、项目、资质</small></div><div class="box t">草稿 / 退回 / 已撤回<span>可以修改、可以删除</span></div><div class="arrow">→</div><div class="box f">已删除<span>不显示在列表，“已删除”页签可查</span></div><div class="arrow">→</div><div class="box t">恢复<span>回到已撤回或草稿，可再提交</span></div></div>
+<div class="row"><div class="name"></div><div class="box s">审批中<span>不能直接删除</span></div><div class="arrow">→</div><div class="box t">先撤回<span>申请人或登记人本人</span></div><div class="arrow">→</div><div class="box f">再删除<span>同上</span></div></div>
+<div class="row"><div class="name"></div><div class="box c">已生效 / 已备案 / 已计分 / 已归档<span>不能删除</span></div><div class="arrow">→</div><div class="box s">更正、作废、改回重审<span>按各自流程办理，留痕</span></div></div>
+<table><tr><th style="width:13%">对象</th><th style="width:14%">谁能删</th><th style="width:22%">什么状态能删</th><th style="width:21%">删除后</th><th style="width:15%">能否恢复</th><th>不能删时怎么办</th></tr>
+<tr><td>培训课程、培训师、培训基地申请</td><td>申请人本人或代登记人</td><td>被退回、已撤回（审批中须先撤回；已入库、已入师资库、已进基地清单的不能删）</td><td>状态改为“已删除”，编号让出，同一门课、同一位培训师、同一基地编号可以重新申报</td><td>可以，恢复为“已撤回”；删除后已经重新申报过的不能恢复</td><td>已生效的联系学校处理</td></tr>
+<tr><td>培训项目申报</td><td>项目负责人或登记人</td><td>草稿、被退回，并且从未备案过、没有参训明细、不是从学院台账带入的（审批中须先撤回）</td><td>状态改为“已删除”，期次让出，可以用同一期次重新建立</td><td>可以，恢复为草稿；已用同一期次重建的不能恢复</td><td>已备案的不能删，需停办请联系学院；核心事项变化走“申请重新备案”</td></tr>
+<tr><td>教师资质</td><td>老师本人</td><td>草稿、被退回（审核中须先撤回；审核通过的不能删）</td><td>状态改为“已删除”，不计入统计；同一证书编号不能重复登记</td><td>可以，恢复为草稿</td><td>审核通过的不删，到期自动标“已过期”；草稿或退回状态可以移除当前附件关联</td></tr>
+<tr><td>社会培训积分申报</td><td>—</td><td>不提供删除</td><td>—</td><td>—</td><td>未提交前可补正；提交后被退回再补正；已归档入账的走“积分更正”，逐级审核后追加差额，原认定保留</td></tr>
+<tr><td>积分更正、积分核对</td><td>发起人</td><td>更正未入账前可以“作废”；积分核对发起人可以撤回</td><td>更正状态改为“已作废”，不追加积分；核对单办结为“已撤回”</td><td>不恢复，需要时重新发起</td><td>—</td></tr>
+<tr><td>授课认定</td><td>老师本人；学校授课认定人</td><td>老师申请后、还没有人审核前可以撤回申请</td><td>回到“待老师申请”</td><td>可以再次申请</td><td>已认定的由学校授课认定人“改回重审”（须写原因）：已入账积分追加一笔反向冲销，原记录保留，从教研室重新审</td></tr>
+<tr><td>教师考核、学院年度考核</td><td>—</td><td>不提供删除</td><td>—</td><td>—</td><td>考核在归档前可以退回重新核对；归档后冻结，不能修改</td></tr>
+<tr><td>积分记录、附件、办理记录</td><td>—</td><td>不提供删除（积分只追加，不改不删）</td><td>—</td><td>—</td><td>积分错误走更正或冲销；材料补充用“上传佐证”追加</td></tr>
+</table>
+<div class="foot">系统实现位置：申请类在 <code>backend/app/routes/applications.py</code> 的 withdraw、delete、restore；项目在 <code>routes/social.py</code> 的 owner_project_action；资质在 <code>routes/business.py</code> 的 qualification_action；更正作废、核对撤回在 <code>routes/social.py</code>；授课认定撤回与改回重审在 <code>teaching_review.py</code>。</div>
 
 <h2>各流程共用的规则</h2>
 <table><tr><th style="width:18%">规则</th><th style="width:22%">制度依据</th><th style="width:34%">系统处理</th><th>系统实现位置</th></tr>
