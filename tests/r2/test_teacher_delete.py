@@ -128,7 +128,7 @@ def test_deleted_application_restores_to_withdrawn(app2, client2):
     assert r.status_code == 200, r.text
     item = r.json()['item']
     assert item['state'] == 'WITHDRAWN' and not item['code'].startswith('DEL-') and 'deleted_code' not in item['data']
-    assert act(c, ident, 'submit', '重新提交').json()['item']['state'] == 'DEPT'
+    assert act(c, ident, 'submit', '重新提交').json()['item']['state'] == 'COLLEGE'
 
 
 def test_approved_application_cannot_be_deleted(app2, client2):
@@ -136,7 +136,7 @@ def test_approved_application_cannot_be_deleted(app2, client2):
     ids = app_setup(app2)
     auth(c, 'teacher')
     ident = apply_course(c, ids['X2']).json()['item']['id']
-    for role in ('depthead', 'collegehead', 'reviewer'):
+    for role in ('collegehead', 'reviewer'):
         auth(c, role)
         assert act(c, ident, 'approve').status_code == 200
     auth(c, 'teacher')

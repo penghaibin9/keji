@@ -1,4 +1,4 @@
-"""培训师遴选（管理办法第十五条）：校内老师教研室→学院→学校→组织人事部认定，外聘由学院登记→教务处备案，通过后进师资库。"""
+"""培训师遴选（管理办法第十五条）：校内老师 学院→组织人事部认定（2026-11-04 精简），外聘由学院登记→教务处备案，通过后进师资库。"""
 from sqlalchemy.orm import Session
 from app.models import User, Setting, Qualification
 from conftest import auth, post
@@ -25,7 +25,7 @@ def approve(c, ident, basis=''):
     return post(c, '/api/applications/' + ident + '/actions', {'action': 'approve', 'expected_version': item['version'], 'reason': '审核意见：同意', 'basis': basis})
 
 
-def test_internal_trainer_goes_four_levels_and_enters_library(app2, client2):
+def test_internal_trainer_goes_college_then_hr_and_enters_library(app2, client2):
     c = client2
     setup(app2)
     auth(c, 'teacher')
@@ -33,14 +33,16 @@ def test_internal_trainer_goes_four_levels_and_enters_library(app2, client2):
     assert r.status_code == 200, r.text
     d = r.json()
     ident = d['item']['id']
-    assert d['flow'] == 'trainer' and d['item']['state'] == 'DEPT' and d['progress']['total'] == 6
-    assert [n['label'] for n in d['progress']['nodes']] == ['提交', '教研室审核', '学院审批', '学校审批', '组织人事部认定', '进入培训师资']
+    assert d['flow'] == 'trainer' and d['item']['state'] == 'COLLEGE' and d['progress']['total'] == 4
+    assert [n['label'] for n in d['progress']['nodes']] == ['提交', '学院审批', '组织人事部认定', '进入培训师资']
     assert internal(c).status_code == 409  # 一人一单
     assert approve(c, ident).status_code == 403  # 本人不能办
-    for user in ('depthead', 'collegehead', 'reviewer'):
+    for user in ('depthead', 'reviewer'):
         auth(c, user)
-        assert ident in todo_ids(c)
-        assert approve(c, ident).status_code == 200
+        assert ident not in todo_ids(c)  # 教研室、学校两级已去掉
+    auth(c, 'collegehead')
+    assert ident in todo_ids(c)
+    assert approve(c, ident).status_code == 200
     auth(c, 'jwcuser')
     assert ident not in todo_ids(c)  # 教务处不办校内培训师
     auth(c, 'hruser')
@@ -112,7 +114,7 @@ def test_return_resumes_at_hr_and_province_recommendation_is_logged(app2, client
     setup(app2)
     auth(c, 'teacher')
     ident = internal(c).json()['item']['id']
-    for user in ('depthead', 'collegehead', 'reviewer'):
+    for user in ('collegehead',):
         auth(c, user)
         assert approve(c, ident).status_code == 200
     auth(c, 'hruser')
@@ -166,7 +168,7 @@ def test_trainer_materials_use_application_scope_version_and_live_file_permissio
     attachment = response.json()['id']
     detail = c.get('/api/social/objects/social_resource/' + ident)
     assert detail.status_code == 200, detail.text
-    assert detail.json()['state_label'] == '待教研室审核'
+    assert detail.json()['state_label'] == '待学院审批'
     assert detail.json()['item']['version'] == item['version'] + 1
     assert upload(item['version']).status_code == 409
     assert c.get('/api/attachments/' + attachment + '/download').content == png()
@@ -195,7 +197,7 @@ def test_completed_trainer_materials_stay_readable_but_cannot_be_appended(app2, 
     item = internal(c).json()['item']
     ident = item['id']
     proof(c, 'social_resource', ident, item['version'])
-    for actor in ('depthead', 'collegehead', 'reviewer'):
+    for actor in ('collegehead',):
         auth(c, actor)
         assert approve(c, ident).status_code == 200
     auth(c, 'teacher')
@@ -230,7 +232,7 @@ def test_unassigned_filing_duty_is_explained_and_resumes_after_configuration(app
     r = post(c, '/api/applications/trainers', {'data': data, **REASON}); assert r.status_code == 200, r.text
     ident = r.json()['item']['id']
     p = c.get('/api/applications/' + ident).json()['progress']
-    assert p['unassigned'] and '尚未指定办理人' in p['headline'] and '配置审批职责' in p['headline']
+    assert p['unassigned'] and '尚未指定办理人' in p['headline'] and '学校审批职责' in p['headline']
     auth(c, 'schooladmin')
     gaps = {g['duty']: g['pending'] for g in c.get('/api/social/duties').json()['gaps']}
     assert gaps == {'trainer_hr': 0, 'trainer_filing': 1}
@@ -259,7 +261,7 @@ def test_trainer_specialty_separate_from_business_category_and_taught_courses_fo
     ident = r.json()['item']['id']
     fields = dict(map(tuple, c.get('/api/applications/' + ident).json()['fields']))
     assert fields['专业特长'] == '茶艺、社区公益课程设计' and fields['培训业务类别'] == '社区公益培训、“一人一技”专项' and '培训方向' not in fields
-    for user in ('depthead', 'collegehead', 'reviewer'):
+    for user in ('collegehead',):
         auth(c, user); assert approve(c, ident).status_code == 200
     auth(c, 'hruser'); assert approve(c, ident, '湘科人认〔2026〕12号').status_code == 200
     with app2.state.sessions.begin() as db:

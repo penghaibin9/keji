@@ -1,4 +1,4 @@
-"""老师发起的申请走通用审批：培训课程申报（含从我的课程带出）教研室→学院→学校，培训基地 学院→学校。
+"""老师发起的申请走通用审批：培训课程申报（含从我的课程带出）学院→学校（2026-11-04 去掉教研室级），培训基地 学院→学校。
 
 覆盖：逐级办理、退回后从退回那一级接着审、本人回避、缺负责人上交代办、同一人连审、进度显示、我的申请、待办、通过后不自动记积分。
 """
@@ -60,9 +60,8 @@ def test_authorized_course_approval_records_courseware_without_rewriting_applica
 
     assert decide(courseware=review).status_code == 403
     auth(c, 'depthead')
-    assert decide(courseware=review).status_code == 422
-    assert c.get('/api/applications/' + ident).json()['item']['state'] == 'DEPT'
-    assert decide().status_code == 200
+    assert decide(courseware=review).status_code == 403  # 教研室不再审培训课程
+    assert c.get('/api/applications/' + ident).json()['item']['state'] == 'COLLEGE'
     auth(c, 'collegehead')
     previous = c.get('/api/applications/' + ident).json()['item']['version']
     assert decide(courseware={**review, 'reviewer': ''}).status_code == 422
@@ -135,7 +134,7 @@ def test_my_course_preserves_original_fields_without_expanding_teacher_scope(app
     assert not any(x['course_code'] == 'X1' for x in other)
 
 
-def test_teaching_course_goes_dept_college_school_and_resumes_at_returned_level(app2, client2):
+def test_teaching_course_goes_college_school_and_resumes_at_returned_level(app2, client2):
     c = client2
     ids = setup(app2)
     auth(c, 'teacher')
@@ -145,8 +144,8 @@ def test_teaching_course_goes_dept_college_school_and_resumes_at_returned_level(
     assert r.status_code == 200, r.text
     d = r.json()
     ident = d['item']['id']
-    assert d['item']['state'] == 'DEPT' and d['flow'] == 'teaching_course'
-    assert d['progress']['text'] == '教研室审核中 · 第 2 步 / 共 5 步' and '测试教研室负责人' in d['progress']['headline']
+    assert d['item']['state'] == 'COLLEGE' and d['flow'] == 'teaching_course'
+    assert d['progress']['text'] == '学院审批中 · 第 2 步 / 共 4 步' and '测试学院负责人' in d['progress']['headline']
     # 同一门课只申报一次：挂了 K1 的超星课算同一门。
     assert apply_course(c, ids['X1']).status_code == 409
     assert apply_course(c, ids['K0']).status_code == 422
@@ -155,12 +154,11 @@ def test_teaching_course_goes_dept_college_school_and_resumes_at_returned_level(
     assert mine['counts']['pending'] == 1 and mine['items'][0]['label'] == '培训课程申报'
     auth(c, 'otherteacher')
     assert c.get('/api/applications/' + ident).status_code == 403
-    auth(c, 'collegehead')
-    assert act(c, ident, 'approve').status_code == 403  # 不能越级
     auth(c, 'depthead')
-    assert ident in todo_ids(c)
-    assert act(c, ident, 'approve').status_code == 200
+    assert ident not in todo_ids(c)
+    assert act(c, ident, 'approve').status_code == 403  # 教研室不再审培训课程
     auth(c, 'collegehead')
+    assert ident in todo_ids(c)
     r = act(c, ident, 'return', '请补充面向对象和课件审查。')
     assert r.status_code == 200, r.text
     assert r.json()['progress']['text'] == '学院退回，待你补正'
@@ -175,7 +173,7 @@ def test_teaching_course_goes_dept_college_school_and_resumes_at_returned_level(
                                                      'expected_version': d['item']['version'], **REASON})
     assert r.status_code == 200, r.text
     r = act(c, ident, 'submit', '已补正')
-    assert r.status_code == 200 and r.json()['item']['state'] == 'COLLEGE'  # 从学院接着审，不回教研室
+    assert r.status_code == 200 and r.json()['item']['state'] == 'COLLEGE'  # 从学院接着审
     auth(c, 'collegehead')
     assert act(c, ident, 'approve').status_code == 200
     auth(c, 'reviewer')
@@ -184,7 +182,7 @@ def test_teaching_course_goes_dept_college_school_and_resumes_at_returned_level(
     assert r.status_code == 200, r.text
     d = r.json()
     assert d['item']['state'] == 'ACTIVE' and d['state_label'] == '已入培训课程库' and d['progress']['tone'] == 'green'
-    assert [n['state'] for n in d['progress']['nodes']] == ['done'] * 5
+    assert [n['state'] for n in d['progress']['nodes']] == ['done'] * 4
     assert 'points' not in d['item']['data']
     with Session(app2.state.engine) as db:
         master = db.scalar(select(TrainingCourseMaster).where(TrainingCourseMaster.code == d['item']['code']))
@@ -197,25 +195,24 @@ def test_teaching_course_goes_dept_college_school_and_resumes_at_returned_level(
     assert next(i for i in courses if i['course_code'] == 'X1')['application']['state'] == 'ACTIVE'
 
 
-def test_vacant_dept_is_handled_by_college_marked_and_same_person_flagged(app2, client2):
+def test_vacant_college_is_handled_by_school_marked_and_same_person_flagged(app2, client2):
     c = client2
     ids = setup(app2)
     with app2.state.sessions.begin() as db:
-        db.get(User, 'depthead').active = False
+        db.get(User, 'collegehead').active = False
         # 即使学校设了旧的每门分值参数，课程遴选也不记积分（积分只按项目授课人次算）。
         db.add(Setting(key='param:social_course_points', value={'name': '每门社会培训课积分', 'type': 'decimal', 'value': '2'}))
     auth(c, 'teacher')
     ident = apply_course(c, ids['X2']).json()['item']['id']
-    auth(c, 'collegehead')
+    auth(c, 'reviewer')  # 学院缺负责人：学校（归口学院复审）代办学院一级，再办学校一级
     assert ident in todo_ids(c)
     r = act(c, ident, 'approve')
     assert r.status_code == 200, r.text
     r = act(c, ident, 'approve')
     assert r.status_code == 200, r.text
-    nodes = r.json()['progress']['nodes']
+    d = r.json()
+    nodes = d['progress']['nodes']
     assert nodes[1]['acting_for'] and nodes[2]['same_person'] == '同一人连审'
-    auth(c, 'reviewer')
-    d = act(c, ident, 'approve').json()
     assert d['item']['state'] == 'ACTIVE' and 'points' not in d['item']['data']
     with Session(app2.state.engine) as db:
         assert db.scalar(select(PointEntry).where(PointEntry.teacher_id == 'teacher')) is None
@@ -226,7 +223,7 @@ def test_school_level_recuses_the_applicant(app2, client2):
     ids = setup(app2, coordinator='teacher')
     auth(c, 'teacher')
     ident = apply_course(c, ids['K1']).json()['item']['id']
-    for user in ('depthead', 'collegehead'):
+    for user in ('collegehead',):
         auth(c, user)
         assert act(c, ident, 'approve').status_code == 200
     auth(c, 'teacher')

@@ -99,8 +99,8 @@ def setup_org(app2):
         return db.scalar(select(SocialResource.org_id).limit(1)) or db.get(User, 'collegehead').org_id
 
 
-def test_teacher_new_course_goes_dept_college_school_without_points(setup_social, client2):
-    """新填一门和从我的课程带出是同一条课程遴选流程：教研室 → 学院 → 学校，通过后进课程库，不记积分。"""
+def test_teacher_new_course_goes_college_school_without_points(setup_social, client2):
+    """新填一门和从我的课程带出是同一条课程遴选流程：学院 → 学校（2026-11-04 去掉教研室级），通过后进课程库，不记积分。"""
     from app.models import PointEntry
     c = client2
     auth(c, 'teacher')
@@ -109,8 +109,8 @@ def test_teacher_new_course_goes_dept_college_school_without_points(setup_social
     assert r.status_code == 200, r.text
     d = r.json()
     ident = d['item']['id']
-    assert d['item']['state'] == 'DEPT' and d['flow'] == 'course' and d['progress']['text'].startswith('教研室审核中')
-    for user, after in (('depthead', 'COLLEGE'), ('collegehead', 'SCHOOL'), ('reviewer', 'ACTIVE')):
+    assert d['item']['state'] == 'COLLEGE' and d['flow'] == 'course' and d['progress']['text'].startswith('学院审批中')
+    for user, after in (('collegehead', 'SCHOOL'), ('reviewer', 'ACTIVE')):
         auth(c, user)
         r = act(c, ident, 'approve')
         assert r.status_code == 200 and r.json()['item']['state'] == after, r.text
@@ -132,7 +132,7 @@ def test_course_package_and_one_skill_flags_and_base_level(setup_social, client2
     ident = r.json()['item']['id']
     fields = dict((k, v) for k, v in r.json()['fields'])
     assert fields['培训包'] == '是' and fields['“一人一技”专项'].startswith('是 · 农民工')
-    for user in ('depthead', 'collegehead', 'reviewer'):
+    for user in ('collegehead', 'reviewer'):
         auth(c, user)
         assert act(c, ident, 'approve').status_code == 200
     info = courses(c)['course_info']['SOC-P8']

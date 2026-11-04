@@ -524,7 +524,7 @@ def test_formal_findings_require_duty_and_cannot_be_overwritten_as_complaints(re
 def test_missing_closeout_materials_and_chinese_project_search(setup_social,client2,monkeypatch):
     monkeypatch.setattr(st,'today',lambda:date(2026,9,3));pid=setup_social
     assert import_rows(client2,pid,[row()]).status_code==200
-    r=action(client2,'projects','social_project',pid,'close_submit',closeout={'closed_on':'2026-09-02','outcome_report':'材料待补','satisfaction':84,'rectification':'补齐材料并整改','actual_income':0,'finance_reference':'零收入核验','location':'onsite'})
+    r=action(client2,'projects','social_project',pid,'close_submit',closeout={'closed_on':'2026-09-02','outcome_report':'材料待补','satisfaction':84,'rectification':'补齐材料并整改','rectification_due':'2026-12-31','actual_income':0,'finance_reference':'零收入核验','location':'onsite'})
     assert r.status_code==200,r.text
     assert action(client2,'projects','social_project',pid,'close').status_code==409
     returned=action(client2,'projects','social_project',pid,'return')
@@ -543,7 +543,7 @@ def test_missing_closeout_materials_and_chinese_project_search(setup_social,clie
     assert current['progress']['tone']=='red' and current['item']['closeout']['actual_income']=='0'
     submitted=action(client2,'projects','social_project',pid,'close_submit',closeout=current['item']['closeout'])
     assert submitted.status_code==200,submitted.text
-    assert submitted.json()['item']['state']=='CLOSE_COLLEGE' and submitted.json()['progress']['tone']=='blue'
+    assert submitted.json()['item']['state']=='CLOSE_REVIEW' and submitted.json()['progress']['tone']=='blue'  # 2026-11-04 起结项直接到学校核验
     result=client2.get('/api/social/workspace?section=projects&q=隔离技能').json()
     assert result['pagination']['total']==1;assert result['projects'][0]['id']==pid
 
@@ -590,15 +590,11 @@ def test_college_quality_review_metadata_does_not_block_school_closeout(setup_so
     assert forged.status_code==422
     result=action(c,'projects','social_project',pid,'close_submit',closeout=closeout)
     assert result.status_code==200,result.text
-    assert result.json()['item']['state']=='CLOSE_COLLEGE'
-    auth(c,'collegehead');result=action(c,'projects','social_project',pid,'approve')
-    assert result.status_code==200,result.text
-    assert result.json()['item']['closeout']['college_checked_by']=='collegehead'
+    assert result.json()['item']['state']=='CLOSE_REVIEW'  # 2026-11-04 起结项直接到学校核验，学院审查百分比已登记时自动计入
     auth(c,'reviewer');result=action(c,'projects','social_project',pid,'close')
     assert result.status_code==200,result.text
     closed=result.json()['item']
     assert closed['state']=='CLOSED'
-    assert closed['closeout']['college_checked_by']=='collegehead'
     assert closed['closeout']['reviewed_by']=='reviewer'
     assert {'teacher_review','courseware_review'}<=set(closed['closeout']['materials_checked'])
     with pytest.raises(Exception):

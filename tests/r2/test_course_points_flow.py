@@ -16,7 +16,7 @@ def approve_manual_course(c):
         'courseware':{'checked':True,'reviewer':'合成课件审查人','reviewed_on':'2026-09-01'}},'reason':'隔离课程申报'})
     assert r.status_code==200,r.text
     ident=r.json()['item']['id']
-    for user in ('depthead','collegehead','reviewer'):
+    for user in ('collegehead','reviewer'):
         auth(c,user);r=act(c,ident,'approve');assert r.status_code==200,r.text
     assert r.json()['item']['state']=='ACTIVE'
     auth(c,'teacher')
@@ -120,7 +120,7 @@ def test_imported_course_approval_enters_same_points_flow(setup_social,client2,a
         'courseware':{'checked':True,'reviewer':'合成审核人','reviewed_on':'2026-10-19'}},'reason':'合成来源统一流程检查'})
     assert r.status_code==200,r.text
     ident=r.json()['item']['id']
-    for user in ('depthead','collegehead','reviewer'):
+    for user in ('collegehead','reviewer'):
         auth(c,user);r=act(c,ident,'approve');assert r.status_code==200,r.text
     auth(c,'teacher');p=progress(c,ident)
     assert p['stage']=='link' and p['can_link'] and p['application_id']==ident

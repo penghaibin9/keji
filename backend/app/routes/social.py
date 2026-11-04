@@ -216,10 +216,13 @@ def set_duties(data:DutiesIn,request:Request):
     def apply(db,a,s):
         a.require_admin();setting=db.get(Setting,'social_training_duties');before=serial(setting)
         if (setting.version if setting else 0)!=data.expected_version:raise HTTPException(409,'职责配置已变化，请刷新')
+        # 只核对这次新加入的人：原已担任的人（例如后来停用的账号）保留不动，不挡住对其他职责的调整；办理时仍按实际身份校验。
+        previous=(setting.value if setting else {}) or {}
         for code,ids in data.assignments.items():
             for ident in ids:
+                if ident in (previous.get(code) or []):continue
                 u=db.get(User,ident)
-                if not st.duty_eligible(db,u,a,code):raise HTTPException(422,st.DUTIES[code]+'人员须具有有效审核身份及对应组织范围')
+                if u is None or not st.duty_eligible(db,u,a,code):raise HTTPException(422,st.DUTIES[code]+'人员须具有有效审核身份及对应组织范围')
         if not setting:setting=Setting(key='social_training_duties',value=data.assignments,version=1);db.add(setting)
         else:setting.value=data.assignments;setting.version+=1
         db.flush();audit(db,a,'social_duties','social_training_duties','配置社会培训职责',before,serial(setting),data.reason)
@@ -617,14 +620,16 @@ def claim_action(ident:str,data:SocialAction,request:Request):
             cfg=db.get(SocialPolicy,obj.policy_id).data
             if obj.state=='RETURNED' and cfg.get('resubmission_mode') is None:raise HTTPException(409,'退回补正的期限口径尚待学校确认')
             submitted=st.today().isoformat() if cfg.get('resubmission_mode')=='resubmission_date' else obj.data.get('submitted_on',st.today().isoformat())
-            obj.data={**obj.data,'submitted_on':submitted}
+            # 退回补正后从退回的那一级接着审（2026-11-04），不再从院长重走；4 级本身不变。
+            # 先改好申报资料再试算冻结，否则冻结的依据和审批时重算的不一致。
+            resume=obj.data.get('returned_stage') if obj.state=='RETURNED' else None
+            resume=resume if resume in stages else None
+            kept={k:v for k,v in obj.data.items() if k not in ('returned_stage','resumed_from')}
+            obj.data={**kept,'submitted_on':submitted,**({'resumed_from':resume} if resume else {})}
             trial=st.point_trial(db,obj);st.require_unblocked(trial)
             blockers=st.review_staff_blockers(db,SimpleNamespace(org_id=db.get(SocialProject,obj.project_id).org_id,data={'claim_id':obj.id,'teacher_id':obj.teacher_id,'created_by':obj.teacher_id}))
             if blockers:raise HTTPException(409,'审批职责尚未就绪：'+'；'.join(blockers))
-            # 退回补正后从退回的那一级接着审（2026-11-04），不再从院长重走；4 级本身不变。
-            resume=obj.data.get('returned_stage') if obj.state=='RETURNED' else None
-            obj.snapshot=st.freeze(trial);obj.state=resume if resume in stages else 'SUBMITTED'
-            obj.data={**obj.data,'returned_stage':None,'resumed_from':resume if resume in stages else None}
+            obj.snapshot=st.freeze(trial);obj.state=resume or 'SUBMITTED'
         elif data.action in {'approve','return'}:
             if obj.state not in stages:raise HTTPException(409,'当前积分申报不在审批阶段')
             code,next_state=stages[obj.state];st.duty(db,a,code,obj.teacher_id,db.get(SocialProject,obj.project_id).org_id)
