@@ -67,6 +67,8 @@ class UserUpdate(Reason):
     expected_version: int=Field(ge=1)
     # 兼任身份；不传表示不改。主身份仍是 org_id + role_id。
     extra_identities: list[IdentityIn]|None=Field(default=None,max_length=6)
+    # 学校审批职责（归口学院复审等）；不传表示不改，传空列表表示这个人不再担任任何学校审批职责。
+    school_duties: list[Ident]|None=Field(default=None,max_length=12)
 class OrgHeadIn(Reason):
     user_id: Ident
     valid_until: str|None=Field(default=None,max_length=10)

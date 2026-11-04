@@ -287,6 +287,10 @@ def users(request:Request):
             'valid_until':x.get('valid_until') or '','expired':expired(x)})
         locked={u.id for u in db.scalars(select(User).where(User.id.in_([x['id'] for x in out['items']] or ['']),User.locked_until>utcnow()))}
         for x in out['items']:x['extra_identities']=extras.get(x['id'],[]);x['locked']=x['id'] in locked
+        from .. import social_training as st
+        assigned=st.assignments(db)
+        for x in out['items']:x['school_duties']=st.user_school_duties(db,x['id'],assigned)
+        out['duty_labels']={k:st.DUTIES[k] for k in st.SCHOOL_DUTIES};out['duty_staffing']=st.school_duty_staffing(db)
         numbers=[x['staff_no'] for x in out['items'] if x.get('staff_no')]
         hr=dict(db.execute(select(TeacherHrProfile.staff_no,TeacherHrProfile.active).where(TeacherHrProfile.staff_no.in_(numbers))).all()) if numbers else {}
         for x in out['items']:
@@ -330,13 +334,18 @@ def update_user(ident:str,data:UserUpdate,request:Request):
         if data.is_admin and role.kind!='school': raise HTTPException(422,'学校管理员必须绑定学校角色')
         before=serial(obj)
         obj.authorization_pending=False
-        for key,value in data.model_dump(exclude={'reason','basis','expected_version','extra_identities'}).items():setattr(obj,key,value)
+        for key,value in data.model_dump(exclude={'reason','basis','expected_version','extra_identities','school_duties'}).items():setattr(obj,key,value)
         after=serial(obj)
         if data.extra_identities is not None:
             from ..identities import replace_user_extras,describe
             old_extras,new_extras=replace_user_extras(db,a,obj,[x.model_dump() for x in data.extra_identities],data.reason)
             before['extra_identities']=[describe(db,x['role_id'],x['org_id']) for x in old_extras]
             after['extra_identities']=[describe(db,x['role_id'],x['org_id']) for x in new_extras]
+        if data.school_duties is not None:
+            from .. import social_training as st
+            db.flush();old_duties,new_duties=st.set_user_duties(db,a,obj,data.school_duties,data.reason)
+            if old_duties!=new_duties:
+                before['school_duties']=[st.DUTIES[c] for c in old_duties];after['school_duties']=[st.DUTIES[c] for c in new_duties]
         obj.version+=1;obj.auth_version+=1;db.execute(delete(AuthSession).where(AuthSession.user_id==ident))
         after['version']=obj.version
         admin_survives(db);audit(db,a,'users',ident,'调整账号权限',before,after,data.reason);return obj

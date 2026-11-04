@@ -207,6 +207,27 @@ def pending_duty_gaps(db):
     return out
 
 
+def school_duty_alerts(db):
+    """给学校系统管理员首页的提醒：学校环节的职责没人或只有 1 人（本人申请回避后就没人办）。
+
+    “归口学院复审”管着项目、课程、基地等走到学校这一级的审批，不管有没有申请在等都提醒；
+    培训师认定、外聘培训师备案两项只在有申请在等时提醒。只数单子，不读申请内容。"""
+    from sqlalchemy import func
+    from .social_models import SocialProject, SocialResource
+    from . import social_training as st
+    staffing = st.school_duty_staffing(db)
+    out = []
+    staff = staffing.get('coordinator', 0)
+    if staff < 2:
+        pending = (db.scalar(select(func.count()).select_from(SocialProject).where(SocialProject.state.in_(('SUBMITTED', 'CLOSE_REVIEW')))) or 0) + \
+                  (db.scalar(select(func.count()).select_from(SocialResource).where(SocialResource.state == 'SCHOOL')) or 0)
+        out.append({'duty': 'coordinator', 'label': st.DUTIES['coordinator'], 'staff': staff, 'pending': pending})
+    for gap in pending_duty_gaps(db):
+        if gap['pending']:
+            out.append({**gap, 'staff': 0})
+    return out
+
+
 def _iso(value):
     return value.isoformat(timespec='seconds') if isinstance(value, datetime) else value
 

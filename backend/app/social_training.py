@@ -83,6 +83,58 @@ def actor_duties(db, actor):
     return out
 
 
+# 学校级审批职责（二级学院院长是学院一级，按学院负责人走，不在这里配）。
+SCHOOL_DUTIES = tuple(k for k in DUTIES if k != 'dean')
+DUTIES_KEY = 'social_training_duties'
+
+
+def user_school_duties(db, user_id, assigned=None):
+    assigned = assignments(db) if assigned is None else assigned
+    return [k for k in SCHOOL_DUTIES if user_id in assigned.get(k, [])]
+
+
+def set_user_duties(db, admin, user, codes, reason):
+    """在“调整账号”里给一个人设置学校审批职责：只改这个人在各职责名单里的进出，其他人不动。
+
+    返回 (调整前, 调整后) 的职责代码；新加的职责要求这个人有学校类型、带审核权限的身份。"""
+    from .core import audit
+    codes = list(dict.fromkeys(codes))
+    if any(c not in SCHOOL_DUTIES for c in codes):
+        raise HTTPException(422, '审批职责不存在，请刷新页面后重选')
+    setting = db.get(Setting, DUTIES_KEY)
+    current = {k: list(v) for k, v in (setting.value if setting else {}).items()}
+    before_codes = user_school_duties(db, user.id, current)
+    if sorted(codes) == sorted(before_codes):
+        return before_codes, before_codes
+    for code in codes:
+        if code not in before_codes and not duty_eligible(db, user, admin, code):
+            raise HTTPException(422, '“' + DUTIES[code] + '”须由有学校审核身份的人担任：请先给' + user.name + '添加“学校业务审核”兼任身份，或确认账号已启用')
+    for code in SCHOOL_DUTIES:
+        ids = [i for i in current.get(code, []) if i != user.id]
+        if code in codes:
+            ids.append(user.id)
+        if ids or code in current:
+            current[code] = ids
+    before = serial(setting)
+    if setting is None:
+        setting = Setting(key=DUTIES_KEY, value=current, version=1)
+        db.add(setting)
+    else:
+        setting.value = current
+        setting.version += 1
+    db.flush()
+    audit(db, admin, 'social_duties', DUTIES_KEY, '在账号里调整审批职责：' + user.name, before, serial(setting), reason)
+    return before_codes, [c for c in SCHOOL_DUTIES if c in codes]
+
+
+def school_duty_staffing(db):
+    """每个学校级职责现在有几位可用的办理人（账号启用、未待授权）。"""
+    assigned = assignments(db)
+    ids = sorted({i for k in SCHOOL_DUTIES for i in assigned.get(k, [])})
+    usable = set(db.scalars(select(User.id).where(User.id.in_(ids or ['']), User.active.is_(True), User.authorization_pending.is_(False))))
+    return {k: len([i for i in assigned.get(k, []) if i in usable]) for k in SCHOOL_DUTIES}
+
+
 def duty(db, actor, code, owner=None, org=None):
     actor.require('assessment.review')
     if code not in actor_duties(db, actor): raise HTTPException(403, '尚未获授'+DUTIES[code]+'职责')

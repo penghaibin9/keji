@@ -369,6 +369,13 @@ def system_reminders(a,items):
     return out
 
 
+def _duty_alerts(db,a):
+    # 只给学校系统管理员（能配置账号和审批职责的人）看
+    if not (a.user.is_admin and a.role.kind=='school' and 'users.manage' in a.permissions):return []
+    from ..approvals import school_duty_alerts
+    return school_duty_alerts(db)
+
+
 @router.get('/portal/workbench')
 def portal_workbench(request:Request):
     """Task-first home summary. Reuse live permissions; never infer deadlines."""
@@ -404,6 +411,7 @@ def portal_workbench(request:Request):
                 'reminders':{'total':len(reminders),'items':reminders[:4],
                              'expired':sum(x['days_remaining']<0 for x in reminders)},
                 'waiting':waiting,
+                'duty_alerts':_duty_alerts(db,a),
                 'scope_note':'待办理与资质提醒包含全部周期，不受下方统计筛选影响。'}
     return read_operation(request,'portal.read',load)
 
