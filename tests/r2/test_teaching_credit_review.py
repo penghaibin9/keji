@@ -7,7 +7,7 @@
 from decimal import Decimal
 from sqlalchemy import select
 from sqlalchemy.orm import Session
-from app.models import Audit,Period,PointEntry,Role,User
+from app.models import Audit,Period,PointEntry,Role,Setting,User
 from app.permissions import TEACHER
 from app.reference_data import TeacherHrProfile
 from conftest import auth,post,put
@@ -270,6 +270,22 @@ def test_admin_designates_teacher_as_reviewer_without_changing_role(client2,app2
     auth(c,'otherteacher')
     assert c.get('/api/auth/me').json()['credit_reviewer'] is False
     assert c.get('/api/todos',params={'type':'credit_review'}).json()['total']==0
+
+
+def test_designation_only_counts_in_management_identity(client2,app2):
+    """授课认定人还有管理身份时，切到普通教师身份就看不到课程认定积分菜单和全校名单；切回管理身份照常办理。"""
+    c=client2;setup(c,app2)
+    auth(c,'schooladmin');assert post(c,'/api/credit-reviewers',{'user_id':'otherteacher',**REASON}).status_code==200
+    with Session(app2.state.engine) as db:
+        db.add(Setting(key='account_identities',value={'items':[{'id':'extra-reviewer','user_id':'otherteacher','role_id':'role-dept','org_id':'dept1'}]}));db.commit()
+    auth(c,'otherteacher')
+    me=c.get('/api/auth/me').json();assert me['role']['kind']=='teacher' and me['credit_reviewer'] is False
+    assert {x['staff_no'] for x in c.get(URL).json()['items']}=={'J002'}
+    assert {x['staff_no'] for x in c.get(URL,params={'review':'pending'}).json()['items']}<={'J002'}
+    r=post(c,'/api/auth/identity',{'identity_id':'extra-reviewer'});assert r.status_code==200,r.text
+    me=c.get('/api/auth/me').json();c.headers['x-csrf-token']=me['csrf']
+    assert me['role']['kind']=='dept' and me['credit_reviewer'] is True
+    assert {'J001','T9001'}<={x['staff_no'] for x in c.get(URL,params={'review':'pending'}).json()['items']}
 
 
 def test_course_level_tags_follow_the_course(client2,app2):

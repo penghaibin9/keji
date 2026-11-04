@@ -569,8 +569,21 @@ def save_credit_reviewers(db,items):
     db.flush()
 
 def is_credit_reviewer(db,actor):
-    """被指定为授课认定人的人（账号停用后自然登录不了）。"""
-    return any(x.get('user_id')==actor.id for x in credit_reviewer_items(db))
+    """被指定为授课认定人的人（账号停用后自然登录不了）。
+
+    指定是跟账号走的，但只在“管理身份”下生效：本人还有教研室、学院或学校身份时，切到普通教师身份就不再看到
+    课程认定积分菜单和全校名单。账号只有普通教师一个身份的，仍按指定办理，免得指定了却进不去。
+    """
+    if not any(x.get('user_id')==actor.id for x in credit_reviewer_items(db)):return False
+    if actor.role.kind!='teacher':return True
+    from .identities import all_extras
+    main=db.get(Role,actor.user.role_id) if getattr(actor,'user',None) is not None else None
+    if main is not None and main.kind!='teacher':return False
+    for x in all_extras(db):
+        if x.get('user_id')!=actor.id:continue
+        role=db.get(Role,x.get('role_id')) if x.get('role_id') else None
+        if (role.kind if role else x.get('kind','teacher'))!='teacher':return False
+    return True
 
 def can_review_credits(db,actor):
     """授课认定由学校办理：指定的授课认定人，或学校层面且有考核审核权限的账号（系统管理员等）。教研室、学院不认定。"""
