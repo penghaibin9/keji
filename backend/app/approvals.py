@@ -10,6 +10,8 @@
 - 学校一级由“归口学院复审”职责（继续教育学院）办理，和原来的审核备案是同一批人。
 - 同一个人连着审两级允许，标“同一人连审”。
 - 任何一级都能退回，必须写原因；老师补正后从退回的那一级重新审，不从头走。
+- 2026-11-04 精简：培训课程 学院 → 学校；校内培训师 学院 → 组织人事部；项目结项直接到学校结项核验。
+  精简前已在审批中的申请按原链路走完（见 chain_of）。
 """
 from __future__ import annotations
 from datetime import datetime, timedelta
@@ -28,26 +30,53 @@ LEVEL_VERB = {'dept': '审核', 'college': '审批', 'school': '审批', 'hr': '
 SAME_PERSON = '同一人连审'
 
 # 每类申请：审批链、每一级对应的 state、生效后的 state、名称。
+# 2026-11-04 精简：去掉制度未规定的审批级（培训课程去教研室；校内培训师去教研室、学校；项目结项去学院核验）。
+# legacy_chain 是精简前的链路：精简前已提交、还在审批中的申请按原链路走完，新提交的走新链路
+# （新提交在 data 里记 chain=2，结项记 close_chain=2；不改数据库结构）。
 FLOWS = {
     'project': {'label': '培训项目申请', 'chain': ('college', 'school'), 'states': {'college': 'COLLEGE', 'school': 'SUBMITTED'},
                 'done': 'FILED', 'final': '已备案', 'object_type': 'social_project'},
-    'project_close': {'label': '培训项目结项', 'chain': ('college', 'school'), 'states': {'college': 'CLOSE_COLLEGE', 'school': 'CLOSE_REVIEW'},
+    'project_close': {'label': '培训项目结项', 'chain': ('school',), 'legacy_chain': ('college', 'school'), 'marker': 'close_chain',
+                      'states': {'college': 'CLOSE_COLLEGE', 'school': 'CLOSE_REVIEW'},
                       'done': 'CLOSED', 'final': '已结项', 'object_type': 'social_project'},
     # 培训课程申报（管理办法第十六条课程遴选）：从我的课程带出（teaching_course）和新填一门（course）是同一条流程。
-    'course': {'label': '培训课程申报', 'chain': ('dept', 'college', 'school'), 'states': {'dept': 'DEPT', 'college': 'COLLEGE', 'school': 'SCHOOL'},
+    'course': {'label': '培训课程申报', 'chain': ('college', 'school'), 'legacy_chain': ('dept', 'college', 'school'),
+               'states': {'dept': 'DEPT', 'college': 'COLLEGE', 'school': 'SCHOOL'},
                'done': 'ACTIVE', 'final': '进入培训课程库', 'object_type': 'social_resource'},
-    'teaching_course': {'label': '培训课程申报', 'chain': ('dept', 'college', 'school'), 'states': {'dept': 'DEPT', 'college': 'COLLEGE', 'school': 'SCHOOL'},
+    'teaching_course': {'label': '培训课程申报', 'chain': ('college', 'school'), 'legacy_chain': ('dept', 'college', 'school'),
+                        'states': {'dept': 'DEPT', 'college': 'COLLEGE', 'school': 'SCHOOL'},
                         'done': 'ACTIVE', 'final': '进入培训课程库', 'object_type': 'social_resource'},
-    # 培训师遴选（管理办法第十五条）：校内老师本人申报，组织人事部认定资格；外聘培训师由学院登记，教务处审核备案。
-    'trainer': {'label': '培训师申报', 'chain': ('dept', 'college', 'school', 'hr'), 'states': {'dept': 'DEPT', 'college': 'COLLEGE', 'school': 'SCHOOL', 'hr': 'HR'},
+    # 培训师遴选（管理办法第十五条）：校内老师本人申报，学院审核后由组织人事部认定资格；外聘培训师由学院登记，教务处审核备案。
+    'trainer': {'label': '培训师申报', 'chain': ('college', 'hr'), 'legacy_chain': ('dept', 'college', 'school', 'hr'),
+                'states': {'dept': 'DEPT', 'college': 'COLLEGE', 'school': 'SCHOOL', 'hr': 'HR'},
                 'done': 'ACTIVE', 'final': '进入培训师资', 'object_type': 'social_resource'},
     'trainer_external': {'label': '外聘培训师备案', 'chain': ('jwc',), 'states': {'jwc': 'JWC'},
                          'done': 'ACTIVE', 'final': '进入培训师资', 'object_type': 'social_resource'},
     'base': {'label': '培训基地申请', 'chain': ('college', 'school'), 'states': {'college': 'COLLEGE', 'school': 'SCHOOL'},
              'done': 'DRAFT', 'final': '进入基地清单', 'object_type': 'social_resource'},
 }
+CHAIN_VERSION = 2
 LEVEL_STATES = {'DEPT': '待教研室审核', 'COLLEGE': '待学院审批', 'SCHOOL': '待学校审批', 'HR': '待组织人事部认定', 'JWC': '待教务处备案审核',
                 'CLOSE_COLLEGE': '待学院结项核验'}
+
+
+def chain_of(flow, obj=None):
+    """这张申请走哪条链：新提交（记了链路版本）走精简后的链；精简前提交的按原链走完。"""
+    f = FLOWS[flow]
+    if 'legacy_chain' not in f or obj is None:
+        return f['chain']
+    data = getattr(obj, 'data', None) or {}
+    if data.get(f.get('marker', 'chain')) == CHAIN_VERSION:
+        return f['chain']
+    return f['legacy_chain']
+
+
+def mark_new_chain(flow, data):
+    """新提交：在申请资料里记下走精简后的链路。"""
+    f = FLOWS[flow]
+    if 'legacy_chain' not in f:
+        return dict(data)
+    return {**data, f.get('marker', 'chain'): CHAIN_VERSION}
 
 
 def level_of(flow, state):
@@ -57,22 +86,27 @@ def level_of(flow, state):
     return None
 
 
-def first_state(flow):
+def first_state(flow, obj=None):
     f = FLOWS[flow]
-    return f['states'][f['chain'][0]]
+    return f['states'][chain_of(flow, obj)[0]]
 
 
-def next_state(flow, level):
+def next_state(flow, level, obj=None):
     f = FLOWS[flow]
-    chain = f['chain']
+    chain = chain_of(flow, obj)
+    if level not in chain:
+        # 在途申请停在已去掉的一级（例如旧链上的教研室）：按原链往下走。
+        chain = f.get('legacy_chain', chain)
     i = chain.index(level)
     return f['states'][chain[i + 1]] if i + 1 < len(chain) else f['done']
 
 
-def resume_state(flow, returned_level):
+def resume_state(flow, returned_level, obj=None):
     """退回后补正重交：从退回的那一级重新审；没记下退回级别的从第一级开始。"""
     f = FLOWS[flow]
-    return f['states'].get(returned_level) or first_state(flow)
+    if returned_level in chain_of(flow, obj):
+        return f['states'][returned_level]
+    return first_state(flow, obj)
 
 
 def level_handler(db, applicant, level, heads=None, orgs=None):
@@ -182,9 +216,9 @@ def duty_gap(db, applicant, level):
         ids = st.assignments(db).get(LEVEL_DUTY[level], [])
         label = st.DUTIES.get(LEVEL_DUTY[level], LEVEL_LABEL[level])
         if not ids:
-            return '“' + label + '”尚未指定办理人，申请会停在这一步。请学校管理员在“执行口径 › 配置审批职责”中指定。'
+            return '“' + label + '”尚未指定办理人，申请会停在这一步。请学校管理员在“用户与权限 › 学校审批职责”中指定。'
         if applicant is not None and all(i == applicant.id for i in ids):
-            return '“' + label + '”只指定了申请人本人，本人不能审批自己的申请，请学校管理员另行指定办理人。'
+            return '“' + label + '”只指定了申请人本人，本人不能审批自己的申请，请学校管理员在“用户与权限 › 学校审批职责”中另行指定办理人。'
         return None
     names, title, _ = handler_names(db, applicant, level) if applicant else ([], LEVEL_LABEL[level], None)
     if not names:
@@ -235,7 +269,7 @@ def _iso(value):
 def progress(db, flow, obj, applicant, *, returned_level=None):
     """三处进度显示用同一份数据：节点（已通过/正在办/被退回/未到）、一句话说明、第几步。"""
     f = FLOWS[flow]
-    chain = f['chain']
+    chain = chain_of(flow, obj)
     evs = events(db, f['object_type'], obj.id)
     # 只看本流程（项目申请和结项共用一个对象，用 handling.flow 区分）。
     evs = [e for e in evs if _handling(e).get('flow') == flow]

@@ -186,7 +186,7 @@ def review_staff_blockers(db,obj):
                 except HTTPException:continue
                 available=True;break
             if available:break
-        if not available:blocked.append(DUTIES[code]+'环节没有具备权限且无需回避的办理人，请学校管理员在社会培训职责设置中配置替代人员')
+        if not available:blocked.append(DUTIES[code]+'环节没有具备权限且无需回避的办理人，请学校管理员在“用户与权限 › 学校审批职责”中配置替代人员')
     return blocked
 
 

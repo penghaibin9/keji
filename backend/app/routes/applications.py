@@ -1,5 +1,6 @@
 """老师发起的申请：培训课程申报（可从我的课程带出）、培训基地申请、培训师申报。审批规则见 approvals.py，业务口径见 applications.py。"""
 import hashlib
+from types import SimpleNamespace
 from fastapi import APIRouter, Request, HTTPException, Query
 from ..schemas import Reason
 from sqlalchemy import select
@@ -71,13 +72,13 @@ def notify(db, obj, title, desc):
     message_push.queue(db, [obj.data.get('teacher_id'), obj.data.get('created_by')], title, desc)
 
 
-def registrar_start(db, a, flow, applicant, org_id):
+def registrar_start(db, a, flow, applicant, org_id, obj=None):
     """教研室、学院负责人代老师登记时，本人能办的最高一级及以下视为登记时已确认，直接到上一级；学校一级始终要办。
     （学院代登记培训课程时教研室一级也算学院已确认，和改成三级之前一样直接到学校。）"""
-    chain = ap.FLOWS[flow]['chain']
+    chain = ap.chain_of(flow, obj)
     top = max((i for i, level in enumerate(chain[:-1]) if ap.can_handle(db, a, applicant, level, org_id)), default=-1)
     if top < 0:
-        return ap.first_state(flow), None
+        return ap.first_state(flow, obj), None
     return ap.FLOWS[flow]['states'][chain[top + 1]], ap.LEVEL_LABEL[chain[top]] + '登记时已确认'
 
 
@@ -85,7 +86,9 @@ def create(db, a, kind, flow, code, name, values, applicant, college, reason):
     values.update(application=True, teacher_id=applicant.id, teacher_name=applicant.name, created_by=a.id, returned_level=None)
     if values.get('source') == 'external':
         values.update(teacher_id=None, teacher_name=values.get('name', ''))
-    state, confirmed = registrar_start(db, a, flow, applicant, college.id) if a.id != applicant.id else (ap.first_state(flow), None)
+    values = ap.mark_new_chain(flow, values)
+    probe = SimpleNamespace(data=values)
+    state, confirmed = registrar_start(db, a, flow, applicant, college.id, probe) if a.id != applicant.id else (ap.first_state(flow, probe), None)
     obj = SocialResource(kind=kind, org_id=college.id, code=code, name=name, state=state, data=values)
     db.add(obj)
     db.flush()
@@ -235,7 +238,7 @@ def course_edit(ident: str, data: CourseApplyIn, request: Request):
             _, name, values = teaching_values(db, a, applicant, data.data, obj)
         else:
             _, name, values = manual_values(db, applicant, data.data, obj)
-        keep = {k: obj.data.get(k) for k in ('application', 'teacher_id', 'teacher_name', 'created_by', 'returned_level', 'returned_flow', 'cover_id', 'photo_ids')}
+        keep = {k: obj.data.get(k) for k in ('application', 'teacher_id', 'teacher_name', 'created_by', 'returned_level', 'returned_flow', 'cover_id', 'photo_ids', 'chain')}
         obj.name = name
         obj.data = {**values, **keep}
         return record(db, a, obj, '补正申请资料', before, data.reason, {'flow': apps.flow_of(obj), 'decision': 'edit'})
@@ -297,7 +300,7 @@ def trainer_edit(ident: str, data: TrainerApplyIn, request: Request):
         applicant = apps.applicant_of(db, obj)
         before = serial(obj)
         _, name, values = trainer_values(db, a, applicant, data.data, obj)
-        keep = {k: obj.data.get(k) for k in ('application', 'teacher_id', 'teacher_name', 'created_by', 'returned_level', 'returned_flow', 'cover_id', 'photo_ids')}
+        keep = {k: obj.data.get(k) for k in ('application', 'teacher_id', 'teacher_name', 'created_by', 'returned_level', 'returned_flow', 'cover_id', 'photo_ids', 'chain')}
         obj.name = name
         obj.data = {**values, **keep}
         return record(db, a, obj, '补正申请资料', before, data.reason, {'flow': apps.flow_of(obj), 'decision': 'edit'})
@@ -352,7 +355,7 @@ def base_edit(ident: str, data: BaseApplyIn, request: Request):
         applicant = apps.applicant_of(db, obj)
         before = serial(obj)
         values = base_values(db, applicant, apps.college_for(db, applicant), data.data)
-        keep = {k: obj.data.get(k) for k in ('application', 'teacher_id', 'teacher_name', 'created_by', 'returned_level', 'cover_id', 'photo_ids')}
+        keep = {k: obj.data.get(k) for k in ('application', 'teacher_id', 'teacher_name', 'created_by', 'returned_level', 'cover_id', 'photo_ids', 'chain')}
         obj.name = data.data.name
         obj.data = {**values, **keep}
         return record(db, a, obj, '补正申请资料', before, data.reason, {'flow': 'base', 'decision': 'edit'})
@@ -373,9 +376,13 @@ def action(ident: str, data: ApplicationAction, request: Request):
             if not mine or obj.state not in ('RETURNED', 'WITHDRAWN'):
                 raise HTTPException(409, '只有申请人可以重新提交被退回或已撤回的申请')
             level = obj.data.get('returned_level') if obj.state == 'RETURNED' else None
-            obj.state, confirmed = ap.resume_state(flow, level), None
+            if level is None or level not in ap.chain_of(flow, obj):
+                # 撤回后重新提交（或退回到已去掉的一级）从第一级重新审，算新提交，走精简后的链路。
+                obj.data = ap.mark_new_chain(flow, obj.data)
+                level = None
+            obj.state, confirmed = ap.resume_state(flow, level, obj), None
             if level is None and applicant is not None and a.id != applicant.id:
-                obj.state, confirmed = registrar_start(db, a, flow, applicant, obj.org_id)
+                obj.state, confirmed = registrar_start(db, a, flow, applicant, obj.org_id, obj)
             obj.data = {**obj.data, 'returned_level': None}
             return record(db, a, obj, '重新提交' + f['label'], before, data.reason,
                           {'flow': flow, 'decision': 'submit', 'resumed_from': level, 'college_by_registrant': confirmed})
@@ -429,7 +436,7 @@ def action(ident: str, data: ApplicationAction, request: Request):
             return result
         if ap.same_person(db, 'social_resource', obj.id, a):
             handling['same_person'] = ap.SAME_PERSON
-        obj.state = ap.next_state(flow, level)
+        obj.state = ap.next_state(flow, level, obj)
         if obj.state == f['done']:
             apps.complete(db, a, obj, flow, (data.basis or '').strip())
         result = record(db, a, obj, ap.LEVEL_LABEL[level] + '通过' + f['label'], before, data.reason, handling, data.basis)

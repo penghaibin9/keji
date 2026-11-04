@@ -80,15 +80,17 @@ test('从课程积分办理进入申报时锁定实际项目并带入周期和�
  assert.ok(fields.some(x=>x.name==='period_id'&&x.value==='period1'));assert.ok(fields.some(x=>x.name==='policy_id'&&x.value==='policy1'));
 });
 
-test('项目补正提交按钮与确认页按退回层级续办，不误导重走学院',async()=>{
+test('项目补正提交按钮按退回层级续办，本人点按钮即带默认意见提交，不再二次弹意见框',async()=>{
  for(const [state,returned_level,label] of [['RETURNED','school','补正后提交学校备案'],['RETURNED','college','补正后提交学院审批'],['DRAFT',undefined,'提交学院审批']]){
   const c=renderContext({},['records.read']);c.me={user:{id:'teacher'},role:{kind:'teacher'}};await renderSocial('projects',c);
-  let footer,form;c.modal=(_t,_b,f)=>{footer=f};c.formModal=(title,body,save,options)=>{form={title,body,save,options}};c.downloads=()=>'';c.eventsHtml=()=>'';
-  c.api=async()=>({item:{id:'returned-project',owner_id:'teacher',state,version:3,data:{name:'补正项目',code:'RET-P1',returned_level},closeout:{}},state_label:'退回补正',facts:{units:[],followups:[],effective:0,excluded:0},attachments:[{id:'proof'}],events:[]});
+  let footer,form;const posts=[];c.modal=(_t,_b,f)=>{footer=f};c.formModal=(title,body,save,options)=>{form={title,body,save,options}};c.downloads=()=>'';c.eventsHtml=()=>'';c.render=async()=>{};c.toast=()=>{};
+  c.api=async(url,options)=>{if(options){posts.push({url,...options});return {}}return {item:{id:'returned-project',owner_id:'teacher',state,version:3,data:{name:'补正项目',code:'RET-P1',returned_level},closeout:{}},state_label:'退回补正',facts:{units:[],followups:[],effective:0,excluded:0},attachments:[{id:'proof'}],events:[]}};
   await socialAction('social-detail','social_project|returned-project',c);
   assert.ok(footer.includes('data-id="submit">'+label+'</button>'));
   if(returned_level==='school')assert.doesNotMatch(footer,/提交学院审批/);
-  await socialAction('social-transition','submit',c);assert.equal(form.title,label);assert.equal(form.options.submit,'确认'+label);
+  assert.equal(posts.length,0,'打开详情不提交');
+  await socialAction('social-transition','submit',c);assert.equal(form,undefined,'不再弹意见框');
+  assert.equal(posts.length,1);assert.equal(posts[0].url,'/social/projects/returned-project/actions');assert.deepEqual([posts[0].body.action,posts[0].body.expected_version,posts[0].body.reason],['submit',3,'材料已备齐，提交审核']);
  }
 });
 
@@ -198,7 +200,7 @@ test('结项补正回填原成果金额日期和核对项，明确零值不被�
  await socialAction('social-close','',c);
  const values=Object.fromEntries(fields);
  for(const [key,value] of Object.entries(old))if(key!=='materials_checked')assert.equal(values[key],value,key);
- assert.equal(values.checked_plan,true);assert.equal(values.checked_attendance,true);assert.equal(values.checked_roster,false);assert.equal(typeof saved,'function');
+ assert.equal(values.checked_plan,undefined,'老师结项不再勾材料核对');assert.equal(values.checked_roster,undefined);assert.equal(typeof saved,'function');
 });
 
 test('学校直接登记和项目内课程登记都只提交教师标识，去掉检索框辅助值并保留零学时',async()=>{
@@ -578,7 +580,7 @@ test('无佐证时直接给出上传入口，有佐证才打开提交表单',asy
  assert.match(modal.body,/detail-facts/);assert.match(modal.body,/&lt;隔离项目&gt;/);assert.doesNotMatch(modal.body,/<隔离项目>/);
  await socialAction('social-transition','submit',c);
  assert.equal(modal.title,'先补充佐证材料');assert.match(modal.foot,/social-upload/);assert.match(modal.foot,/social_project\|p/);assert.equal(form,undefined);assert.equal(writes,0);
- detail.attachments=[{id:'a'}];await socialAction('social-detail','social_project|p',c);await socialAction('social-transition','submit',c);assert.ok(form);assert.equal(writes,0);
+ detail.attachments=[{id:'a'}];c.render=async()=>{};c.toast=()=>{};await socialAction('social-detail','social_project|p',c);await socialAction('social-transition','submit',c);assert.equal(form,undefined,'有佐证时直接带默认意见提交');assert.equal(writes,1);
 });
 
 test('资源补正保留不在当前分页中的课程和教师关联',async()=>{
@@ -846,7 +848,7 @@ test('学院项目详情复用分区折叠流程和更多操作，开班准备�
  await socialAction('social-detail','social_project|college-project',c);
  assert.match(modal.body,/data-detail-section="social-info"/);assert.match(modal.body,/<details class="detail-fold application-flow"><summary>查看完整办理流程/);assert.match(modal.buttons,/<details class="detail-more-actions">/);assert.match(modal.buttons,/social-export/);assert.equal((modal.buttons.match(/data-action="social-prep"/g)||[]).length,1);assert.equal(modal.contextLabel,'培训项目 / 业务详情');assert.match(modal.buttons,/data-action="social-unit-import"/);
  await socialAction('social-transition','refile',c);assert.match(form.body,/本次办理对象/);assert.match(form.body,/学院&lt;项目&gt;/);assert.equal(form.options.contextLabel,'培训项目 / 申请重新备案');
- await socialAction('social-close','',c);assert.equal(form.options.page,true);assert.match(form.body,/结项情况/);assert.match(form.body,/结项材料核对/);
+ await socialAction('social-close','',c);assert.equal(form.options.page,true);assert.match(form.body,/结项情况/);assert.doesNotMatch(form.body,/结项材料核对/);
 });
 
 test('学院年度自评复用整页分区，补正保持原组织周期与版本并保留零值',async()=>{
@@ -876,23 +878,25 @@ test('学院学校共用项目次要动作折叠，教师原动作不变且无�
 });
 
 
-test('结项补正的全选状态随已保存核对项初始化，并随单项变化',async()=>{
- const c=renderContext({},['records.write']);await renderSocial('projects',c);
- c.modal=()=>{};c.downloads=()=>'';c.eventsHtml=()=>'';c.formModal=()=>{};
- c.api=async()=>({item:{id:'check-project',owner_id:'teacher',state:'FILED',version:1,data:{name:'合成结项',category:'community'},closeout:{}},facts:{units:[],followups:[]},attachments:[],events:[]});
+test('学校结项核验在办理区勾选材料：一键全部核对带展开明细，带出老师以前勾过的项，提交转成 materials_checked',async()=>{
+ const c=renderContext({my_duties:['coordinator']},['records.write']);c.me={user:{id:'school-reviewer'},role:{kind:'school'}};await renderSocial('projects',c);
+ let form;const posts=[];c.modal=()=>{};c.downloads=()=>'';c.eventsHtml=()=>'';c.formModal=(title,body,save,options)=>{form={title,body,save,options}};
+ c.api=async(url,options)=>{if(options){posts.push({url,...options});return {}}return {item:{id:'check-project',owner_id:'teacher',state:'CLOSE_REVIEW',version:5,data:{name:'合成结项',category:'community'},closeout:{materials_checked:['plan','attendance']}},state_label:'待学校结项核验',facts:{units:[],followups:[]},attachments:[{id:'f'}],events:[]}};
  await socialAction('social-detail','social_project|check-project',c);
  const original=globalThis.document;
  try{
-  for(const states of [[true,true],[true,false],[false,false]]){
-   const input=(checked=false)=>({checked,value:'',style:{},addEventListener(type,fn){this[type]=fn}}),all=input(),boxes=states.map(input),fields=new Map([['close-check-all',all]]);
-   for(const id of ['f-actual_income','f-funding_source','f-satisfaction','f-location','f-retained','f-personnel'])fields.set(id,input());
-   globalThis.document={getElementById:id=>fields.get(id)||null,querySelectorAll:selector=>selector.includes('name^="checked_"')?boxes:[]};
-   await socialAction('social-close','',c);await new Promise(resolve=>setTimeout(resolve,5));
-   assert.equal(all.checked,states.every(Boolean));
-   boxes[0].checked=false;boxes[0].change();assert.equal(all.checked,false);
-   all.checked=true;all.change();assert.ok(boxes.every(x=>x.checked));
-  }
+  const input=(checked=false)=>({checked,addEventListener(type,fn){this[type]=fn}}),all=input(),boxes=[input(true),input(false)];
+  globalThis.document={getElementById:id=>id==='close-check-all'?all:null,querySelectorAll:selector=>selector.includes('data-close-material')?boxes:[]};
+  await socialAction('social-transition','close',c);await new Promise(resolve=>setTimeout(resolve,5));
+  assert.match(form.body,/结项材料核对/);assert.match(form.body,/id="close-check-all"/);assert.match(form.body,/材料已全部核对/);assert.match(form.body,/<details/);
+  assert.match(form.body,/name="checked_plan" data-close-material="plan" checked/);assert.match(form.body,/name="checked_roster" data-close-material="roster">/);
+  assert.match(form.body,/已带出申报人以前勾过的核对项/);
+  all.checked=true;all.change();assert.ok(boxes.every(x=>x.checked));
+  boxes[0].checked=false;boxes[0].change();assert.equal(all.checked,false);
  }finally{globalThis.document=original}
+ assert.equal(form.options.reasonDefault,'结项材料核验通过','结项核验是同意动作，预填默认意见');
+ await form.save({reason:'结项材料核验通过',basis:'',checked_plan:true,checked_roster:false,checked_attendance:true});
+ assert.equal(posts.length,1);assert.equal(posts[0].body.action,'close');assert.deepEqual(posts[0].body.materials_checked,['plan','attendance']);assert.equal(posts[0].body.checked_plan,undefined);
 });
 
 test('财务纪检和制度确认不预填结论，采用需要本人补齐依据的句式',async()=>{

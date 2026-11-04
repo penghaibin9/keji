@@ -173,7 +173,7 @@ test('审核意见保留在资料后，底部确认只办理当前条，下一�
  const claim=()=>returned({teacher_id:'t9',state:'SUBMITTED',version:8});
  const {c,state}=socialContext({me:'dean',duties:['dean'],claim,next:'social_claim|c2',handler:()=>({})});
  await socialAction('social-detail','social_claim|c1',c);
- assert.match(state.modal.body,/本环节办理/);assert.match(state.modal.body,/data-phrases="approve"/);assert.match(state.modal.body,/<textarea id="handle-reason"[^>]*><\/textarea>/);assert.doesNotMatch(state.modal.body,/通过并查看下一条/);assert.match(state.modal.foot,/data-action="social-handle"/);assert.ok(state.modal.body.indexOf('id="social-materials"')<state.modal.body.indexOf('id="approval-opinion"'));
+ assert.match(state.modal.body,/本环节办理/);assert.match(state.modal.body,/data-phrases="approve"/);assert.match(state.modal.body,/<textarea id="handle-reason"[^>]*>材料核对无误，审核通过<\/textarea>/);assert.doesNotMatch(state.modal.body,/通过并查看下一条/);assert.match(state.modal.foot,/data-action="social-handle"/);assert.ok(state.modal.body.indexOf('id="social-materials"')<state.modal.body.indexOf('id="approval-opinion"'));
  assert.match(state.modal.body,/教师t9/);assert.match(state.modal.body,/合计 7/);assert.match(state.modal.foot,/退回补正/);assert.match(state.modal.foot,/查看下一条/);
  assert.equal(state.posts.length,0,'打开详情不办理');
  globalThis.document={getElementById:id=>({'handle-reason':{value:'核对无误，审核通过'},'handle-basis':{value:''}})[id]||null,querySelectorAll:()=>[]};
@@ -263,5 +263,6 @@ test('结项整改条件放在结项情况内，不创建隐藏后的空整改�
  assert.match(first,/id="cond-rect"/);
  assert.match(first,/name="rectification"/);assert.match(first,/name="rectification_due"/);
  assert.doesNotMatch(state.form.body,/<legend>整改/);
- assert.equal((state.form.body.match(/class="social-fieldset"/g)||[]).length,4,'普通结项为三个业务分组加办理说明');
+ assert.equal((state.form.body.match(/class="social-fieldset"/g)||[]).length,3,'普通结项只剩结项情况、经费与财务核验两个业务分组加办理说明');
+ assert.doesNotMatch(state.form.body,/结项材料核对|close-check-all|name="checked_/,'材料核对改由学校在结项核验时勾选');
 });

@@ -183,9 +183,11 @@ def duties(request:Request):
         for ident in {i for ids in assignments.values() for i in ids}:
             user=db.get(User,ident)
             people.append({'id':ident,'name':user.name if user else '原账号已不存在','username':user.username if user else '',
-                           'staff_no':user.staff_no if user else '', 'org_name':db.get(Org,user.org_id).name if user and db.get(Org,user.org_id) else ''})
+                           'staff_no':user.staff_no if user else '', 'org_name':db.get(Org,user.org_id).name if user and db.get(Org,user.org_id) else '',
+                           'usable':bool(user and user.active and not user.authorization_pending)})
         from ..approvals import pending_duty_gaps
-        return {'assignments':assignments,'version':setting.version if setting else 0,'labels':st.DUTIES,'people':people,'gaps':pending_duty_gaps(db)}
+        return {'assignments':assignments,'version':setting.version if setting else 0,'labels':st.DUTIES,'people':people,'gaps':pending_duty_gaps(db),
+                'school_duties':list(st.SCHOOL_DUTIES)}
     return read_operation(request,'roles.manage',load)
 
 
@@ -198,8 +200,13 @@ def duty_options(request:Request,duty:str,q:str=Query('',max_length=100),page:in
         if q:query=query.where(or_(User.name.contains(q,autoescape=True),User.username.contains(q,autoescape=True),User.staff_no.contains(q,autoescape=True)))
         total=db.scalar(select(func.count()).select_from(query.subquery()))
         rows=db.scalars(query.order_by(User.name,User.id).offset((page-1)*25).limit(25)).all()
+        from ..identities import extras_for
+        def account(u):
+            # “学校审批职责”页签一步添加“学校业务审核”兼任身份时，沿用账号保存接口（PUT /users/{id}）需要的原账号字段。
+            return {'name':u.name,'title':u.title or '','org_id':u.org_id,'role_id':u.role_id,'active':u.active,'is_admin':u.is_admin,'version':u.version,
+                    'extra_identities':[{'role_id':x['role_id'],'org_id':x['org_id'],'valid_until':x.get('valid_until') or None} for x in extras_for(db,u.id,include_expired=True)]}
         return {'items':[{'id':u.id,'name':u.name,'username':u.username,'staff_no':u.staff_no,
-                          'org_name':db.get(Org,u.org_id).name,'eligible':st.duty_eligible(db,u,a,duty)} for u in rows],
+                          'org_name':db.get(Org,u.org_id).name,'eligible':st.duty_eligible(db,u,a,duty),'account':account(u)} for u in rows],
                 'total':total,'page':page,'size':25}
     return read_operation(request,'roles.manage',load)
 
@@ -375,9 +382,13 @@ def project_action(ident:str,data:SocialAction,request:Request):
             st.require_closeout_distribution(serial(c.model_dump()))
             if c.closed_on.isoformat()<obj.data['end_date'] or c.closed_on>st.today():raise HTTPException(422,'结项日期应在培训结束后且不晚于今天')
             if obj.data['category']=='subsidy' and not (c.province_receipt.strip() and c.special_evidence.strip()):raise HTTPException(422,'补贴项目须提交报送凭证及专项材料')
-            if c.satisfaction<85 and not c.rectification.strip():raise HTTPException(422,'满意度低于85%，须提交整改报告及期限')
-            obj.closeout=serial(c.model_dump());obj.state='CLOSE_COLLEGE' if via_college else 'CLOSE_REVIEW'
-            handling={'flow':'project_close','decision':'submit','college_by_registrant':None if via_college else '学院、学校登记时已确认'}
+            if c.satisfaction<85 and not (c.rectification.strip() and c.rectification_due):raise HTTPException(422,'满意度低于85%，须填写整改报告和整改办理期限')
+            # 2026-11-04 精简：结项提交后直接到学校结项核验，不再经学院结项核验；材料核对由学校在核验时勾选。
+            # 老师以前勾过的核对项（在途数据）保留，学校核验时可以沿用。
+            values=serial(c.model_dump());old_checked=list(obj.closeout.get('materials_checked',[])) if obj.closeout else []
+            if not values.get('materials_checked') and old_checked:values['materials_checked']=old_checked
+            obj.closeout=values;obj.data=ap.mark_new_chain('project_close',obj.data);obj.state='CLOSE_REVIEW'
+            handling={'flow':'project_close','decision':'submit'}
         elif data.action=='close':
             st.duty(db,a,'coordinator',obj.owner_id,obj.org_id)
             if obj.state!='CLOSE_REVIEW':raise HTTPException(409,'项目不在结项核验阶段')
@@ -385,9 +396,15 @@ def project_action(ident:str,data:SocialAction,request:Request):
             if issues:=st.person_day_blockers([u.data for u in st.units(db,ident)]):raise HTTPException(409,'；'.join(issues))
             st.require_closeout_distribution(obj.closeout)
             required={'plan','filing_form','roster','attendance','hours','process','assessment','outcomes'}
-            # 有“立德树人与质量”的项目，结项还要核对主讲教师资格审查表和课件内容审查记录。
-            if obj.data.get('quality'):required|={'teacher_review','courseware_review'}
-            if not required<=set(obj.closeout.get('materials_checked',[])):raise HTTPException(409,'培训方案、备案表、名册、签到、学时、过程、结业考核及成果材料'+('，主讲教师资格审查表、课件内容审查记录' if obj.data.get('quality') else '')+'尚未逐项核验')
+            # 材料核对由学校在这一步勾选（2026-11-04 起老师结项不再勾）；在途数据里老师已勾过的沿用。
+            checked=set(obj.closeout.get('materials_checked',[]))|set(data.materials_checked or [])
+            # 有“立德树人与质量”的项目，结项还要核对主讲教师资格审查表和课件内容审查记录：两项审查由学院登记，登记了百分比就自动补上。
+            if obj.data.get('quality'):
+                required|={'teacher_review','courseware_review'}
+                q=obj.data['quality']
+                if review_done(q.get('teacher_review')) and review_done(q.get('courseware_review')):checked|={'teacher_review','courseware_review'}
+            if not required<=checked:raise HTTPException(409,'培训方案、备案表、名册、签到、学时、过程、结业考核及成果材料'+('，主讲教师资格审查表、课件内容审查记录（须先由学院登记审查百分比）' if obj.data.get('quality') else '')+'尚未逐项核对，请在办理区勾选')
+            obj.closeout={**obj.closeout,'materials_checked':sorted(checked),'materials_checked_by':a.id}
             if st.D(obj.closeout['satisfaction'])<85 and not obj.closeout.get('rectification_due'):raise HTTPException(409,'满意度低于85%，须明确整改办理日期')
             from .files import verify_file
             for file in st.attachments(db,'social_project',ident):verify_file(request.app.state.settings.storage_dir,file)
@@ -604,13 +621,16 @@ def claim_action(ident:str,data:SocialAction,request:Request):
             trial=st.point_trial(db,obj);st.require_unblocked(trial)
             blockers=st.review_staff_blockers(db,SimpleNamespace(org_id=db.get(SocialProject,obj.project_id).org_id,data={'claim_id':obj.id,'teacher_id':obj.teacher_id,'created_by':obj.teacher_id}))
             if blockers:raise HTTPException(409,'审批职责尚未就绪：'+'；'.join(blockers))
-            obj.snapshot=st.freeze(trial);obj.state='SUBMITTED'
+            # 退回补正后从退回的那一级接着审（2026-11-04），不再从院长重走；4 级本身不变。
+            resume=obj.data.get('returned_stage') if obj.state=='RETURNED' else None
+            obj.snapshot=st.freeze(trial);obj.state=resume if resume in stages else 'SUBMITTED'
+            obj.data={**obj.data,'returned_stage':None,'resumed_from':resume if resume in stages else None}
         elif data.action in {'approve','return'}:
             if obj.state not in stages:raise HTTPException(409,'当前积分申报不在审批阶段')
             code,next_state=stages[obj.state];st.duty(db,a,code,obj.teacher_id,db.get(SocialProject,obj.project_id).org_id)
             st.check_project_conflicts(db,a,db.get(SocialProject,obj.project_id))
             if data.action=='return':
-                obj.state='RETURNED'
+                obj.data={**obj.data,'returned_stage':obj.state};obj.state='RETURNED'
                 from ..message_push import queue
                 queue(db,[obj.teacher_id],'你的社会培训积分申报被退回','请登录非学历教育智慧前台，在“个人培训”查看退回原因并补正。')
             else:
@@ -840,7 +860,9 @@ def correction_action(ident:str,data:SocialAction,request:Request):
         if data.action=='submit':
             if obj.data['created_by']!=a.id or obj.state not in {'DRAFT','RETURNED'}:raise HTTPException(403,'仅申请人可补正后提交')
             if not (obj.data.get('review_id') and st.evidence(db,'social_resource',obj.data['review_id'])):st.require_evidence(db,'social_resource',ident)
-            obj.state='SUBMITTED'
+            # 退回补正后从退回的那一级接着审（2026-11-04）。
+            resume=obj.data.get('returned_stage') if obj.state=='RETURNED' else None
+            obj.state=resume if resume in stages else 'SUBMITTED';obj.data={**obj.data,'returned_stage':None}
         elif data.action=='void':
             if obj.data['created_by']!=a.id:raise HTTPException(403,'仅发起人可作废尚未入账的更正')
             obj.state='VOID';obj.data={**obj.data,'void_reason':data.reason}
@@ -849,7 +871,7 @@ def correction_action(ident:str,data:SocialAction,request:Request):
             duty,next_state=stages[obj.state];st.duty(db,a,duty,obj.data['teacher_id'],obj.org_id)
             claim=db.get(SocialClaim,obj.data['claim_id']);st.check_project_conflicts(db,a,db.get(SocialProject,claim.project_id))
             if a.id==obj.data['created_by']:raise HTTPException(403,'不能审核本人发起的更正')
-            if data.action=='return':obj.state='RETURNED'
+            if data.action=='return':obj.data={**obj.data,'returned_stage':obj.state};obj.state='RETURNED'
             else:
                 if next_state=='ARCHIVED':
                     from .files import verify_file
