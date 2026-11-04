@@ -391,10 +391,16 @@ def suggested_points(hours,rate):
     if hours is None:return None
     return str((Decimal(str(hours))*rate).quantize(Decimal('0.01'),rounding=ROUND_HALF_UP))
 
+TEACHER_APPLY='apply'  # 待老师本人申请认定：同步进来的课不进任何人的待办，老师申请后才到教研室
+
 def pending_stage(review,basis,user_id):
-    """还没办结的课当前在哪一级（记下的级别，未计负责人缺位）：没认定记录或学分学时变了从教研室开始；没有本地账号的直接到学校。"""
-    if user_id is None:return 'school'
-    if review is not None and review.state=='PENDING' and review.data.get('basis')==basis and review.data.get('stage') in TEACHING_STAGES:
+    """还没办结的课当前在哪一级（记下的级别，未计负责人缺位）。
+
+    老师还没申请（没有认定记录、或撤回了申请）停在 apply；没有本地账号的老师登录不了、也申请不了，同样停在 apply。
+    申请过的课学分学时在源头变了，从教研室重新审核。
+    """
+    if user_id is None or review is None or review.data.get('stage')==TEACHER_APPLY:return TEACHER_APPLY
+    if review.state=='PENDING' and review.data.get('basis')==basis and review.data.get('stage') in TEACHING_STAGES:
         return review.data['stage']
     return 'dept'
 
@@ -432,7 +438,7 @@ def annual_teaching_credits(db,rows,*,include_details=True,reviews=None):
             'school_year':year or UNKNOWN_YEAR,'terms':set(),'jw_credit':Decimal('0'),'cx_credit':Decimal('0'),'hours':Decimal('0'),
             'courses':0,'missing_credit':[],'duplicates_skipped':0,'in_staff_table':r.staff_no in staff,
             'approved_courses':0,'pending_courses':0,'excluded_courses':0,'pending_credit':Decimal('0'),'pending_hours':Decimal('0'),
-            'waiting':{'dept':0,'college':0,'school':0},'points':Decimal('0')})
+            'waiting':{'apply':0,'dept':0,'college':0,'school':0},'points':Decimal('0')})
         if r.teacher_name and not g['teacher_name']:g['teacher_name']=r.teacher_name
         if r.user_id and not g['user_id']:g['user_id']=r.user_id
         g['terms'].add(r.term_name)

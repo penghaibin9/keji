@@ -295,7 +295,17 @@ def _todo_items(db,a):
         verb={'dept':'待审核','college':'待审批'}.get(a.role.kind,'待认定') if not can_review_credits(db,a) else '待认定'
         for g in groups:
             add('credit_review',SimpleNamespace(id=g['staff_no']+'~'+g['school_year'],teacher_id=g['user_id']),
-                '授课认定：'+(names.get(g['user_id']) or g['teacher_name'] or g['staff_no'])+' '+g['school_year']+' 学年 '+str(g['mine_courses'])+' 门课'+verb,verb)
+                '课程认定积分：'+(names.get(g['user_id']) or g['teacher_name'] or g['staff_no'])+' '+g['school_year']+' 学年 '+str(g['mine_courses'])+' 门课'+verb,verb)
+    # 老师本人：同步来的教务、超星课要自己申请认定，申请后才到教研室。
+    from types import SimpleNamespace as _NS
+    from ..reference_data import all_credit_groups,TeacherCourseTerm
+    # 课程按工号挂到账号上，没有工号的账号（如系统管理员）不会有自己的课，不用查。
+    own_courses=bool(a.user.staff_no) and db.scalar(select(TeacherCourseTerm.id).where(TeacherCourseTerm.user_id==a.id,TeacherCourseTerm.active.is_(True)).limit(1))
+    for g in (all_credit_groups(db) if own_courses else []):
+        n=(g.get('waiting') or {}).get('apply',0)
+        if n and g.get('user_id')==a.id:
+            add('credit_review',_NS(id='apply~'+g['staff_no']+'~'+g['school_year'],teacher_id=a.id),
+                '课程认定积分：'+g['school_year']+' 学年有 '+str(n)+' 门课可申请认定','待申请')
     if 'dispute.write' in a.permissions:
         for x in db.scalars(select(Dispute).where(a.scope(Dispute.teacher_id),Dispute.state=='OPEN')):
             if x.teacher_id==a.id or 'dispute.resolve' in a.permissions:

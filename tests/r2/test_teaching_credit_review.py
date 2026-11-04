@@ -16,6 +16,15 @@ from test_r4_internal_closeout import configure_middle
 from test_teacher_course_inbound import typed
 
 URL='/api/reference/teacher-credits'
+
+
+import pytest
+@pytest.fixture(autouse=True)
+def _fresh_credit_cache():
+    # 汇总缓存按数据指纹失效；每个测试是新库，指纹可能和上一个测试的库碰巧相同，先清掉。
+    from app import reference_data
+    reference_data._CREDIT_CACHE.update(key=None,at=0.0,groups=[])
+    yield
 MAPS=(typed('school_course',{'KCH':'code','KCMC':'name','XF':'credit','ZXS':'hours','VERSION':'course_version'},{'code','name'})
     +typed('teacher_course',{'ZGH':'staff_no','XM':'teacher_name','KCH':'course_code','KCMC':'course_name','XQMC':'term_name'},{'staff_no','course_code','course_name','term_name'})
     +typed('online_course',{'creater_login_name':'staff_no','teachername':'teacher_name','courseid':'course_code','coursename':'course_name','xn':'school_year','xq':'term_no','credit':'credit','courseIdentifier':'jw_course_code'},{'staff_no','course_code','course_name'}))
@@ -65,6 +74,20 @@ def teaching_points(app2,teacher='teacher'):
         return sum((Decimal(str(e.amount)) for e in db.scalars(select(PointEntry).where(PointEntry.teacher_id==teacher,PointEntry.kind=='TEACHING'))),Decimal('0'))
 
 
+def apply_all(c,users=('teacher','otherteacher','jwc'),reason=''):
+    """老师本人申请认定自己能申请的全部课（同步来的课要老师申请后才到教研室）。"""
+    for user in users:
+        auth(c,user)
+        me=c.get('/api/auth/me').json()['user']
+        ids=[d['id'] for g in credits(c,me['staff_no']).values() for d in g['details'] if d.get('can_apply')]
+        if ids:
+            r=review(c,ids,'apply',reason);assert r.status_code==200,r.text
+
+
+def ready(c,app2):
+    conn=setup(c,app2);apply_all(c);return conn
+
+
 def mine(c):
     r=c.get(URL,params={'review':'mine'});assert r.status_code==200,r.text
     return {(x['staff_no'],x['school_year']):x['mine_courses'] for x in r.json()['items']}
@@ -72,12 +95,26 @@ def mine(c):
 
 def test_three_levels_edit_points_and_school_sees_who_approved(client2,app2):
     c=client2;setup(c,app2)
-    # 1. 老师本人：两门课都在教研室，按学时算建议积分（K1 64 学时 → 64 分）。
+    # 0. 同步来的课先停在“待老师申请”，不进教研室待办；别人不能替老师申请，审核人也不能直接办。
     auth(c,'teacher')
+    years=credits(c,'J001');k1=course(years['2025-2026'],'K1');k2=course(years['2026-2027'],'K2')
+    assert (k1['review'],k1['stage'],k1['handler'],k1['handler_label'],k1['can_apply'])==('pending','apply','teacher','待老师申请',True)
+    auth(c,'depthead');assert mine(c)=={}
+    r=review(c,[k1['id']],'approve');assert r.status_code==409 and '还没申请' in r.json()['detail'],r.text
+    assert review(c,[k1['id']],'apply').status_code==403
+    assert {x['id'] for x in c.get('/api/todos',params={'type':'credit_review'}).json()['items']}==set()
+    # 1. 老师本人申请：有待申请提醒；申请后到教研室，按学时算建议积分（K1 64 学时 → 64 分）；还没人审时可以撤回。
+    auth(c,'teacher')
+    assert {x['id'] for x in c.get('/api/todos',params={'type':'credit_review'}).json()['items']}=={'apply~J001~2025-2026','apply~J001~2026-2027'}
+    assert review(c,[k1['id'],k2['id']],'apply','本学期实际授课').json()['updated']==2
+    assert review(c,[k1['id']],'apply').status_code==409   # 已申请过
+    assert review(c,[k2['id']],'withdraw').status_code==200
+    assert course(credits(c,'J001')['2026-2027'],'K2')['stage']=='apply'
     years=credits(c,'J001');k1=course(years['2025-2026'],'K1')
-    assert (k1['review'],k1['stage'],k1['handler'],k1['suggested_points'],k1['points'])==('pending','dept','dept','64.00','64.00')
+    assert (k1['review'],k1['stage'],k1['handler'],k1['suggested_points'],k1['points'],k1['can_withdraw'])==('pending','dept','dept','64.00','64.00',True)
     assert course(years['2025-2026'],'X1','CX')['counted'] is False   # 重复课不用认定
     assert review(c,[k1['id']],'approve').status_code==403
+    assert review(c,[k2['id']],'apply').status_code==200
     # 学院、学校都不能越级办教研室这一级。
     for user in ('collegehead','jwc','otherdept'):
         auth(c,user);assert review(c,[k1['id']],'approve').status_code==403,user
@@ -86,6 +123,8 @@ def test_three_levels_edit_points_and_school_sees_who_approved(client2,app2):
     assert mine(c)=={('J001','2025-2026'):1,('J001','2026-2027'):1}
     r=one(c,k1['id'],'approve',points='60');assert r.status_code==422 and '审批意见' in r.json()['detail'],r.text
     assert one(c,k1['id'],'approve',points='60',reason='实际授课 60 学时').status_code==200
+    auth(c,'teacher');r=review(c,[k1['id']],'withdraw');assert r.status_code==409 and '审核过' in r.json()['detail'],r.text
+    auth(c,'depthead')
     assert review(c,[k1['id']],'approve').status_code==403   # 已到学院
     k1=course(credits(c,'J001')['2025-2026'],'K1')
     assert (k1['stage'],k1['points'],k1['suggested_points'])==('college','60.00','64.00')
@@ -99,7 +138,7 @@ def test_three_levels_edit_points_and_school_sees_who_approved(client2,app2):
     d=c.get(URL+'/course/'+k1['id']).json()
     steps=d['course']['steps']
     assert [(x['level'],x['decision'],x['by_name'],x.get('points_before'),x.get('points_after'),x.get('reason')) for x in steps]==[
-        ('dept','approve','测试教研室负责人','64.00','60.00','实际授课 60 学时'),('college','approve','测试学院负责人','60.00','60.00',None)]
+        ('teacher','apply','测试教师一',None,'64.00','本学期实际授课'),('dept','approve','测试教研室负责人','64.00','60.00','实际授课 60 学时'),('college','approve','测试学院负责人','60.00','60.00',None)]
     assert d['course']['can_act'] is True and d['content']['course_code']=='K1'
     assert {x['label']:x['ok'] for x in d['conditions']}=={'在学校教职工表里':True,'有本地教师账号':True,'有学时':True,'有学分':True,'不是重复课':True,'不是本人的课':True}
     r=review(c,[k1['id']],'approve','三级核对一致');assert r.status_code==200,r.text
@@ -120,11 +159,11 @@ def test_three_levels_edit_points_and_school_sees_who_approved(client2,app2):
     assert (k1['review'],k1['stage'],k1['steps'])==('pending','dept',[])
     with Session(app2.state.engine) as db:
         actions=[a.action for a in db.scalars(select(Audit).where(Audit.module=='teacher_course',Audit.action.startswith('授课认定')).order_by(Audit.created_at))]
-    assert actions==['授课认定：教研室通过','授课认定：学院通过','授课认定：认定计分','授课认定：改回重审']
+    assert actions==['授课认定：老师申请认定','授课认定：老师申请认定','授课认定：老师撤回申请','授课认定：老师申请认定','授课认定：教研室通过','授课认定：学院通过','授课认定：认定计分','授课认定：改回重审']
 
 
 def test_exclude_and_school_returns_to_lower_level(client2,app2):
-    c=client2;setup(c,app2)
+    c=client2;ready(c,app2)
     auth(c,'depthead')
     k2=course(credits(c,'J001')['2026-2027'],'K2')
     assert review(c,[k2['id']],'exclude').status_code==422   # 不计分要写原因
@@ -137,7 +176,7 @@ def test_exclude_and_school_returns_to_lower_level(client2,app2):
     assert review(c,[k2['id']],'return','请核对是否代课',return_to='dept').status_code==200
     auth(c,'depthead')
     k2=course(credits(c,'J001')['2026-2027'],'K2')
-    assert k2['stage']=='dept' and [x['decision'] for x in k2['steps']]==['approve','approve','return']
+    assert k2['stage']=='dept' and [x['decision'] for x in k2['steps']]==['apply','approve','approve','return']
     assert review(c,[k2['id']],'exclude','该课为代课，按规定不计').status_code==200
     # 老师看到不计分和原因；不计分不入账。
     auth(c,'teacher')
@@ -149,7 +188,7 @@ def test_exclude_and_school_returns_to_lower_level(client2,app2):
 
 
 def test_vacant_levels_unmapped_staff_recusal_and_missing_hours(client2,app2):
-    c=client2;conn=setup(c,app2)
+    c=client2;conn=ready(c,app2)
     # 测试学院二没有院长：教研室二通过后直接到学校。
     auth(c,'otherdept')
     j2=course(credits(c,'J002')['2025-2026'],'K1')
@@ -160,23 +199,19 @@ def test_vacant_levels_unmapped_staff_recusal_and_missing_hours(client2,app2):
     assert mine(c)=={('J002','2025-2026'):1}
     assert review(c,[j2['id']],'approve').status_code==200
     assert teaching_points(app2,'otherteacher')==Decimal('64')
-    # 没有本地账号的工号直接到学校，教研室不能办。
+    # 没有本地账号的工号登录不了、申请不了，停在“待老师申请”，谁都不能直接办。
     row=course(credits(c,'T9001')['2025-2026'],'K1')
-    assert row['stage']=='school'
-    auth(c,'depthead');assert review(c,[row['id']],'approve').status_code==403
-    auth(c,'jwc');assert review(c,[row['id']],'approve','人事核对后认定').status_code==200
-    assert course(credits(c,'T9001')['2025-2026'],'K1')['booked']['booked'] is False
-    # 学校账号自己的课须回避，由其他授课认定人认定。
-    own=course(credits(c,'J900')['2025-2026'],'K2')
-    r=review(c,[own['id']],'approve');assert r.status_code==403 and '回避' in r.json()['detail'],r.text
-    auth(c,'schooladmin');assert review(c,[own['id']],'approve','学校核对').status_code==200
+    assert (row['stage'],row['handler_label'])==('apply','待老师申请（还没有本地账号）')
+    assert review(c,[row['id']],'approve','人事核对后认定').status_code==409
+    auth(c,'depthead');assert review(c,[row['id']],'approve').status_code==409
+    auth(c,'schooladmin')   # 同步数据要管理员
+    # 本人的课须回避，见 test_admin_designates_teacher_as_reviewer_without_changing_role。
     # 缺学时（课程总库没有这门课）：算不出建议积分，须手工填。
     inbound(c,conn,'teacher_course',[{'ZGH':'J001','XM':'测试教师一','KCH':'K9','KCMC':'缺学时课','XQMC':'2025-2026学年第二学期'}])
-    auth(c,'depthead')
+    auth(c,'teacher')
     k9=course(credits(c,'J001')['2025-2026'],'K9')
     assert k9['suggested_points'] is None
-    r=review(c,[k9['id']],'approve');assert r.status_code==409 and '缺学时' in r.json()['detail'],r.text
-    assert one(c,k9['id'],'approve',points='16').status_code==200
+    r=review(c,[k9['id']],'apply');assert r.status_code==409 and '缺学时' in r.json()['detail'],r.text
     # 不存在的课整批拒绝。
     k2=course(credits(c,'J001')['2026-2027'],'K2')
     assert review(c,[k2['id'],'no-such-row'],'approve').status_code==409
@@ -184,7 +219,7 @@ def test_vacant_levels_unmapped_staff_recusal_and_missing_hours(client2,app2):
 
 
 def test_todos_follow_the_course_up_the_chain(client2,app2):
-    c=client2;setup(c,app2)
+    c=client2;ready(c,app2)
     def todos(user):
         auth(c,user);return {x['id'] for x in c.get('/api/todos',params={'type':'credit_review'}).json()['items']}
     assert todos('depthead')=={'J001~2025-2026','J001~2026-2027'}
@@ -194,11 +229,11 @@ def test_todos_follow_the_course_up_the_chain(client2,app2):
     y=credits(c,'J001');ids=[d['id'] for g in y.values() for d in g['details'] if d['review']=='pending']
     assert review(c,ids,'approve').json()['updated']==2   # 批量通过，按各自当前积分
     assert todos('depthead')==set() and todos('collegehead')=={'J001~2025-2026','J001~2026-2027'}
-    assert all(t['title'].startswith('授课认定：') for t in c.get('/api/todos',params={'type':'credit_review'}).json()['items'])
+    assert all(t['title'].startswith('课程认定积分：') for t in c.get('/api/todos',params={'type':'credit_review'}).json()['items'])
 
 
 def test_repull_restarts_from_dept_and_reverses_booked_points(client2,app2):
-    c=client2;conn=setup(c,app2)
+    c=client2;conn=ready(c,app2)
     for user in ('depthead','collegehead','jwc'):
         auth(c,user);k1=course(credits(c,'J001')['2025-2026'],'K1');assert review(c,[k1['id']],'approve').status_code==200,user
     assert teaching_points(app2)==Decimal('64')
@@ -217,11 +252,11 @@ def test_repull_restarts_from_dept_and_reverses_booked_points(client2,app2):
     assert review(c,[k1['id']],'approve').status_code==200
     assert teaching_points(app2)==Decimal('0')
     history=c.get(URL+'/course/'+k1['id']).json()['history']
-    assert [x['decision'] for x in history]==['approve','approve','approve','restart','approve']
+    assert [x['decision'] for x in history]==['apply','approve','approve','approve','restart','approve']
 
 
 def test_school_admin_sets_points_per_hour(client2,app2):
-    c=client2;setup(c,app2)
+    c=client2;ready(c,app2)
     auth(c,'depthead')
     assert c.get(URL+'/points-rule').json()=={'JW':'1','CX':'1'}
     assert put(c,URL+'/points-rule',{'JW':'2','CX':'1'}).status_code==403
@@ -232,7 +267,7 @@ def test_school_admin_sets_points_per_hour(client2,app2):
 
 def test_admin_designates_teacher_as_reviewer_without_changing_role(client2,app2):
     """组织页学校那一行设“授课认定人”：普通教师（如皮老师）不用改角色，就能办学校这一级。"""
-    c=client2;setup(c,app2)
+    c=client2;ready(c,app2)
     auth(c,'jwc');assert post(c,'/api/credit-reviewers',{'user_id':'otherteacher',**REASON}).status_code==403
     auth(c,'schooladmin')
     school=next(o for o in c.get('/api/organizations').json()['items'] if o['kind']=='school')
@@ -257,7 +292,7 @@ def test_admin_designates_teacher_as_reviewer_without_changing_role(client2,app2
     assert {x['id'] for x in c.get('/api/todos',params={'type':'credit_review'}).json()['items']}=={'J001~2025-2026'}
     assert review(c,[k1['id']],'approve','已核对排课').status_code==200
     row=course(credits(c,'T9001')['2025-2026'],'K1')
-    assert review(c,[row['id']],'approve','人事核对后认定').status_code==200
+    assert review(c,[row['id']],'approve','人事核对后认定').status_code==409   # 没有账号的老师申请不了，学校也不能直接认定
     auth(c,'otherdept');own=course(credits(c,'J002')['2025-2026'],'K1');assert review(c,[own['id']],'approve').status_code==200
     auth(c,'otherteacher')
     r=review(c,[own['id']],'approve');assert r.status_code==403 and '回避' in r.json()['detail'],r.text
@@ -274,7 +309,7 @@ def test_admin_designates_teacher_as_reviewer_without_changing_role(client2,app2
 
 def test_designation_only_counts_in_management_identity(client2,app2):
     """授课认定人还有管理身份时，切到普通教师身份就看不到课程认定积分菜单和全校名单；切回管理身份照常办理。"""
-    c=client2;setup(c,app2)
+    c=client2;ready(c,app2)
     auth(c,'schooladmin');assert post(c,'/api/credit-reviewers',{'user_id':'otherteacher',**REASON}).status_code==200
     with Session(app2.state.engine) as db:
         db.add(Setting(key='account_identities',value={'items':[{'id':'extra-reviewer','user_id':'otherteacher','role_id':'role-dept','org_id':'dept1'}]}));db.commit()

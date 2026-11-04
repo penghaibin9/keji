@@ -61,7 +61,7 @@ def full_result(app,params,users=None):
     return {'items':items,'total':total,'page':page,'size':size,'years':years}
 
 
-ANNOTATION={'can_return'};DETAIL_ANNOTATION={'handler','handler_label','acting_for','can_act'}
+ANNOTATION={'can_return'};DETAIL_ANNOTATION={'handler','handler_label','acting_for','can_act','can_apply','can_withdraw'}
 
 def plain(body):
     """授课认定三级给明细加的“谁在办、当前账号能不能办”是按查看人算的，比较分页口径时去掉。"""

@@ -23,11 +23,11 @@ from .models import User, Period, PointEntry, PointBalance, utcnow
 from .core import serial, audit, archive_exists
 from .social_models import SocialResource
 from .identities import stage_handler, org_heads, org_map, VACANCY_LABEL, check_not_principal, agent_item
-from .reference_data import (TeacherCourseTerm, CREDIT_REVIEW_KIND, TEACHING_STAGES, credit_review_code, credit_reviews,
+from .reference_data import (TeacherCourseTerm, CREDIT_REVIEW_KIND, TEACHING_STAGES, TEACHER_APPLY, credit_review_code, credit_reviews,
                              annual_teaching_credits, can_review_credits, term_anchor, teaching_point_rates)
 
-LEVEL_NAME = {'dept': '教研室', 'college': '学院', 'school': '学校'}
-STEP_LABEL = {'approve': '通过', 'exclude': '不计分', 'return': '退回', 'reset': '改回重审', 'restart': '学分学时变化，重新审核'}
+LEVEL_NAME = {'teacher': '老师', 'dept': '教研室', 'college': '学院', 'school': '学校'}
+STEP_LABEL = {'apply': '申请认定', 'withdraw': '撤回申请', 'approve': '通过', 'exclude': '不计分', 'return': '退回', 'reset': '改回重审', 'restart': '学分学时变化，重新审核'}
 MAX_POINTS = Decimal('1000')
 
 
@@ -96,7 +96,7 @@ def waiting_for(db, actor, groups):
     kind = _review_kind(actor)
     if not school and not kind:
         return []
-    candidates = [g for g in groups if any((g.get('waiting') or {}).values())]
+    candidates = [g for g in groups if any(v for k, v in (g.get('waiting') or {}).items() if k != TEACHER_APPLY)]
     if not candidates:
         return []
     users = _users(db, [g.get('user_id') for g in candidates])
@@ -108,7 +108,7 @@ def waiting_for(db, actor, groups):
             continue
         n = 0
         for stage, count in (g.get('waiting') or {}).items():
-            if not count:
+            if not count or stage == TEACHER_APPLY:
                 continue
             level, _ = effective_level(db, teacher, stage, heads, orgs)
             if level == 'school' and school:
@@ -124,10 +124,17 @@ def annotate(db, actor, group):
     """单个老师学年的明细：每门课实际在哪一级、谁在办、当前账号能不能办。"""
     teacher = db.get(User, group['user_id']) if group.get('user_id') else None
     heads, orgs = org_heads(db), org_map(db)
+    owner = teacher is not None and teacher.id == actor.id
     for d in group.get('details', []):
+        d.update(can_apply=False, can_withdraw=False)
         if d.get('review') != 'pending' or not d.get('counted'):
             d.update(handler=None, handler_label=None, acting_for=None, can_act=False)
             continue
+        if d['stage'] == TEACHER_APPLY:
+            d.update(handler='teacher', handler_label='待老师申请' if teacher is not None else '待老师申请（还没有本地账号）',
+                     acting_for=None, can_act=False, can_apply=owner)
+            continue
+        d['can_withdraw'] = owner and d['stage'] == 'dept' and all(x.get('level') == 'teacher' for x in d.get('steps') or [])
         level, acting = effective_level(db, teacher, d['stage'], heads, orgs)
         d.update(handler=level, handler_label='待' + LEVEL_NAME[level] + ('认定' if level == 'school' else '审核' if level == 'dept' else '审批'),
                  acting_for=acting, can_act=can_act(db, actor, teacher, group['staff_no'], level))
@@ -261,7 +268,31 @@ def apply_review(db, actor, data):
         entry = {'by': actor.id, 'by_name': actor.name, 'at': at, 'reason': reason, 'agent': agent or None}
         state = obj.state if obj is not None and current else 'PENDING'
         stage = d['stage']
-        if data.decision == 'reset':
+        points_after = points_now
+        if data.decision in ('apply', 'withdraw'):
+            if teacher is None or teacher.id != actor.id:
+                raise HTTPException(403, '课程认定积分由任课老师本人申请或撤回')
+            if d['review'] != 'pending':
+                raise HTTPException(409, r.course_name + ' 已' + ('认定计分' if d['review'] == 'approved' else '认定不计分') + '，不用再申请')
+            if data.decision == 'apply':
+                if stage != TEACHER_APPLY:
+                    raise HTTPException(409, r.course_name + ' 已经申请过，正在审核中')
+                if points_now is None:
+                    raise HTTPException(409, r.course_name + ' 缺学时，算不出积分，请先联系教务处或超星管理员补齐学时')
+                entry.update(level='teacher', decision='apply', points_after=str(points_now))
+                stage = 'dept'
+            else:
+                if stage != 'dept' or any(s.get('level') != 'teacher' for s in steps):
+                    raise HTTPException(409, r.course_name + ' 已经有人审核过，不能撤回')
+                entry.update(level='teacher', decision='withdraw')
+                stage = TEACHER_APPLY
+            steps.append({k: v for k, v in entry.items() if v not in (None, '')})
+            history.append({k: v for k, v in entry.items() if v not in (None, '')})
+        elif data.decision != 'reset' and stage == TEACHER_APPLY:
+            raise HTTPException(409, r.course_name + ' 老师还没申请认定')
+        if data.decision in ('apply', 'withdraw'):
+            pass
+        elif data.decision == 'reset':
             if not can_review_credits(db, actor) or _own(actor, teacher, r.staff_no):
                 raise HTTPException(403, '改回重审由学校授课认定人办理' if not _own(actor, teacher, r.staff_no) else '须回避本人的课，由其他人办理')
             if len(reason) < 2:
@@ -272,7 +303,7 @@ def apply_review(db, actor, data):
             booked = None
             entry.update(level='school', decision='reset', points_before=str(points_now) if points_now is not None else None)
             history.append(entry)
-            state, stage, steps = 'PENDING', 'dept' if r.user_id else 'school', []
+            state, stage, steps = 'PENDING', 'dept' if r.user_id else TEACHER_APPLY, []
             points_after = None
         else:
             if d['review'] != 'pending':
@@ -329,7 +360,8 @@ def apply_review(db, actor, data):
                     'points': str(points_after) if points_after is not None else None, 'steps': steps[-30:], 'history': history[-100:],
                     'booked': booked, 'reason': reason, 'by': actor.id, 'by_name': actor.name, 'at': at}
         db.flush()
-        label = {'approve': '认定计分' if state == 'APPROVED' else LEVEL_NAME.get(entry.get('level'), '') + '通过',
+        label = {'apply': '老师申请认定', 'withdraw': '老师撤回申请',
+                 'approve': '认定计分' if state == 'APPROVED' else LEVEL_NAME.get(entry.get('level'), '') + '通过',
                  'exclude': '认定不计分', 'return': '学校退回' + LEVEL_NAME.get(data.return_to or '', ''), 'reset': '改回重审'}[data.decision]
         labels.append(label)
         audit(db, actor, 'teacher_course', i, '授课认定：' + label, before=before, after=serial(obj), reason=reason or label)

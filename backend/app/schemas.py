@@ -339,7 +339,7 @@ class CreditReviewIn(Input):
     """授课认定三级办理：教研室审核、学院审批、学校认定；approve 通过、exclude 不计分、return 学校退回、reset 学校改回重审。"""
     ids: list[Ident] = Field(default_factory=list,max_length=200)
     items: list[CreditReviewItem] = Field(default_factory=list,max_length=200)
-    decision: Literal['approve','exclude','reset','return']
+    decision: Literal['apply','withdraw','approve','exclude','reset','return']
     return_to: Literal['dept','college']|None = None
     reason: str = Field(default='',max_length=500)
 
