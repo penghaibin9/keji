@@ -1,0 +1,68 @@
+<!doctype html>
+<html lang="zh-CN"><head><meta charset="utf-8"><title>审批流程一览</title>
+<style>
+:root{--teacher:#e8f1fc;--teacher-b:#8db4e2;--dept:#e3f5ef;--dept-b:#6fbf9f;--college:#eeeafb;--college-b:#a79ad9;--school:#fdf2df;--school-b:#e3b25e;--done:#fce9e6;--done-b:#e3a197;--ink:#1f2933;--muted:#5f6b7a}
+*{box-sizing:border-box}body{margin:0;background:#fff;color:var(--ink);font:15px/1.6 "Microsoft YaHei","PingFang SC",sans-serif}
+.page{width:1600px;padding:36px 44px 40px}
+h1{font-size:32px;margin:0 0 6px}h2{font-size:24px;margin:30px 0 10px}
+.sub{font-size:17px;color:var(--muted);margin-bottom:12px}
+.legend{display:flex;gap:24px;font-size:17px;color:var(--muted);margin-bottom:16px}
+.legend i{display:inline-block;width:20px;height:20px;border-radius:5px;margin-right:7px;vertical-align:-4px;border:1.5px solid}
+.row{display:flex;align-items:center;margin:12px 0}
+.name{width:200px;flex:none;font-size:20px;font-weight:600}
+.box{width:220px;height:76px;border-radius:12px;border:2px solid;display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;font-size:19px;font-weight:600}
+.box span{font-size:15px;font-weight:400;color:var(--muted)}
+.arrow{width:36px;text-align:center;color:#9aa5b1;font-size:24px}
+.tip{margin-left:16px;font-size:15px;color:var(--muted)}
+.t{background:var(--teacher);border-color:var(--teacher-b)}.d{background:var(--dept);border-color:var(--dept-b)}.c{background:var(--college);border-color:var(--college-b)}.s{background:var(--school);border-color:var(--school-b)}.f{background:var(--done);border-color:var(--done-b)}
+table{width:100%;border-collapse:collapse;font-size:16px}
+th,td{border:1px solid #d9e0e8;padding:10px 12px;vertical-align:top;text-align:left}th{background:#eef3f9}
+.grid{display:grid;grid-template-columns:1fr 1fr;gap:28px}
+ul{margin:6px 0 0 20px;padding:0}li{margin:4px 0}
+.foot{font-size:14px;color:var(--muted);margin-top:18px}
+</style></head><body><div class="page">
+<h1>非学历教育智慧前台 · 审批流程一览</h1>
+<div class="sub">每一条流程：谁发起、每一级谁办。待办会自动送到下一级办理人手上，不用另行通知。</div>
+<div class="legend"><span><i style="background:var(--teacher);border-color:var(--teacher-b)"></i>老师</span><span><i style="background:var(--dept);border-color:var(--dept-b)"></i>教研室负责人</span><span><i style="background:var(--college);border-color:var(--college-b)"></i>学院负责人</span><span><i style="background:var(--school);border-color:var(--school-b)"></i>学校（继续教育与乡村振兴学院等）</span><span><i style="background:var(--done);border-color:var(--done-b)"></i>指定部门 / 完成</span></div>
+
+<div class="row"><div class="name">培训项目申请</div><div class="box t">老师提交<span>项目负责人</span></div><div class="arrow">→</div><div class="box c">学院审批<span>院长</span></div><div class="arrow">→</div><div class="box s">学校审核备案<span>归口学院复审</span></div><div class="arrow">→</div><div class="box f">已备案<span>可开班、登记明细</span></div></div>
+<div class="row"><div class="name">培训项目结项</div><div class="box t">提交结项<span>填两步：结项情况、经费</span></div><div class="arrow">→</div><div class="box s">学校结项核验<span>归口学院复审·核对材料</span></div><div class="arrow">→</div><div class="box f">已结项<span>可申报积分</span></div></div>
+<div class="row"><div class="name">培训课程申报</div><div class="box t">老师提交<span>可从“我的课程”带出</span></div><div class="arrow">→</div><div class="box c">学院审批<span>院长</span></div><div class="arrow">→</div><div class="box s">学校复审<span>归口学院复审</span></div><div class="arrow">→</div><div class="box f">进入培训课程库</div></div>
+<div class="row"><div class="name">培训基地申请</div><div class="box t">老师提交</div><div class="arrow">→</div><div class="box c">学院审批<span>院长</span></div><div class="arrow">→</div><div class="box s">学校复审<span>归口学院复审</span></div><div class="arrow">→</div><div class="box f">进入基地清单</div></div>
+<div class="row"><div class="name">校内培训师</div><div class="box t">本人申报</div><div class="arrow">→</div><div class="box c">学院审批<span>院长</span></div><div class="arrow">→</div><div class="box f">资格认定<span>组织人事部</span></div></div>
+<div class="row"><div class="name">外聘培训师</div><div class="box c">学院登记</div><div class="arrow">→</div><div class="box f">审核备案<span>教务处</span></div><div class="arrow">→</div><div class="box f">进入培训师资</div></div>
+<div class="row"><div class="name">社会培训积分认定</div><div class="box t">老师申报<span>项目结项后</span></div><div class="arrow">→</div><div class="box c">院长初审</div><div class="arrow">→</div><div class="box s">归口复审</div><div class="arrow">→</div><div class="box s">分管副校长审批</div><div class="arrow">→</div><div class="box f">教学秘书归档入账</div></div>
+<div class="row"><div class="name">授课认定</div><div class="box t">老师申请认定<span>教务、超星同步来的课</span></div><div class="arrow">→</div><div class="box d">教研室审核</div><div class="arrow">→</div><div class="box c">学院审批</div><div class="arrow">→</div><div class="box s">学校认定计分<span>授课认定人</span></div><div class="arrow">→</div><div class="box f">计入积分</div></div>
+<div class="row"><div class="name">教师资质</div><div class="box t">老师提交<span>附证书照片</span></div><div class="arrow">→</div><div class="box d">审核<span>教研室负责人等</span></div><div class="arrow">→</div><div class="box f">审核通过</div></div>
+<div class="row"><div class="name">教师年度考核</div><div class="box t">本人确认</div><div class="arrow">→</div><div class="box d">教研室确认</div><div class="arrow">→</div><div class="box c">学院确认</div><div class="arrow">→</div><div class="box s">学校审核</div><div class="arrow">→</div><div class="box f">归档</div></div>
+
+<div class="grid">
+<div>
+<h2>办理时的几条规则</h2>
+<table>
+<tr><th style="width:28%">情况</th><th>系统怎么处理</th></tr>
+<tr><td>被退回</td><td>按退回原因修改后重新提交，<b>从退回的那一级接着审</b>，不用从头走。</td></tr>
+<tr><td>本人的申请</td><td>自己不能审，由同级其他负责人或上一级办理。</td></tr>
+<tr><td>某一级没有负责人</td><td>自动交上一级代办（教研室缺→学院，学院缺→学校），进度上会标明“代办”。</td></tr>
+<tr><td>同一级有几位负责人</td><td>任何一位办理即可。</td></tr>
+<tr><td>办理意见</td><td>“同意、提交、备案、核验通过”类意见已预填，可修改，须本人点确认；退回、不计分、改积分必须写明原因。</td></tr>
+<tr><td>学校这一级由谁办</td><td>由学校管理员在“用户与权限 › 学校审批职责”里给每个职责指定办理人，建议每个职责至少两人。</td></tr>
+</table>
+</div>
+<div>
+<h2>删除和撤回</h2>
+<table>
+<tr><th style="width:30%">记录现在的状态</th><th>老师能做什么</th></tr>
+<tr><td>草稿、被退回、已撤回</td><td>可以直接删除。删除后可在“已删除”里恢复。</td></tr>
+<tr><td>审批中</td><td>先点“撤回”，再删除。</td></tr>
+<tr><td>已通过、已备案、已入库、已计分</td><td>不能删除。有错误时按更正流程办理（如积分更正、授课认定改回重审），原记录保留。</td></tr>
+</table>
+<ul class="foot" style="font-size:15px">
+<li>系统不做物理删除：删除只是隐藏，办理记录和材料都保留，可以查证。</li>
+<li>教务、超星同步来的课程不能删除；不需要认定的课不申请即可。</li>
+<li>已备案的项目不能删除；需要停办请联系学院。</li>
+</ul>
+</div>
+</div>
+<div class="foot">依据：《湖南科技职业学院社会培训管理办法（试行）》《社会培训积分量化管理办法》及学校采购需求。积分认定、教师考核的每一级按文件逐级执行；其他流程的学校一级有文件依据，学院一级按“分级管理、审核”设置。（2026年11月）</div>
+</div></body></html>
