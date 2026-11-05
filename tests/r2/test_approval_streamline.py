@@ -195,3 +195,39 @@ def test_resubmit_saves_correction_and_upload_before_submit_check(setup_social,c
     assert saved['item']['data']['recognition_form_reference']=='补正后的认定表编号' and len(saved['attachments'])==2  # 原材料与补正材料都保留
     assert saved['item']['state']==('RETURNED' if expected==409 else 'SUBMITTED')
     if expected==409:assert '退回补正的期限口径' in submit.json()['detail']
+
+
+def test_conflicted_reviewer_gets_no_todo_but_direct_approval_still_refused(submitted_claims,client2,app2):
+    """待办源头复用实际办理权限：登记了利益冲突的审核人不再收到该项目的认定待办，详情不给办理按钮，直接请求仍拒绝。"""
+    pid,pol,ids=submitted_claims
+    def claim_todos():
+        r=client2.get('/api/todos');assert r.status_code==200,r.text
+        return {x['id'] for x in r.json()['items'] if x['type']=='social_claim'}
+    auth(client2,'collegehead')
+    assert set(ids.values())<=claim_todos()
+    assert detail(client2,'social_claim',ids['batch2'])['can_review'] is True
+    from app.models import Setting
+    with app2.state.sessions.begin() as db:
+        db.add(Setting(key=st.CONFLICTS_KEY,value=[{'user_id':'collegehead','target_kind':'teacher','target_id':'batch3','target_name':'批量测试教师2','active':True}]))
+    # batch3 参与了这个项目，同项目的申报都须回避。
+    assert not set(ids.values())&claim_todos()
+    d=detail(client2,'social_claim',ids['batch2']);assert d['can_review'] is False
+    r=post(client2,'/api/social/claims/'+ids['batch2']+'/actions',{'action':'approve','expected_version':d['item']['version'],'reason':'核对无误，审核通过','basis':''})
+    assert r.status_code==403 and '利益冲突' in r.json()['detail'],r.text
+    # 冲突登记撤掉后，待办恢复。
+    with app2.state.sessions.begin() as db:
+        db.get(Setting,st.CONFLICTS_KEY).value=[]
+    assert set(ids.values())<=claim_todos()
+
+
+def test_may_review_hides_only_permission_refusals(monkeypatch):
+    from types import SimpleNamespace
+    from fastapi import HTTPException
+    def raising(code):
+        def check(db,a,obj):raise HTTPException(code,'x')
+        return check
+    monkeypatch.setattr(st,'review_check',raising(403));assert st.may_review(None,None,None) is False
+    monkeypatch.setattr(st,'review_check',raising(409));assert st.may_review(None,None,None) is True   # 缺材料、配置问题照常给办理人
+    def boom(db,a,obj):raise RuntimeError('程序异常')
+    monkeypatch.setattr(st,'review_check',boom)
+    with pytest.raises(RuntimeError):st.may_review(None,None,SimpleNamespace())

@@ -889,6 +889,8 @@ def detail(db,actor,kind,obj):
         result['ever_filed']=filed
         # 删除按钮和后端删除用同一判断（后端还会核对负责人、明细和台账来源）。
         result['can_delete']=obj.state in {'DRAFT','RETURNED'} and not filed
+    if isinstance(obj,(SocialProject,SocialClaim)) or (isinstance(obj,SocialResource) and obj.kind=='correction'):
+        result['can_review']=may_review(db,actor,obj)   # 详情里的审核按钮和待办同一权限结果
     if isinstance(obj,(SocialProject,SocialResource,SocialAnnual)):
         org=db.get(Org,obj.org_id);result['org_name']=org.name if org else ''  # 教师、教研室的组织列表不含所属学院，名称由服务端给出
     if isinstance(obj,SocialResource) and obj.kind in ('correction','point_review'):
@@ -998,6 +1000,37 @@ def open_point_reviews(db, teacher_id):
     return [x for x in db.scalars(reviews) if x.data.get('teacher_id')==teacher_id]+[x for x in db.scalars(fixes) if x.data.get('teacher_id')==teacher_id and x.data.get('review_id')]
 
 
+REVIEW_STAGES={'SUBMITTED':'dean','DEAN':'coordinator','COORDINATOR':'vice_president','APPROVED':'secretary'}
+
+
+def review_check(db,a,obj):
+    """项目审核、积分认定、积分更正这一环节的实际办理权限（职责、本人回避、同项目参与人回避、已登记利益冲突），
+    和办理接口用同一组检查。不能办直接抛 403；不在审批环节或来源缺失返回 False（不判断，交给办理接口）。"""
+    if isinstance(obj,SocialProject):
+        if obj.state not in {'SUBMITTED','CLOSE_REVIEW'}:return False
+        duty(db,a,'coordinator',obj.owner_id,obj.org_id);check_project_conflicts(db,a,obj);return True
+    if isinstance(obj,SocialClaim):
+        project=db.get(SocialProject,obj.project_id)
+        if obj.state not in REVIEW_STAGES or project is None:return False
+        duty(db,a,REVIEW_STAGES[obj.state],obj.teacher_id,project.org_id);check_project_conflicts(db,a,project);return True
+    if isinstance(obj,SocialResource) and obj.kind=='correction':
+        claim=db.get(SocialClaim,obj.data.get('claim_id'));project=db.get(SocialProject,claim.project_id) if claim else None
+        if obj.state not in REVIEW_STAGES or project is None:return False
+        duty(db,a,REVIEW_STAGES[obj.state],obj.data['teacher_id'],obj.org_id);check_project_conflicts(db,a,project)
+        if a.id==obj.data['created_by']:raise HTTPException(403,'不能审核本人发起的更正')
+        return True
+    return False
+
+
+def may_review(db,a,obj):
+    """待办和办理按钮用：只把明确的权限或回避拒绝（403）当成“不该给你”；缺材料、配置问题（409 等）照常给合法办理人，
+    让他看得到、去处理；程序异常不吞。"""
+    try:
+        review_check(db,a,obj);return True
+    except HTTPException as e:
+        return e.status_code!=403
+
+
 def todo_items(db,a):
     items=[];duties=actor_duties(db,a)
     def add(kind,obj,title,state=None,teacher_id=None,due=None,**extra):
@@ -1010,7 +1043,7 @@ def todo_items(db,a):
             add('social_project',p,'待完善项目：'+p.data['name'],teacher_id=a.id,
                 action_hint='项目尚未提交，请完善资料并上传材料后提交学院审核。',action_label='完善项目申报')
         elif p.state in {'DRAFT','RETURNED'} and 'records.write' in a.permissions:add('social_project',p,'补充项目申报：'+p.data['name'])
-        elif p.state in {'SUBMITTED','CLOSE_REVIEW'} and 'coordinator' in duties and p.owner_id!=a.id:add('social_project',p,'项目审核：'+p.data['name'])
+        elif p.state in {'SUBMITTED','CLOSE_REVIEW'} and 'coordinator' in duties and p.owner_id!=a.id and may_review(db,a,p):add('social_project',p,'项目审核：'+p.data['name'])
         elif p.state=='FILED' and today().isoformat()>p.data['end_date']:add('social_project',p,'培训已结束，请办理结项：'+p.data['name'],'待结项')
         followups=project_followups(db,p.id)
         if any(x.get('invalidate_cohort') for x in followups) and 'secretary' in duties:
@@ -1037,11 +1070,11 @@ def todo_items(db,a):
                 action_required=not waiting,
                 action_hint='等待学校确认积分口径和申报期限，可先查看准备材料。' if waiting else '请核对申报资料，补充后提交。',
                 action_label='查看进度' if waiting else '补充并提交')
-        elif stages.get(claim.state) in duties and claim.teacher_id!=a.id:add('social_claim',claim,'社会培训积分认定',teacher_id=claim.teacher_id)
+        elif stages.get(claim.state) in duties and claim.teacher_id!=a.id and may_review(db,a,claim):add('social_claim',claim,'社会培训积分认定',teacher_id=claim.teacher_id)
     for obj in db.scalars(select(SocialResource).where(SocialResource.kind=='correction')):
         if obj.data['teacher_id'] not in a.teacher_ids:continue
         if obj.state in {'DRAFT','RETURNED'} and obj.data['created_by']==a.id:add('social_resource',obj,'补充积分更正依据',teacher_id=obj.data['teacher_id'])
-        elif stages.get(obj.state) in duties and a.id not in {obj.data['created_by'],obj.data['teacher_id']}:add('social_resource',obj,'社会培训积分更正审核',teacher_id=obj.data['teacher_id'])
+        elif stages.get(obj.state) in duties and a.id not in {obj.data['created_by'],obj.data['teacher_id']} and may_review(db,a,obj):add('social_resource',obj,'社会培训积分更正审核',teacher_id=obj.data['teacher_id'])
     for obj in db.scalars(select(SocialResource).where(SocialResource.kind=='point_review',SocialResource.state!='CLOSED')):
         if obj.data['teacher_id'] not in a.teacher_ids:continue
         if obj.state=='DRAFT' and obj.data['created_by']==a.id:add('social_resource',obj,'上传核对材料并发给教师',teacher_id=obj.data['teacher_id'])

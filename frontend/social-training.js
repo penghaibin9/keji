@@ -423,9 +423,9 @@ async function showDetail(kind,id,courseList=null){
  if(kind==='social_project'&&(ownTeacher||(c.can('records.write')&&['college','school'].includes(c.me?.role?.kind)))&&['FILED','CLOSE_COLLEGE','CLOSE_REVIEW','CLOSED'].includes(x.state))(manager?moreActions:buttons).push(act('复制为新一期','social-project-copy'));
  if(kind==='social_project'&&(c.can('records.write')||ownTeacher)){
   if(['DRAFT','RETURNED'].includes(x.state)){const resume=x.state==='RETURNED'?{college:'补正后提交学院审批',school:'补正后提交学校备案'}[x.data.returned_level]:'';add(resume||(c.me?.role?.kind==='teacher'||c.me?.role?.kind==='dept'?'提交学院审批':'提交审核备案'),'submit');buttons.push(act('修改项目资料','social-project-edit'))}
-  if(x.state==='SUBMITTED'&&workspace.my_duties.includes('coordinator')){add('完成审核备案','file');add('退回补正','return')}
+  if(x.state==='SUBMITTED'&&workspace.my_duties.includes('coordinator')&&d.can_review!==false){add('完成审核备案','file');add('退回补正','return')}
   if(x.state==='FILED'){if(c.can('records.write')){buttons.push(c.me?.role?.kind==='school'?act('关联已入库课程','social-course-link')+act('登记本项目课程','social-course-for-project'):act('申请本项目课程','app-course-new',x.data.code));buttons.push(act('导入参训明细','social-unit-import'))}buttons.push(act('提交结项','social-close'));add('申请重新备案','refile')}
-  if(x.state==='CLOSE_REVIEW'&&workspace.my_duties.includes('coordinator')){add('核验通过结项','close');add('退回补充材料','return')}
+  if(x.state==='CLOSE_REVIEW'&&workspace.my_duties.includes('coordinator')&&d.can_review!==false){add('核验通过结项','close');add('退回补充材料','return')}
  }
  // 负责人自己撤回审批中的申报、删除从未备案过的申报草稿、恢复已删除的（后端再核对是否负责人或登记人、有无明细）。
  if(kind==='social_project'&&x.owner_id===c.me?.user?.id){
@@ -439,7 +439,7 @@ async function showDetail(kind,id,courseList=null){
   if(x.state==='ARCHIVED'&&x.teacher_id!==c.me.user.id&&['dept','college'].includes(c.me?.role?.kind)){if(d.busy_reason)opened.busyNote=d.busy_reason+'。如还发现积分有误，请在那件办结后再发起核对。';else buttons.push(act('发现积分有误，发起核对','social-review-new','','light','help'))}
   if(x.teacher_id===c.me.user.id&&['DRAFT','RETURNED'].includes(x.state)){if(d.trial?.blockers?.length)buttons.push('<button type="button" class="btn primary" disabled title="请先处理上方列出的提交条件">暂不能提交积分申报</button>');else add('提交本人积分申报','submit');buttons.push(act('补正及辅助积分','social-claim-edit'))}
   const duty={SUBMITTED:'dean',DEAN:'coordinator',COORDINATOR:'vice_president',APPROVED:'secretary'}[x.state];
-  if(workspace.my_duties.includes(duty)){add(x.state==='APPROVED'?'归档并计入个人台账':'审核通过','approve');if(x.state==='APPROVED')opened.archiveStep=true;add('退回补正','return')}
+  if(workspace.my_duties.includes(duty)&&d.can_review!==false){add(x.state==='APPROVED'?'归档并计入个人台账':'审核通过','approve');if(x.state==='APPROVED')opened.archiveStep=true;add('退回补正','return')}
  }
  if(kind==='social_resource'&&x.kind==='point_review'){
   if(x.data.correction_id)buttons.push(act('查看更正单','social-detail','social_resource|'+x.data.correction_id,'primary'));
@@ -454,7 +454,7 @@ async function showDetail(kind,id,courseList=null){
   if(x.data.created_by===c.me.user.id&&!['ARCHIVED','VOID'].includes(x.state))add('作废未入账更正','void');
   if(x.state==='VOID')buttons.push(act('返回原认定，重新核对','social-detail','social_claim|'+x.data.claim_id));
   if(x.data.created_by===c.me.user.id&&['DRAFT','RETURNED'].includes(x.state)){add('提交更正审核','submit');if(!x.data.review_id)buttons.push(act('补正更正内容','social-correction-edit'))}
-  const duty={SUBMITTED:'dean',DEAN:'coordinator',COORDINATOR:'vice_president',APPROVED:'secretary'}[x.state];if(workspace.my_duties.includes(duty)){add(x.state==='APPROVED'?'归档追加更正差额':'审核通过','approve');add('退回补正','return')}
+  const duty={SUBMITTED:'dean',DEAN:'coordinator',COORDINATOR:'vice_president',APPROVED:'secretary'}[x.state];if(workspace.my_duties.includes(duty)&&d.can_review!==false){add(x.state==='APPROVED'?'归档追加更正差额':'审核通过','approve');add('退回补正','return')}
  }
  if(kind==='social_resource'&&x.kind==='point_report'){
   if(x.state==='VOID'&&x.data.superseded_by)buttons.push(act('查看后续公示','social-detail','social_resource|'+x.data.superseded_by,'primary'));
