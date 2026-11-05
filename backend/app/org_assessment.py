@@ -197,14 +197,17 @@ def organization_basis_digests(db,teacher_ids,period,references):
 
 def organization_source_changes(db,obj):
     from .calculation_freshness import source_changes
-    from .services import point_source_changes
+    from .services import point_source_changes,upstream_point_items
     if obj.state=='ARCHIVED':return {'changed':False,'items':[]}
     period=db.get(Period,obj.period_id);rule=db.get(OrganizationAssessmentRule,obj.rule_id)
     current=organization_facts(db,db.get(Org,obj.target_id),period)[1]
     result=source_changes(obj.source_snapshot,current,rule.config['components'])
     if any(c['source']=='points' for c in rule.config['components']):
-        if any(point_source_changes(db,tid,period)['changed'] for tid in current['teacher_ids']):
-            result['changed']=True;result['items'].append({'label':'教师积分的原始依据','before':'计算时的依据','after':'已变化，请先重算积分','details':[]})
+        upstream=[point_source_changes(db,tid,period) for tid in current['teacher_ids']]
+        changed=[u for u in upstream if u['changed']]
+        if changed:
+            result['changed']=True
+            result['items'].extend(upstream_point_items({'items':[x for u in changed for x in u['items']]}))
     return result
 
 

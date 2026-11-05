@@ -44,6 +44,9 @@ def setup(c,app2):
     inbound(c,conn,'online_course',[{'creater_login_name':'J001','teachername':'测试教师一','courseid':'X1','coursename':'高数线上版','xn':'2025','xq':'2','credit':'4','courseIdentifier':'K1'}])
     with Session(app2.state.engine) as db:
         db.add(TeacherHrProfile(staff_no='J001',user_id='teacher',name='测试教师一',org_code='dept1'))
+        # 只有教职工表里在职的工号才能认定计分（T9001 没有本地账号，也没进教职工表）。
+        db.add(TeacherHrProfile(staff_no='J002',user_id='otherteacher',name='测试教师二',org_code='dept2'))
+        db.add(TeacherHrProfile(staff_no='J900',user_id=None,name='教务处测试账号',org_code='school'))
         # 教务处：学校层级、不是系统管理员，只多一个“考核审核”权限。
         db.add(Role(id='role-jwc',code='jwc',name='教务处审核',kind='school',permissions=sorted(TEACHER|{'assessment.review'})))
         db.add(User(id='jwc',username='jwc',name='教务处测试账号',staff_no='J900',org_id='school',role_id='role-jwc',
@@ -263,6 +266,75 @@ def test_repull_restarts_from_dept_and_reverses_booked_points(client2,app2):
     assert teaching_points(app2)==Decimal('0')
     history=c.get(URL+'/course/'+k1['id']).json()['history']
     assert [x['decision'] for x in history]==['apply','approve','approve','approve','restart','approve']
+
+
+def _confirm(c):
+    auth(c,'teacher');b=c.get('/api/point-balances?teacher_id=teacher').json()['items'][0]
+    return post(c,f"/api/point-balances/{b['id']}/actions",{'action':'confirm','expected_version':b['version'],**REASON})
+
+
+def _stale(app2):
+    from app.services import point_source_changes
+    with Session(app2.state.engine) as db:
+        return [x for x in point_source_changes(db,'teacher',db.get(Period,'period2026'))['items'] if x.get('source')=='teaching_review']
+
+
+def test_changed_course_blocks_confirm_until_rereviewed(client2,app2):
+    """学时 64 改成 48：没重审前，旧的 64 分不能确认、计入考核或归档；重审后保留 +64、−64，再入账 48，合计 48。"""
+    c=client2;conn=ready(c,app2)
+    for user in ('depthead','collegehead','jwc'):
+        auth(c,user);k1=course(credits(c,'J001')['2025-2026'],'K1');assert review(c,[k1['id']],'approve').status_code==200,user
+    assert teaching_points(app2)==Decimal('64') and _stale(app2)==[]
+    # 只改课程名称：认定依据（工号、课号、学期、学分、学时）没变，不拦。
+    auth(c,'schooladmin');inbound(c,conn,'school_course',[{**CATALOGUE[0],'KCMC':'高等数学（改名）'},CATALOGUE[1]])
+    assert _stale(app2)==[]
+    # 学时变了、还没重审：积分确认被拦，提示先完成授课重审（普通积分重算处理不了授课认定积分）。
+    auth(c,'schooladmin');inbound(c,conn,'school_course',[{**CATALOGUE[0],'ZXS':'48'},CATALOGUE[1]])
+    stale=_stale(app2);assert len(stale)==1 and stale[0]['details'][0]['before']=='64.00 学时' and stale[0]['details'][0]['after']=='48.00 学时'
+    r=_confirm(c);assert r.status_code==409 and '授课重审' in r.json()['detail'],r.text
+    from app.calculation_freshness import require_current_sources
+    from app.services import upstream_point_items
+    import fastapi
+    with pytest.raises(fastapi.HTTPException) as e:
+        require_current_sources({'changed':True,'items':upstream_point_items({'items':stale})})
+    assert '授课重审' in e.value.detail
+    # 教研室重新通过时冲销旧 64：这时已没有按旧依据的有效入账，不再拦（但也还没有新积分）。
+    auth(c,'depthead');k1=course(credits(c,'J001')['2025-2026'],'K1');assert review(c,[k1['id']],'approve').status_code==200
+    assert _stale(app2)==[] and teaching_points(app2)==Decimal('0')
+    for user in ('collegehead','jwc'):
+        auth(c,user);k1=course(credits(c,'J001')['2025-2026'],'K1');assert review(c,[k1['id']],'approve').status_code==200,user
+    with Session(app2.state.engine) as db:
+        amounts=sorted(str(e.amount) for e in db.scalars(select(PointEntry).where(PointEntry.teacher_id=='teacher',PointEntry.kind=='TEACHING')))
+    assert amounts==sorted(['64.00','-64.00','48.00']) and teaching_points(app2)==Decimal('48')
+    assert _stale(app2)==[]
+    assert _confirm(c).status_code==200
+    # 再改回 64：只认最新那笔 48 是有效入账（前面的 64 已按关联冲销），照样拦。
+    auth(c,'schooladmin');r=post(c,'/api/point-balances/'+c.get('/api/point-balances?teacher_id=teacher').json()['items'][0]['id']+'/actions',
+        {'action':'reopen','expected_version':c.get('/api/point-balances?teacher_id=teacher').json()['items'][0]['version'],**REASON});assert r.status_code==200,r.text
+    inbound(c,conn,'school_course',CATALOGUE)
+    stale=_stale(app2);assert len(stale)==1 and stale[0]['details'][0]['before']=='48.00 学时'
+
+
+def test_school_approval_needs_active_staff_record(client2,app2):
+    """学校最终认定前查教职工表：没有在职记录整批拒绝、积分不变，课停在待学校认定；补齐后原单继续办，只入账一次。"""
+    c=client2;ready(c,app2)
+    for user in ('depthead','collegehead'):
+        auth(c,user);k1=course(credits(c,'J001')['2025-2026'],'K1');assert review(c,[k1['id']],'approve').status_code==200,user
+    # 审批期间人事状态失效。
+    with Session(app2.state.engine) as db:
+        db.scalar(select(TeacherHrProfile).where(TeacherHrProfile.staff_no=='J001')).active=False;db.commit()
+    auth(c,'jwc');k1=course(credits(c,'J001')['2025-2026'],'K1')
+    assert k1['handler']=='school' and '教职工' in (k1.get('blocked_reason') or '')
+    r=review(c,[k1['id']],'approve');assert r.status_code==409 and '教职工' in r.json()['detail'],r.text
+    assert teaching_points(app2)==Decimal('0')
+    k1=course(credits(c,'J001')['2025-2026'],'K1');assert (k1['review'],k1['stage'])==('pending','school')
+    # 人事补齐后原单直接继续。
+    with Session(app2.state.engine) as db:
+        db.scalar(select(TeacherHrProfile).where(TeacherHrProfile.staff_no=='J001')).active=True;db.commit()
+    auth(c,'jwc');k1=course(credits(c,'J001')['2025-2026'],'K1');assert not k1.get('blocked_reason')
+    assert review(c,[k1['id']],'approve').status_code==200
+    assert review(c,[k1['id']],'approve').status_code==409
+    assert teaching_points(app2)==Decimal('64')
 
 
 def test_school_admin_sets_points_per_hour(client2,app2):

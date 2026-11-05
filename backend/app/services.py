@@ -6,7 +6,7 @@ from fastapi import HTTPException
 from .core import *
 from .schemas import RecordIn
 from .read_queries import record_query, assessment_query, stats
-from .calculation_freshness import source_changes, require_current_sources
+from .calculation_freshness import source_changes, require_current_sources, TEACHING_REVIEW_SOURCE
 from .settings_catalog import validate_manual_source
 
 D = Decimal
@@ -140,7 +140,26 @@ def point_source_changes(db,teacher_id,period,current=None):
         frozen=entry.source_snapshot or {}
         components=[c for c in frozen.get('rule',{}).get('config',{}).get('components',[]) if c['key']==key]
         items.extend(source_changes(frozen.get('facts',{}),current,components)['items'])
+    items.extend(teaching_review_items(db,teacher_id,period))
     return {'changed':bool(items),'items':items}
+
+
+def teaching_review_items(db,teacher_id,period):
+    """授课认定积分不参与规则重算：所依据课程的学分学时变了、还没重审，这笔积分就不能再被确认、计入考核或归档。"""
+    from .teaching_review import stale_entries
+    stale=stale_entries(db,teacher_id,period.id)
+    if not stale:return []
+    return [{'source':TEACHING_REVIEW_SOURCE,'label':'授课认定积分的课程依据','before':'按入账时的学分学时认定','after':'已变化，请先完成授课重审',
+             'details':[{'record_id':x['course_term_id'],'name':f"{x['course_code'] or ''} {x['course']}".strip(),'before':x['before'],'after':x['after']} for x in stale[:20]],
+             'detail_count':len(stale)}]
+
+
+def upstream_point_items(upstream):
+    """考核引用本期积分时，把积分依据的变化转成考核的提示：授课认定的原样带上（要先重审），其余提示重算积分。"""
+    teaching=[x for x in upstream['items'] if x.get('source')==TEACHING_REVIEW_SOURCE]
+    if len(teaching)<len(upstream['items']):
+        teaching.append({'label':'本期积分的原始依据','before':'计算时的依据','after':'已变化，请先重算积分','details':[]})
+    return teaching
 
 
 def assessment_source_changes(db,obj):
@@ -151,7 +170,7 @@ def assessment_source_changes(db,obj):
     if any(c['source']=='points' for c in rule.config['components']):
         upstream=point_source_changes(db,obj.teacher_id,period,current)
         if upstream['changed']:
-            changes['items'].append({'label':'本期积分的原始依据','before':'计算时的依据','after':'已变化，请先重算积分','details':[]})
+            changes['items'].extend(upstream_point_items(upstream))
             changes['changed']=True
     return changes
 

@@ -74,6 +74,16 @@ def check_level(db, actor, teacher, staff_no, level):
     st.check_conflicts(db, actor, teacher.id)
 
 
+HR_MISSING = '工号在学校教职工表里没有有效记录，不能认定计分；请人事信息补齐后再认定'
+
+
+def in_staff_table(db, staff_no):
+    """和授课学分取数同一条件：教职工表里有这个工号、且在职（active）。"""
+    from .reference_data import TeacherHrProfile
+    return bool(staff_no) and db.scalar(select(TeacherHrProfile.id).where(TeacherHrProfile.staff_no == staff_no,
+                                                                          TeacherHrProfile.active.is_(True)).limit(1)) is not None
+
+
 def can_act(db, actor, teacher, staff_no, level):
     try:
         check_level(db, actor, teacher, staff_no, level)
@@ -136,6 +146,8 @@ def annotate(db, actor, group):
             continue
         d['can_withdraw'] = owner and d['stage'] == 'dept' and all(x.get('level') == 'teacher' for x in d.get('steps') or [])
         level, acting = effective_level(db, teacher, d['stage'], heads, orgs)
+        if level == 'school' and not in_staff_table(db, group['staff_no']):
+            d['blocked_reason'] = HR_MISSING
         d.update(handler=level, handler_label='待' + LEVEL_NAME[level] + ('认定' if level == 'school' else '审核' if level == 'dept' else '审批'),
                  acting_for=acting, can_act=can_act(db, actor, teacher, group['staff_no'], level))
     group['can_return'] = can_review_credits(db, actor) and not _own(actor, teacher, group['staff_no'])
@@ -210,6 +222,43 @@ def unbook(db, actor, row, booked, reason):
                       actor_id=actor.id, reason=reason or '授课认定改回重审', basis='授课认定改回或学分学时变化'))
     db.flush()
     bal.version += 1
+
+
+def stale_entries(db, teacher_id, period_id):
+    """仍有效（没被冲销）的授课认定入账里，所依据课程的学分学时已变或课已撤下的那些。
+
+    冲销流水在 source_snapshot.reverses 里记着它冲的是哪条原入账，按这条关联认冲销，不看净额或最后一条，
+    多次重审也不会误判。依据用入账时记下的 basis（工号、来源、课号、学期、学分、学时）和现在重新算出的比，
+    课程名称等无关字段变了不算。
+    """
+    from .reference_data import credit_basis
+    entries = db.scalars(select(PointEntry).where(PointEntry.teacher_id == teacher_id, PointEntry.period_id == period_id,
+                                                  PointEntry.kind == 'TEACHING').order_by(PointEntry.id)).all()
+    reversed_ids = {(e.source_snapshot or {}).get('reverses') for e in entries} - {None}
+    live = [e for e in entries if 'reverses' not in (e.source_snapshot or {}) and e.id not in reversed_ids
+            and (e.source_snapshot or {}).get('teaching_course') and (e.source_snapshot or {}).get('basis')]
+    if not live:
+        return []
+    ids = {e.source_snapshot['teaching_course'] for e in live}
+    rows = {r.id: r for r in db.scalars(select(TeacherCourseTerm).where(TeacherCourseTerm.id.in_(ids)))}
+    facts = _facts(db, [r for r in rows.values() if r.active])
+    out = []
+    for e in live:
+        snap = e.source_snapshot
+        r = rows.get(snap['teaching_course'])
+        d = facts.get(r.id) if r is not None and r.active else None
+        if d is None or not d['counted']:
+            now = None
+        else:
+            now = credit_basis(r, None if d['credit'] is None else Decimal(d['credit']), None if d['hours'] is None else Decimal(d['hours']))
+        if now == snap['basis']:
+            continue
+        old_hours = (snap['basis'] or {}).get('hours')
+        out.append({'entry_id': e.id, 'course_term_id': snap['teaching_course'], 'course': snap.get('course') or (r.course_name if r else ''),
+                    'course_code': snap.get('course_code'), 'amount': str(e.amount),
+                    'before': '%s 学时' % old_hours if old_hours else '入账时的学分学时',
+                    'after': ('%s 学时' % now['hours'] if now and now.get('hours') else '学分学时已变化') if now else '课程已撤下或不再计入'})
+    return out
 
 
 def _facts(db, rows):
@@ -341,6 +390,9 @@ def apply_review(db, actor, data):
                         entry['same_person'] = True
                     nxt = next_stage(level)
                     if nxt is None:
+                        # 最终认定前再查一次人事：审批期间资格可能失效。不合格整批拒绝、回滚，课停在待学校认定，补齐后原单继续办。
+                        if not in_staff_table(db, r.staff_no):
+                            raise HTTPException(409, r.course_name + '（工号 ' + r.staff_no + '）：' + HR_MISSING)
                         state = 'APPROVED'
                     else:
                         stage = nxt

@@ -40,8 +40,15 @@ def source_changes(previous, current, components):
             'details':details[:20],'detail_count':len(details)})
     return {'changed':bool(items),'items':items}
 
+TEACHING_REVIEW_SOURCE='teaching_review'
+
 def require_current_sources(changes):
-    if changes['changed']:raise HTTPException(409,'计算依据已变化，请先退回或重新取数计算，再确认及归档')
+    if not changes['changed']:return
+    stale=[d for x in changes['items'] if x.get('source')==TEACHING_REVIEW_SOURCE for d in x.get('details',[])]
+    if stale:
+        names='、'.join(d['name'] for d in stale[:5])
+        raise HTTPException(409,f'授课认定积分所依据的课程学分学时已变化（{names}），请授课认定人先完成授课重审，再确认、计算或归档')
+    raise HTTPException(409,'计算依据已变化，请先退回或重新取数计算，再确认及归档')
 
 def relevant_disputes(teacher_id,period,record_ids=()):
     records=select(TrainingRecord.id).where(TrainingRecord.teacher_id==teacher_id,

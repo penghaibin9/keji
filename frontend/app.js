@@ -458,7 +458,7 @@ function crStepsHtml(steps){
 function crStatus(r){
  if(r.review==='approved')return `<span class="badge green-b">已认定计分 · ${esc(r.points??'—')} 分</span>`;
  if(r.review==='excluded')return '<span class="badge gray-b">不计分</span>';
- return `<span class="badge orange-b">${esc(r.handler_label||'待审核')}</span>`+(r.acting_for?` <span class="small muted">${esc(r.acting_for)}</span>`:'')+(r.review_stale?' <span class="small orange">学分学时有变化，重新审核</span>':'');
+ return `<span class="badge orange-b">${esc(r.handler_label||'待审核')}</span>`+(r.acting_for?` <span class="small muted">${esc(r.acting_for)}</span>`:'')+(r.review_stale?' <span class="small orange">学分学时有变化，重新审核</span>':'')+(r.blocked_reason?` <span class="small orange">${esc(r.blocked_reason)}</span>`:'');
 }
 function crCourseCard(r,x){
  const school=r.handler==='school';
