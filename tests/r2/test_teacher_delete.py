@@ -251,3 +251,40 @@ def test_refiled_project_keeps_filing_facts_after_edit_and_still_cannot_be_delet
     assert detail(c, 'social_project', p['id'])['can_delete'] is False
     r = action(c, 'projects', 'social_project', p['id'], 'delete')
     assert r.status_code == 409 and '已备案' in r.text
+
+
+def test_once_approved_qualification_can_be_revised_but_not_deleted(app2, client2):
+    """通过 → 编辑回草稿：仍可修订、重新审核，但不能普通删除；重提被退回后也不能删；从未通过的照常能删。"""
+    c = client2
+    auth(c, 'teacher')
+    q = qual(c)
+    image = __import__('test_api').png()
+    up = c.post('/api/attachments/qualification/' + q['id'], headers={'Idempotency-Key': str(uuid.uuid4())},
+                data={'expected_version': str(q['version']), 'reason': '上传证书'}, files={'file': ('cert.png', image, 'image/png')})
+    assert up.status_code == 200, up.text
+    assert c.get('/api/qualifications/' + q['id']).json()['can_delete'] is True
+    assert qual_action(c, q['id'], 'submit').status_code == 200
+    auth(c, 'schooladmin');assert qual_action(c, q['id'], 'approve').status_code == 200
+    auth(c, 'teacher')
+    current = c.get('/api/qualifications/' + q['id']).json()['qualification']
+    body = {k: current[k] for k in ('teacher_id', 'category', 'name', 'certificate_no', 'issuer', 'obtained', 'expires')}
+    r = put(c, '/api/qualifications/' + q['id'], {**body, 'issuer': body['issuer'] + '（更正）', 'expected_version': current['version'], **REASON})
+    assert r.status_code == 200 and r.json()['state'] == 'DRAFT', r.text   # 合法修订保留
+    d = c.get('/api/qualifications/' + q['id']).json()
+    assert d['can_delete'] is False
+    r = qual_action(c, q['id'], 'delete');assert r.status_code == 409 and '审核通过' in r.text
+    assert qual_action(c, q['id'], 'submit').status_code == 200
+    auth(c, 'schooladmin');assert qual_action(c, q['id'], 'return').status_code == 200
+    auth(c, 'teacher')
+    assert c.get('/api/qualifications/' + q['id']).json()['can_delete'] is False
+    r = qual_action(c, q['id'], 'delete');assert r.status_code == 409 and '审核通过' in r.text
+    # 从未通过的退回记录照常能删、能恢复。
+    other = qual(c)
+    up = c.post('/api/attachments/qualification/' + other['id'], headers={'Idempotency-Key': str(uuid.uuid4())},
+                data={'expected_version': str(other['version']), 'reason': '上传证书'}, files={'file': ('cert.png', image, 'image/png')})
+    assert up.status_code == 200 and qual_action(c, other['id'], 'submit').status_code == 200
+    auth(c, 'schooladmin');assert qual_action(c, other['id'], 'return').status_code == 200
+    auth(c, 'teacher')
+    assert c.get('/api/qualifications/' + other['id']).json()['can_delete'] is True
+    assert qual_action(c, other['id'], 'delete').status_code == 200
+    assert qual_action(c, other['id'], 'restore').status_code == 200

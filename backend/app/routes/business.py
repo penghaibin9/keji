@@ -119,11 +119,26 @@ def qualification_summary(request:Request):
                 'expiry_days':days,'note':f'即将到期 = 审核通过且 {days} 天内到期；无有效期视为长期有效。'}
     return read_operation(request,'qualification.read',load)
 
+def qualification_ever_approved(db,obj):
+    """资质是否曾经审核通过（生效过）：修订记录保存了每个版本的状态，直接复用；再用办理记录兼容早先没有修订快照的旧记录。"""
+    if obj.state=='APPROVED':return True
+    for data in db.scalars(select(QualificationRevision.data).where(QualificationRevision.qualification_id==obj.id)):
+        if (data or {}).get('state')=='APPROVED':return True
+    for after in db.scalars(select(WorkflowEvent.after).where(WorkflowEvent.object_type=='qualification',WorkflowEvent.object_id==obj.id)):
+        if (after or {}).get('state')=='APPROVED':return True
+    return False
+
+
+def qualification_can_delete(db,obj):
+    """普通删除只给从未生效的草稿、退回记录；曾审核通过的修订后回到草稿也不能删（修订、重新审核照常）。"""
+    return obj.state in {'DRAFT','RETURNED'} and not qualification_ever_approved(db,obj)
+
+
 @router.get('/qualifications/{ident}')
 def qualification_detail(ident:str,request:Request):
     def load(db,a,s):
         obj=owned_object(db,a,Qualification,ident,'qualification.read')
-        return {'qualification':obj,'attachments':safe_attachments(db,obj),
+        return {'qualification':obj,'attachments':safe_attachments(db,obj),'can_delete':obj.teacher_id==a.id and qualification_can_delete(db,obj),
           'revisions':db.scalars(select(QualificationRevision).where(QualificationRevision.qualification_id==ident).order_by(QualificationRevision.version)).all(),
           'events':events(db,'qualification',ident)}
     return read_operation(request,'qualification.read',load)
@@ -181,6 +196,7 @@ def qualification_action(ident:str,data:Action,request:Request):
             if not own:raise HTTPException(403,'只能删除本人的资质')
             if obj.state=='SUBMITTED':raise HTTPException(409,'资质审核中，请先撤回再删除')
             if obj.state not in {'DRAFT','RETURNED'}:raise HTTPException(409,'审核通过的资质不能删除；已过期的会自动标为已过期')
+            if qualification_ever_approved(db,obj):raise HTTPException(409,'这份资质曾审核通过（生效过），修订中也不能删除；可以继续修改后重新提交审核')
             obj.state='DELETED'
         elif data.action=='restore':
             if not own:raise HTTPException(403,'只能恢复本人的资质')
