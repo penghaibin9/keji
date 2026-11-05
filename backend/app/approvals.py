@@ -283,7 +283,8 @@ def progress(db, flow, obj, applicant, *, returned_level=None):
         elif h.get('decision') == 'approve':
             done_by[h.get('level')] = e
         elif h.get('decision') == 'return':
-            done_by = {k: v for k, v in done_by.items() if chain.index(k) < chain.index(h.get('level'))} if h.get('level') in chain else {}
+            # 旧申请转新流程时，历史上已通过的节点可能已不在新链里：先确认还在链里再比顺序，不在的不算已通过。
+            done_by = {k: v for k, v in done_by.items() if k in chain and chain.index(k) < chain.index(h.get('level'))} if h.get('level') in chain else {}
     current = level_of(flow, obj.state)
     finished = obj.state == f['done'] and last_submit is not None
     close_returned = flow == 'project_close' and obj.state == 'FILED' and bool(evs) and _handling(evs[-1]).get('decision') == 'return'
