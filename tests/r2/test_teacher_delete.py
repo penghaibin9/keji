@@ -207,3 +207,47 @@ def test_project_in_review_must_be_withdrawn_and_filed_project_cannot_be_deleted
     assert action(c, 'projects', 'social_project', p['id'], 'refile').json()['item']['state'] == 'RETURNED'
     r = action(c, 'projects', 'social_project', p['id'], 'delete')
     assert r.status_code == 409 and '已备案' in r.text
+
+
+def test_refiled_project_keeps_filing_facts_after_edit_and_still_cannot_be_deleted(app2, client2):
+    """备案 → 重新备案 → 修改资料：备案事实保留、删除仍被拒；撤回保持“重新备案补正”；丢过备案标记的旧单靠办理记录兜底。"""
+    from test_project_apply import payload
+    c = client2
+    project_setup(app2)
+    auth(c, 'teacher')
+    extra = dict(total_hours='16', audiences=['企业职工'], service_types=['national'], teaching_methods=['classroom', 'case'])
+    draft = teacher_project(c, **extra)
+    assert detail(c, 'social_project', draft['id'])['can_delete'] is True   # 从未备案的草稿照常能删
+    p = draft
+    proof(c, 'social_project', p['id'], p['version'])
+    assert action(c, 'projects', 'social_project', p['id'], 'submit').json()['item']['state'] == 'COLLEGE'
+    auth(c, 'collegehead');assert action(c, 'projects', 'social_project', p['id'], 'approve').json()['item']['state'] == 'SUBMITTED'
+    auth(c, 'reviewer');assert action(c, 'projects', 'social_project', p['id'], 'file').json()['item']['state'] == 'FILED'
+    auth(c, 'teacher')
+    assert action(c, 'projects', 'social_project', p['id'], 'refile').json()['item']['state'] == 'RETURNED'
+    with Session(app2.state.engine) as db:
+        filing = {k: db.get(SocialProject, p['id']).data.get(k) for k in ('filed_on', 'filed_by', 'prior_review_on', 'filing_basis')}
+    assert filing['filed_on'] and filing['filed_by']
+    d = detail(c, 'social_project', p['id'])
+    r = put(c, '/api/social/projects/' + p['id'], {**payload(), 'expected_version': d['item']['version'],
+            'data': {**payload()['data'], **extra, 'name': payload()['data']['name'] + '（补正）'}})
+    assert r.status_code == 200, r.text
+    with Session(app2.state.engine) as db:
+        obj = db.get(SocialProject, p['id'])
+        assert {k: obj.data.get(k) for k in filing} == filing and obj.data['name'].endswith('（补正）')
+    d = detail(c, 'social_project', p['id'])
+    assert d['can_delete'] is False and d['ever_filed'] is True
+    r = action(c, 'projects', 'social_project', p['id'], 'delete')
+    assert r.status_code == 409 and '已备案' in r.text
+    # 重提后撤回：回到“重新备案补正”，不退成普通草稿。
+    assert action(c, 'projects', 'social_project', p['id'], 'submit').json()['item']['state'] == 'COLLEGE'
+    r = action(c, 'projects', 'social_project', p['id'], 'withdraw')
+    assert r.status_code == 200 and r.json()['item']['state'] == 'RETURNED' and r.json()['state_label'] == '重新备案补正', r.text
+    # 早先版本改资料丢了备案标记的旧单：按办理记录里到过“已备案”状态认定，照样不能删。
+    with Session(app2.state.engine) as db:
+        obj = db.get(SocialProject, p['id'])
+        obj.data = {k: v for k, v in obj.data.items() if k not in filing}
+        db.commit()
+    assert detail(c, 'social_project', p['id'])['can_delete'] is False
+    r = action(c, 'projects', 'social_project', p['id'], 'delete')
+    assert r.status_code == 409 and '已备案' in r.text

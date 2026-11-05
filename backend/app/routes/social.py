@@ -267,7 +267,8 @@ def project_edit(ident:str,data:ProjectIn,request:Request):
             if data.data.mode_confirmed:source.pop('mode_pending',None)
             source['policy_pending']=[key for key in source.get('policy_pending',['level','scene'] if source.get('ledger_id') else []) if not values.get(key+'_confirmed')]
             values['source']=source
-        values={**values,**{k:obj.data[k] for k in ('returned_level','prep','cover_id') if k in obj.data}}
+        # 服务端生成的字段不随表单替换：备案日期、备案人、前置审核日期和备案依据是“曾经备案”的事实，重新备案改资料时也要保留。
+        values={**values,**{k:obj.data[k] for k in ('returned_level','prep','cover_id',*st.FILING_KEYS) if k in obj.data}}
         if values.get('quality') is None and obj.data.get('quality'):values['quality']=obj.data['quality']
         obj.data=values;obj.owner_id=data.data.owner_id
         return event(db,a,'social_project',obj,'修改申报草稿',before,data.reason)
@@ -435,7 +436,7 @@ def project_starter(db,obj):
 def owner_project_action(db,a,obj,data,before):
     """负责人撤回、删除、恢复项目申报。删除不物理删除：状态改为 DELETED，期次让出来以便重新建立，原期次记在 data.deleted_cohort。"""
     if a.id not in {obj.owner_id,project_starter(db,obj)}:raise HTTPException(403,'只有项目负责人或登记人可以撤回、删除本项目申报')
-    filed=bool(obj.data.get('filed_on'))
+    filed=st.ever_filed(db,obj)
     if data.action=='withdraw':
         if obj.state not in {'COLLEGE','SUBMITTED'}:raise HTTPException(409,'只有待学院审批或待审核备案的项目可以撤回')
         # 从未备案的回到草稿；重新备案中途撤回的回到“重新备案补正”。

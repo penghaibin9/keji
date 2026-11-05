@@ -839,6 +839,21 @@ def annual_read_item(actor, annual):
     return item
 
 
+FILED_STATES=('FILED','CLOSE_COLLEGE','CLOSE_REVIEW','CLOSED')
+FILING_KEYS=('filed_on','filed_by','prior_review_on','filing_basis')
+
+
+def ever_filed(db,obj):
+    """项目是否曾经备案过：看当前的备案标记，也看办理记录里是否到过已备案及之后的业务状态（按状态码，不看中文操作名）。
+
+    早先版本修改资料会丢掉备案标记，只看当前资料会把这类项目当成从未备案。
+    """
+    if obj.data.get('filed_on'):return True
+    for after in db.scalars(select(WorkflowEvent.after).where(WorkflowEvent.object_type=='social_project',WorkflowEvent.object_id==obj.id)):
+        if (after or {}).get('state') in FILED_STATES:return True
+    return False
+
+
 def detail(db,actor,kind,obj):
     if isinstance(obj,SocialProject) and (actor.role.kind=='dept' or (actor.role.kind=='teacher' and obj.owner_id!=actor.id)):
         item=project_read_item(actor,obj)
@@ -870,6 +885,10 @@ def detail(db,actor,kind,obj):
         if result['progress'].get('refiled'):result['state_label']='重新备案补正'
         result['college_handle']=level=='college' and ap.can_handle(db,actor,owner,'college',obj.org_id)
         result['report_issues']=application_blockers(obj.data)
+        filed=ever_filed(db,obj)
+        result['ever_filed']=filed
+        # 删除按钮和后端删除用同一判断（后端还会核对负责人、明细和台账来源）。
+        result['can_delete']=obj.state in {'DRAFT','RETURNED'} and not filed
     if isinstance(obj,(SocialProject,SocialResource,SocialAnnual)):
         org=db.get(Org,obj.org_id);result['org_name']=org.name if org else ''  # 教师、教研室的组织列表不含所属学院，名称由服务端给出
     if isinstance(obj,SocialResource) and obj.kind in ('correction','point_review'):

@@ -430,7 +430,7 @@ async function showDetail(kind,id,courseList=null){
  // 负责人自己撤回审批中的申报、删除从未备案过的申报草稿、恢复已删除的（后端再核对是否负责人或登记人、有无明细）。
  if(kind==='social_project'&&x.owner_id===c.me?.user?.id){
   if(['COLLEGE','SUBMITTED'].includes(x.state))add('撤回申报','withdraw');
-  if(['DRAFT','RETURNED'].includes(x.state)&&!x.data?.filed_on)add('删除申报','delete');
+  if(d.can_delete)add('删除申报','delete');
   if(x.state==='DELETED')add('恢复申报','restore');
  }
  if(kind==='social_project'&&c.can('assessment.review')&&workspace.my_duties.some(v=>['coordinator','discipline','finance'].includes(v)))buttons.push(act('登记投诉与跟踪','social-note'));
