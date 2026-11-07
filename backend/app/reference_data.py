@@ -879,11 +879,22 @@ def inbound_content_hash(rows):
 
 CX_LOGIN_ALIAS_KEY='dict:cx_login_alias'
 
+def lock_cx_mapping(db):
+    # 与入站确认共用连接行锁，认领或字典不能在校验后、落库前改变。
+    return db.scalar(select(Connection).where(Connection.code=='middle').with_for_update())
+
+
+def cx_import_aliases(db):
+    aliases=cx_login_aliases(db)
+    real=set(db.scalars(select(TeacherHrProfile.staff_no).where(TeacherHrProfile.staff_no.in_(list(aliases)),TeacherHrProfile.active.is_(True)))) if aliases else set()
+    return {k:v for k,v in aliases.items() if k not in real}
+
+
 def cx_login_aliases(db,include_claims=True):
     """超星登录名→教职工工号 对照（学校管理员在基础字典“dict:cx_login_alias”维护，每项写“登录名=工号”），
     加上老师认领并已生效的登录名（cx_claims）；同一登录名以管理员字典为准。"""
     from .cx_claims import approved_claims
-    obj=db.get(Setting,CX_LOGIN_ALIAS_KEY);out=approved_claims(db) if include_claims else {}
+    obj=db.scalar(select(Setting).where(Setting.key==CX_LOGIN_ALIAS_KEY).execution_options(populate_existing=True));out=approved_claims(db) if include_claims else {}
     for item in ((obj.value or {}).get('items') or []) if obj and isinstance(obj.value,dict) else []:
         login,sep,staff=str(item).partition('=')
         if sep and login.strip() and staff.strip():out[login.strip()]=staff.strip()
@@ -927,13 +938,13 @@ def preview_inbound(db,actor,connection:Connection,data_type,records,source_labe
     batch=InboundBatch(connection_id=connection.id,data_type=data_type,owner_id=actor.id,source_label=source_label,total=len(records),errors=0,receipt={},configuration_hash=configuration_hash(connection))
     db.add(batch);db.flush();seen={}
     codes=code_tables(db) if data_type=='teacher_hr' else None
-    aliases=cx_login_aliases(db) if data_type=='online_course' else {}
-    if aliases:
-        # 登录名本身已是在职工号（老师已在超星改好）就按工号算，旧对照不再把它改挂到别人名下。
-        real=set(db.scalars(select(TeacherHrProfile.staff_no).where(TeacherHrProfile.staff_no.in_(list(aliases)),TeacherHrProfile.active.is_(True))))
-        aliases={k:v for k,v in aliases.items() if k not in real}
+    aliases=cx_import_aliases(db) if data_type=='online_course' else {}
+    cx_mapping={}
     for i,raw in enumerate(records,1):
         mapped,mapping_errors=apply_mappings(connection,raw,data_type)
+        if data_type=='online_course':
+            login=str(mapped.get('staff_no') or '').strip()
+            cx_mapping[login]=aliases.get(login,login)
         if aliases and str(mapped.get('staff_no') or '').strip() in aliases:
             login=str(mapped['staff_no']).strip();mapped={**mapped,'staff_no':aliases[login],'cx_login':login}
         status_error=derive_hr_active(db,mapped,codes) if data_type=='teacher_hr' else None
@@ -948,6 +959,7 @@ def preview_inbound(db,actor,connection:Connection,data_type,records,source_labe
         else:errors.append('无法确定业务唯一键')
         db.add(InboundRow(batch_id=batch.id,row_no=i,business_key=key,raw=serial(mask_raw(connection,raw,data_type)),mapped=normalized,errors=errors))
         if errors:batch.errors+=1
+    if data_type=='online_course':batch.receipt={'cx_mapping':cx_mapping}
     db.flush()
     batch.content_hash=inbound_content_hash(db.scalars(select(InboundRow).where(InboundRow.batch_id==batch.id).order_by(InboundRow.row_no)).all())
     audit(db,actor,'inbound',batch.id,'生成数据中台入站预览',after={'data_type':data_type,'rows':batch.total,'errors':batch.errors},reason='仅预览，未写正式主数据')
@@ -967,11 +979,15 @@ def _confirm_inbound(db,actor,batch:InboundBatch,expected_version,reason,basis='
     if batch.state!='PREVIEW':raise HTTPException(409,'该入站批次已处理')
     if batch.errors:raise HTTPException(409,'预览仍有错误行，不能确认入库')
     rows=db.scalars(select(InboundRow).where(InboundRow.batch_id==batch.id).order_by(InboundRow.row_no)).all()
-    connection=db.scalar(select(Connection).where(Connection.id==batch.connection_id).with_for_update())
+    connection=db.scalar(select(Connection).where(Connection.id==batch.connection_id).with_for_update().execution_options(populate_existing=True))
     if not connection or batch.configuration_hash!=configuration_hash(connection):
         raise HTTPException(409,'接口配置或字段映射已变化，请重新生成预览')
     if len(rows)!=batch.total or not rows or batch.content_hash!=inbound_content_hash(rows):
         raise HTTPException(409,'预览行数量或内容校验不一致，禁止确认')
+    if batch.data_type=='online_course':
+        aliases=cx_import_aliases(db);mapping=(batch.receipt or {}).get('cx_mapping')
+        if not isinstance(mapping,dict) or not mapping or any(aliases.get(login,login)!=staff for login,staff in mapping.items()):
+            raise HTTPException(409,'超星课程归属或认领映射已变化，或旧预览缺少归属依据，请重新生成预览')
     seen={}
     for row in rows:
         normalized,errors=validate_inbound(batch.data_type,row.mapped)
@@ -1202,6 +1218,9 @@ def rollback_conflicts(db,batch,entries):
 
 def rollback_inbound(db,actor,batch:InboundBatch,expected_version,reason,basis=''):
     actor.require_admin()
+    if batch.state=='VOID' and (batch.receipt or {}).get('rollback'):return batch
+    from .paged_inbound import lock_rollback_task,stop_paged_task
+    task,schedule=lock_rollback_task(db,batch)
     batch=db.scalar(select(InboundBatch).where(InboundBatch.id==batch.id).with_for_update().execution_options(populate_existing=True))
     receipt=dict(batch.receipt or {})
     if batch.state=='VOID' and receipt.get('rollback'):return batch  # idempotent: already rolled back, nothing re-applied
@@ -1251,5 +1270,7 @@ def rollback_inbound(db,actor,batch:InboundBatch,expected_version,reason,basis='
     before_state={'state':batch.state,'version':batch.version}
     batch.state='VOID';batch.version+=1
     batch.receipt={**receipt,'rollback':{'at':utcnow().isoformat(),'actor_id':actor.id,'actor_name':actor.name,'reason':reason,'basis':basis,'objects':restored,'authorization_changes':revoked}}
+    if task:
+        stop_paged_task(db,task,schedule,actor,'分页批次已撤销，原采集已终止；核对后重新启用计划或发起全量采集')
     audit(db,actor,'inbound',batch.id,'撤销数据中台入站批次',before=before_state,after={'state':'VOID','objects':restored},reason=reason)
     return batch

@@ -117,7 +117,7 @@ def retry_pull_task(db, actor, task, reason):
     if task.payload.get('configuration_hash')!=configuration_hash(connection):
         raise HTTPException(409,'接口配置已经变化，请创建新拉取任务')
     if task.payload.get('approval_revoked'):
-        raise HTTPException(409,'原同步计划批准已撤销，请由新计划产生任务')
+        raise HTTPException(409,'原采集授权已撤销，请重新发起全量采集或重新启用同步计划')
     sid=task.payload.get('schedule_id')
     if sid:
         schedule=db.get(IntegrationSchedule,sid)

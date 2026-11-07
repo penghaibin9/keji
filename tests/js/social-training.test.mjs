@@ -1,6 +1,16 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {parseTrainingRows,socialPage,socialAction,applicationProjectPicker} from '../../frontend/social-training.js';
+test('积分核对裁定按钮遵循服务端项目回避结果',async()=>{
+ for(const allowed of [false,true]){
+  const c=renderContext({my_duties:['dean']},['points.read','assessment.review','records.read']);
+  c.me={user:{id:'dean'},role:{kind:'college'}};await renderSocial('recognition',c);
+  let buttons='';c.modal=(_title,_body,footer)=>{buttons=footer};c.downloads=()=>'';c.eventsHtml=()=>'';
+  c.api=async()=>({item:{id:'review',kind:'point_review',state:'COLLEGE',org_id:'college1',version:1,data:{teacher_id:'teacher',created_by:'dept',claim_id:'claim'}},can_review:allowed,state_label:'待学院裁定',attachments:[],events:[],review_context:{}});
+  await socialAction('social-detail','social_resource|review',c);
+  assert.equal(buttons.includes('uphold'),allowed);assert.equal(buttons.includes('dismiss'),allowed);
+ }
+});
 const header='单元编号\t课程编号\t班级编号\t模块名称\t培训日期\t学员编号\t本校全日制生\t准毕业生例外\t实名签到\t学时达标\t全程参训\t结业通过\t重点群体\t剔除原因\t教师工号\t岗位\t人员类型\t佐证说明';
 const row=(teacher='J001',learner='L001')=>['U1','C1','CL1','技能一','2026-09-01',learner,'否','否','是','是','是','是','是','',teacher,'主讲','校内','已核验签到'].join('\t');
 const teachers=[{id:'t1',staff_no:'J001'},{id:'t2',staff_no:'J002'}];

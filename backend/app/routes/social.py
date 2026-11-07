@@ -961,8 +961,7 @@ def point_review_action(ident:str,data:SocialAction,request:Request):
             else:obj.state='COLLEGE';obj.data={**d,'teacher_reply':data.reason};label='教师说明情况，提交学院裁定'
         elif data.action in {'uphold','dismiss'}:
             if obj.state!='COLLEGE':raise HTTPException(409,'当前不在学院裁定环节')
-            st.duty(db,a,'dean',d['teacher_id'],obj.org_id)
-            if a.id==d['created_by']:raise HTTPException(403,'发起人不能裁定本人发起的核对')
+            st.review_check(db,a,obj)
             if data.action=='uphold':
                 fix=correction_from_review(db,a,obj,'学院院长已裁定，免院长初审','DEAN');obj.state='CLOSED';obj.data={**d,'outcome':'corrected','correction_id':fix.id,'ruling':data.reason};label='学院裁定更正，已生成更正单'
             else:obj.state='CLOSED';obj.data={**d,'outcome':'kept','ruling':data.reason};label='学院裁定维持原认定'

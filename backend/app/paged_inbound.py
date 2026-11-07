@@ -7,8 +7,8 @@ from copy import deepcopy
 from datetime import timedelta
 from sqlalchemy import select
 from fastapi import HTTPException
-from .models import Task, TaskAttempt, utcnow
-from .core import digest
+from .models import Task, TaskAttempt, Connection, utcnow
+from .core import digest, audit, serial
 from .reference_data import InboundBatch, InboundRow, batch_facts, preview_inbound, confirm_inbound, inbound_content_hash, COLLAPSE_TYPES, reconcile_full_pull
 from .integrations import transport_kwargs
 from .adapters.contracts import AdapterContractError
@@ -59,6 +59,9 @@ def process_page(db, task, connection, actor, schedule, adapter, registry):
     state.setdefault('records', 0)
     state.setdefault('chunks', [])
     task.attempts += 1
+    if run_counts(db,task,connection)[3]=='BLOCKED':
+        stop_paged_task(db,task,schedule,actor,'已提交分页证据不完整，请核对后重新发起全量采集')
+        return task
     try:
         if state.get('committed'):
             task.state='DONE'
@@ -96,7 +99,7 @@ def process_page(db, task, connection, actor, schedule, adapter, registry):
         if records:
             batch = preview_inbound(db, actor, connection, task.payload['data_type'], records,
                                     source_label='分页采集 / ' + task.payload['mode'])
-            batch.receipt = {'pull_task_id': task.id, 'pull_page': response.get('page'), 'transport_evidence':proof}
+            batch.receipt = {**batch.receipt, 'pull_task_id': task.id, 'pull_page': response.get('page'), 'transport_evidence':proof}
             _check_cross_page_keys(db, batch, state)
             state.update(batch_id=batch.id, errors=batch.errors, received_records=received)
             if batch.errors:
@@ -149,6 +152,9 @@ def lock_pending_task(db, batch):
     task = db.scalar(select(Task).where(Task.id == ident).with_for_update().execution_options(populate_existing=True))
     if not task or task.state != 'WAITING_CONFIRMATION':
         raise HTTPException(409, '采集任务状态已变化，请核对后再确认')
+    connection=db.get(Connection,task.payload.get('connection_id'))
+    if connection is None or run_counts(db,task,connection)[3]=='BLOCKED':
+        raise HTTPException(409,'已提交分页证据不完整，不能继续确认旧页，请重新发起全量采集')
     return task
 
 
@@ -192,6 +198,10 @@ def _reconcile(db, task, actor):
 
 
 def _finalize(db,task,actor,schedule):
+    connection=db.get(Connection,task.payload.get('connection_id'))
+    if connection is None or run_counts(db,task,connection)[3]=='BLOCKED':
+        stop_paged_task(db,task,schedule,actor,'分页入库证据不完整，未推进同步水位，请重新全量采集')
+        return
     _reconcile(db,task,actor)
     if task.state=='BLOCKED':
         if schedule:schedule.last_error=task.error
@@ -205,6 +215,42 @@ def _finalize(db,task,actor,schedule):
         if cursor is not None:schedule.last_cursor=cursor
         schedule.last_error=''
         schedule.version+=1
+
+
+def lock_rollback_task(db,batch):
+    ident=(batch.receipt or {}).get('pull_task_id')
+    if not ident:return None,None
+    task=db.scalar(select(Task).where(Task.id==ident).with_for_update().execution_options(populate_existing=True))
+    if not task or not (task.result or {}).get('paged') or task.payload.get('connection_id')!=batch.connection_id or task.payload.get('data_type')!=batch.data_type:
+        raise HTTPException(409,'分页所属任务证据不一致，不能单独撤销')
+    if task.lease_token and task.lease_until and task.lease_until>utcnow():
+        raise HTTPException(409,'采集任务正在处理当前页，请等待本页结束后再撤销')
+    from .inbound_sync import IntegrationSchedule
+    from .sync_policy import schedule_context
+    sid=task.payload.get('schedule_id')
+    schedule=db.scalar(select(IntegrationSchedule).where(IntegrationSchedule.id==sid).with_for_update().execution_options(populate_existing=True)) if sid else None
+    expected=task.payload.get('stopped_schedule_context',task.payload.get('schedule_authorization'))
+    if sid and (schedule is None or expected!=schedule_context(schedule)):
+        raise HTTPException(409,'原同步计划已调整，请先核对当前采集，不能撤销旧计划分页')
+    later=db.scalar(select(Task.id).where(Task.kind=='inbound_pull',Task.id!=task.id,Task.created_at>=task.created_at,
+        Task.payload['connection_id'].as_string()==batch.connection_id,Task.payload['data_type'].as_string()==batch.data_type).limit(1))
+    if later:
+        raise HTTPException(409,'同一数据源已有后续采集，请先核对最新运行，不能撤销旧分页')
+    return task,schedule
+
+
+def stop_paged_task(db,task,schedule,actor,reason):
+    before=serial(task)
+    task.state='BLOCKED';task.error=reason;task.version+=1
+    task.payload={**task.payload,'approval_revoked':True}
+    task.lease_token=None;task.lease_until=None
+    audit(db,actor,'sync',task.id,'终止不完整分页采集',before,serial(task),reason)
+    if schedule:
+        before=serial(schedule)
+        schedule.active=False;schedule.last_cursor=None;schedule.last_error=reason;schedule.version+=1
+        from .sync_policy import schedule_context
+        task.payload={**task.payload,'stopped_schedule_context':schedule_context(schedule)}
+        audit(db,actor,'sync_schedule',schedule.id,'暂停计划并清除同步水位',before,serial(schedule),reason)
 
 
 def has_unfinished_run(db, schedule):

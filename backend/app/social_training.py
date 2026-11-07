@@ -19,6 +19,7 @@ REVIEW_STATES = {'DRAFT':'待发送教师','TEACHER':'待教师回应','COLLEGE'
 DUTIES = {'dean':'二级学院院长','coordinator':'归口学院复审','vice_president':'分管副校长','secretary':'教学秘书',
           'finance':'财务核验','academic':'成果核验','discipline':'纪检核验','committee':'委员会评审',
           'trainer_hr':'培训师资格认定（组织人事部）','trainer_filing':'外聘培训师备案（教务处）'}
+SCHOOL_REVIEW_DUTIES = frozenset({'vice_president','coordinator','committee','finance','academic','discipline','trainer_hr','trainer_filing'})
 KINDS = {'social_project':SocialProject, 'social_claim':SocialClaim, 'social_annual':SocialAnnual,
          'social_policy':SocialPolicy, 'social_resource':SocialResource}
 DECISIONS = {'cap_mode':'单次基数封顶', 'person_day_unit':'人天式核算单元', 'precision':'单元积分及汇总小数位',
@@ -76,6 +77,8 @@ def actor_duties(db, actor):
     """当前身份能办的职责。学院经办人代授权院长办理“二级学院院长”（dean）职责。"""
     assigned = assignments(db)
     out = {k for k, v in assigned.items() if actor.id in v}
+    if out & SCHOOL_REVIEW_DUTIES and not has_school_review_identity(db, actor.user):
+        out -= SCHOOL_REVIEW_DUTIES
     from .identities import agent_item
     agent = agent_item(db, actor)
     if agent and agent.get('delegated_by') in assigned.get('dean', []):
@@ -131,8 +134,9 @@ def school_duty_staffing(db):
     """每个学校级职责现在有几位可用的办理人（账号启用、未待授权）。"""
     assigned = assignments(db)
     ids = sorted({i for k in SCHOOL_DUTIES for i in assigned.get(k, [])})
-    usable = set(db.scalars(select(User.id).where(User.id.in_(ids or ['']), User.active.is_(True), User.authorization_pending.is_(False))))
-    return {k: len([i for i in assigned.get(k, []) if i in usable]) for k in SCHOOL_DUTIES}
+    usable = {u.id:u for u in db.scalars(select(User).where(User.id.in_(ids or ['']), User.active.is_(True), User.authorization_pending.is_(False)))}
+    school = {i for i,u in usable.items() if has_school_review_identity(db,u)}
+    return {k: len([i for i in assigned.get(k, []) if i in (school if k in SCHOOL_REVIEW_DUTIES else usable)]) for k in SCHOOL_DUTIES}
 
 
 def duty(db, actor, code, owner=None, org=None):
@@ -200,8 +204,12 @@ def active_identities(db,user):
         except HTTPException:continue
 
 
+def has_school_review_identity(db,user):
+    return any(a.role.kind=='school' and 'assessment.review' in a.permissions for a in active_identities(db,user))
+
+
 def duty_eligible(db,user,admin,code):
-    school=code in {'vice_president','coordinator','committee','finance','academic','discipline','trainer_hr','trainer_filing'}
+    school=code in SCHOOL_REVIEW_DUTIES
     return any(a.org.id in admin.org_ids and 'assessment.review' in a.permissions
                and (not school or a.role.kind=='school') for a in active_identities(db,user))
 
@@ -889,7 +897,7 @@ def detail(db,actor,kind,obj):
         result['ever_filed']=filed
         # 删除按钮和后端删除用同一判断（后端还会核对负责人、明细和台账来源）。
         result['can_delete']=obj.state in {'DRAFT','RETURNED'} and not filed
-    if isinstance(obj,(SocialProject,SocialClaim)) or (isinstance(obj,SocialResource) and obj.kind=='correction'):
+    if isinstance(obj,(SocialProject,SocialClaim)) or (isinstance(obj,SocialResource) and obj.kind in ('correction','point_review')):
         result['can_review']=may_review(db,actor,obj)   # 详情里的审核按钮和待办同一权限结果
     if isinstance(obj,(SocialProject,SocialResource,SocialAnnual)):
         org=db.get(Org,obj.org_id);result['org_name']=org.name if org else ''  # 教师、教研室的组织列表不含所属学院，名称由服务端给出
@@ -1013,6 +1021,13 @@ def review_check(db,a,obj):
         project=db.get(SocialProject,obj.project_id)
         if obj.state not in REVIEW_STAGES or project is None:return False
         duty(db,a,REVIEW_STAGES[obj.state],obj.teacher_id,project.org_id);check_project_conflicts(db,a,project);return True
+    if isinstance(obj,SocialResource) and obj.kind=='point_review':
+        if obj.state!='COLLEGE':return False
+        claim=db.get(SocialClaim,obj.data.get('claim_id'));project=db.get(SocialProject,claim.project_id) if claim else None
+        if project is None:raise HTTPException(409,'原认定项目已缺失，请先核对来源')
+        duty(db,a,'dean',obj.data['teacher_id'],obj.org_id);check_project_conflicts(db,a,project)
+        if a.id==obj.data['created_by']:raise HTTPException(403,'发起人不能裁定本人发起的核对')
+        return True
     if isinstance(obj,SocialResource) and obj.kind=='correction':
         claim=db.get(SocialClaim,obj.data.get('claim_id'));project=db.get(SocialProject,claim.project_id) if claim else None
         if obj.state not in REVIEW_STAGES or project is None:return False
@@ -1079,7 +1094,7 @@ def todo_items(db,a):
         if obj.data['teacher_id'] not in a.teacher_ids:continue
         if obj.state=='DRAFT' and obj.data['created_by']==a.id:add('social_resource',obj,'上传核对材料并发给教师',teacher_id=obj.data['teacher_id'])
         elif obj.state=='TEACHER' and obj.data['teacher_id']==a.id:add('social_resource',obj,'教研室请你核对一条积分，请回应',teacher_id=a.id)
-        elif obj.state=='COLLEGE' and 'dean' in duties and a.id not in {obj.data['created_by'],obj.data['teacher_id']}:add('social_resource',obj,'积分核对待学院裁定',teacher_id=obj.data['teacher_id'])
+        elif obj.state=='COLLEGE' and 'dean' in duties and a.id not in {obj.data['created_by'],obj.data['teacher_id']} and may_review(db,a,obj):add('social_resource',obj,'积分核对待学院裁定',teacher_id=obj.data['teacher_id'])
     current=today();has_current_report=False
     for report in db.scalars(select(SocialResource).where(SocialResource.kind=='point_report',SocialResource.org_id.in_(a.org_ids),SocialResource.state.notin_(['ARCHIVED','VOID']))):
         if report.org_id==a.org.id and report.data.get('year')==current.year and report.data.get('start_month')==current.month-1 and report.data.get('end_month')==current.month:has_current_report=True

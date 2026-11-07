@@ -447,7 +447,7 @@ async function showDetail(kind,id,courseList=null){
   if(dd.created_by===me&&x.state==='DRAFT'){if(d.workflow_blockers?.length)opened.busyNote=d.workflow_blockers.join('；');else add('发给教师回应','send')}
   if(dd.created_by===me&&['DRAFT','TEACHER'].includes(x.state))add('撤回核对','withdraw');
   if(dd.teacher_id===me&&x.state==='TEACHER'){add('同意更正','agree');add('不同意，说明情况','explain')}
-  if(x.state==='COLLEGE'&&workspace.my_duties.includes('dean')&&dd.created_by!==me){add('裁定更正','uphold');add('维持原认定','dismiss')}
+  if(x.state==='COLLEGE'&&workspace.my_duties.includes('dean')&&dd.created_by!==me&&d.can_review!==false){add('裁定更正','uphold');add('维持原认定','dismiss')}
  }
  if(kind==='social_resource'&&x.kind==='correction'){
   buttons.push(act('查看原认定','social-detail','social_claim|'+x.data.claim_id));

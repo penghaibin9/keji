@@ -1,7 +1,7 @@
 """老师认领超星课：超星建课人登录名不是工号时，老师登录本系统后自己认领。
 
 不收超星密码。认领人的工号来自本系统登录身份；认领的登录名下所有课的超星姓名都和
-认领人教职工表姓名一致时直接生效，否则等学校系统管理员确认。生效的认领和
+认领人教职工表姓名一致也须由学校系统管理员确认，姓名只用于候选推荐。生效的认领和
 “dict:cx_login_alias”对照一样，下一次同步按工号入库；生效当时就把已入库的课改挂过来。
 """
 from __future__ import annotations
@@ -14,7 +14,10 @@ CLAIMS_KEY='cx_login_claims'
 LIVE={'PENDING','APPROVED'}
 
 def _claims(db,lock=False):
-    q=select(Setting).where(Setting.key==CLAIMS_KEY)
+    if lock:
+        from .reference_data import lock_cx_mapping
+        lock_cx_mapping(db)
+    q=select(Setting).where(Setting.key==CLAIMS_KEY).execution_options(populate_existing=True)
     obj=db.scalar(q.with_for_update() if lock else q)
     if obj is None and lock:
         obj=Setting(key=CLAIMS_KEY,value={'items':[]},version=1);db.add(obj);db.flush()
@@ -98,14 +101,12 @@ def submit_claim(db,actor,login,note=''):
     rows=_rows(db,login)
     if not rows:raise HTTPException(404,'系统里没有这个超星登录名建的课，请核对登录名（要和超星里完全一致），或等下一次同步后再试')
     names=sorted({r.teacher_name for r in rows if r.teacher_name})
-    auto=bool(name) and names==[name]
     item={'login':login,'staff_no':staff,'user_id':actor.user.id,'claimant':name,'cx_names':names,'courses':len(rows),
-          'state':'APPROVED' if auto else 'PENDING','note':(note or '')[:200],'created_at':utcnow().isoformat(),
-          'decided_by':'系统自动（姓名一致）' if auto else '','decided_at':utcnow().isoformat() if auto else ''}
+          'state':'PENDING','note':(note or '')[:200],'created_at':utcnow().isoformat(),
+          'decided_by':'','decided_at':''}
     items=[x for x in items if not (x.get('login')==login and x.get('staff_no')==staff)]+[item];_save(obj,items)
-    moved=_apply(db,actor,login,staff,actor.user.id,'老师认领超星课程（姓名一致自动生效）') if auto else 0
     audit(db,actor,'teacher_course','cx-claim:'+login[:40],'老师认领超星登录名',after=item,reason=item['note'] or '老师认领')
-    return {**item,'moved':moved}
+    return {**item,'moved':0}
 
 def list_claims(db,actor,state=None):
     _require_admin(actor);_,items=_claims(db)

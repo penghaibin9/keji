@@ -456,7 +456,10 @@ def setting_history(key:str,request:Request):
 @router.put('/settings/{key}')
 def update_setting(key:str,data:SettingUpdate,request:Request):
     def apply(db,a,s):
-        need_admin(a);obj=db.get(Setting,key)
+        need_admin(a)
+        from ..reference_data import CX_LOGIN_ALIAS_KEY,lock_cx_mapping
+        if key==CX_LOGIN_ALIAS_KEY:lock_cx_mapping(db)
+        obj=db.get(Setting,key)
         if not configurable_key(key) or not obj: raise HTTPException(404,'配置项不存在')
         check_version(obj,data.expected_version)
         if not _setting_ok(key,data.value):raise HTTPException(422,'配置值不符合该项目规范')
@@ -470,6 +473,8 @@ def create_setting(data:SettingCreate,request:Request):
     """3.1: add a custom dictionary category (dict:code) or system parameter (param:code)."""
     def apply(db,a,s):
         need_admin(a)
+        from ..reference_data import CX_LOGIN_ALIAS_KEY,lock_cx_mapping
+        if data.key==CX_LOGIN_ALIAS_KEY:lock_cx_mapping(db)
         if not is_custom_key(data.key):raise HTTPException(422,'只能新增自定义字典类别（dict:编码）或系统参数（param:编码）')
         if db.get(Setting,data.key):raise HTTPException(409,'该配置编码已存在，请在原配置上修改')
         count=db.scalar(select(func.count()).select_from(Setting).where(Setting.key.like('dict:%')|Setting.key.like('param:%')))

@@ -80,13 +80,19 @@ def seed_unmatched(c,app):
     assert state=='DONE',error
     return others
 
-def test_teacher_claims_login_without_password_name_match_applies_at_once_and_survives_next_sync(client2,app2):
+def test_teacher_claim_requires_admin_even_when_name_matches_and_survives_next_sync(client2,app2):
     c=client2;auth(c,'schooladmin');others=seed_unmatched(c,app2)
     auth(c,'teacher')
     mine=c.get('/api/reference/cx-claims/mine').json()
     assert mine['name']=='测试教师一' and [x['login'] for x in mine['candidates']]==['phone138']
     r=post(c,'/api/reference/cx-claims',{'login':'phone138'});assert r.status_code==200,r.text
-    assert r.json()['state']=='APPROVED' and r.json()['moved']==2
+    assert r.json()['state']=='PENDING' and r.json()['moved']==0
+    assert cx_rows(app2)[('phone138','X1')]==(True,None)
+    assert post(c,'/api/reference/cx-claims/decide',{'login':'phone138','staff_no':'J001','decision':'approve'}).status_code==403
+    auth(c,'schooladmin')
+    r=post(c,'/api/reference/cx-claims/decide',{'login':'phone138','staff_no':'J001','decision':'approve'})
+    assert r.status_code==200 and r.json()['moved']==2,r.text
+    auth(c,'teacher')
     got=cx_rows(app2)
     assert got[('J001','X1')]==(True,'teacher') and got[('J001','X6')]==(True,'teacher') and ('phone138','X1') not in got
     # 认领只是把课挂到老师名下，仍要教研室主任认定后才计学分。
