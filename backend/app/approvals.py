@@ -54,6 +54,15 @@ FLOWS = {
                          'done': 'ACTIVE', 'final': '进入培训师资', 'object_type': 'social_resource'},
     'base': {'label': '培训基地申请', 'chain': ('college', 'school'), 'states': {'college': 'COLLEGE', 'school': 'SCHOOL'},
              'done': 'DRAFT', 'final': '进入基地清单', 'object_type': 'social_resource'},
+    # 2026-11-07 运行中的变更申请（lifecycle.py）：只审改动的几项，通过后档案业务版本号 +1。
+    'change': {'label': '变更申请', 'chain': ('college', 'school'), 'states': {'college': 'COLLEGE', 'school': 'SCHOOL'},
+               'done': 'ACTIVE', 'final': '变更生效', 'object_type': 'social_resource'},
+    'change_college': {'label': '变更申请', 'chain': ('college',), 'states': {'college': 'COLLEGE'},
+                       'done': 'ACTIVE', 'final': '变更生效', 'object_type': 'social_resource'},
+    'change_hr': {'label': '变更申请', 'chain': ('college', 'hr'), 'states': {'college': 'COLLEGE', 'hr': 'HR'},
+                  'done': 'ACTIVE', 'final': '变更生效', 'object_type': 'social_resource'},
+    'change_jwc': {'label': '变更申请', 'chain': ('jwc',), 'states': {'jwc': 'JWC'},
+                   'done': 'ACTIVE', 'final': '变更生效', 'object_type': 'social_resource'},
 }
 CHAIN_VERSION = 2
 LEVEL_STATES = {'DEPT': '待教研室审核', 'COLLEGE': '待学院审批', 'SCHOOL': '待学校审批', 'HR': '待组织人事部认定', 'JWC': '待教务处备案审核',

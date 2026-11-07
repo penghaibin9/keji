@@ -191,7 +191,7 @@ def pending(db, actor, items):
         kind = raw['type']
         if kind in {'security', 'sync'} or raw.get('state') == 'EXPIRING':
             continue
-        if kind == 'credit_review' or kind == 'social_report':
+        if kind in ('credit_review', 'social_report', 'life_change'):
             out.append({**raw, 'business_name': raw['title'], 'owner_name': '授权业务',
                         'action_required': True, 'action_label': '查看并办理'})
             continue

@@ -14,7 +14,7 @@ STATES = {'DRAFT':'草稿', 'SUBMITTED':'待院长初审', 'DEAN':'待归口复�
           'APPROVED':'待教学秘书归档', 'ARCHIVED':'已归档', 'FILED':'已备案', 'CLOSE_REVIEW':'待结项核验',
           'CLOSED':'已结项', 'RETURNED':'退回补正', 'REVIEW':'待职能部门核验', 'COMMITTEE':'待委员会评分',
           'PUBLIC':'公示中', 'ACTIVE':'已确认启用', 'VOID':'已作废',
-          'DEPT':'待教研室审核', 'COLLEGE':'待学院审批', 'SCHOOL':'待学校审批', 'CLOSE_COLLEGE':'待学院结项核验', 'WITHDRAWN':'已撤回', 'DELETED':'已删除'}
+          'DEPT':'待教研室审核', 'COLLEGE':'待学院审批', 'SCHOOL':'待学校审批', 'CLOSE_COLLEGE':'待学院结项核验', 'WITHDRAWN':'已撤回', 'DELETED':'已删除', 'STOPPED':'已停用'}
 REVIEW_STATES = {'DRAFT':'待发送教师','TEACHER':'待教师回应','COLLEGE':'待学院裁定','CLOSED':'已办结'}
 DUTIES = {'dean':'二级学院院长','coordinator':'归口学院复审','vice_president':'分管副校长','secretary':'教学秘书',
           'finance':'财务核验','academic':'成果核验','discipline':'纪检核验','committee':'委员会评审',
@@ -239,7 +239,14 @@ def scoped(db, actor, kind, ident, write=False, allow_participant=False, allow_d
         from .applications import read_check, PENDING_STATES
         read_check(db, actor, obj)
         if write and not (actor.id in {obj.data.get('teacher_id'), obj.data.get('created_by')} and obj.state in ('RETURNED','WITHDRAWN',*PENDING_STATES)):
-            raise HTTPException(409, '申请已办结或不由你补正，不能修改')
+            # 2026-11-07 运行中：申请人或所属学院、学校可以给已生效的课程、基地、师资补传运行材料（改资料仍须申请变更）。
+            # 师资认定材料办结后不追加（认定依据保持原样）；课程、基地可补传运行材料。
+            from .lifecycle import RUN_STATES
+            kind_of={'course_apply':'course','base':'base'}.get(obj.kind)
+            mine=actor.id in {obj.data.get('teacher_id'), obj.data.get('created_by')}
+            manager=actor.role.kind in ('college','school') and obj.org_id in actor.org_ids and 'records.write' in actor.permissions
+            if not (kind_of and obj.state in RUN_STATES[kind_of] and (mine or manager)):
+                raise HTTPException(409, '申请已办结或不由你补正，不能修改')
         return obj
     if kind=='social_resource' and obj.kind not in {'base','achievement','course_resource','ledger','correction','point_review','point_report'}:
         raise HTTPException(403,'资源类型尚未配置授权，拒绝读取')

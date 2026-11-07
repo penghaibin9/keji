@@ -1,4 +1,4 @@
-"""培训项目开放老师申报：学院审批 → 学校备案；申报不要求填思政内容，总学时和受众群体必填；学院补填历史项目上报信息。"""
+"""培训项目开放老师申报：学院审批 → 学校备案；申报不要求填思政内容，总学时和受众群体可在结项前补齐（2026-11-07）；学院补填历史项目上报信息。"""
 from sqlalchemy import select
 from app.models import User, Setting
 from app.social_models import SocialResource
@@ -33,13 +33,9 @@ def test_teacher_project_goes_college_then_school_and_application_needs_no_ideol
     p = teacher_project(c)
     proof(c, 'social_project', p['id'], p['version'])
     r = action(c, 'projects', 'social_project', p['id'], 'submit')
-    assert r.status_code == 409 and all(x in r.text for x in ('总学时', '受众群体', '服务面向类型', '教学实施方式'))  # 申报只拦这四项
-    d = detail(c, 'social_project', p['id'])
-    r = put(c, '/api/social/projects/' + p['id'], {**payload(), 'expected_version': d['item']['version'],
-            'data': {**payload()['data'], 'total_hours': '16', 'audiences': ['企业职工'], 'service_types': ['national'], 'teaching_methods': ['classroom', 'case'], 'video_minutes': 120, 'base_count': 2}})
+    # 2026-11-07 立项简化：总学时、受众、服务面向、教学方式不再拦立项，标“结项前补齐”（见 test_lifecycle_20261107）。
     assert r.status_code == 200, r.text
-    r = action(c, 'projects', 'social_project', p['id'], 'submit')
-    assert r.status_code == 200, r.text
+    assert r.json()['item']['data']['report_pending'] is True
     assert r.json()['item']['state'] == 'COLLEGE' and r.json()['progress']['text'].startswith('学院审批中')
     auth(c, 'reviewer')
     assert action(c, 'projects', 'social_project', p['id'], 'file').status_code == 409  # 学院还没审
@@ -76,7 +72,10 @@ def test_college_registered_project_skips_college_level_and_can_fill_report_info
     auth(c, 'reviewer')
     item = action(c, 'projects', 'social_project', p['id'], 'file').json()['item']
     auth(c, 'teacher')
-    assert put(c, '/api/social/projects/' + p['id'] + '/report-info', {'expected_version': item['version'], 'service_types': ['regional'], 'reason': '补填'}).status_code == 403
+    # 2026-11-07 起项目负责人本人也能在备案后、结项前补填上报信息。
+    r = put(c, '/api/social/projects/' + p['id'] + '/report-info', {'expected_version': item['version'], 'service_types': ['regional'], 'reason': '补填'})
+    assert r.status_code == 200, r.text
+    item = r.json()['item']
     auth(c, 'collegehead')
     r = put(c, '/api/social/projects/' + p['id'] + '/report-info', {'expected_version': item['version'], 'total_hours': '16', 'audiences': ['社区居民'], 'service_types': ['regional'], 'teaching_methods': ['case'], 'video_minutes': 120, 'base_count': 2, 'reason': '补填历史项目上报信息'})
     assert r.status_code == 200, r.text

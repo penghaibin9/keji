@@ -130,10 +130,11 @@ def workspace(request:Request,section:str=Query('projects',pattern='^(projects|c
         course_info={};course_orgs=dict(db.execute(select(Org.id,Org.name)).all())
         codes=[c.code for c in courses]
         for i in range(0,len(codes),500):
-            for r in db.scalars(select(SocialResource).where(SocialResource.kind=='course_apply',SocialResource.state=='ACTIVE',SocialResource.data['course_code'].as_string().in_(codes[i:i+500]))):
+            for r in db.scalars(select(SocialResource).where(SocialResource.kind=='course_apply',SocialResource.state.in_(('ACTIVE','STOPPED')),SocialResource.data['course_code'].as_string().in_(codes[i:i+500]))):
                 d=r.data;course_info[d['course_code']]={**{k:d.get(k) for k in ('hours','teaching_mode','ideology','teacher_name','courseware','audience','intro','package','one_skill','target_groups')},
                     'application_id':r.id if d.get('application') else None,'source':d.get('source'),
-                    'org_id':r.org_id,'org_name':course_orgs.get(r.org_id,''),'info_id':r.id,'cover_id':d.get('cover_id'),'version':r.version}
+                    'org_id':r.org_id,'org_name':course_orgs.get(r.org_id,''),'info_id':r.id,'cover_id':d.get('cover_id'),'version':r.version,'state':r.state,
+                    'teacher_id':d.get('teacher_id'),'created_by':d.get('created_by')}
         resource_orgs=dict(db.execute(select(Org.id,Org.name).where(Org.id.in_({r.org_id for r in resources}|{r.org_id for r in annuals}))).all()) if resources or annuals else {}
         display=lambda rows:[{**serial(row),'state_label':st.state_label(row)} for row in rows]
         from ..social_schemas import application_blockers
@@ -279,6 +280,8 @@ def validate_units(db,a,project,rows):
     previous=st.units(db,project.id);seen=set();existing={u.external_key for u in previous}
     days={(u.data['class_code'],u.data['event_date']) for u in previous}
     modules={(u.data['class_code'],u.data['course_code'],u.data['module']) for u in previous}
+    from ..lifecycle import stopped_course_codes
+    stopped=stopped_course_codes(db,{r.course_code for r in rows})
     if issues:=st.person_day_blockers([u.data for u in previous]+[serial(row.model_dump()) for row in rows]):raise HTTPException(409,'；'.join(issues))
     for row in rows:
         if row.external_key in seen or row.external_key in existing:raise HTTPException(409,'来源唯一编号重复，本批未入库')
@@ -295,6 +298,7 @@ def validate_units(db,a,project,rows):
             modules.add(key)
         course=db.scalar(select(TrainingCourseMaster).where(TrainingCourseMaster.code==row.course_code,TrainingCourseMaster.active==True))
         if not course or course.project_code!=project.data['code']:raise HTTPException(422,'课程须先登记并关联当前项目')
+        if row.course_code in stopped:raise HTTPException(409,'课程 '+row.course_code+' 已停用，不能再登记新的参训明细；需要时请先在课程里恢复运行')
         cl=db.scalar(select(TrainingClassMaster).where(TrainingClassMaster.code==row.class_code))
         if cl and cl.project_code!=project.data['code']:raise HTTPException(422,'班级属于其他项目')
         if cl and cl.course_code and cl.course_code!=row.course_code:raise HTTPException(422,'班级与所选课程不一致')
@@ -338,7 +342,8 @@ def project_action(ident:str,data:SocialAction,request:Request):
             if obj.state not in {'DRAFT','RETURNED'}:raise HTTPException(409,'当前项目不能提交')
             st.require_project_confirmed(obj)
             if not obj.data.get('venue'):raise HTTPException(409,'请先在“修改项目资料”里填写培训场地（新申报和重新备案必填）')
-            if via_college and (issues:=application_blockers(obj.data)):raise HTTPException(409,'申报信息还没填完：'+'；'.join(issues))
+            # 2026-11-07 立项简化：总学时、受众、服务面向、教学方式不再拦立项，记下“结项前补齐”，结项提交时再查。
+            obj.data={**obj.data,'report_pending':bool(via_college and application_blockers(obj.data))}
             st.require_evidence(db,'social_project',ident)
             level=obj.data.get('returned_level') if obj.state=='RETURNED' else None
             obj.state='SUBMITTED' if level=='school' or not via_college else 'COLLEGE'
@@ -384,6 +389,7 @@ def project_action(ident:str,data:SocialAction,request:Request):
             st.require_project_confirmed(obj)
             if issues:=st.person_day_blockers([u.data for u in st.units(db,ident)]):raise HTTPException(409,'；'.join(issues))
             if not st.units(db,ident):raise HTTPException(409,'尚无参训核算明细')
+            if obj.data.get('report_pending') and (issues:=application_blockers(obj.data)):raise HTTPException(409,'结项前请先补齐上报信息（立项时可以不填）：'+'；'.join(issues))
             st.require_evidence(db,'social_project',ident);c=data.closeout
             st.require_closeout_distribution(serial(c.model_dump()))
             if c.closed_on.isoformat()<obj.data['end_date'] or c.closed_on>st.today():raise HTTPException(422,'结项日期应在培训结束后且不晚于今天')
@@ -490,12 +496,17 @@ def project_report_info(ident:str,data:ReportInfoIn,request:Request):
     def apply(db,a,s):
         obj=db.get(SocialProject,ident)
         if obj is None:raise HTTPException(404,'项目不存在')
-        if a.role.kind not in {'college','school'} or obj.org_id not in a.org_ids:raise HTTPException(403,'上报信息由承办学院或学校补填')
-        a.require('records.write');check_version(obj,data.expected_version)
+        owner=a.role.kind=='teacher' and obj.owner_id==a.id
+        if not owner and (a.role.kind not in {'college','school'} or obj.org_id not in a.org_ids):raise HTTPException(403,'上报信息由项目负责人、承办学院或学校补填')
+        if not owner:a.require('records.write')
+        check_version(obj,data.expected_version)
         if obj.state not in {'FILED','CLOSE_COLLEGE','CLOSE_REVIEW','CLOSED'}:raise HTTPException(409,'还没备案的项目请在申报里填写')
+        if owner and obj.state!='FILED':raise HTTPException(409,'项目已提交结项，上报信息请联系学院修改')
         before=serial(obj)
         values={k:v for k,v in serial(data.model_dump()).items() if k in data.model_fields_set and k in {'total_hours','audiences','audience_other','service_types','teaching_methods','base_count','video_minutes'}}
+        from ..social_schemas import application_blockers
         obj.data={**obj.data,**values,'report_info_by':a.id,'report_info_on':st.today().isoformat()}
+        if obj.data.get('report_pending') and not application_blockers(obj.data):obj.data={**obj.data,'report_pending':False}
         result=event(db,a,'social_project',obj,'补填上报信息',before,data.reason,data.basis)
         return result
     return command(request,data.model_dump(mode='json'),'portal.read',apply)
@@ -1145,6 +1156,7 @@ def resource_update(ident:str,data:ResourceUpdate,request:Request):
     def apply(db,a,s):
         obj=st.scoped(db,a,'social_resource',ident,write=True);check_version(obj,data.expected_version)
         if obj.kind not in {'base','achievement','course_resource'} or obj.data.get('auto') or obj.state=='ARCHIVED':raise HTTPException(409,'此项由原业务生成，请从原业务办理更正')
+        if obj.data.get('application'):raise HTTPException(409,'这是审批通过的申请，改资料请在档案里“申请变更”')
         if (obj.kind,obj.org_id,obj.code)!=(data.kind,data.org_id,data.code):raise HTTPException(422,'资源类型、所属学院和来源编号不能变更')
         before=serial(obj);values=resource_values(db,a,data)
         # 只合并本次提交的字段：表单没带的用途、设立日期、共建单位、级别等保持原值，不被默认值覆盖。

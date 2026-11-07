@@ -370,7 +370,7 @@ def state_label(obj):
     if isinstance(obj, SocialResource) and obj.kind in APP_KINDS:
         if obj.state in ap.LEVEL_STATES:
             return ap.LEVEL_STATES[obj.state]
-        return {'RETURNED': '退回补正', 'WITHDRAWN': '已撤回', 'DELETED': '已删除', 'ACTIVE': '已入师资库' if obj.kind == 'trainer' else '已入培训课程库', 'DRAFT': '已生效'}.get(obj.state, obj.state)
+        return {'RETURNED': '退回补正', 'WITHDRAWN': '已撤回', 'DELETED': '已删除', 'ACTIVE': '已入师资库' if obj.kind == 'trainer' else '已入培训课程库', 'DRAFT': '已生效', 'STOPPED': '已停用'}.get(obj.state, obj.state)
     from .social_training import state_label as social_label
     return social_label(obj)
 
@@ -515,7 +515,10 @@ def complete(db, a, obj, flow, basis=''):
 def todo_items(db, a):
     """要我处理：本级可办的申请，以及本人被退回待补正的申请。"""
     items = []
-    rows = db.scalars(select(SocialResource).where(SocialResource.kind.in_(APP_KINDS), SocialResource.state.in_([*PENDING_STATES, 'RETURNED']))).all()
+    # 运行中的变更申请（kind='change'）和申请一并取出，省一次查询。
+    rows = db.scalars(select(SocialResource).where(SocialResource.kind.in_((*APP_KINDS, 'change')), SocialResource.state.in_([*PENDING_STATES, 'RETURNED']))).all()
+    changes = [r for r in rows if r.kind == 'change' and r.state in PENDING_STATES]
+    rows = [r for r in rows if r.kind != 'change']
     for obj in rows:
         if not is_application(obj):
             continue
@@ -537,7 +540,8 @@ def todo_items(db, a):
         items.append({'type': 'application', 'id': obj.id, 'title': ap.FLOWS[flow]['label'] + '：' + obj.name + hint,
                       'state': state_label(obj), 'teacher_id': obj.data.get('teacher_id'), 'target_id': None if obj.data.get('teacher_id') else obj.org_id,
                       'same_person': ap.SAME_PERSON if ap.same_person(db, 'social_resource', obj.id, a) else None})
-    return items + project_todos(db, a)
+    from .lifecycle import change_todos
+    return items + project_todos(db, a) + change_todos(db, a, changes)
 
 
 def project_todos(db, a):
@@ -584,7 +588,7 @@ def trainer_library(db, a):
     """师资库：学校看全部，学院看本院，教研室看本院（申请中的单子只给申请人和办理人，不在库里露出）。老师不开放。"""
     if a.role.kind == 'teacher':
         raise HTTPException(403, '培训师资不对老师开放，本人的申报在“培训业务 › 培训师资 › 我的申报”里查看')
-    q = select(SocialResource).where(SocialResource.kind == 'trainer', SocialResource.state == 'ACTIVE').order_by(SocialResource.code)
+    q = select(SocialResource).where(SocialResource.kind == 'trainer', SocialResource.state.in_(('ACTIVE', 'STOPPED'))).order_by(SocialResource.code)
     rows = db.scalars(q).all()
     if a.role.kind != 'school':
         scope = {a.org.parent_id} if a.role.kind == 'dept' else set(a.org_ids)
@@ -610,6 +614,6 @@ def trainer_library(db, a):
                        'title': r.data.get('title') or '', 'specialty': r.data.get('specialty') or '', 'courses': taught.get(r.data.get('teacher_id'), []), 'directions': [TRAINER_DIRECTIONS.get(x, x) for x in r.data.get('directions', [])],
                        'org_name': orgs.get(r.org_id, ''), 'effective_on': r.data.get('effective_on'), 'filing_basis': r.data.get('filing_basis') or '',
                        'recommended_province_on': r.data.get('recommended_province_on'), 'can_view_detail': can_read_details(r),
-                       'photo_id': r.data.get('cover_id'), 'version': r.version, 'teacher_id': r.data.get('teacher_id')} for r in rows], 'total': len(rows),
+                       'photo_id': r.data.get('cover_id'), 'version': r.version, 'teacher_id': r.data.get('teacher_id'), 'state': r.state} for r in rows], 'total': len(rows),
             # 学校管理员可见：人事认定、教务处备案职责未指定时，有多少申请在等。
             'duty_gaps': ap.pending_duty_gaps(db) if a.role.kind == 'school' and a.user.is_admin else []}

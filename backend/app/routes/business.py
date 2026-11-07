@@ -349,7 +349,7 @@ def todos(request:Request):
     from ..read_queries import clean_filters
     f=clean_filters(f,{'q','type','stage','attention'})
     if f.get('attention') and f['attention'] not in {'handle','waiting'}:raise HTTPException(422,'待办分类无效')
-    if f.get('type') and f['type'] not in {'qualification','assessment','organization_assessment','dispute','sync','security','social_project','social_claim','social_annual','social_resource','social_report','credit_review','application'}:
+    if f.get('type') and f['type'] not in {'qualification','assessment','organization_assessment','dispute','sync','security','social_project','social_claim','social_annual','social_resource','social_report','credit_review','application','life_change'}:
         raise HTTPException(422,'待办类型无效')
     # 待归档清单只是只读筛选：积分认定、更正待教学秘书归档，教师考核待学校归档；办理仍走原单条接口。
     if f.get('stage') and f['stage']!='archive':raise HTTPException(422,'待办环节无效')

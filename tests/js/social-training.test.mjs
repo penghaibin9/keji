@@ -857,7 +857,8 @@ test('学院项目详情复用分区折叠流程和更多操作，开班准备�
  c.api=async()=>({item:{id:'college-project',owner_id:'teacher',state:'FILED',version:4,data:{name:'学院<项目>',code:'COLLEGE-P1',category:'community'},closeout:{}},state_label:'已备案',facts:{units:[],followups:[],effective:0,excluded:0},attachments:[{id:'material'}],events:[]});
  await socialAction('social-detail','social_project|college-project',c);
  assert.match(modal.body,/data-detail-section="social-info"/);assert.match(modal.body,/<details class="detail-fold application-flow"><summary>查看完整办理流程/);assert.match(modal.buttons,/<details class="detail-more-actions">/);assert.match(modal.buttons,/social-export/);assert.equal((modal.buttons.match(/data-action="social-prep"/g)||[]).length,1);assert.equal(modal.contextLabel,'培训项目 / 业务详情');assert.match(modal.buttons,/data-action="social-unit-import"/);
- await socialAction('social-transition','refile',c);assert.match(form.body,/本次办理对象/);assert.match(form.body,/学院&lt;项目&gt;/);assert.equal(form.options.contextLabel,'培训项目 / 申请重新备案');
+ // 2026-11-07 已备案项目改资料走“申请变更”（运行档案），不再出“申请重新备案”。
+ assert.match(modal.buttons,/data-action="life-change" data-id="project\|college-project"/);assert.match(modal.buttons,/data-action="life-open" data-id="project\|college-project"/);assert.doesNotMatch(modal.buttons,/data-id="refile"/);
  await socialAction('social-close','',c);assert.equal(form.options.page,true);assert.match(form.body,/结项情况/);assert.doesNotMatch(form.body,/结项材料核对/);
 });
 
@@ -881,9 +882,9 @@ test('学院学校共用项目次要动作折叠，教师原动作不变且无�
   if(['college','school'].includes(role)){
    assert.equal((footer.match(/class="detail-more-actions"/g)||[]).length,1);
    for(const action of ['social-prep','social-report-info']){assert.ok(more.includes('data-action="'+action+'"'));assert.ok(!main.includes('data-action="'+action+'"'))}
-   assert.match(more,/data-action="social-transition" data-id="refile"/);assert.doesNotMatch(main,/data-id="refile"/);assert.equal(more.includes('social-export'),exported);
+   assert.match(main,/data-action="life-change" data-id="project\|footer-project"/);assert.doesNotMatch(footer,/data-id="refile"/);assert.equal(more.includes('social-export'),exported);
    for(const action of ['social-upload','social-unit-import','social-close'])assert.ok(main.includes('data-action="'+action+'"'));
-  }else{assert.match(main,/data-action="social-prep"/);assert.match(main,/data-id="refile"/);if(role==='school')assert.match(main,/data-action="social-report-info"/)}
+  }else{assert.match(main,/data-action="social-prep"/);assert.match(main,/data-action="life-change"/);if(role==='school')assert.match(main,/data-action="social-report-info"/)}
  }
 });
 

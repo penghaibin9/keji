@@ -28,7 +28,7 @@ export function trainingModels(section,w,c){
  if(section==='projects')return (w.projects||[]).map(x=>({id:x.id,name:x.data.name,code:x.data.code,org:org(x),orgId:x.org_id,status:x.state_label||states[x.state]||'待核对',state:x.state,category:x.data.category,date:[x.data.start_date,x.data.end_date].filter(Boolean).join(' — '),image:x.data.cover_id,imageTarget:['project',x.id,x.version],detailAction:'social-detail',detailId:'social_project|'+x.id,raw:x}));
  if(section==='courses')return (w.courses||[]).map(x=>{const info=w.course_info?.[x.code]||{},project=(w.projects||[]).find(p=>p.data.code===x.project_code);return {id:x.code,name:x.name,code:x.code,org:info.org_name||project?.org_name||collegeName(project?.org_id,c)||'所属学院待补充',orgId:project?.org_id||info.org_id,subtitle:project?.data.name||(x.project_code?'项目名称待核对':'未关联项目'),image:info.cover_id,imageTarget:info.info_id?['resource',info.info_id,info.version]:null,info,stats:w.course_stats?.[x.code]||{},category:info.category||'',detailAction:'social-course-view',detailId:x.code,raw:x}});
  if(section==='bases'||section==='outcomes')return (w.resources||[]).filter(x=>x.kind===(section==='bases'?'base':'achievement')).map(x=>({id:x.id,name:x.name,code:x.code,org:org(x),orgId:x.org_id,status:x.state_label||states[x.state]||'已登记',state:x.state,category:section==='bases'?(x.data.onsite===false?'external':x.data.onsite===true?'internal':'unknown'):x.data.level,image:x.data.cover_id,photos:x.data.photo_ids||[],imageTarget:['resource',x.id,x.version],detailAction:'social-detail',detailId:'social_resource|'+x.id,raw:x}));
- if(section==='trainers')return (w.items||[]).map(x=>({id:x.id,name:x.name,code:x.staff_no||x.code||'',org:(x.source==='external'?x.unit:x.org_name)||x.org_name||x.unit||'所属单位待补充',orgId:x.source==='external'?'':x.org_id,category:x.source,status:x.source==='external'?'外聘已备案':'校内已认定',subtitle:x.title||'',image:x.photo_id,imageTarget:x.version?['resource',x.id,x.version]:null,detailAction:x.can_view_detail?'app-detail':'',detailId:x.id,raw:x}));
+ if(section==='trainers')return (w.items||[]).map(x=>({id:x.id,name:x.name,code:x.staff_no||x.code||'',org:(x.source==='external'?x.unit:x.org_name)||x.org_name||x.unit||'所属单位待补充',orgId:x.source==='external'?'':x.org_id,category:x.source,status:x.state==='STOPPED'?'已停用':x.source==='external'?'外聘已备案':'校内已认定',state:x.state,subtitle:x.title||'',image:x.photo_id,imageTarget:x.version?['resource',x.id,x.version]:null,detailAction:x.can_view_detail?'app-detail':'',detailId:x.id,raw:x}));
  return (w.items||[]).map(x=>({id:x.id,name:x.project||'培训项目待核对',code:x.project_code,org:x.org_name||collegeName(c.teachers?.find(t=>t.id===x.teacher_id)?.org_id,c)||'所属学院待补充',orgId:x.org_id,subtitle:x.course||'',date:x.event_date,detailAction:'record',detailId:x.id,raw:x}));
 }
 function tabs(section){return {projects:[['','全部项目'],['pending','待审批'],['FILED','已备案'],['closing','待结项'],['CLOSED','已结项']],courses:[],bases:[['','全部基地'],['internal','校内基地'],['external','校外共建']],trainers:[['','全部师资'],['internal','校内教师'],['external','外聘培训师']],outcomes:[['','全部成果'],['national','国家级'],['province','省级'],['school','校级']],records:[]}[section]}
@@ -75,6 +75,29 @@ function projectPrimary(row,c){
  const label=school&&x.state==='SUBMITTED'?'办理备案':school&&x.state==='CLOSE_REVIEW'?'办理结项核验':college&&['COLLEGE','CLOSE_COLLEGE'].includes(x.state)?'学院审批':x.state==='FILED'&&row.status!=='结项退回补正'&&(school||college||x.owner_id===c.me?.user?.id)?'查看与结项':'查看完整资料';
  return c.act(label,row.detailAction,row.detailId,'primary');
 }
+// 2026-11-07 详情里的三个主按钮：项目立项 / 项目运行 / 项目结项（课程、基地、师资同样三个）。立项（申报）信息打开原来的详情，运行和结项进运行档案。
+function lifeOwner(row,section,c){
+ const me=c.me?.user?.id,x=row.raw||{},d=x.data||{},manager=['college','school'].includes(c.me?.role?.kind);
+ if(section==='projects')return x.owner_id===me||manager;
+ if(section==='courses')return [row.info?.teacher_id,row.info?.created_by].includes(me)||manager;
+ if(section==='trainers')return x.teacher_id===me||manager;
+ return [d.teacher_id,d.created_by].includes(me)||manager;
+}
+function lifeButtons(row,section,c){
+ const x=row.raw||{},type={projects:'project',courses:'course',bases:'base',trainers:'trainer'}[section];
+ if(!type||!lifeOwner(row,section,c)||section==='trainers'&&!x.can_view_detail)return '';
+ const id=section==='courses'?row.info?.info_id:x.id;
+ if(!id)return '';
+ const key=type+'|'+id,state=section==='courses'?row.info?.state:x.state;
+ const running=section==='projects'?x.state==='FILED':section==='bases'?['DRAFT','ACTIVE'].includes(state):state==='ACTIVE'||section==='trainers'&&!state;
+ const ended=section==='projects'?['CLOSE_COLLEGE','CLOSE_REVIEW','CLOSED'].includes(x.state):state==='STOPPED';
+ const names={project:['项目立项','项目运行','项目结项'],course:['课程申报','课程运行','课程停用'],base:['基地申报','基地运行','年度确认'],trainer:['师资申报','师资运行','年度确认']}[type];
+ const infoAction=section==='projects'?c.act(names[0],'social-detail','social_project|'+x.id,'primary'):section==='trainers'?c.act(names[0],'app-detail',x.id,'primary'):c.act(names[0],'life-info',key,'primary');
+ const run=running||ended?c.act(names[1],'life-open',key,running?'primary':''):`<button type="button" class="btn" disabled title="通过后才进入运行">${c.esc(names[1])}</button>`;
+ const third=section==='projects'?(running?c.act(names[2],'life-close',key,''):ended?c.act(x.state==='CLOSED'?'结项结果':names[2],'social-detail','social_project|'+x.id,''):`<button type="button" class="btn" disabled title="备案后才能结项">${c.esc(names[2])}</button>`)
+  :running||ended?c.act(ended?'恢复运行':names[2],ended?'life-resume':section==='courses'?'life-stop':'life-annual',key,ended?'':'light'):`<button type="button" class="btn" disabled title="通过后才进入运行">${c.esc(names[2])}</button>`;
+ return `<div class="tw-life-actions" role="group" aria-label="${c.esc(names.join('、'))}">${infoAction}${run}${third}</div>`;
+}
 function preview(row,section,c){
  if(!row)return `<aside class="tw-detail"><h2>${{projects:'项目详情',courses:'课程详情',bases:'基地详情',trainers:'师资详情',records:'数据详情',outcomes:'成果详情'}[section]}</h2><div class="tw-empty">${c.icon('file')}<h3>选择一条记录</h3><p>详情与办理入口将在这里显示</p></div></aside>`;
  const e=c.esc,x=row.raw,d=x.data||{},title={projects:'项目详情',courses:'课程详情',bases:'基地详情',trainers:'师资详情',records:'数据详情',outcomes:'成果详情'}[section];
@@ -100,7 +123,8 @@ function preview(row,section,c){
  else if(section==='outcomes')body+=facts([['所属学院',row.org],...(c.me?.role?.kind==='school'&&!/^(SAT-|AUTO-)/.test(row.code||'')?[['成果编号',row.code]]:[]),['认定级别',levels[d.level]],['认定日期',d.confirmed_on],['认定依据',d.recognition]],c)+`<p class="tw-note">登记成果不直接计分，以年度考核核验结果为准。</p>`;
  else if(section==='trainers')body+=facts([['职称或岗位',x.title],[x.source==='external'?'工作单位':'所属学院',row.org],...(x.source==='external'?[['登记学院',x.org_name]]:[]),['专业特长',x.specialty],['培训业务类别',(x.directions||[]).join('、')],['授课课程',(x.courses||[]).join('、')||(x.source==='external'?'外聘培训师暂无关联课程':'暂无已入库的授课课程')],['来源',x.source==='external'?'外聘培训师':'校内教师'],['认定或备案日期',x.effective_on],['认定或备案依据',x.filing_basis],['省级推荐',x.recommended_province_on||'尚未推荐']],c);
  else body+=facts([['课程',x.course],['教师',c.teacherName(x.teacher_id)],['培训日期',x.event_date],['授课学时',text(x.hours)+' 学时'],['课程人次',text(x.participants)+' 人次'],['归属培训收入',text(x.income)+' 元'],['数据来源',x.source==='Excel导入'?'表格导入':x.source]],c)+`<p class="tw-note">课程人次用于数据核对，个人积分以审核归档为准。</p>`;
- const action=section==='projects'?projectPrimary(row,c):row.detailAction?c.act('查看详情',row.detailAction,row.detailId,'primary'):'<p class="tw-note">当前身份仅可查看基础信息</p>';
+ const life=lifeButtons(row,section,c),review=section==='projects'&&/办理|审批/.test(projectPrimary(row,c));
+ const action=life?(review?projectPrimary(row,c):'')+life:section==='projects'?projectPrimary(row,c):row.detailAction?c.act('查看详情',row.detailAction,row.detailId,'primary'):'<p class="tw-note">当前身份仅可查看基础信息</p>';
  const extra=section==='courses'?c.act('查看资源','social-course-resources',row.id,'')+(row.info.application_id&&c.can?.('points.read')?c.act('积分办理','course-points',row.info.application_id):''):section==='trainers'&&c.me.role.kind==='school'&&!x.recommended_province_on?c.act('推荐省级','trainer-recommend',row.id):'';
  return `<aside id="training-detail" class="tw-detail" aria-label="${title}" tabindex="-1"><h2>${title}</h2>${body}<div class="tw-detail-actions">${action}${extra}</div></aside>`;
 }

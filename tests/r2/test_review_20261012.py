@@ -102,6 +102,11 @@ def test_reconcile_block_preserves_cursor_and_retry_does_not_pull_again(app2,mon
     schedule=SimpleNamespace(last_cursor='OLD',last_run_at=None,next_at=None,frequency_minutes=30,last_error='',version=1)
     pending={'batch_id':None,'rows':0,'received_total':0,'source_total':0,'has_more':False,'checkpoint':None,'next_cursor':'NEW'}
     with app2.state.sessions.begin() as db:
+        # 2026-11-05 起结项前先核对分页入库证据（无连接或证据不全直接终止）；本用例只测对账拦截，给出一条真实连接并视证据齐全。
+        from sqlalchemy import select as _select
+        from app.models import Connection
+        task.payload={**task.payload,'connection_id':db.scalar(_select(Connection.id).limit(1))}
+        monkeypatch.setattr(pages,'run_counts',lambda *args:(0,0,0,'SUCCESS'))
         monkeypatch.setattr(pages,'reconcile_full_pull',lambda *args:{'blocked':'缺失比例过高'})
         pages._advance(task,{},pending);pages._finalize(db,task,None,schedule)
         assert task.state=='BLOCKED' and schedule.last_cursor=='OLD' and schedule.last_run_at is None

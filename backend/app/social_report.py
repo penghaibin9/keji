@@ -93,7 +93,7 @@ def course_facts(db, codes):
     keys = list(courses)
     for i in range(0, len(keys), 500):
         part = keys[i:i + 500]
-        for r in db.scalars(select(SocialResource).where(SocialResource.kind == 'course_apply', SocialResource.state == 'ACTIVE',
+        for r in db.scalars(select(SocialResource).where(SocialResource.kind == 'course_apply', SocialResource.state.in_(('ACTIVE', 'STOPPED')),
                                                          SocialResource.data['course_code'].as_string().in_(part))):
             c = courses[r.data['course_code']]
             c.update(hours=num(r.data.get('hours')), mode=r.data.get('teaching_mode'), courseware=r.data.get('courseware'))
@@ -138,7 +138,7 @@ def check(db, a, start, end):
 
 def bases(db, a, end):
     rows = db.scalars(select(SocialResource).where(SocialResource.kind == 'base', SocialResource.org_id.in_(a.org_ids),
-                                                    SocialResource.state.notin_([*APPLYING, 'ARCHIVED', 'VOID']))).all()
+                                                    SocialResource.state.notin_([*APPLYING, 'ARCHIVED', 'VOID', 'STOPPED']))).all()
     out = []
     for b in rows:
         on = b.data.get('established_on')

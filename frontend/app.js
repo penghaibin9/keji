@@ -1,12 +1,13 @@
 import {mountHelp,closeHelp,helpLibraryHTML,helpSearch,openHelp} from './help-system.js?v=20261105-highfix1';
 import {bindFormDraft} from './form-drafts.js?v=20261021-form-merged1';
 import {coursePointsAction} from './course-points.js?v=20261021-form-merged1';
-import {renderTrainingWorkspace,trainingChange} from './training-workspace.js?v=20261021-core-recheck2';
+import {renderTrainingWorkspace,trainingChange} from './training-workspace.js?v=20261107-life1';
 import {renderSchoolCockpit,bindSchoolCockpit} from './school-cockpit.js?v=20261019-walk3&display=20261019-clean2';
 import {icons} from './icons.js';
 import {dutiesTabHtml,dutiesAction} from './school-duties.js?v=20261104-simplify2';
-import {socialPage,socialAction,applicationProjectPicker} from './social-training.js?v=20261105-highfix1';
-import {applicationAction,trainersHtml,applyPageHtml,APPLY_PAGES,myApplicationsHtml,homeApplicationsHtml,myCoursesHtml,libraryHtml,libraryFilterSubmit,homeCoursesHtml,courseAction} from './applications.js?v=20261104-simplify1';
+import {socialPage,socialAction,applicationProjectPicker} from './social-training.js?v=20261107-life1';
+import {lifecycleAction,LIFE_ACTIONS} from './lifecycle.js?v=20261107-life1';
+import {applicationAction,trainersHtml,applyPageHtml,APPLY_PAGES,myApplicationsHtml,homeApplicationsHtml,myCoursesHtml,libraryHtml,libraryFilterSubmit,homeCoursesHtml,courseAction} from './applications.js?v=20261107-life1';
 import {nextCode,runBatch,batchStage,batchMode,batchPerformer,BATCH_LABELS,materialUploadForm,checkUploadFiles,uploadEntries,uploadSequential,uploadStatusHtml} from './approval-flow.js?v=20261021-form-merged1';
 import {ledgerPage,resourceStatsPage,homeIndicators,ledgerAction,resetLedgerView,minePage,mineReminders} from './social-ledgers.js?v=20261021-form-merged1';
 import {rosterSection,rosterHandlers,onlineHandlers,showStaffDetail,showCourseDetail,presetRoster,loadCodeTables,courseFactsHtml,codeLabel} from './school-data.js?v=20261019-merge1&display=20261019-clean2';
@@ -1158,7 +1159,7 @@ async function toggleRecordDetail(id,button){
 }
 // 老师只会遇到这几类待办，不再列出组织考核、同步异常等管理员事项；每类带数量，一点即筛。
 let todoTab='handle';
-const TODO_TYPES=[['qualification','资质审核与到期'],['assessment','教师考核'],['organization_assessment','组织考核'],['dispute','数据核对'],['credit_review','课程认定积分'],['sync','同步异常'],['security','安全提示'],['social_project','项目备案与结项'],['social_claim','社会培训积分认定'],['social_annual','学院年度考核'],['social_resource','积分更正与汇总公示'],['social_report','双月积分汇总与报送'],['application','申请审批']];
+const TODO_TYPES=[['qualification','资质审核与到期'],['assessment','教师考核'],['organization_assessment','组织考核'],['dispute','数据核对'],['credit_review','课程认定积分'],['life_change','运行中变更'],['sync','同步异常'],['security','安全提示'],['social_project','项目备案与结项'],['social_claim','社会培训积分认定'],['social_annual','学院年度考核'],['social_resource','积分更正与汇总公示'],['social_report','双月积分汇总与报送'],['application','申请审批']];
 const TEACHER_TODO_TYPES=[['social_project','我的项目申报'],['application','我的申请补正'],['social_resource','积分核对与更正'],['social_claim','我的积分申报'],['qualification','我的资质'],['assessment','我的年度考核'],['dispute','我提出的异议']];
 function todoTypes(){return me.role.kind==='teacher'?TEACHER_TODO_TYPES:TODO_TYPES}
 // 右上角待办数 = 审批事项 + 系统提醒；系统提醒不进审批清单，在这里写明数量和去处。
@@ -2066,7 +2067,7 @@ const handlers={
  'open-help-topic':(id,el)=>openHelp({...currentHelpContext(),page:id,root:null},el),
  'search-nav':id=>{closeModal();return nav(id)},'drill-org':id=>scopeNav('records',{org_id:id}),'drill-state':s=>scopeNav('assessment',{state:s}),
  'scope-nav':id=>scopeNav(id),
- todo:async code=>{const[k,id]=code.split('|');closeModal();if(k==='social_report'){await nav('recognition');return socialAction('social-report-new','',socialContext())};if(k==='application')return applicationAction('app-detail',id,socialContext());if(k.startsWith('social_'))return socialAction('social-detail',k+'|'+id,socialContext());return ({qualification:showQualification,assessment:showAssessment,organization_assessment:showOrgAssessment,points:showPoint,record:showRecord,dispute:id=>showDispute(id),credit_review:id=>id.startsWith('apply~')?showCreditDetail(id.slice(6).replace('~','|')):nav('creditreview',{pick:id.replace('~','|')}),sync:showTask,security:()=>nav('audit')}[k]||(()=>nav('todos')))(id)},
+ todo:async code=>{const[k,id]=code.split('|');closeModal();if(k==='social_report'){await nav('recognition');return socialAction('social-report-new','',socialContext())};if(k==='application')return applicationAction('app-detail',id,socialContext());if(k==='life_change')return lifecycleAction('life-change-view',id,socialContext());if(k.startsWith('social_'))return socialAction('social-detail',k+'|'+id,socialContext());return ({qualification:showQualification,assessment:showAssessment,organization_assessment:showOrgAssessment,points:showPoint,record:showRecord,dispute:id=>showDispute(id),credit_review:id=>id.startsWith('apply~')?showCreditDetail(id.slice(6).replace('~','|')):nav('creditreview',{pick:id.replace('~','|')}),sync:showTask,security:()=>nav('audit')}[k]||(()=>nav('todos')))(id)},
  'record-expand':toggleRecordDetail,'record-form':id=>recordForm(id),'participation-form':id=>recordForm(id,true),participation:showParticipation,record:showRecord,'qualification-form':qualificationForm,qualification:showQualification,'qualification-images':qualificationImages,point:showPoint,assessment:showAssessment,'org-assessment':showOrgAssessment,'org-print':printOrganizationAssessment,'org-ranking':organizationRanking,'ranking-print':printRanking,'ledger-sync':ledgerSyncForm,'ledger-preview':ledgerPreview,
  'rank-metric':id=>{if(!RANKS.some(x=>x.key===id))return;rankMetric=id;const el=$('#rank-card');if(el&&view?.s&&'outerHTML' in el){el.outerHTML=rankHTML(view.s);return}return render()},
  'progress-filter':id=>{filter=pageFilters(page,{...filter,progress:id==='all'?'':id});tablePage=1;syncLocation(true);return render()},'org-ranking-page':p=>showOrganizationRanking(orgRankingContext,Number(p)),dispute:id=>showDispute(id),
@@ -2124,6 +2125,7 @@ handlers['training-image-remove']=async id=>{const [target,ident,purpose,imageId
 handlers['mc-year']=id=>{filter={tab:filter.tab,...(id?{school_year:id}:{})};return render()};
 handlers['qualification-filter']=id=>{if(!['','DRAFT','SUBMITTED','RETURNED','APPROVED','EXPIRING','EXPIRED','DELETED'].includes(id))return;filter={...filter,state:id};tablePage=1;syncLocation(true);return render()};
 handlers['nav-mycourses']=id=>nav('credits',{tab:id});
+for(const action of LIFE_ACTIONS)handlers[action]=id=>lifecycleAction(action,id,socialContext());
 for(const action of ['app-mine-filter','app-detail','app-edit','app-upload','app-approve','app-return','app-submit','app-withdraw','app-delete','app-restore','app-course-new','app-base-new','app-trainer-new','trainer-recommend'])handlers[action]=id=>applicationAction(action,id,socialContext());
 handlers['todos-tab']=id=>{todoTab=(me.role.kind==='teacher'?['handle','mine']:['handle','handled','mine']).includes(id)?id:'handle';tablePage=1;filter=me.role.kind!=='teacher'&&todoTab!=='handle'?{tab:todoTab}:{};closeModal();syncLocation(true);return page==='todos'?render():nav('todos',filter)};
 for(const action of ['impl-draft-diff','impl-quick-trial','impl-quick-publish','impl-quick-disable','impl-step','impl-handover','impl-copy','impl-materials','impl-credential-meta','impl-acceptance','impl-probe','impl-publish','impl-health','impl-reset','impl-login-test'])handlers[action]=id=>handleImplementationAction(action,id,implementationContext());

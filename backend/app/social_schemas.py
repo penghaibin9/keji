@@ -667,3 +667,33 @@ class ReopenIn(Reason):
     school_year: str = Field(pattern=r'^20\d{2}-20\d{2}$')
     until: date | None = None
     expected_version: int = Field(ge=0)
+
+
+# ---- 2026-11-07 运行过程（lifecycle.py）----
+
+class RunNoteIn(Input):
+    tag: Literal['start', 'teach', 'check', 'material', 'issue', 'use', 'other']
+    text: str = Field(min_length=1, max_length=1000)
+    happened_on: date | None = None
+    reason: str = Field(default='', max_length=2000)
+
+
+class ChangeIn(Reason):
+    # 只带要改的项：{字段: 新值}；字段和取值由 lifecycle.FIELDS 逐项校验。
+    values: dict[str, object] = Field(min_length=1, max_length=10)
+
+
+class ChangeAction(Reason):
+    action: Literal['approve', 'return', 'withdraw']
+    expected_version: int = Field(ge=1)
+
+
+class AnnualConfirmIn(Input):
+    year: int = Field(ge=2020, le=2100)
+    running: bool = True
+    text: str = Field(default='', max_length=1000)
+    reason: str = Field(default='', max_length=2000)
+
+
+class LifeReason(Reason):
+    expected_version: int = Field(ge=1)

@@ -203,3 +203,57 @@ body:not(.no-shell) #content .page-title .teacher-page-subtitle{font-size:15px;l
 .progress-quick:has(>.assessment-control-label){padding:16px 20px 0}
 /* 窄屏头部：按钮间距收紧，避免右侧退出按钮把页面撑出横向滚动条。 */
 @media(max-width:480px){body:not(.no-shell) .nd-header__tools{gap:6px;min-width:0}body:not(.no-shell) .nd-header__exit{margin-left:0;padding-left:0;border-left:0}body:not(.no-shell) .nd-header__icon-button{flex:none}}
+
+/* 2026-11-07 运行过程：详情三按钮、运行档案、记一笔、申请变更 */
+.tw-life-actions{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px;width:100%}
+.tw-life-actions .btn{min-width:0;flex:none}
+.life-archive{color:var(--ink,#193451)}
+.life-head{background:#fff;border:1px solid var(--line,#e1e9f3);border-radius:10px;padding:16px 20px}
+.life-title{display:flex;align-items:center;gap:10px}
+.life-ver{font-size:12px;color:#245ee0;background:#eef4ff;border-radius:10px;padding:1px 9px}
+.life-facts{display:flex;flex-wrap:wrap;gap:6px 22px;margin:10px 0 0;font-size:13px;color:#536985}
+.life-facts div{display:flex;gap:6px}.life-facts dt{color:#7b8ca3}.life-facts dd{margin:0;color:var(--ink,#193451)}
+.life-stepper{display:flex;list-style:none;margin:16px 0 4px;padding:0}
+.life-stepper li{flex:1;position:relative;text-align:center;font-size:12px;color:#8a99ae;padding-top:22px}
+.life-stepper li:before{content:"";position:absolute;top:5px;left:50%;width:12px;height:12px;margin-left:-6px;border-radius:50%;background:#d5dfec;z-index:1}
+.life-stepper li:after{content:"";position:absolute;top:10px;left:-50%;width:100%;height:2px;background:#d5dfec}
+.life-stepper li:first-child:after{display:none}
+.life-stepper .on{color:#167656}.life-stepper .on:before,.life-stepper .on:after{background:#2f9b73}
+.life-stepper .now{color:#245ee0;font-weight:600}.life-stepper .now:before{background:#245ee0;box-shadow:0 0 0 4px #dbe7ff}.life-stepper .now:after{background:#2f9b73}
+.life-actions{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px;margin-top:14px}
+.life-big{display:flex;flex-direction:column;align-items:flex-start;gap:2px;padding:12px 16px;min-height:62px;text-align:left}
+.life-big strong{font-size:15px}.life-big small{font-size:12px;opacity:.8;font-weight:400}
+.life-minor{display:flex;gap:8px;flex-wrap:wrap;margin-top:10px}
+.life-remind,.life-pending{margin-top:10px;padding:9px 12px;border-radius:8px;font-size:13px;display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+.life-remind{background:#fff7ea;border:1px solid #f3dcb3;color:#7c4a08}
+.life-pending{background:#eef4ff;border:1px solid #c9daf8;color:#23467e}
+.life-two{display:grid;grid-template-columns:minmax(0,1fr) 300px;gap:14px;margin-top:14px;align-items:start}
+.life-panel{background:#fff;border:1px solid var(--line,#e1e9f3);border-radius:10px;padding:14px 18px;margin-bottom:14px}
+.life-panel h3{margin:0 0 12px;font-size:15px;display:flex;align-items:center;gap:8px}
+.life-timeline{list-style:none;margin:0;padding:0;max-height:460px;overflow:auto}
+.life-timeline li{position:relative;padding:0 0 14px 20px;border-left:2px solid #e3eaf4;margin-left:6px}
+.life-timeline li:last-child{border-left-color:transparent}
+.life-timeline li:before{content:"";position:absolute;left:-7px;top:4px;width:12px;height:12px;border-radius:50%;background:#fff;border:2px solid #9db6dd}
+.life-timeline li.k-change:before{border-color:#245ee0;background:#245ee0}
+.life-timeline li.k-auto:before{border-color:#2f9b73}
+.life-timeline li.k-start:before,.life-timeline li.k-end:before{border-color:#167656;background:#167656}
+.life-timeline .t{font-size:12px;color:#8090a7}.life-timeline .w{font-size:14px}.life-timeline .r{font-size:12px;color:#6b7d95}
+.life-timeline .src{font-size:11px;margin-left:6px;padding:0 6px;border-radius:4px;background:#eef3fa;color:#5a7091}
+.life-timeline .src.auto{background:#e8f5ef;color:#207451}
+.life-stats{display:grid;grid-template-columns:repeat(2,1fr);gap:8px}
+.life-stats div{background:#f6f9fd;border-radius:8px;padding:9px 11px}.life-stats b{display:block;font-size:16px}.life-stats small{color:#637995;font-size:12px}
+.life-versions{list-style:none;margin:0;padding:0;font-size:13px}
+.life-versions li{padding:7px 0;border-bottom:1px solid #edf1f7}.life-versions li:last-child{border-bottom:0}
+.life-versions .v{display:inline-block;min-width:44px;font-weight:600;color:#245ee0}
+.life-versions small{display:block;color:#637995;font-size:12px;margin-left:44px}
+.life-quick{display:flex;gap:6px;flex-wrap:wrap}
+.life-chg{border:1px solid #e1e9f5;border-radius:8px;padding:10px 12px;margin-bottom:8px}
+.life-chg:has(input[name^="pick-"]:checked){border-color:#8faef0;background:#f7faff}
+.life-chg-top{display:flex;align-items:center;gap:10px;cursor:pointer}
+.life-chg-top .cur{margin-left:auto;font-size:12px;color:#637995;text-align:right}
+.life-chg-new{display:flex;align-items:center;gap:10px;margin-top:8px}
+.life-chg-new>input,.life-chg-new>select,.life-chg-new>textarea{flex:1}
+.life-venue{display:grid;grid-template-columns:1fr 1fr;gap:6px;flex:1}
+.life-new{color:#1756d4}
+@media(max-width:900px){.life-two{grid-template-columns:1fr}}
+@media(max-width:640px){.life-actions,.tw-life-actions{grid-template-columns:1fr}.life-chg-top{flex-wrap:wrap}.life-chg-top .cur{margin-left:0;text-align:left}.life-venue{grid-template-columns:1fr}}
