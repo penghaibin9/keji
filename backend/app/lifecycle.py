@@ -280,7 +280,8 @@ def field_level(kind, obj, key, old, new):
         if key == 'venue':
             return 'school' if (new or {}).get('type') == 'offsite' and (old or {}).get('type') != 'offsite' else 'college'
         if key in ('expected_participants', 'expected_income'):
-            r = _ratio(old, new)
+            # 对比“上次经审批（或立项）时的值”，不是上一次的值：小变更连着改也累计，超过 30% 就要学校备案。
+            r = _ratio(((obj.data or {}).get('baseline') or {}).get(key, old), new)
             return 'direct' if r is not None and r <= Decimal('0.3') else 'school'
         return 'college'
     if kind == 'course':
@@ -385,12 +386,29 @@ def apply_change(db, a, kind, obj, rows, reason, basis, *, how, change=None):
     for r in rows:
         if serial(current_value(kind, obj, r['key'])) != r['from']:
             raise HTTPException(409, '“' + r['label'] + '”在申请之后已被改过，这份变更不能直接生效；请退回，由申请人按现在的资料重新申请')
+    if kind == 'project':
+        for r in rows:
+            if r['key'] == 'end_date':
+                # 申请到生效之间可能又导入了明细：生效时再核对一次。
+                from . import social_training as st
+                outside = [u.external_key for u in st.units(db, obj.id) if u.data['event_date'] > r['to']]
+                if outside:
+                    raise HTTPException(409, '已有参训明细晚于新的结束日期：' + '、'.join(outside[:10]) + '；请退回，由申请人重新申请')
     before = serial(obj)
     values = dict(obj.data)
+    baseline = dict(values.get('baseline') or {})
     for r in rows:
         if kind == 'project' and r['key'] == 'owner_id':
             obj.owner_id = r['to']
         values[r['key']] = r['to']
+        if r['key'] in ('expected_participants', 'expected_income'):
+            # 直接生效的小变更不移动基准；经审批的变更把基准移到新值。
+            if r.get('level') == 'direct':
+                baseline.setdefault(r['key'], r['from'])
+            else:
+                baseline[r['key']] = r['to']
+    if baseline:
+        values['baseline'] = baseline
     version = biz_version(obj) + 1
     values['biz_version'] = version
     obj.data = values
@@ -635,7 +653,7 @@ def view(db, a, kind, obj):
         d = obj.data or {}
         if kind == 'course':
             code = d.get('course_code') or (obj.code[3:] if obj.code.startswith(('CA-', 'CI-')) else '')
-            used = [u for u in db.scalars(select(SocialUnit)) if u.data.get('course_code') == code] if code else []
+            used = list(db.scalars(select(SocialUnit).where(SocialUnit.data['course_code'].as_string() == code))) if code else []
             stats = [['学时', str(d.get('hours') or '—')], ['开课次数', str(len({(u.data['class_code'], u.data['event_date']) for u in used})) + ' 次'],
                      ['参训人次', str(sum(st.unit_counts(u.data)['effective'] for u in used))], ['运行记录', str(notes) + ' 笔']]
         else:

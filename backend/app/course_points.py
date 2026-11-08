@@ -17,7 +17,7 @@ def can_link_course(actor, application):
 def course_points_progress(db, actor, application, project_id=''):
     actor.require('records.read')
     course = db.scalar(select(TrainingCourseMaster).where(TrainingCourseMaster.code == application.data.get('course_code')))
-    ready = application.kind == 'course_apply' and application.state == 'ACTIVE' and course is not None and course.active
+    ready = application.kind == 'course_apply' and application.state in ('ACTIVE', 'STOPPED') and course is not None and course.active
     can_read_application = True
     try:
         applicant = apps.read_check(db, actor, application)

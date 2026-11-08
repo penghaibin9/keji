@@ -269,7 +269,13 @@ class Pipeline:
         return [s for s in START_ORDER if s in names]
     def stop_writers(self):
         self.dc('stop','-t','45',*WRITERS,timeout=180)
+        # compose stop 返回时容器状态可能还没刷新（自 10-12 起已让升级失败 5 次）：轮询等它们真的退出，再多等 3 秒。
+        import time
+        for _ in range(30):
+            if not self.running_writers():break
+            time.sleep(2)
         if self.running_writers():raise ControlError('one or more business services did not stop')
+        time.sleep(3)
     def resume(self,services):
         if services:self.dc('up','-d','--no-deps','--no-build','--pull','never','--wait','--wait-timeout','120',*services,timeout=180)
     def resolve_images(self,api,frontend):

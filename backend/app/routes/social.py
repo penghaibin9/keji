@@ -389,6 +389,8 @@ def project_action(ident:str,data:SocialAction,request:Request):
             st.require_project_confirmed(obj)
             if issues:=st.person_day_blockers([u.data for u in st.units(db,ident)]):raise HTTPException(409,'；'.join(issues))
             if not st.units(db,ident):raise HTTPException(409,'尚无参训核算明细')
+            from ..lifecycle import pending_change
+            if pending_change(db,'project',obj) is not None:raise HTTPException(409,'有一份变更正在审批，请等它办完或先撤回，再提交结项')
             if obj.data.get('report_pending') and (issues:=application_blockers(obj.data)):raise HTTPException(409,'结项前请先补齐上报信息（立项时可以不填）：'+'；'.join(issues))
             st.require_evidence(db,'social_project',ident);c=data.closeout
             st.require_closeout_distribution(serial(c.model_dump()))

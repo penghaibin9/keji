@@ -348,7 +348,7 @@ def visible_courses(db,a):
         codes=visible_projects(db,a).order_by(None).with_only_columns(SocialProject.data['code'].as_string())
         own=select(SocialResource.data['course_code'].as_string()).where(SocialResource.kind=='course_resource',SocialResource.org_id==a.org.parent_id,SocialResource.data['teacher_id'].as_string().in_(a.teacher_ids))
         # 本人（教研室为本室老师）申报并已入库的培训课程，批下来后也看得见。
-        applied=select(SocialResource.data['course_code'].as_string()).where(SocialResource.kind=='course_apply',SocialResource.state=='ACTIVE',SocialResource.data['teacher_id'].as_string().in_(a.teacher_ids))
+        applied=select(SocialResource.data['course_code'].as_string()).where(SocialResource.kind=='course_apply',SocialResource.state.in_(('ACTIVE','STOPPED')),SocialResource.data['teacher_id'].as_string().in_(a.teacher_ids))
         query=query.where(or_(TrainingCourseMaster.project_code.in_(codes),TrainingCourseMaster.code.in_(own),TrainingCourseMaster.code.in_(applied)))
     return query
 
