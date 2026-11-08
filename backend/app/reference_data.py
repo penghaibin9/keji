@@ -337,7 +337,12 @@ def reconcile_full_pull(db,actor,data_type,batch_ids,source_total):
         before=serial(x);x.active=False;x.version+=1
         audit(db,actor,data_type if data_type=='school_course' else 'teacher_course',x.id,'全量同步后源端已无此记录，停用',before=before,after=serial(x),reason='数据中台全量同步对账')
     db.flush()
-    return {**result,'deactivated':len(missing),'sample':[x.external_key for x in missing[:20]]}
+    reversed_points={}
+    if model is TeacherCourseTerm and missing:
+        # 源头撤下的课若已认定入账，自动追加反向积分冲销（考核已归档的不动，留给学校更正）。
+        from .teaching_review import unbook_withdrawn
+        reversed_points=unbook_withdrawn(db,actor,missing)
+    return {**result,'deactivated':len(missing),'reversed':len(reversed_points),'sample':[x.external_key for x in missing[:20]]}
 
 def _catalogue(db,codes):
     """Course code -> enabled 课程总库 row; with several versions the newest version wins."""
@@ -1249,6 +1254,9 @@ def rollback_inbound(db,actor,batch:InboundBatch,expected_version,reason,basis='
         obj=db.get(MASTER_MODELS[model],e['object_id']);before=serial(obj)
         if e.get('created'):
             obj.active=False;action='DEACTIVATED'  # created by this batch: deactivate, never physically delete
+            if isinstance(obj,TeacherCourseTerm):
+                from .teaching_review import unbook_withdrawn
+                db.flush();unbook_withdrawn(db,actor,[obj],'整批撤销入站记录，自动冲销授课认定积分')
         else:
             for key in RESTORE_FIELDS[model]:
                 if key in e['before']:setattr(obj,key,_restore_value(key,e['before'][key]))

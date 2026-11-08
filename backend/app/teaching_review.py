@@ -224,6 +224,38 @@ def unbook(db, actor, row, booked, reason):
     bal.version += 1
 
 
+def unbook_withdrawn(db, actor, rows, reason='源头已撤下这门课，自动冲销授课认定积分'):
+    """源头（教务、超星全量对账或整批撤销）停用了课程学期时，自动冲销它已入账的授课认定积分。
+
+    原入账保留，追加一条反向积分；认定记录改为“已撤下”，留一条办理记录。老师当期考核已归档的不冲销，
+    仍由 stale_entries 拦住后续确认、交学校更正。返回冲销了的 {课程学期编号: 分值}。"""
+    rows = [r for r in rows if r is not None and not r.active]
+    if not rows:
+        return {}
+    done = {}
+    reviews = credit_reviews(db, [r.id for r in rows])
+    for r in rows:
+        obj = reviews.get(r.id)
+        booked = (obj.data or {}).get('booked') if obj is not None else None
+        if not booked or not booked.get('booked'):
+            continue
+        teacher_id = db.scalar(select(PointEntry.teacher_id).where(PointEntry.id == booked['entry_id']))
+        if teacher_id is None or archive_exists(db, teacher_id, booked['period_id']):
+            continue
+        before = serial(obj)
+        unbook(db, actor, r, booked, reason)
+        data = dict(obj.data or {})
+        history = list(data.get('history') or [])
+        history.append({'decision': 'withdrawn', 'by': actor.id, 'by_name': actor.name, 'at': utcnow().isoformat(timespec='seconds'), 'reason': reason})
+        data.update(booked=None, history=history, withdrawn=True)
+        obj.data = data
+        obj.version += 1
+        db.flush()
+        audit(db, actor, 'teacher_course', r.id, '源头撤课，冲销授课认定积分', before=before, after=serial(obj), reason=reason)
+        done[r.id] = booked.get('amount')
+    return done
+
+
 def stale_entries(db, teacher_id, period_id):
     """仍有效（没被冲销）的授课认定入账里，所依据课程的学分学时已变或课已撤下的那些。
 

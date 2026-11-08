@@ -85,3 +85,37 @@ def test_stopped_base_can_resume(setup_social, client2):
     r = post(c, '/api/social/lifecycle/base/' + ident + '/resume', {'reason': '装修完成', 'expected_version': v['version']})
     assert r.status_code == 200, r.text
     assert life(c, 'base', ident)['running']
+
+
+def test_course_withdrawn_at_source_auto_reverses_booked_points(client2, app2):
+    """源头撤下已认定入账的课（全量对账或整批撤销停用课程学期）：自动追加反向积分，老师积分确认不再被卡死。"""
+    from decimal import Decimal
+    from types import SimpleNamespace
+    from sqlalchemy import select
+    from sqlalchemy.orm import Session
+    from app.models import PointEntry
+    from app.reference_data import TeacherCourseTerm, credit_reviews
+    from app.teaching_review import unbook_withdrawn
+    from test_teaching_credit_review import ready, course, credits, review, teaching_points, _stale, _confirm
+    c = client2
+    ready(c, app2)
+    for user in ('depthead', 'collegehead', 'jwc'):
+        auth(c, user)
+        k1 = course(credits(c, 'J001')['2025-2026'], 'K1')
+        assert review(c, [k1['id']], 'approve').status_code == 200, user
+    assert teaching_points(app2) == Decimal('64')
+    actor = SimpleNamespace(id='schooladmin', name='学校测试管理员', org=SimpleNamespace(id='school'), request_id='test-withdrawn')
+    with Session(app2.state.engine) as db:
+        row = db.get(TeacherCourseTerm, k1['id'])
+        row.active = False
+        db.flush()
+        done = unbook_withdrawn(db, actor, [row])
+        assert list(done) == [row.id]
+        assert unbook_withdrawn(db, actor, [row]) == {}  # 再跑一次不重复冲销
+        obj = credit_reviews(db, [row.id])[row.id]
+        assert obj.data['booked'] is None and obj.data['history'][-1]['decision'] == 'withdrawn'
+        db.commit()
+        amounts = sorted(str(e.amount) for e in db.scalars(select(PointEntry).where(PointEntry.teacher_id == 'teacher', PointEntry.kind == 'TEACHING')))
+    assert amounts == ['-64.00', '64.00'] and teaching_points(app2) == Decimal('0')
+    assert _stale(app2) == []
+    assert _confirm(c).status_code == 200
