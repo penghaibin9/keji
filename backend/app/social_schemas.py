@@ -590,7 +590,7 @@ class BaseApplyIn(Reason):
     expected_version: int | None = Field(default=None, ge=1)
 
 
-TRAINER_DIRECTIONS = {'subsidy': '补贴性培训', 'enterprise': '社会化自主培训', 'community': '社区公益培训', 'rural': '对口帮扶培训', 'other': '其他非学历培训', 'one_skill': '“一人一技”专项'}
+TRAINER_DIRECTIONS = {'subsidy': '补贴性培训', 'enterprise': '企业定制培训', 'community': '社区公益培训', 'rural': '乡村帮扶培训', 'other': '其他非学历培训', 'one_skill': '“一人一技”专项'}
 
 
 class TrainerApplyData(Input):

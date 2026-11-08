@@ -220,7 +220,7 @@ test('项目申报表可直接附方案材料，先传封面再按最新版本�
 
 test('复制为新一期带入上一期资料但不带编号、期次和日期；结项表默认带出结束日期和场地类型；草稿详情给出提交前清单',async()=>{
  const src={id:'old',version:5,state:'CLOSED',cohort:'一期',closeout:{},data:{code:'OLD-1',name:'茶艺培训',cohort:'一期',org_id:'college1',owner_id:'t1',category:'community',expected_income:'100',expected_participants:20,expected_outcomes:'成果',start_date:'2026-03-01',end_date:'2026-03-02',mode:'module',class_type:'technical',level:'school',scene:'dispatched',total_hours:16,audiences:['社区居民'],venue:{type:'offsite',place:'茶园',offsite_reason:'合作',offsite_ref:'会议〔1〕号'},cover_id:'img-old',one_skill:true,target_groups:'退役军人'}};
- const c=context({'/social/objects/social_project/old':{item:src,state_label:'已结项',attachments:[{id:'a'}],events:[],facts:{units:[],followups:[],effective:0,excluded:0},report_issues:[]},'/social/project-options':{items:[],total:0,page:1,size:20}},['records.read','records.write']);
+ const c=context({'/social/objects/social_project/old':{item:src,state_label:'已结项',attachments:[{id:'a'}],events:[],facts:{units:[{external_key:'U1',data:{event_date:'2026-03-01',course_code:'C1',learners:[]}}],followups:[],effective:0,excluded:0},report_issues:[]},'/social/project-options':{items:[],total:0,page:1,size:20}},['records.read','records.write']);
  c.me={role:{kind:'college'},user:{id:'t1'},org:{id:'college1',kind:'college'}};c.teacherField=()=>'';c.orgs=[{id:'college1',name:'学院',kind:'college'}];c.orgName=esc;
  await socialAction('social-detail','social_project|old',c);
  assert.match(c.modalData.buttons,/复制为新一期/);

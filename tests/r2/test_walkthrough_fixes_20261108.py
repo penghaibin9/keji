@@ -1,0 +1,87 @@
+"""2026-11-08 本地全流程走查修复：零收入项目不生成结算跟踪、结算待办只给能办的人；年度确认的年份限制和同年更正。"""
+from conftest import auth, post
+from test_social_training import setup_social, import_rows, row, action  # noqa: F401
+from test_applications import act
+from test_lifecycle_20261107 import life
+from test_flow_simplify_20261104 import MATERIALS
+
+ZERO = {'closed_on': '2026-09-02', 'outcome_report': '结项报告', 'satisfaction': '96', 'actual_income': '0',
+        'finance_reference': '零收入项目，无到账收入', 'location': 'onsite'}
+PAID = {**ZERO, 'actual_income': '10000', 'funding_source': 'other_training', 'retained': '2000', 'personnel': '6000', 'finance_reference': '财务凭证'}
+
+
+def settle_titles(c):
+    return [x['title'] for x in c.get('/api/todos').json()['items'] if '结算期限' in x.get('title', '')]
+
+
+def close(c, pid, closeout):
+    auth(c, 'schooladmin')
+    assert import_rows(c, pid, [row()]).status_code == 200
+    auth(c, 'teacher')
+    r = action(c, 'projects', 'social_project', pid, 'close_submit', closeout=closeout)
+    assert r.status_code == 200, r.text
+    auth(c, 'reviewer')
+    r = action(c, 'projects', 'social_project', pid, 'close', materials_checked=MATERIALS)
+    assert r.status_code == 200, r.text
+
+
+def test_zero_income_project_has_no_settlement_todo(setup_social, client2):
+    c = client2
+    close(c, setup_social, ZERO)
+    for user in ('reviewer', 'teacher', 'collegehead', 'schooladmin'):
+        auth(c, user)
+        assert settle_titles(c) == [], user
+
+
+def test_settlement_todo_only_for_finance_or_coordinator(setup_social, client2):
+    c = client2
+    close(c, setup_social, PAID)
+    auth(c, 'reviewer')  # 夹具里 reviewer 同时担任归口复审和财务核验
+    assert len(settle_titles(c)) == 1
+    for user in ('teacher', 'collegehead', 'schooladmin', 'vice'):
+        auth(c, user)
+        assert settle_titles(c) == [], user
+
+
+def base_running(c):
+    auth(c, 'teacher')
+    data = {'code': 'WALK-B1', 'name': '走查实践基地', 'location': '图书馆', 'onsite': True, 'recognition': '会议纪要',
+            'usages': ['practice'], 'established_on': '2026-03-01'}
+    r = post(c, '/api/applications/bases', {'data': data, 'reason': '申请基地'})
+    assert r.status_code == 200, r.text
+    ident = r.json()['item']['id']
+    auth(c, 'collegehead')
+    assert act(c, ident, 'approve').status_code == 200
+    auth(c, 'reviewer')
+    assert act(c, ident, 'approve').status_code == 200
+    auth(c, 'teacher')
+    return ident
+
+
+def test_annual_confirm_rejects_years_before_base_existed_and_records_correction(setup_social, client2):
+    c = client2
+    ident = base_running(c)
+    view = life(c, 'base', ident)
+    assert 2025 not in view['annual_years'] and 2026 in view['annual_years']
+    url = '/api/social/lifecycle/base/' + ident + '/annual'
+    r = post(c, url, {'year': 2025, 'running': True, 'text': '设立前'})
+    assert r.status_code == 422 and '还没有设立或认定' in r.text
+    assert post(c, url, {'year': 2026, 'running': True, 'text': '今年在用'}).status_code == 200
+    r = post(c, url, {'year': 2026, 'running': False, 'text': '填错了，今年其实没用'})
+    assert r.status_code == 200, r.text
+    d = r.json()
+    assert d['timeline'][0]['what'] == '年度运行确认（更正）：2026年度在运行 → 暂未运行'
+    assert d['annual']['2026']['running'] is False
+    assert any(k == '最近年度确认' and v == '2026年 · 暂未运行' for k, v in d['stats'])
+
+
+def test_stopped_base_can_resume(setup_social, client2):
+    c = client2
+    ident = base_running(c)
+    v = life(c, 'base', ident)
+    assert post(c, '/api/social/lifecycle/base/' + ident + '/stop', {'reason': '装修', 'expected_version': v['version']}).status_code == 200
+    v = life(c, 'base', ident)
+    assert v['state'] == 'STOPPED' and v['can']['resume']
+    r = post(c, '/api/social/lifecycle/base/' + ident + '/resume', {'reason': '装修完成', 'expected_version': v['version']})
+    assert r.status_code == 200, r.text
+    assert life(c, 'base', ident)['running']

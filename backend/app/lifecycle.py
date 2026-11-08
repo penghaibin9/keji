@@ -37,18 +37,18 @@ LEVEL_ORDER = ('direct', 'college', 'school', 'hr', 'jwc')
 NOTE_TAGS = {'start': '开班', 'teach': '授课/加课', 'check': '检查督导', 'material': '材料归档', 'issue': '问题整改',
              'use': '使用情况', 'other': '其他'}
 
-CATEGORY = {'subsidy': '补贴性培训', 'enterprise': '社会化自主培训', 'community': '社区公益培训', 'rural': '对口帮扶培训', 'other': '其他非学历培训'}
+CATEGORY = {'subsidy': '补贴性培训', 'enterprise': '企业定制培训', 'community': '社区公益培训', 'rural': '乡村帮扶培训', 'other': '其他非学历培训'}
 TEACHING_MODE = {'lecture': '讲授', 'practice': '实训实操', 'case': '案例研讨', 'onsite': '现场教学', 'online': '线上自学'}
 BASE_USAGE = {'practice': '实践教学基地', 'ideology': '思政实践教学基地'}
 BASE_LEVEL = {'school': '校级', 'city': '市级', 'province': '省级及以上'}
 VENUE_TYPE = {'base': '校内基地', 'campus': '其他校内场所', 'offsite': '校外（一事一议）'}
-DIRECTIONS = {'subsidy': '补贴性培训', 'enterprise': '社会化自主培训', 'community': '社区公益培训', 'rural': '对口帮扶培训',
+DIRECTIONS = {'subsidy': '补贴性培训', 'enterprise': '企业定制培训', 'community': '社区公益培训', 'rural': '乡村帮扶培训',
               'other': '其他非学历培训', 'one_skill': '“一人一技”专项'}
 
 # 可以申请变更的核心字段：(标签, 类型, 选项)。类型：text / textarea / number / money / date / choice / multi / user / venue
 FIELDS = {
     'project': {
-        'end_date': ('结束日期（延期）', 'date', None),
+        'end_date': ('结束日期（延期或提前）', 'date', None),
         'expected_participants': ('预估培训人次', 'number', None),
         'expected_income': ('预计收入（元）', 'money', None),
         'venue': ('培训场地', 'venue', VENUE_TYPE),
@@ -507,6 +507,23 @@ def change_todos(db, a, rows=None):
 
 # ---- 年度运行确认、停用 ----
 
+def started_year(obj):
+    """基地、师资最早有据可查的年份（设立、认定或生效日期中最早的）；都没有时返回 None，不限制。"""
+    years = []
+    for key in ('established_on', 'recognized_on', 'effective_on'):
+        value = str((obj.data or {}).get(key) or '')[:4]
+        if value.isdigit():
+            years.append(int(value))
+    return min(years) if years else None
+
+
+def annual_years(obj):
+    """年度确认可选的年份：今年和上一年度，但不早于设立／认定／生效那一年。"""
+    this_year = school_today().year
+    first = started_year(obj)
+    return [y for y in (this_year, this_year - 1) if first is None or y >= first]
+
+
 def annual_confirm(db, a, kind, obj, year, still_running, text, reason):
     if kind not in ('base', 'trainer'):
         raise HTTPException(422, '年度运行确认只用于培训基地、培训师资')
@@ -514,13 +531,26 @@ def annual_confirm(db, a, kind, obj, year, still_running, text, reason):
     this_year = school_today().year
     if year not in (this_year, this_year - 1):
         raise HTTPException(422, '只能确认今年或上一年度')
+    if year not in annual_years(obj):
+        raise HTTPException(422, str(year) + '年时还没有设立或认定（最早是' + str(started_year(obj)) + '年），不能确认这一年度')
     before = serial(obj)
     annual = dict((obj.data or {}).get('annual') or {})
-    annual[str(year)] = {'running': still_running, 'text': text, 'on': school_today().isoformat(), 'by': a.id}
+    previous = annual.get(str(year))
+    entry = {'running': still_running, 'text': text, 'on': school_today().isoformat(), 'by': a.id}
+    if previous:
+        # 同一年度再次确认视为更正：保留上一次的结论，办理记录写明“更正”和前后变化。
+        entry['corrects'] = {k: previous.get(k) for k in ('running', 'text', 'on', 'by')}
+    annual[str(year)] = entry
     obj.data = {**obj.data, 'annual': annual}
     obj.version += 1
     db.flush()
-    workflow(db, a, OBJECT_TYPE[kind], obj.id, '年度运行确认：' + str(year) + '年度' + ('在运行' if still_running else '暂未运行'), before, serial(obj), reason or text)
+    state = '在运行' if still_running else '暂未运行'
+    if previous:
+        old = '在运行' if previous.get('running') else '暂未运行'
+        title = '年度运行确认（更正）：' + str(year) + '年度' + (old + ' → ' + state if old != state else '仍为' + state)
+    else:
+        title = '年度运行确认：' + str(year) + '年度' + state
+    workflow(db, a, OBJECT_TYPE[kind], obj.id, title, before, serial(obj), reason or text)
 
 
 def stop(db, a, kind, obj, reason):
@@ -644,7 +674,8 @@ def view(db, a, kind, obj):
             elif (end - today).days <= 30:
                 reminders.append('还有 ' + str((end - today).days) + ' 天培训结束；需要延期请点“项目立项”里的“申请变更”。')
             if today >= start and not rows:
-                reminders.append('培训已经开始，还没有导入参训明细（人次从明细自动核算）。')
+                reminders.append('培训已经开始，还没有导入参训明细（人次从明细自动核算，没有明细不能结项）。'
+                                 + ('' if 'records.write' in a.permissions else '参训明细由学院导入，请把签到和结业名单交给本院培训管理员。'))
             if obj.data.get('report_pending'):
                 from .social_schemas import application_blockers
                 if issues := application_blockers(obj.data):
@@ -658,7 +689,7 @@ def view(db, a, kind, obj):
                      ['参训人次', str(sum(st.unit_counts(u.data)['effective'] for u in used))], ['运行记录', str(notes) + ' 笔']]
         else:
             stats = [['运行记录', str(notes) + ' 笔'], ['材料', str(materials) + ' 份'],
-                     ['最近年度确认', next((y + '年' for y in sorted((d.get('annual') or {}).keys(), reverse=True)), '还没有')]]
+                     ['最近年度确认', next((y + '年 · ' + ('在运行' if v.get('running') else '暂未运行') for y, v in sorted((d.get('annual') or {}).items(), reverse=True)), '还没有')]]
             if running(kind, obj) and today.month >= 9 and str(today.year) not in (d.get('annual') or {}):
                 reminders.append('请做 ' + str(today.year) + ' 年度运行确认（今年是否还在运行），点“年度确认”两下就好。')
     if obj.state == STOPPED:
@@ -688,6 +719,8 @@ def view(db, a, kind, obj):
                                'level_label': CHANGE_LEVEL_LABEL[pending.data['level']]} if pending else None,
             'fields': [{'key': k, 'label': v[0], 'type': v[1], 'options': v[2], 'value': serial(current_value(kind, obj, k))} for k, v in FIELDS[kind].items()],
             'note_tags': NOTE_TAGS,
+            'annual': {y: {'running': bool(v.get('running')), 'on': v.get('on')} for y, v in (d.get('annual') or {}).items()} if kind in ('base', 'trainer') else {},
+            'annual_years': annual_years(obj) if kind in ('base', 'trainer') else [],
             'can': {'note': can_write and is_run, 'change': can_write and is_run and pending is None,
                     'annual': can_write and is_run and kind in ('base', 'trainer'),
                     'stop': can_write and is_run and kind != 'project' and pending is None,

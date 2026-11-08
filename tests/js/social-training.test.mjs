@@ -23,7 +23,7 @@ test('conflicting learner evidence and unknown teachers are rejected before prev
  assert.throws(()=>parseTrainingRows([header,row('UNKNOWN')].join('\n'),'module',teachers),/工号不在授权列表/);
 });
 test('invalid boolean and missing columns are never coerced to valid attendance',()=>{
- assert.throws(()=>parseTrainingRows([header,row().replace('\t是\t是','\t1\t是')].join('\n'),'module',teachers),/判断项/);
+ assert.throws(()=>parseTrainingRows([header,row().replace('\t是\t是','\t1\t是')].join('\n'),'module',teachers),/“实名签到”须填“是”或“否”|须填“是”或“否”/);
  assert.throws(()=>parseTrainingRows([header,'short'].join('\n'),'module',teachers),/18列/);
 });
 test('external instructors can be recorded with a stable school reference',()=>{
@@ -921,4 +921,17 @@ test('财务纪检和制度确认不预填结论，采用需要本人补齐依�
   fields={};await socialAction('social-transition',action,c);
   assert.equal(fields.reason.value,'');assert.equal(fields.reason.options.phrases,phrases);
  }
+});
+
+// 2026-11-08 走查修复：结项前先看培训是否结束、有没有参训明细，不让老师填完两页表单才被拦。
+test('老师结项前没有参训明细或培训未结束时先说明原因，不打开结项表单',async()=>{
+ const c=renderContext({},['records.read','file.write']);c.me={user:{id:'teacher'},role:{kind:'teacher'}};await renderSocial('projects',c);
+ let modal,form;c.modal=(title,body,buttons)=>{modal={title,body,buttons}};c.formModal=(title)=>{form=title};c.downloads=()=>'';c.eventsHtml=()=>'';
+ const item=(end)=>({id:'pc',owner_id:'teacher',state:'FILED',version:2,data:{name:'合成项目',code:'PC1',category:'community',start_date:'2026-01-05',end_date:end,expected_income:0},closeout:{}});
+ c.api=async()=>({item:item('2026-01-10'),state_label:'已备案',facts:{units:[],followups:[],effective:0,excluded:0},attachments:[{id:'a'}],events:[]});
+ await socialAction('social-detail','social_project|pc',c);await socialAction('social-close','',c);
+ assert.equal(form,undefined);assert.match(modal.body,/参训明细由学院导入/);assert.match(modal.buttons,/返回详情/);
+ c.api=async()=>({item:item('2999-12-31'),state_label:'已备案',facts:{units:[{external_key:'U1',data:{event_date:'2026-01-05',course_code:'C1',learners:[]}}],followups:[],effective:0,excluded:0},attachments:[{id:'a'}],events:[]});
+ modal=undefined;await socialAction('social-detail','social_project|pc',c);await socialAction('social-close','',c);
+ assert.equal(form,undefined);assert.match(modal.body,/2999-12-31 才结束/);
 });

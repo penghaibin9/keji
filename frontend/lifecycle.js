@@ -29,14 +29,17 @@ function archiveHtml(c,d){
  const stepper=`<ol class="life-stepper" aria-label="办理进度">${steps.map((l,i)=>`<li class="${i<now?'on':i===now?'now':''}">${e(l)}</li>`).join('')}</ol>`;
  const big=ACTS[d.type].map(([k,l,sub])=>{
   const off=k==='note'?!d.can.note:k==='close'?!d.can.close:k==='annual'?!d.can.annual:k==='stop'?!(d.can.stop||d.can.resume):false;
-  const label=k==='stop'&&d.state==='STOPPED'?'恢复运行':l,act=k==='stop'&&d.state==='STOPPED'?'life-resume':'life-'+k;
+  const back=k==='stop'&&d.state==='STOPPED',label=back?'恢复运行':l,act=back?'life-resume':'life-'+k;
+  if(back&&!off)sub='需要时重新启用，历史记录不变';
   const why=off?(k==='close'&&['CLOSE_COLLEGE','CLOSE_REVIEW','CLOSED'].includes(d.state)?'已提交结项':!d.running?(d.state==='STOPPED'?'已停用':'通过后才能办理'):'你没有办理权限'):'';
   return `<button type="button" class="btn life-big${k==='info'||(k==='note'&&d.running)?' primary':''}" data-action="${act}" data-id="${e(d.type+'|'+d.id)}"${off?' disabled':''}><strong>${e(label)}</strong><small>${e(off?why:sub)}</small></button>`;
  }).join('');
  const minor=[d.can.change?c.act('申请变更','life-change',d.type+'|'+d.id,'light'):'',d.can.upload?c.act('上传材料','life-upload',d.type+'|'+d.id,'light','file'):'',
   d.type==='project'&&d.running&&c.can?.('records.write')?c.act('导入参训明细','life-units',d.id,'light'):'',
   d.type==='project'&&d.running&&(d.reminders||[]).some(x=>x.includes('上报信息'))?c.act('补填上报信息','life-report',d.id,'light'):'',
-  d.can.stop&&d.type!=='course'?c.act('停用','life-stop',d.type+'|'+d.id,'text'):''].filter(Boolean).join('');
+  d.can.stop&&d.type!=='course'?c.act('停用','life-stop',d.type+'|'+d.id,'text'):'',
+  // 基地、师资没有“停用”大按钮，停用后在这里恢复（课程的恢复在大按钮上）。
+  d.can.resume&&d.type!=='course'?c.act('恢复运行','life-resume',d.type+'|'+d.id,'primary'):''].filter(Boolean).join('');
  const pending=d.pending_change?`<div class="life-pending" role="status"><strong>有一份变更在审批：</strong>${e(d.pending_change.summary)}（${e(d.pending_change.state_label)}）。审批期间按原资料照常运行。${c.act('查看变更','life-change-view',d.pending_change.id,'text')}</div>`:'';
  const remind=(d.reminders||[]).map(x=>`<div class="life-remind">${c.icon('clock')}<span>${e(x)}</span></div>`).join('');
  const tl=(d.timeline||[]).length?`<ol class="life-timeline">${d.timeline.map(t=>`<li class="k-${e(t.kind)}"><div class="t">${e(String(t.on||t.at||'').slice(0,10))} · ${e(t.who||'')}<span class="src ${t.source==='auto'?'auto':''}">${e(SOURCE[t.source]||'')}</span></div><div class="w">${e(t.what)}</div>${t.reason&&t.reason!==t.what&&t.kind!=='auto'?`<div class="r">${e(t.reason)}</div>`:''}</li>`).join('')}</ol>`:'<p class="muted small">还没有记录。</p>';
@@ -76,8 +79,9 @@ function noteForm(c,d){
  if(typeof document!=='undefined')document.querySelectorAll('#modal-root [data-fill]').forEach(b=>b.addEventListener('click',()=>{const t=document.getElementById('f-text');if(t){t.value=b.dataset.fill;t.focus();t.dispatchEvent(new Event('input',{bubbles:true}))}}));
 }
 
-function valueText(f,v){
+function valueText(f,v,c){
  if(v==null||v===''||(Array.isArray(v)&&!v.length))return '（空）';
+ if(f.type==='user'){const t=(c?.teachers||[]).find(x=>x.id===v);return t?t.name+(t.staff_no?'（'+t.staff_no+'）':''):(v===c?.me?.user?.id?c.me.user.name:String(v))}
  if(f.type==='venue')return ({base:'校内基地',campus:'其他校内场所',offsite:'校外（一事一议）'}[v.type]||'')+'：'+(v.place||'');
  if(f.type==='multi')return v.map(x=>f.options?.[x]||x).join('、');
  if(f.type==='choice')return f.options?.[v]||v;
@@ -105,7 +109,7 @@ const LEVEL_HINT={project:'人次、收入变动不超过 30% 直接生效；换
  course:'学时变动超过一半要学院审批后学校备案；面向对象、简介直接更新；其他学院审批。',base:'地点、级别要学院审批后学校备案；负责人直接更新；其他学院审批。',trainer:'业务类别要重新认定（校内：学院审批后组织人事部认定；外聘：教务处备案）；职称、单位、特长直接更新。'};
 function changeForm(c,d){
  const e=c.esc;
- const rows=d.fields.map(f=>`<div class="life-chg" data-key="${e(f.key)}"><label class="life-chg-top"><input type="checkbox" name="pick-${e(f.key)}"><strong>${e(f.label)}</strong><span class="cur">现在：${e(valueText(f,f.value))}</span></label><div class="life-chg-new"><span class="muted small">改为</span>${inputFor(c,f)}</div></div>`).join('');
+ const rows=d.fields.map(f=>`<div class="life-chg" data-key="${e(f.key)}"><label class="life-chg-top"><input type="checkbox" name="pick-${e(f.key)}"><strong>${e(f.label)}</strong><span class="cur">现在：${e(valueText(f,f.value,c))}</span></label><div class="life-chg-new"><span class="muted small">改为</span>${inputFor(c,f)}</div></div>`).join('');
  c.formModal('申请变更',`<div class="form-field full">${c.note('只勾要改的项。审批期间按原资料照常运行；通过后档案生成新版本，原版本留着能查。')}${rows}<p class="hint">${e(LEVEL_HINT[d.type])}</p></div>`+c.field('reason','为什么要改（审批人会看到）','textarea','',{full:true,rows:2,textLimit:2000}),async(v,form)=>{
   const values={};
   for(const f of d.fields)if(form.querySelector(`[name="pick-${f.key}"]`)?.checked)values[f.key]=readValue(f,form);
@@ -118,13 +122,15 @@ function changeForm(c,d){
 }
 
 function annualForm(c,d){
- const y=new Date().getFullYear();
- c.formModal('年度运行确认',c.field('year','确认年度','select',String(y),{chips:true,options:[[String(y),y+' 年度'],[String(y-1),(y-1)+' 年度']]})
-  +c.field('running','今年的情况','select','yes',{chips:true,options:[['yes',d.type==='base'?'在运行，有培训在用':'在授课，资格继续有效'],['no','今年暂未运行']]})
+ const y=new Date().getFullYear(),years=(d.annual_years&&d.annual_years.length?d.annual_years:[y,y-1]).map(String),done=d.annual||{};
+ const word=v=>v.running?'在运行':'暂未运行',first=years[0],prior=done[first];
+ const doneNote=years.filter(k=>done[k]).map(k=>k+' 年度已确认为“'+word(done[k])+'”').join('；');
+ c.formModal('年度运行确认',c.field('year','确认年度','select',first,{chips:true,options:years.map(k=>[k,k+' 年度'+(done[k]?'（已确认，再确认即更正）':'')])})
+  +c.field('running','今年的情况','select',prior&&!prior.running?'no':'yes',{chips:true,options:[['yes',d.type==='base'?'在运行，有培训在用':'在授课，资格继续有效'],['no','今年暂未运行']]})
   +c.field('text','补充一句（选填）','textarea','',{full:true,required:false,rows:2,textLimit:1000,placeholder:d.type==='base'?'例：今年接待 3 期培训，共 120 人次':'例：今年主讲 2 个项目，共 32 学时'}),async v=>{
   await c.api('/social/lifecycle/'+d.type+'/'+d.id+'/annual',{method:'POST',body:{year:Number(v.year),running:v.running!=='no',text:v.text||''}});
   c.toast('已确认');await openArchive(c,d.type,d.id);
- },{submit:'确认',stepper:false,returnTo:back(c,d.type,d.id),returnLabel:'返回档案',contextLabel:TYPE_LABEL[d.type]+' / 年度确认',hint:'每年一次，点选即可，不用审批。今年不再运行的，可以回到档案点“停用”。'});
+ },{submit:'确认',stepper:false,returnTo:back(c,d.type,d.id),returnLabel:'返回档案',contextLabel:TYPE_LABEL[d.type]+' / 年度确认',hint:(doneNote?doneNote+'。同一年度再确认会记为更正，前后结论都留在运行过程里。':'每年一次，点选即可，不用审批。')+'今年不再运行的，可以回到档案点“停用”。'});
 }
 
 function stopForm(c,d,resume=false){

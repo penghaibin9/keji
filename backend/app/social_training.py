@@ -647,6 +647,14 @@ def require_unblocked(trial):
     if trial['blockers']: raise HTTPException(409, '；'.join(trial['blockers']))
 
 
+def settlement_needed(close):
+    """零收入项目（财务确认到账收入为0）不涉及经费结算，不生成结算期限、不算逾期。"""
+    try:
+        return D(str(close.get('actual_income'))) != 0
+    except Exception:
+        return True
+
+
 def project_funding(db, projects, step_mode='full_steps'):
     out={'late':0,'overdue':0,'penalty':D(0),'details':[],'veto':[],'blockers':[]}
     for project in projects:
@@ -656,7 +664,7 @@ def project_funding(db, projects, step_mode='full_steps'):
         due=date(year,month,min(closed.day,monthrange(year,month)[1]))
         settled=[x['completed_on'] for x in follow if x['kind']=='settlement' and x.get('completed_on')]
         settlement=max(settled) if settled else close.get('settlement_on')
-        if (settlement and date.fromisoformat(settlement)>due) or (not settlement and today()>due):
+        if settlement_needed(close) and ((settlement and date.fromisoformat(settlement)>due) or (not settlement and today()>due)):
             out['overdue']+=1
             reviews=[x for x in follow if x['kind']=='settlement' and x.get('completed_on')==settlement and x.get('settlement_result') and x.get('basis','').strip()]
             results={x['settlement_result'] for x in reviews}
@@ -1071,7 +1079,9 @@ def todo_items(db,a):
         if any(x.get('invalidate_cohort') for x in followups) and 'secretary' in duties:
             for claim in db.scalars(select(SocialClaim).where(SocialClaim.project_id==p.id,SocialClaim.state=='ARCHIVED')):
                 if sum(correction_totals(db,claim).values())>0:add('social_claim',claim,'正式处理后待追加积分更正',teacher_id=claim.teacher_id)
-        if p.state=='CLOSED' and not p.closeout.get('settlement_on') and not any(x['kind']=='settlement' and x.get('completed_on') for x in followups):
+        # 结算跟踪只给能登记结算的人（财务核验、归口复审），零收入项目不涉及结算。
+        if (p.state=='CLOSED' and duties&{'finance','coordinator'} and settlement_needed(p.closeout) and not p.closeout.get('settlement_on')
+                and not any(x['kind']=='settlement' and x.get('completed_on') for x in followups)):
             closed=date.fromisoformat(p.closeout['closed_on']);month=closed.month+6;year=closed.year+(month-1)//12;month=(month-1)%12+1
             due=date(year,month,min(closed.day,monthrange(year,month)[1]));add('social_project',p,'项目结算期限：'+due.isoformat()+' · '+p.data['name'],'结算跟踪',due=due)
         if p.state=='CLOSED' and p.closeout.get('rectification_due') and not any(x['kind']=='rectification' and x.get('completed_on') for x in followups):

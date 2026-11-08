@@ -235,7 +235,7 @@ export function baseForm(existing = null) {
 }
 
 // 培训师申报（管理办法第十五条）：校内老师本人申报，外聘培训师由学院负责人登记。
-const TRAINER_DIRECTIONS = [['subsidy', '补贴性培训'], ['enterprise', '社会化自主培训'], ['community', '社区公益培训'], ['rural', '对口帮扶培训'], ['other', '其他非学历培训'], ['one_skill', '“一人一技”专项']];
+const TRAINER_DIRECTIONS = [['subsidy', '补贴性培训'], ['enterprise', '企业定制培训'], ['community', '社区公益培训'], ['rural', '乡村帮扶培训'], ['other', '其他非学历培训'], ['one_skill', '“一人一技”专项']];
 
 export async function trainerForm(existing = null, source = '') {
   const formContext = c, origin = c.currentPage?.(), user = c.currentUser?.();

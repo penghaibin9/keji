@@ -44,3 +44,26 @@ test('申请变更只提交勾选的项',async()=>{
  const sent=c.calls.find(([u,o])=>o&&u.endsWith('/changes'));
  assert.deepEqual(sent[1].body.values,{end_date:'2027-04-30'});assert.equal(sent[1].body.reason,'延期');
 });
+
+// 2026-11-08 走查修复：基地、师资停用后也有“恢复运行”；年度确认只给可确认的年份；变更表单负责人显示姓名。
+test('基地、师资停用后档案里有恢复运行按钮',async()=>{
+ for(const type of ['base','trainer']){
+  const c=ctx({...base,type,state:'STOPPED',state_label:'已停用',running:false,annual:{},annual_years:[2026],can:{...base.can,note:false,change:false,close:false,annual:false,upload:false,resume:true}});
+  await lifecycleAction('life-open',type+'|r1',c);
+  assert.match(c.last.body,/data-action="life-resume"[^>]*>恢复运行/,type);
+ }
+});
+
+test('年度确认只列后端给的年份，已确认的年份标明再确认即更正',async()=>{
+ const c=ctx({...base,type:'base',annual:{'2026':{running:true,on:'2026-11-08'}},annual_years:[2026],can:{...base.can,annual:true}});
+ c.field=(n,l,t,v,o)=>`<label>${esc(l)}<input name="${n}" value="${esc(v)}">${(o?.options||[]).map(x=>esc(x[1])).join('|')}</label>`;
+ await lifecycleAction('life-annual','base|b1',c);
+ assert.match(c.form.body,/2026 年度（已确认，再确认即更正）/);assert.doesNotMatch(c.form.body,/2025 年度/);
+ assert.match(c.form.options.hint,/2026 年度已确认为“在运行”/);
+});
+
+test('变更表单的负责人显示姓名和工号，不显示账号',async()=>{
+ const c=ctx({...base,fields:[{key:'owner_id',label:'项目负责人',type:'user',value:'t1'}]});c.teachers=[{id:'t1',name:'张老师',staff_no:'J001'}];
+ await lifecycleAction('life-change','project|p1',c);
+ assert.match(c.form.body,/现在：张老师（J001）/);
+});

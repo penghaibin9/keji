@@ -349,6 +349,9 @@ def progress(db, flow, obj, applicant, *, returned_level=None):
         step = total
         text = f['final']
         headline = '已办结：' + f['final'] + '。'
+        if f.get('done') == 'FILED':
+            # 备案只是立项办完，项目接着进入运行，别让老师以为整件事已经结束。
+            headline = '立项已办结：' + f['final'] + '。项目进入运行阶段，培训结束并导入参训明细后再提交结项。'
     elif returned:
         back = next((n for n in nodes if n['state'] == 'returned'), None)
         who = LEVEL_LABEL.get(returned_level, '审批人')

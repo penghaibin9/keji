@@ -805,7 +805,7 @@ function teacherApplyCard(){
 function courseApplyChooser(){
  const opts=[pageAllowed('credits')&&['credits|','book','从我的课程导入','选择本人教务或超星课程，自动带出课程信息'],pageAllowed('courses')&&['courses|app-course-new','plus','手动填写课程','适用于没有现成课程的新培训课程']].filter(Boolean);
  if(opts.length===1)return handlers['teacher-apply'](opts[0][0]);
- modal('申报培训课程',note('教研室审核 → 学院审批 → 学校（继续教育学院）审批，通过后进入学校培训课程库。课程入库不单独记积分，积分按你在培训项目里授课的人次计算。')+`<div class="teacher-apply-grid one">${opts.map(([id,i,l,sub])=>`<button type="button" class="teacher-apply-item" data-action="teacher-apply" data-id="${id}">${icon(i)}<span><b>${esc(l)}</b><small>${esc(sub)}</small></span>${icon('arrow')}</button>`).join('')}</div>`,act('取消','close'));
+ modal('申报培训课程',note('学院审批 → 学校（继续教育学院）审批，通过后进入学校培训课程库。课程入库不单独记积分，积分按你在培训项目里授课的人次计算。')+`<div class="teacher-apply-grid one">${opts.map(([id,i,l,sub])=>`<button type="button" class="teacher-apply-item" data-action="teacher-apply" data-id="${id}">${icon(i)}<span><b>${esc(l)}</b><small>${esc(sub)}</small></span>${icon('arrow')}</button>`).join('')}</div>`,act('取消','close'));
 }
 // 教师不查询师资库，“培训师资”只有本人申报区。
 const routeAlias=p=>me?.role?.kind==='teacher'&&p==='trainers'?'apply_trainer':p;

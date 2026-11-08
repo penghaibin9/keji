@@ -23,13 +23,15 @@ const tone=state=>['ARCHIVED','CLOSED','ACTIVE'].includes(state)?'green':['RETUR
 const statusBadge=(label,state)=>'<span class="social-badge" data-tone="'+(label==='已登记'?'blue':tone(state))+'">'+context.esc(label)+'</span>';
 const identity=(name,code,icon)=>'<div class="social-identity"><span class="social-list-icon">'+context.icon(icon)+'</span><div><strong>'+context.esc(name)+'</strong><small>'+context.esc(code)+'</small></div></div>';
 
+// 页面开了内容安全策略，内联 onsubmit 会被拦截；这两个表单只用于填写，回车不应提交刷新页面。
+if(typeof document!=='undefined')document.addEventListener('submit',e=>{if(['approval-opinion','report-range-form'].includes(e.target?.id))e.preventDefault()});
 export function parseTrainingRows(text,mode,teachers){
  const raw=String(text??'').replace(/^\ufeff/,'').split(/\r?\n/).filter(line=>line.replace(/[\t,\s]/g,'')),sep=raw[0]?.includes('\t')?'\t':',';
  const lines=raw.map(line=>{const v=splitCells(line,sep);while(v.length>18&&v[v.length-1]==='')v.pop();return v.join('\t')});
  if(lines.length<2)throw Error('请上传模板文件或粘贴包含表头和明细的表格内容');
  const expected=['单元编号','课程编号','班级编号','模块名称','培训日期','学员编号','本校全日制生','准毕业生例外','实名签到','学时达标','全程参训','结业通过','重点群体','剔除原因','教师工号','岗位','人员类型','佐证说明'];
  if(lines[0].split('\t').join('|')!==expected.join('|'))throw Error('表头不符，请点“下载导入模板”，按模板18列填写');
- const yes=(v,row)=>{if(!['是','否'].includes(v))throw Error('第'+row+'行的判断项须填“是”或“否”');return v==='是'};
+ const yes=(v,row,col)=>{if(!['是','否'].includes(v))throw Error('第'+row+'行“'+expected[col]+'”须填“是”或“否”'+(col===12?'（是否属于重点群体，不填群体名称）':'')+'，现在是“'+v+'”');return v==='是'};
  const groups=new Map();
  for(let i=1;i<lines.length;i++){
   const v=lines[i].split('\t');if(v.length!==18)throw Error('第'+(i+1)+'行必须有18列');
@@ -40,7 +42,7 @@ export function parseTrainingRows(text,mode,teachers){
   const day=String(v[4]).trim().match(/^(\d{4})[-/.年](\d{1,2})[-/.月](\d{1,2})日?$/);if(!day)throw Error('第'+(i+1)+'行培训日期“'+v[4]+'”无法识别，请写成 2026-09-10 或 2026/9/10');const meta={external_key:v[0],course_code:v[1],class_code:v[2],module:v[3],event_date:day[1]+'-'+day[2].padStart(2,'0')+'-'+day[3].padStart(2,'0'),mode,evidence_note:v[17]};
   let group=groups.get(v[0]);if(!group){group={...meta,learners:[],teachers:[]};groups.set(v[0],group)}
   if(Object.keys(meta).some(k=>group[k]!==meta[k]))throw Error('同一单元编号的课程、日期等信息不一致');
-  const learner={reference:v[5],full_time_student:yes(v[6],i+1),graduate_exception:yes(v[7],i+1),signed:yes(v[8],i+1),hours_met:yes(v[9],i+1),full_attendance:yes(v[10],i+1),passed:yes(v[11],i+1),priority_group:yes(v[12],i+1),exclusion_reason:v[13]};
+  const learner={reference:v[5],full_time_student:yes(v[6],i+1,6),graduate_exception:yes(v[7],i+1,7),signed:yes(v[8],i+1,8),hours_met:yes(v[9],i+1,9),full_attendance:yes(v[10],i+1,10),passed:yes(v[11],i+1,11),priority_group:yes(v[12],i+1,12),exclusion_reason:v[13]};
   const previous=group.learners.find(x=>x.reference===learner.reference);
   if(previous&&JSON.stringify(previous)!==JSON.stringify(learner))throw Error('同一学员在同一单元的参训依据不一致');
   if(!previous)group.learners.push(learner);
@@ -138,7 +140,7 @@ let reportRange={start:'2023-07-01',end:'2026-06-30',year:''},reportResult=null;
 function schoolYears(){const now=new Date(),last=now.getMonth()>=8?now.getFullYear():now.getFullYear()-1,out=[];for(let y=last;y>=2020;y--)out.push(y+'-'+(y+1));return out}
 function reportModal(){
  const c=context,e=c.esc,r=reportResult;
- const form='<form id="report-range-form" data-query-form="true" class="report-range" onsubmit="return false"><label>开始日期<input type="date" name="start" id="report-start" value="'+e(reportRange.start)+'"></label><label>结束日期<input type="date" name="end" id="report-end" value="'+e(reportRange.end)+'"></label>'
+ const form='<form id="report-range-form" data-query-form="true" class="report-range"><label>开始日期<input type="date" name="start" id="report-start" value="'+e(reportRange.start)+'"></label><label>结束日期<input type="date" name="end" id="report-end" value="'+e(reportRange.end)+'"></label>'
   +'<label>或按学年<select id="report-year"><option value="">用左边的起止日期</option>'+schoolYears().map(y=>'<option value="'+y+'"'+(reportRange.year===y?' selected':'')+'>'+y+' 学年</option>').join('')+'</select></label></form>';
  let body=c.note('默认是上级给的历史统计区间（2023-07-01 至 2026-06-30），不是滚动最新三年，也可以选本次起止日期或学年。只统计已备案及以后的项目；'+(c.me?.role?.kind==='school'?'学校导出全校。':'学院导出本院，用于自查。'))+c.note('用于项目清单和绩效汇总核对，纳入培训日期与区间重叠的项目。视频时长优先取项目填写值（含0），未填写时取课程资源合计，两张表口径一致。绩效表基地数统计本范围全部有效基地；近一年为区间结束日前365天，新增课程、视频按系统建档时间判断，基地按设立日期判断。课程缺学时或教学方式时，占比标为待补充。',false,'上报表用途与统计口径')+form;
  if(r){
@@ -383,7 +385,7 @@ function handlePanel(kind,x,d){
  const facts=[['当前环节',esc(d.state_label)],[claim?'申报人':'被更正教师',esc(owner||'—')],['项目',esc(project||'—')],[claim?'候选积分':'更正积分',esc(points)],['佐证材料',files+' 份 '+c.act('查看材料','social-materials','','text')]];
  const warn=[...(t.blockers||[]).map(v=>c.note('系统检查发现：'+v+'。通过会被拦下，请先退回补正。',true)),...(!files?[c.note('当前没有佐证材料，请核实材料来源；材料不全的请退回补正。',true)]:[])].join('');
  return {summary:'<section class="approval-object-summary" aria-label="当前审批对象"><dl class="detail-facts">'+facts.map(([k,v])=>'<div><dt>'+esc(k)+'</dt><dd>'+v+'</dd></div>').join('')+'</dl><button type="button" class="btn text" data-detail-section="approval-opinion">填写办理意见</button></section>',
-  form:'<form id="approval-opinion" onsubmit="return false" class="social-detail-section social-handle" aria-label="本环节办理"><h3>本环节办理</h3>'+warn
+  form:'<form id="approval-opinion" class="social-detail-section social-handle" aria-label="本环节办理"><h3>本环节办理</h3>'+warn
   +'<div class="form-field full"><label for="handle-reason">办理意见（已预填，可修改；须本人点击确认才会办理）</label><textarea id="handle-reason" name="reason" rows="2" data-phrases="'+(archive?'archive':'approve')+'" data-text-limit="2000">'+esc(archive?'审核材料齐全，归档入账':'材料核对无误，审核通过')+'</textarea></div>'
   +'<div class="form-field full"><label for="handle-basis">依据说明或材料编号（选填）</label><textarea id="handle-basis" name="basis" rows="2" data-text-limit="2000"></textarea></div><div id="handle-error" role="alert" tabindex="-1"></div>'
   +'<p class="hint">退回须具体说明补什么材料；“查看下一条”仅打开下一条，不会自动审批。</p></form>'};
@@ -858,10 +860,15 @@ export async function socialAction(action,id,c){
   await c.render();return showDetail(k,x.id);
  }
  if(action==='social-close'){
+  // 结项前先看两个硬条件，免得老师填完两页表单才被拦下：培训已结束、已有参训明细（明细由学院或学校导入）。
+  const todayIso=new Date().toLocaleDateString('sv-SE'),endIso=opened.item.data.end_date||'',unitCount=(opened.facts?.units||[]).length;
+  const stops=[...(endIso&&endIso>todayIso?['培训要到 '+endIso+' 才结束，结束后才能结项；如已提前结束，请先“申请变更”把结束日期改为实际日期。']:[]),
+   ...(!unitCount&&opened.facts?.units&&opened.item.data.start_date&&opened.item.data.start_date<=todayIso?[c.can('records.write')?'还没有导入参训明细，人次从明细核算，没有明细不能结项。请先点“导入参训明细”。':'还没有参训明细，没有明细不能结项。参训明细由学院导入：请把签到表和结业名单交给本院培训管理员，导入后再来结项。']:[])];
+  if(stops.length)return c.modal('提交项目结项','<div class="social-detail">'+stops.map(t=>c.note(t,true)).join('')+'</div>',c.act('返回详情','social-detail',opened.kind+'|'+opened.id,'primary'));
   const old=opened.item.closeout||{},f=(key,label,type='text',value='',opts={})=>c.field(key,label,type,old[key]??value,opts);
   const subsidy=opened.item.data.category==='subsidy',wrap=(id,html)=>'<div class="social-cond" id="cond-'+id+'" style="display:contents">'+html+'</div>';
   let body=(!(opened.attachments||[]).length?c.note('还没有上传结项佐证材料，提交会被系统拦下。请点“返回详情”，先“上传佐证”（签到表、成果报告、财务凭证等）。',true):'')+formSection('一、结项情况',f('closed_on','结项日期','date',(opened.item.data.end_date&&opened.item.data.end_date<=new Date().toLocaleDateString('sv-SE'))?opened.item.data.end_date:'',{hint:'已按培训结束日期带出，如实际结项日期不同请修改。'})+f('satisfaction','满意度（百分比）','number','',{min:0,max:100,step:0.01})+f('location','培训地点类型','select',opened.item.data.venue?.type==='offsite'?'offsite':'onsite',{options:[['onsite','校内'],['offsite','校外']],hint:'已按项目申报的培训场地带出。'})+f('outcome_report','成果报告','textarea','',{full:true,phrases:'completion',textLimit:200})+wrap('rect','<p class="full hint">满意度低于85%时，请填写整改信息。</p>'+f('rectification','整改报告','textarea','',{required:false,phrases:'rectify',textLimit:2000,hint:'满意度低于85%时必填。'})+f('rectification_due','整改办理期限','date','',{required:false,hint:'满意度低于85%时必填。'})))
-   +formSection('二、经费与财务核验',f('actual_income','财务确认到账收入（元）','number',0,{min:0,step:0.01})+f('funding_source','财务确认的资金来源','select','',{required:false,options:[['','请确认资金来源（非零收入必填）'],['other_training','其他培训收入'],['government_special','政府专项培训资金']]})+f('finance_reference','财务核验凭据')+f('implicit_cost','隐性成本（元）','number',0,{min:0,step:0.01})+f('settlement_on','经费结算日期','date','',{required:false})
+   +formSection('二、经费与财务核验',f('actual_income','财务确认到账收入（元）','number',0,{min:0,step:0.01})+f('funding_source','财务确认的资金来源','select','',{required:false,options:[['','请确认资金来源（非零收入必填）'],['other_training','其他培训收入'],['government_special','政府专项培训资金']]})+f('finance_reference','财务核验凭据','text',Number(opened.item.data.expected_income||0)===0?'零收入项目，无到账收入':'',{hint:'有收入填财务到账凭证号；零收入项目已默认填写，可按实际修改。'})+f('implicit_cost','隐性成本（元）','number',0,{min:0,step:0.01})+f('settlement_on','经费结算日期','date','',{required:false})
     +wrap('split',f('retained','学校留存（元）','number','',{min:0,step:0.01,required:false})+f('personnel','校内人员支出（元，自动计算）','number','',{min:0,step:0.01,required:false,readonly:true,hint:'按“到账收入 × 80% − 学校留存”自动算出，使项目公用正好为收入的 20%。'})+'<p class="hint full" id="close-split-hint"></p>')
     +wrap('special',f('funding_basis','政府专项主管部门规定及财务核验依据','textarea','',{required:false,full:true,hint:'专项资金有收入时必填；按主管部门规定专款专用，不套用其他收入比例'})),'其他培训收入分配：校内留存不低于20%、人员支出不高于60%；校外留存不低于10%、人员支出不高于70%；项目公用20%。填写到账收入和学校留存后，人员支出自动算出。零收入可留空。政府专项按主管部门规定核验。')
    +(subsidy?formSection('三、补贴项目专项材料',f('province_receipt','省平台报送凭证','textarea','',{required:false})+f('special_evidence','专项参训与成果材料','textarea','',{required:false}),'补贴性培训须登记省平台报送凭证和专项材料，否则结项核验不能通过。'):'')
