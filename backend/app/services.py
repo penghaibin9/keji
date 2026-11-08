@@ -44,7 +44,7 @@ def facts(db,teacher_id,period):
         TrainingRecord.state=="VALID",TrainingRecord.event_date>=period.start_date,TrainingRecord.event_date<=period.end_date)
         .order_by(TrainingRecord.id)).all()
     if len(records)>20000:raise HTTPException(422,"该教师本周期明细超过单次安全计算上限，请缩小周期")
-    quals=db.scalars(select(Qualification).where(Qualification.teacher_id==teacher_id,Qualification.state=="APPROVED",
+    quals=db.scalars(select(Qualification).where(Qualification.teacher_id==teacher_id,Qualification.state.in_(("APPROVED","VOID_PENDING")),
         Qualification.obtained<=period.end_date, (Qualification.expires.is_(None))|(Qualification.expires>=period.end_date))).all()
     points=db.scalars(select(PointEntry).where(PointEntry.teacher_id==teacher_id,PointEntry.period_id==period.id).order_by(PointEntry.created_at)).all()
     previous=db.scalar(select(Assessment).join(Period,Period.id==Assessment.period_id)

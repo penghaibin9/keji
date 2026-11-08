@@ -1,5 +1,5 @@
 """2026-11-08 本地全流程走查修复：零收入项目不生成结算跟踪、结算待办只给能办的人；年度确认的年份限制和同年更正。"""
-from conftest import auth, post
+from conftest import auth, post, put
 from test_social_training import setup_social, import_rows, row, action  # noqa: F401
 from test_applications import act
 from test_lifecycle_20261107 import life
@@ -119,3 +119,53 @@ def test_course_withdrawn_at_source_auto_reverses_booked_points(client2, app2):
     assert amounts == ['-64.00', '64.00'] and teaching_points(app2) == Decimal('0')
     assert _stale(app2) == []
     assert _confirm(c).status_code == 200
+
+
+def test_approved_qualification_void_request_review_and_withdraw(app2, client2):
+    """审核通过的资质不能删，只能申请作废：作废审核期间照常有效，同意后变“已作废”，不再算有效；不同意或撤回回到审核通过。"""
+    import uuid
+    from test_api import qual, png
+    from test_teacher_delete import qual_action
+    c = client2
+    auth(c, 'teacher')
+    q = qual(c)
+    up = c.post('/api/attachments/qualification/' + q['id'], headers={'Idempotency-Key': str(uuid.uuid4())},
+                data={'expected_version': str(q['version']), 'reason': '上传证书'}, files={'file': ('cert.png', png(), 'image/png')})
+    assert up.status_code == 200, up.text
+    assert qual_action(c, q['id'], 'submit').status_code == 200
+    assert qual_action(c, q['id'], 'void_request').status_code == 409  # 还没通过，不能申请作废
+    auth(c, 'schooladmin')
+    assert qual_action(c, q['id'], 'approve').status_code == 200
+    v = c.get('/api/qualifications/' + q['id']).json()['qualification']['version']
+    auth(c, 'otherteacher')
+    assert qual_action(c, q['id'], 'void_request', v).status_code in (403, 404)
+    auth(c, 'teacher')
+    d = c.get('/api/qualifications/' + q['id']).json()
+    assert d['can_void'] and not d['can_review_void']
+    assert qual_action(c, q['id'], 'void_request').status_code == 200
+    summary = c.get('/api/qualification-summary').json()
+    assert sum(x['count'] for x in summary['items'] if x['key'] in ('VALID', 'EXPIRING', 'EXPIRED')) == 1  # 作废审核期间照常有效
+    assert qual_action(c, q['id'], 'void_approve').status_code == 403  # 本人不能审
+    assert qual_action(c, q['id'], 'withdraw').status_code == 200
+    assert c.get('/api/qualifications/' + q['id']).json()['qualification']['state'] == 'APPROVED'
+    assert qual_action(c, q['id'], 'void_request').status_code == 200
+    auth(c, 'schooladmin')
+    assert any(x['id'] == q['id'] and '作废审核' in x['title'] for x in c.get('/api/todos').json()['items'])
+    d = c.get('/api/qualifications/' + q['id']).json()
+    assert d['can_review_void']
+    assert qual_action(c, q['id'], 'void_reject').status_code == 200
+    assert c.get('/api/qualifications/' + q['id']).json()['qualification']['state'] == 'APPROVED'
+    auth(c, 'teacher')
+    assert qual_action(c, q['id'], 'void_request').status_code == 200
+    auth(c, 'schooladmin')
+    assert qual_action(c, q['id'], 'void_approve').status_code == 200
+    auth(c, 'teacher')
+    assert c.get('/api/qualifications/' + q['id']).json()['qualification']['state'] == 'VOID'
+    summary = c.get('/api/qualification-summary').json()
+    assert summary['voided'] == 1 and sum(x['count'] for x in summary['items'] if x['key'] in ('VALID', 'EXPIRING', 'EXPIRED')) == 0
+    assert q['id'] in [x['id'] for x in c.get('/api/qualifications', params={'state': 'VOID'}).json()['items']]
+    item = c.get('/api/qualifications/' + q['id']).json()['qualification']
+    r = put(c, '/api/qualifications/' + q['id'], {'teacher_id': 'teacher', 'category': '职业资格', 'name': '改名', 'certificate_no': item['certificate_no'],
+            'issuer': '合成发证单位', 'obtained': '2026-01-01', 'expires': '2026-12-31', 'expected_version': item['version'], 'reason': '作废后再改'})
+    assert r.status_code == 409 and '已作废' in r.text
+    assert qual_action(c, q['id'], 'delete').status_code == 409

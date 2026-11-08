@@ -30,6 +30,9 @@ def safe_attachments(db,obj):
         values=serial(item);values.pop('storage_key',None);items.append(values)
     return items
 
+# 资质“有效”口径：审核通过，以及申请作废还没批下来的（作废批准前照常有效）。
+QUALIFICATION_VALID=('APPROVED','VOID_PENDING')
+
 @router.get('/statistics')
 def statistics(request:Request):
     f,_,_=filters_from(request,STAT_FILTERS)
@@ -84,12 +87,12 @@ def qualifications(request:Request):
         if f.get('teacher_id'):q=q.where(Qualification.teacher_id==f['teacher_id'])
         if f.get('org_id'):q=q.where(Qualification.teacher_id.in_(select(User.id).where(User.org_id.in_(authorized_org_descendants(db,a,f['org_id'])))))
         if f.get('state'):
-            if f['state'] not in {'DRAFT','SUBMITTED','RETURNED','APPROVED','EXPIRING','EXPIRED','DELETED'}:raise HTTPException(422,'资质状态无效')
+            if f['state'] not in {'DRAFT','SUBMITTED','RETURNED','APPROVED','EXPIRING','EXPIRED','DELETED','VOID_PENDING','VOID'}:raise HTTPException(422,'资质状态无效')
             if f['state'] in {'EXPIRING','EXPIRED'}:
                 # 与资质概况同一口径：审核通过且已过有效期为已过期；提醒天数内到期为即将到期。
                 setting=db.get(Setting,'qualification');days=int((setting.value or {}).get('expiry_days',0)) if setting else 0
                 today=school_today()
-                q=q.where(Qualification.state=='APPROVED',Qualification.expires.is_not(None))
+                q=q.where(Qualification.state.in_(QUALIFICATION_VALID),Qualification.expires.is_not(None))
                 q=q.where(Qualification.expires<today) if f['state']=='EXPIRED' else q.where(Qualification.expires>=today,Qualification.expires<=today+timedelta(days=days))
             else:q=q.where(Qualification.state==f['state'])
         else:q=q.where(Qualification.state!='DELETED')  # 老师删除的资质只在“已删除”筛选里出现
@@ -109,13 +112,14 @@ def qualification_summary(request:Request):
         if f.get('q'):q=q.where(Qualification.name.contains(f['q'],autoescape=True)|Qualification.certificate_no.contains(f['q'],autoescape=True))
         setting=db.get(Setting,'qualification');days=int((setting.value or {}).get('expiry_days',0)) if setting else 0
         today=school_today();limit=today+timedelta(days=days)
-        counts={'SUBMITTED':0,'RETURNED':0,'EXPIRING':0,'VALID':0,'EXPIRED':0,'DRAFT':0};deleted=0
+        counts={'SUBMITTED':0,'RETURNED':0,'EXPIRING':0,'VALID':0,'EXPIRED':0,'DRAFT':0};deleted=0;voided=0
         for state,expires in db.execute(q):
             if state=='DELETED':deleted+=1  # 已删除不算进总数和各状态，只给“已删除”页签显示个数
-            elif state=='APPROVED':counts['EXPIRED' if expires and expires<today else 'EXPIRING' if expires and expires<=limit else 'VALID']+=1
+            elif state=='VOID':voided+=1  # 已作废同样不算进有效资质
+            elif state in QUALIFICATION_VALID:counts['EXPIRED' if expires and expires<today else 'EXPIRING' if expires and expires<=limit else 'VALID']+=1
             elif state in counts:counts[state]+=1
         labels={'SUBMITTED':'待审核','RETURNED':'已退回','EXPIRING':'即将到期','VALID':'有效','EXPIRED':'已过期','DRAFT':'草稿'}
-        return {'items':[{'key':k,'label':labels[k],'count':v} for k,v in counts.items()],'total':sum(counts.values()),'deleted':deleted,
+        return {'items':[{'key':k,'label':labels[k],'count':v} for k,v in counts.items()],'total':sum(counts.values()),'deleted':deleted,'voided':voided,
                 'expiry_days':days,'note':f'即将到期 = 审核通过且 {days} 天内到期；无有效期视为长期有效。'}
     return read_operation(request,'qualification.read',load)
 
@@ -139,6 +143,8 @@ def qualification_detail(ident:str,request:Request):
     def load(db,a,s):
         obj=owned_object(db,a,Qualification,ident,'qualification.read')
         return {'qualification':obj,'attachments':safe_attachments(db,obj),'can_delete':obj.teacher_id==a.id and qualification_can_delete(db,obj),
+          'can_void':obj.teacher_id==a.id and obj.state=='APPROVED',
+          'can_review_void':obj.teacher_id!=a.id and a.role.kind!='teacher' and 'qualification.review' in a.permissions and obj.state=='VOID_PENDING',
           'revisions':db.scalars(select(QualificationRevision).where(QualificationRevision.qualification_id==ident).order_by(QualificationRevision.version)).all(),
           'events':events(db,'qualification',ident)}
     return read_operation(request,'qualification.read',load)
@@ -163,6 +169,7 @@ def qualification_update(ident:str,data:QualificationUpdate,request:Request):
     def apply(db,a,s):
         obj=owned_object(db,a,Qualification,ident,'qualification.write',own=True);check_version(obj,data.expected_version)
         if data.teacher_id!=a.id or obj.state=='SUBMITTED':raise HTTPException(409,'审核中材料不可修改，请先撤回')
+        if obj.state in {'VOID_PENDING','VOID'}:raise HTTPException(409,'资质'+('正在申请作废，请先撤回作废申请' if obj.state=='VOID_PENDING' else '已作废，不能再修改；请重新登记'))
         if obj.state=='DELETED':raise HTTPException(409,'资质已删除，请先恢复再修改')
         settings=db.get(Setting,'qualification')
         if not settings or data.category not in settings.value.get('categories',[]):raise HTTPException(422,'资质类别无效')
@@ -175,7 +182,7 @@ def qualification_update(ident:str,data:QualificationUpdate,request:Request):
 
 @router.post('/qualifications/{ident}/actions')
 def qualification_action(ident:str,data:Action,request:Request):
-    permission='qualification.write' if data.action in {'submit','withdraw','delete','restore'} else 'qualification.review'
+    permission='qualification.write' if data.action in {'submit','withdraw','delete','restore','void_request'} else 'qualification.review'
     def apply(db,a,s):
         obj=owned_object(db,a,Qualification,ident,permission);check_version(obj,data.expected_version)
         own=obj.teacher_id==a.id;before=serial(obj)
@@ -189,8 +196,19 @@ def qualification_action(ident:str,data:Action,request:Request):
             obj.state='SUBMITTED'
         elif data.action=='withdraw':
             if not own:raise HTTPException(403,'资质必须由本人撤回')
-            if obj.state!='SUBMITTED':raise HTTPException(409,'当前资质不能撤回')
-            obj.state='DRAFT'
+            if obj.state not in {'SUBMITTED','VOID_PENDING'}:raise HTTPException(409,'当前资质不能撤回')
+            obj.state='DRAFT' if obj.state=='SUBMITTED' else 'APPROVED'  # 撤回作废申请：回到审核通过，照常有效
+        elif data.action=='void_request':
+            # 已审核通过（含已过期）的资质不能删除，只能申请作废；审核人同意前照常有效。
+            if not own:raise HTTPException(403,'只能申请作废本人的资质')
+            if obj.state!='APPROVED':raise HTTPException(409,'只有审核通过的资质才能申请作废；没生效的可以直接删除')
+            if len((data.reason or '').strip())<2:raise HTTPException(422,'请写明作废原因')
+            obj.state='VOID_PENDING'
+        elif data.action in {'void_approve','void_reject'}:
+            if own or a.role.kind=='teacher':raise HTTPException(403,'不能审核本人资质')
+            if obj.state!='VOID_PENDING':raise HTTPException(409,'资质不在待作废审核环节')
+            if data.action=='void_reject' and len((data.reason or '').strip())<2:raise HTTPException(422,'不同意作废请写明原因')
+            obj.state='VOID' if data.action=='void_approve' else 'APPROVED'
         elif data.action=='delete':
             # 只删还没生效的：草稿和被退回的。审核中先撤回；审核通过的不在这里删。不物理删除，可恢复。
             if not own:raise HTTPException(403,'只能删除本人的资质')
@@ -211,7 +229,9 @@ def qualification_action(ident:str,data:Action,request:Request):
                 queue(db,[obj.teacher_id],'你的资质申报被退回','请登录非学历教育智慧前台，在“个人培训”查看退回原因并补正后重新提交。')
         else:raise HTTPException(422,'资质操作无效')
         obj.version+=1;qualification_revision(db,a,obj,data.reason)
-        workflow(db,a,'qualification',obj.id,{'submit':'提交资质','withdraw':'撤回资质','delete':'删除资质','restore':'恢复已删除资质','approve':'资质审核通过','return':'资质退回补充'}[data.action],before,serial(obj),data.reason,data.basis)
+        names={'submit':'提交资质','withdraw':'撤回资质' if before.get('state')=='SUBMITTED' else '撤回作废申请','delete':'删除资质','restore':'恢复已删除资质','approve':'资质审核通过','return':'资质退回补充',
+               'void_request':'申请作废资质','void_approve':'同意作废资质','void_reject':'不同意作废资质'}
+        workflow(db,a,'qualification',obj.id,names[data.action],before,serial(obj),data.reason,data.basis)
         return obj
     return command(request,data.model_dump(),permission,apply)
 
@@ -261,6 +281,7 @@ def _todo_items(db,a):
         for q in db.scalars(select(Qualification).where(a.scope(Qualification.teacher_id))):
             if q.teacher_id==a.id and q.state in {'DRAFT','RETURNED'}:add('qualification',q,'补充并提交资质：'+q.name)
             elif q.teacher_id!=a.id and 'qualification.review' in a.permissions and q.state=='SUBMITTED':add('qualification',q,'待审核资质：'+q.name)
+            elif q.teacher_id!=a.id and 'qualification.review' in a.permissions and a.role.kind!='teacher' and q.state=='VOID_PENDING':add('qualification',q,'资质作废审核：'+q.name)
             elif q.state=='APPROVED' and q.expires:
                 setting=db.get(Setting,'qualification')
                 days=setting.value['expiry_days'] if setting else 0

@@ -735,7 +735,7 @@ def overview(request: Request, year: int = Query(..., ge=2020, le=2100)):
         levels = {'national': 0, 'province': 0, 'school': 0}
         for x in achievements: levels[x.data.get('level', 'school')] = levels.get(x.data.get('level', 'school'), 0) + 1
         teacher_scope = [a.id] if a.role.kind == 'teacher' else None
-        q = select(Qualification).where(Qualification.state == 'APPROVED', Qualification.category.like('双师型%'))
+        q = select(Qualification).where(Qualification.state.in_(('APPROVED', 'VOID_PENDING')), Qualification.category.like('双师型%'))
         q = q.where(Qualification.teacher_id.in_(teacher_scope)) if teacher_scope else q.where(a.scope(Qualification.teacher_id))
         dual = {'初级': set(), '中级': set(), '高级': set(), '未分级': set()}
         for item in db.scalars(q) if allowed['qualifications'] else []:

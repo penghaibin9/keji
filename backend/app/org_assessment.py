@@ -148,7 +148,7 @@ def organization_facts(db, target: Org, period: Period):
         func.coalesce(func.sum(rq.c.hours),0),func.coalesce(func.sum(rq.c.participants),0),func.coalesce(func.sum(rq.c.income),0),
         func.count(distinct(rq.c.teacher_id)),func.count(distinct(rq.c.project_code)),func.count(distinct(rq.c.course_code))
     )).one()
-    qual_count=db.scalar(select(func.count()).select_from(Qualification).where(Qualification.teacher_id.in_(teacher_ids),Qualification.state=="APPROVED",Qualification.obtained<=period.end_date,(Qualification.expires.is_(None))|(Qualification.expires>=period.end_date))) or 0
+    qual_count=db.scalar(select(func.count()).select_from(Qualification).where(Qualification.teacher_id.in_(teacher_ids),Qualification.state.in_(("APPROVED","VOID_PENDING")),Qualification.obtained<=period.end_date,(Qualification.expires.is_(None))|(Qualification.expires>=period.end_date))) or 0
     points=db.scalar(select(func.coalesce(func.sum(PointEntry.amount),0)).where(PointEntry.teacher_id.in_(teacher_ids),PointEntry.period_id==period.id)) or 0
     from .assessment_evidence import verified_archive
     archived=db.scalars(select(Assessment).where(Assessment.teacher_id.in_(teacher_ids),Assessment.period_id==period.id,Assessment.state=="ARCHIVED").order_by(Assessment.id)).all()
@@ -185,7 +185,7 @@ def organization_basis_digests(db,teacher_ids,period,references):
         for source,field in RECORD_FIELDS.items():
             hashes[source].update(digest([row.id,row.teacher_id,row.event_date,row.external_key,row.source,row.batch_id,getattr(row,field)]).encode())
     result={k:v.hexdigest() for k,v in hashes.items()}
-    q=select(Qualification).where(Qualification.teacher_id.in_(teacher_ids),Qualification.state=='APPROVED',Qualification.obtained<=period.end_date,(Qualification.expires.is_(None))|(Qualification.expires>=period.end_date)).order_by(Qualification.id)
+    q=select(Qualification).where(Qualification.teacher_id.in_(teacher_ids),Qualification.state.in_(('APPROVED','VOID_PENDING')),Qualification.obtained<=period.end_date,(Qualification.expires.is_(None))|(Qualification.expires>=period.end_date)).order_by(Qualification.id)
     p=select(PointEntry).where(PointEntry.teacher_id.in_(teacher_ids),PointEntry.period_id==period.id).order_by(PointEntry.id)
     for source,query in [('qualifications',q),('points',p)]:
         checksum=sha256()
