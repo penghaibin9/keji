@@ -767,8 +767,8 @@
       "size": 12269
     },
     "docs/手册菜单按钮核对表_20261022.md": {
-      "sha256": "d9b3fa4c9468054eccdab4ea949eb805d224272ab3f07556499f042dd5feb2ca",
-      "size": 14728
+      "sha256": "242b9849d11483eb6d6c54b7878a505d76fadf7e3d5d0d0f6263b5bcf019815e",
+      "size": 16707
     },
     "docs/接口异常处理说明.md": {
       "sha256": "6d94797e5033960b7dba94e6f0d5135c06f99c44435153e7fefeab90d629257d",
@@ -827,8 +827,8 @@
       "size": 14358
     },
     "frontend/app.js": {
-      "sha256": "6aa6a8dc16e41a826e9b8b7b2be438ea5f2578321408366f4ef8da155833530b",
-      "size": 535718
+      "sha256": "95b8d089d9b2bcc7e76da5d96f783cda0439dc56d820cfc947d5d1e9bf296224",
+      "size": 535719
     },
     "frontend/applications.js": {
       "sha256": "f970a616dcc5bd155a90232514c4bb137f2e7da6746a5b17581858087e26d69a",
@@ -1595,8 +1595,8 @@
       "size": 3450
     },
     "frontend/help-system.js": {
-      "sha256": "c0f59194920ba587dbf6dc524d1358fd0c872dbe103183b0208991f1f5cf9148",
-      "size": 29969
+      "sha256": "2b2cfad0fb208ec19c982526ebafa905147d3ccd7fef52147fa44da6dea07055",
+      "size": 29758
     },
     "frontend/history-projects.js": {
       "sha256": "2a354347db4c4d503847dd5aaab85bda4901d5204f93436274d9e1fdf62d7f8f",
@@ -1607,8 +1607,8 @@
       "size": 2302
     },
     "frontend/index.html": {
-      "sha256": "cc1271dd371d9a27423ce241983e9678bc38c00d88d49dd521329dfc328d30a0",
-      "size": 1869
+      "sha256": "ed53ab50a7866c482c629b29c31b0722ff4c74dd4d90f92401ad72a37f5db82c",
+      "size": 1866
     },
     "frontend/integration-drafts.js": {
       "sha256": "8ecc0ab6a0ce01ac7e922540f902ce75ee295194ed81095923b8b59ad3ccb99d",
@@ -1679,7 +1679,7 @@
       "size": 71868
     },
     "frontend/social-training.js": {
-      "sha256": "262ca4eb2a06e25db794c188bf091a34af7b2013b4e11efe244f8a8aa86453dc",
+      "sha256": "e2e09b39072c366cd96210eb6a98b29797c325ff35a516e54e528770b2d99453",
       "size": 196557
     },
     "frontend/styles.css": {
