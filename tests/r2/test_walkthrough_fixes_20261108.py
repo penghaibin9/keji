@@ -20,6 +20,8 @@ def close(c, pid, closeout):
     auth(c, 'teacher')
     r = action(c, 'projects', 'social_project', pid, 'close_submit', closeout=closeout)
     assert r.status_code == 200, r.text
+    auth(c, 'collegehead')
+    assert action(c, 'projects', 'social_project', pid, 'approve').status_code == 200
     auth(c, 'reviewer')
     r = action(c, 'projects', 'social_project', pid, 'close', materials_checked=MATERIALS)
     assert r.status_code == 200, r.text
