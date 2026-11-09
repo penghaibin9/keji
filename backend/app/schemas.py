@@ -127,16 +127,18 @@ class RecordIn(Reason):
 class RecordUpdate(RecordIn):
     expected_version:int=Field(ge=1)
 class QualificationIn(Reason):
+    # 2026-11-09 用户定：老师只填证书名称、上传证书。类别不填时按名称归类（名称就是某个类别则用它，否则记“其他”），
+    # 编号不填自动生成（库里每人编号唯一），发证机构可空，取得日期不填记当天。
     teacher_id: Ident
-    category: str=Field(min_length=1,max_length=80)
+    category: str=Field(default='',max_length=80)
     name: Text
-    certificate_no: str=Field(min_length=1,max_length=128)
-    issuer: Text
-    obtained: date
+    certificate_no: str=Field(default='',max_length=128)
+    issuer: str=Field(default='',max_length=160)
+    obtained: date|None=None
     expires: date|None=None
     @model_validator(mode='after')
     def dates(self):
-        if self.expires and self.expires<self.obtained: raise ValueError('有效期不能早于取得日期')
+        if self.expires and self.obtained and self.expires<self.obtained: raise ValueError('有效期不能早于取得日期')
         return self
 class QualificationUpdate(QualificationIn):
     expected_version:int=Field(ge=1)

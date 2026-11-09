@@ -1275,17 +1275,18 @@ test('teacher home does not claim there is nothing to do when to-dos fail to loa
  assert.doesNotMatch(html,/当前没有需要你处理的事项|都处理完了|NaN/);
 });
 
-test('编辑历史资质保留当前类别，不静默改成首个新类别',async()=>{
- const e=engine(async url=>url.endsWith('/qualification-categories')?{categories:['职业资格','教学资质']}:{qualification:{id:'q',teacher_id:'u',category:'双师型中级',name:'合成资质',version:1}},'teacher');
+test('修改后重新提交：只改证书名称和材料，名称不变时保留原类别',async()=>{
+ const e=engine(async(url,options)=>url.endsWith('/qualification-categories')?{categories:['职业资格','教学资质']}:options?.method==='PUT'?{id:'q',version:2}:url.endsWith('/q/actions')?{}:{qualification:{id:'q',teacher_id:'u',category:'双师型中级',name:'合成资质',version:1,state:'RETURNED'},events:[{action:'资质退回补充',reason:'证书不清晰'}],attachments:[]},'teacher');
  e.t.captureForm();await vm.runInContext('qualificationForm',e.ctx)('q');
- const form=e.t.getForm();assert.match(form.body,/<option value="双师型中级" selected/);assert.equal(typeof form.options.returnTo,'function');
- await form.options.returnTo();assert.ok(e.requests.filter(r=>r.url.endsWith('/qualifications/q')).length===2);
+ const form=e.t.getForm();assert.match(form.body,/证书名称/);assert.match(form.body,/上传证书/);assert.match(form.body,/证书不清晰/);
+ for(const gone of ['证书编号','发证机构','取得日期','有效期至','资质类别'])assert.doesNotMatch(form.body,new RegExp(gone),gone);
+ await form.callback({name:'合成资质'},{querySelector:sel=>e.node(sel)});
+ const put=e.requests.find(r=>r.options.method==='PUT');assert.equal(JSON.parse(put.options.body).category,'双师型中级');
 });
-
-test('资质表单明确草稿与审核，附件失败保留同一条草稿，提交使用上传后的版本',async()=>{
- for(const mode of ['draft','submit','upload-error','submit-error']){
+test('申报资质只有证书名称和上传证书两项，提交时先建档、逐份上传、再提交审核',async()=>{
+ for(const mode of ['submit','upload-error','submit-error']){
   const e=engine(async(url,options)=>{
-   if(url.endsWith('/qualification-categories'))return {categories:['教学资质']};
+   if(url.endsWith('/qualification-categories'))return {categories:['教学资质','职业资格']};
    if(url.endsWith('/qualifications')&&options.method==='POST')return {id:'q-new',version:1};
    if(url.includes('/attachments/qualification/')){if(mode==='upload-error')throw Error('附件上传失败');return {id:'att'};}
    if(url.endsWith('/q-new/actions')&&mode==='submit-error')throw Error('审核提交失败');
@@ -1293,17 +1294,17 @@ test('资质表单明确草稿与审核，附件失败保留同一条草稿，�
    return {items:[],total:0,page:1,size:20};
   },'teacher');
   e.t.setState('qualifications');e.t.captureForm();await vm.runInContext('qualificationForm',e.ctx)('');const f=e.t.getForm();
-  assert.equal(f.options.page,true);assert.equal(f.options.draft,'保存草稿');assert.equal(f.options.submit,'提交审核');assert.doesNotMatch(f.body,/submit_now/);
-  const file=new Blob(['synthetic certificate'],{type:'image/png'});file.name='证书.png';e.node('#f-file').files=mode==='draft'?[]:[file];
-  await f.callback({category:'教学资质',name:'合成证书',certificate_no:'Q1',issuer:'合成机构',obtained:'2026-01-01',expires:'',reason:'合成验证'},{querySelector:sel=>e.node(sel)},{value:mode==='draft'?'draft':'submit'});
-  const created=e.requests.filter(r=>r.url.endsWith('/qualifications')&&r.options.method==='POST');assert.equal(created.length,1);assert.equal(JSON.parse(created[0].options.body).expires,null);
+  assert.equal(f.options.submit,'提交审核');assert.notEqual(f.options.page,true);assert.match(f.body,/data-qual-name="教学资质"/);
+  for(const gone of ['证书编号','发证机构','取得日期','有效期至','申报说明'])assert.doesNotMatch(f.body,new RegExp(gone),gone);
+  const file=new Blob(['synthetic certificate'],{type:'image/png'});file.name='证书.png';e.node('#f-file').files=[file];
+  await f.callback({name:'合成证书'},{querySelector:sel=>e.node(sel)});
+  const created=e.requests.filter(r=>r.url.endsWith('/qualifications')&&r.options.method==='POST');assert.equal(created.length,1);
+  assert.deepEqual(Object.keys(JSON.parse(created[0].options.body)).sort(),['name','reason','teacher_id']);
   const uploads=e.requests.filter(r=>r.url.includes('/attachments/qualification/')),submits=e.requests.filter(r=>r.url.endsWith('/q-new/actions'));
-  assert.equal(uploads.length,mode==='draft'?0:1);assert.equal(submits.length,['submit','submit-error'].includes(mode)?1:0);
-  if(mode==='submit'){assert.equal(uploads[0].options.body.get('expected_version'),'1');assert.equal(JSON.parse(submits[0].options.body).expected_version,2);const paths=e.requests.map(r=>r.url);assert.ok(paths.indexOf('/api/qualifications/q-new')>paths.indexOf('/api/attachments/qualification/q-new'));}
-  assert.match(e.node('#modal-root').innerHTML,/合成证书/);
+  assert.equal(uploads.length,1);assert.equal(submits.length,mode==='upload-error'?0:1);
+  if(mode==='submit')assert.equal(JSON.parse(submits[0].options.body).expected_version,2);
  }
 });
-
 test('资质一次选择三张证书逐份上传，任一失败保留草稿且不提交审核',async()=>{
  for(const failSecond of [false,true]){
   let version=1;const attachments=[];
@@ -1328,34 +1329,32 @@ test('图片材料提供分组预览和下载，文档保留下载，文件名�
  assert.equal((html.match(/data-action="attachment-preview"/g)||[]).length,2);assert.equal((html.match(/data-action="attachment-download"/g)||[]).length,3);assert.match(html,/class="material-list"/);assert.match(html,/正面&lt;证书&gt;.png/);assert.doesNotMatch(html,/<证书>/);
 });
 
-test('资质提交缺附件或格式大小不合格时不创建记录',async()=>{
+test('资质提交缺证书或格式大小不合格时不创建记录',async()=>{
  for(const file of [null,{name:'错误.txt',size:2},{name:'太大.pdf',size:10*1024*1024+1}]){
   const e=engine(async()=>({categories:['教学资质']}),'teacher');e.t.captureForm();await vm.runInContext('qualificationForm',e.ctx)('');e.node('#f-file').files=file?[file]:[];
-  await assert.rejects(e.t.getForm().callback({},{querySelector:sel=>e.node(sel)},{value:'submit'}),/请选择|不能上传/);assert.equal(e.requests.filter(r=>r.options.method==='POST').length,0);
+  await assert.rejects(e.t.getForm().callback({name:'合成证书'},{querySelector:sel=>e.node(sel)}),/请上传证书|不能上传/);assert.equal(e.requests.filter(r=>r.options.method==='POST').length,0);
  }
 });
-
 test('资质临期采用学校提醒天数，草稿不标临期，学校当天和零天窗口有效',()=>{
  const e=engine(),expiry=vm.runInContext('qualificationExpiry',e.ctx);e.ctx.Date=class extends Date{static now(){return Date.parse('2026-10-16T20:00:00Z')}};
  assert.doesNotMatch(expiry('2026-10-23',5),/即将到期/);assert.match(expiry('2026-10-23',30),/即将到期 · 剩余 6 天/);assert.doesNotMatch(expiry('2026-10-23',30,'DRAFT'),/即将到期/);assert.match(expiry('2026-10-17',0),/今天到期/);assert.match(expiry('2026-10-16',30),/已过期 1 天/);assert.match(expiry(null,30),/长期有效/);
 });
 
-test('资质列表四种身份都按状态页签筛选；教师去掉本人姓名与版本列，单页不显示翻页',async()=>{
+test('老师的资质是卡片：证书名和状态，被退回显示原因和修改后重新提交；管理角色保留原表格和状态页签',async()=>{
  const items=['DRAFT','RETURNED','APPROVED'].map((state,i)=>({id:'q'+i,name:'证书<'+i+'>',category:'教学资质',state,certificate_no:'Q'+i,issuer:'合成机构',expires:null}));
- const e=engine(async url=>url.includes('/qualification-summary')?{items:[{key:'VALID',count:1}],expiry_days:5,note:'学校提前5天提醒'}:{items,total:3,page:1,size:20},'teacher');
+ const e=engine(async url=>url.includes('/qualification-summary')?{items:[{key:'VALID',count:1}],expiry_days:5,note:'学校提前5天提醒'}:url.endsWith('/qualifications/q1')?{qualification:items[1],events:[{action:'资质退回补充',reason:'照片太模糊'}]}:{items,total:3,page:1,size:20},'teacher');
  e.t.setUser({user:{id:'u',staff_no:'T1'},role:{kind:'teacher'},permissions:['qualification.read','qualification.write','portal.read']});
- const html=await e.t.pages.qualifications();for(const label of ['继续填写','补充材料','查看详情','合成机构','学校提前5天提醒'])assert.ok(html.includes(label),label);assert.match(html,/证书&lt;0&gt;/);assert.doesNotMatch(html,/<th[^>]*>教师<|<th[^>]*>版本<|pagination/);
+ const html=await e.t.pages.qualifications();
+ for(const label of ['草稿','已退回','有效','照片太模糊','修改后重新提交','提交审核','申报我的资质'])assert.ok(html.includes(label),label);
+ assert.match(html,/证书&lt;0&gt;/);assert.doesNotMatch(html,/合成机构|学校提前5天提醒|<table|qualification-state-tabs/);
  const manager=engine(async()=>({items,total:3,page:1,size:20}));const all=await manager.t.pages.qualifications();assert.match(all,/<th[^>]*>教师 \/ 所属组织</);assert.match(all,/<th[^>]*>版本</);assert.match(all,/qualification-state-tabs/);assert.match(all,/>待审核</);
 });
-
-test('我的资质列表在原证书列展示图片入口，无附件记录说明缺图，管理角色保留原表格',async()=>{
- const items=[{id:'q-image',name:'证书<正本>',category:'职业资格',attachment_ids:['a1','a2'],state:'APPROVED'},{id:'q-empty',name:'历史资质',category:'教学资质',attachment_ids:[],state:'APPROVED'}];
- const e=engine(async url=>url.includes('/qualification-summary')?{items:[],total:2}:{items,total:2,page:1,size:20},'teacher');
- e.t.setUser({user:{id:'u',staff_no:'T1'},role:{kind:'teacher'},permissions:['qualification.read','file.read','portal.read']});
- const html=await e.t.pages.qualifications();assert.match(html,/data-action="qualification-images" data-id="q-image"/);assert.match(html,/data-qualification-preview="q-image"/);assert.match(html,/证书&lt;正本&gt;/);assert.match(html,/暂无图片/);assert.match(html,/当前版本暂无材料/);assert.equal((html.match(/<th[ >]/g)||[]).length,5);
- e.t.setUser({user:{id:'u'},role:{kind:'teacher'},permissions:['qualification.read','portal.read']});assert.doesNotMatch(await e.t.pages.qualifications(),/data-qualification-preview/);
+test('管理角色的资质表格在证书列展示图片入口，无附件记录说明缺图',async()=>{
+ const items=[{id:'q-image',teacher_id:'u',name:'证书<正本>',category:'职业资格',attachment_ids:['a1','a2'],state:'APPROVED'},{id:'q-empty',teacher_id:'u',name:'历史资质',category:'教学资质',attachment_ids:[],state:'APPROVED'}];
+ const e=engine(async url=>url.includes('/qualification-summary')?{items:[],total:2}:{items,total:2,page:1,size:20});
+ e.t.setUser({user:{id:'admin'},role:{kind:'school'},permissions:['qualification.read','qualification.review','file.read','portal.read']});
+ const html=await e.t.pages.qualifications();assert.match(html,/data-action="qualification-images" data-id="q-image"/);assert.match(html,/data-qualification-preview="q-image"/);assert.match(html,/证书&lt;正本&gt;/);assert.match(html,/暂无图片/);
 });
-
 test('证书详情将图片和文档分开，图片同组可切换，空材料保留历史查阅说明',()=>{
  const e=engine(),render=vm.runInContext('qualificationMaterials',e.ctx);
  const html=render([{id:'a1',name:'正面.png',size:100},{id:'a2',name:'背面.jpg',size:200},{id:'a3',name:'说明.pdf',size:300}],'历史材料请查看审核记录');
@@ -1739,7 +1738,7 @@ test('只有一种待办类别时显示分类说明，有多个类别时才提�
 
 
 test('资质状态切换保留关键词并回到第一页，查询表单保留当前状态',async()=>{
- const e=engine(async url=>url.includes('qualification-summary')?{items:[{key:'RETURNED',count:1}],total:1,expiry_days:30,note:'学校提醒口径'}:{items:[],total:0,page:1,size:20},'teacher');
+ const e=engine(async url=>url.includes('qualification-summary')?{items:[{key:'RETURNED',count:1}],total:1,expiry_days:30,note:'学校提醒口径'}:{items:[],total:0,page:1,size:20});
  e.t.setState('qualifications',{q:'证书'},3);vm.runInContext('render=async()=>{}',e.ctx);
  await e.t.handlers['qualification-filter']('RETURNED');
  assert.equal(e.t.getState().filter.q,'证书');assert.equal(e.t.getState().filter.state,'RETURNED');assert.equal(e.t.getState().tablePage,1);
@@ -1747,7 +1746,6 @@ test('资质状态切换保留关键词并回到第一页，查询表单保留�
  await e.t.handlers['qualification-filter']('UNKNOWN');assert.equal(e.t.getState().filter.state,'RETURNED');await e.t.handlers['qualification-filter']('EXPIRED');assert.equal(e.t.getState().filter.state,'EXPIRED');
  assert.ok(e.requests.every(x=>x.options.method==='GET'));
 });
-
 test('本人待确认台账先于流水出现，确认仍绑定原台账，零分和负分不被格式改写',async()=>{
  const items=[{id:'p0',teacher_id:'u',kind:'MANUAL',item_key:'hours',amount:0},{id:'p1',teacher_id:'u',kind:'MANUAL',item_key:'hours',amount:-2}];
  const e=engine(async url=>url.includes('point-balances')?{items:[{id:'balance',teacher_id:'u',period_id:'period',confirmed:false}]}:{items,total:2,sum:-2,page:1,size:20},'teacher');

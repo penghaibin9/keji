@@ -67,3 +67,22 @@ def test_participant_teacher_can_upload_but_not_change_or_close(setup_social, cl
     r = post(c, '/api/social/lifecycle/project/' + pid + '/changes', {'values': {'expected_participants': 40}, 'reason': '参与老师不能改'})
     assert r.status_code == 403
     assert action(c, 'projects', 'social_project', pid, 'close_submit', closeout={'closed_on': '2026-09-02'}).status_code in (403, 422)
+
+
+def test_teacher_qualification_needs_only_name(client2):
+    """2026-11-09：老师只填证书名称（加上传证书）；类别按名称归类，编号自动生成，取得日期记当天。"""
+    from conftest import put
+    c = client2
+    auth(c, 'teacher')
+    cats = c.get('/api/qualification-categories').json()['categories']
+    r = post(c, '/api/qualifications', {'teacher_id': 'teacher', 'name': cats[0], 'reason': '申报本人资质证书'})
+    assert r.status_code == 200, r.text
+    q = r.json()
+    assert q['category'] == cats[0] and q['certificate_no'].startswith('AUTO-') and q['obtained'] and q['issuer'] == ''
+    r = post(c, '/api/qualifications', {'teacher_id': 'teacher', 'name': '茶艺师（高级）', 'reason': '申报本人资质证书'})
+    assert r.status_code == 200 and r.json()['category'] == '其他', r.text
+    other = r.json()
+    r = put(c, '/api/qualifications/' + q['id'], {'teacher_id': 'teacher', 'name': cats[0] + '（复印件）', 'category': q['category'], 'expected_version': q['version'], 'reason': '改名称'})
+    assert r.status_code == 200, r.text
+    assert r.json()['certificate_no'] == q['certificate_no'] and r.json()['category'] == q['category']
+    assert other['certificate_no'] != q['certificate_no']

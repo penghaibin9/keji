@@ -149,17 +149,32 @@ def qualification_detail(ident:str,request:Request):
           'events':events(db,'qualification',ident)}
     return read_operation(request,'qualification.read',load)
 
+def qualification_defaults(data,settings,obj=None):
+    """老师只填证书名称时补齐其余字段；改名称时保留原编号、机构、日期。"""
+    import uuid
+    from ..core import school_today
+    cats=(settings.value.get('categories',[]) if settings else [])
+    v=data.model_dump(exclude={'reason','basis','expected_version'})
+    name=str(v.get('name') or '').strip()
+    if not v.get('category'):v['category']=(obj.category if obj is not None and obj.category in cats else name if name in cats else '其他')
+    if not v.get('certificate_no'):v['certificate_no']=obj.certificate_no if obj is not None else 'AUTO-'+uuid.uuid4().hex[:12].upper()
+    if not v.get('issuer'):v['issuer']=obj.issuer if obj is not None else ''
+    if not v.get('obtained'):v['obtained']=obj.obtained if obj is not None else school_today()
+    if obj is not None and 'expires' not in data.model_fields_set:v['expires']=obj.expires
+    return v
+
 @router.post('/qualifications')
 def qualification_create(data:QualificationIn,request:Request):
     def apply(db,a,s):
         if data.teacher_id!=a.id:raise HTTPException(403,'只能维护本人资质')
         a.check_teacher(db,data.teacher_id,active=True)
         settings=db.get(Setting,'qualification')
-        if not settings or data.category not in settings.value.get('categories',[]):raise HTTPException(422,'请选择有效资质类别')
-        same=db.scalar(select(Qualification).where(Qualification.teacher_id==data.teacher_id,Qualification.certificate_no==data.certificate_no))
+        values=qualification_defaults(data,settings)
+        if not settings or values['category'] not in settings.value.get('categories',[])+['其他']:raise HTTPException(422,'请选择有效资质类别')
+        same=db.scalar(select(Qualification).where(Qualification.teacher_id==data.teacher_id,Qualification.certificate_no==values['certificate_no']))
         if same is not None:
             raise HTTPException(409,'这张证书已在“已删除”里，请在资质列表筛选“已删除”后恢复再修改' if same.state=='DELETED' else '这张证书已经登记过，请在资质列表里修改原记录')
-        obj=Qualification(**data.model_dump(exclude={'reason','basis'}));db.add(obj)
+        obj=Qualification(**values);db.add(obj)
         qualification_revision(db,a,obj,data.reason)
         workflow(db,a,'qualification',obj.id,'新建资质',{},serial(obj),data.reason,data.basis);return obj
     return command(request,data.model_dump(),'qualification.write',apply)
@@ -172,9 +187,10 @@ def qualification_update(ident:str,data:QualificationUpdate,request:Request):
         if obj.state in {'VOID_PENDING','VOID'}:raise HTTPException(409,'资质'+('正在申请作废，请先撤回作废申请' if obj.state=='VOID_PENDING' else '已作废，不能再修改；请重新登记'))
         if obj.state=='DELETED':raise HTTPException(409,'资质已删除，请先恢复再修改')
         settings=db.get(Setting,'qualification')
-        if not settings or data.category not in settings.value.get('categories',[]):raise HTTPException(422,'资质类别无效')
+        values=qualification_defaults(data,settings,obj)
+        if not settings or values['category'] not in settings.value.get('categories',[])+['其他']:raise HTTPException(422,'资质类别无效')
         before=serial(obj)
-        for k,v in data.model_dump(exclude={'reason','basis','expected_version'}).items():setattr(obj,k,v)
+        for k,v in values.items():setattr(obj,k,v)
         obj.state='DRAFT';obj.version+=1
         qualification_revision(db,a,obj,data.reason)
         workflow(db,a,'qualification',obj.id,'修订资质',before,serial(obj),data.reason,data.basis);return obj
