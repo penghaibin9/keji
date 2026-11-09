@@ -1,7 +1,7 @@
 // 2026-11-07 立项（申报）通过以后的运行过程：档案视图、申请变更、年度确认、停用与恢复。
 // 2026-11-09 按设计图 v2：老师“我的X”三步列表、详情只留三个按钮、上传自动分组、结项查缺、学院学校“待我审批”。
 // 菜单不变（培训项目 / 培训课程 / 培训基地 / 培训师资）；入口是详情里的三个主按钮。名称按验收人定的：项目立项、项目运行、项目结项。
-import {quickApply} from './apply-quick.js?v=20261109-v2h';
+import {quickApply} from './apply-quick.js?v=20261109-v2i';
 
 const TYPE_LABEL={project:'培训项目',course:'培训课程',base:'培训基地',trainer:'培训师资'};
 // 三个主按钮：[动作, 名称, 小字]
@@ -325,6 +325,7 @@ async function closeWithCheck(c,d){
   return c.modal('结项 · '+d.name,`<div class="lv-gaps"><strong>还不能结项</strong><ul>${r.gaps.map(x=>`<li>${e(x)}</li>`).join('')}</ul></div>${r.points?`<div class="lv-points">本项目将记积分：${e(r.points)}</div>`:''}`,
    `${report?c.act('补填上报信息','life-report',d.id,'primary'):''}${files&&d.can.upload?c.act('去上传','life-upload',d.type+'|'+d.id,report?'':'primary'):''}${c.act('关闭','close')}`,false,'培训项目 / 结项');
  }
+ if(r.notes?.length)c.toast(r.notes.join('；'));
  await c.runAction('social-detail','social_project|'+d.id);return c.runAction('social-close','');
 }
 
@@ -340,7 +341,7 @@ export async function lifeQueueHtml(c,type){
  const n=k=>items.filter(x=>k==='all'||x.kind===k).length,sel=rows.filter(x=>view2.sel.has(qid(x)));
  const all=rows.filter(x=>x.batch).length>0&&rows.filter(x=>x.batch).every(x=>view2.sel.has(qid(x)));
  return `<section class="lv-queue"><div class="lv-bar"><div class="lv-stages">${Q_TABS.map(([k,l])=>`<button type="button" class="lv-step${k===tab?' on':''}" data-action="q-tab" data-id="${type}|${k}">${l} ${n(k)}</button>`).join('')}</div><button type="button" class="btn primary" data-action="q-bulk" data-id="${type}"${sel.length?'':' disabled'}>批量同意${sel.length?'（'+sel.length+'）':''}</button></div>
-${rows.length?`<div class="lv-table"><table class="table"><thead><tr><th><input type="checkbox" data-action="q-all" data-id="${type}" aria-label="全选"${all?' checked':''}></th><th>事项</th><th>名称</th><th>提交人</th><th>日期</th><th>内容</th><th></th></tr></thead><tbody>${rows.map(x=>`<tr><td>${x.batch?`<input type="checkbox" data-action="q-pick" data-id="${e(qid(x))}" aria-label="选择"${view2.sel.has(qid(x))?' checked':''}>`:'<span class="lv-single" title="需单独办理">单</span>'}</td><td><span class="lv-kind k-${e(x.kind)}">${e(x.label)}</span></td><td><strong>${e(x.name)}</strong></td><td>${e(x.who)}</td><td>${e(x.on)}</td><td class="lv-sum">${e(x.summary)}</td><td class="lv-ops">${c.act('查看','q-view',qid(x),'sm')}${x.batch||x.kind!=='close'?c.act('同意','q-ok',qid(x),'sm primary'):''}${c.act('退回','q-ret',qid(x),'sm')}</td></tr>`).join('')}</tbody></table></div>`:'<p class="lv-empty">没有待审批事项</p>'}</section>`;
+${rows.length?`<div class="lv-table"><table class="table"><thead><tr><th><input type="checkbox" data-action="q-all" data-id="${type}" aria-label="全选"${all?' checked':''}></th><th>事项</th><th>名称</th><th>提交人</th><th>日期</th><th>内容</th><th></th></tr></thead><tbody>${rows.map(x=>`<tr><td>${x.batch?`<input type="checkbox" data-action="q-pick" data-id="${e(qid(x))}" aria-label="选择"${view2.sel.has(qid(x))?' checked':''}>`:'<span class="lv-single" title="需单独办理">单</span>'}</td><td><span class="lv-kind k-${e(x.kind)}">${e(x.label)}</span></td><td><strong>${e(x.name)}</strong></td><td>${e(x.who)}</td><td>${e(x.on)}</td><td class="lv-sum">${e(x.summary)}</td><td class="lv-ops">${c.act('查看','q-view',qid(x),'sm')}${x.batch||(x.kind!=='close')?c.act('同意','q-ok',qid(x),'sm primary'):''}${c.act('退回','q-ret',qid(x),'sm')}</td></tr>`).join('')}</tbody></table></div>`:'<p class="lv-empty">没有待审批事项</p>'}</section>`;
 }
 const findQ=id=>(view2.items||[]).find(x=>qid(x)===id);
 async function approveQ(c,x,extra={}){
@@ -349,6 +350,7 @@ async function approveQ(c,x,extra={}){
  if(x.type==='project'){
   const body={action:x.action,reason,basis:extra.basis||'',expected_version:x.version};
   if(x.action==='close')body.materials_checked=['plan','filing_form','roster','attendance','hours','process','assessment','outcomes'];
+  if(extra.review)body.review=extra.review;
   if(extra.prior_review_on)body.prior_review_on=extra.prior_review_on;
   return c.api('/social/projects/'+x.id+'/actions',{method:'POST',body});
  }
@@ -370,7 +372,7 @@ function returnForm(c,x){
 }
 function okForm(c,x){
  // 需要依据（补贴性/高风险备案、人事认定、教务备案）的不进批量，这里单独补依据。
- const needPrior=x.type==='project'&&x.action==='file',needBasis=needPrior||x.kind==='change'||x.label==='认定'||x.label==='备案'||x.needs_basis;
+ const needPrior=x.type==='project'&&x.action==='file'&&!x.batch,needBasis=needPrior||x.needs_basis||(!x.batch&&x.kind!=='close');
  if(!needBasis)return approveQ(c,x).then(async()=>{c.toast('已同意');await c.render?.()});
  c.formModal('同意 · '+x.name,c.field('basis',needPrior?'前置审核依据':x.needs_basis?'认定依据（协议、发文或会议纪要）':'依据（文号、日期）','text','',{full:true,required:!!x.needs_basis})+(needPrior?c.field('prior_review_on','前置审核日期','date','',{required:false}):''),async v=>{
   await approveQ(c,x,{basis:v.basis||'',prior_review_on:v.prior_review_on||''});c.closeModal();c.toast('已同意');await c.render?.();
@@ -381,9 +383,35 @@ async function closeReviewModal(c,x){
  const files=r.files||[];
  const grid=`<div class="lv-mat">${GROUPS.map(g=>{const fs=files.filter(f=>groupOf(f.name)===g);return `<div class="lv-group"><div class="lv-ghead"><strong>${g}</strong><span>${fs.length}</span></div>${fs.map(f=>`<a class="lv-file is-link" href="/api/attachments/${e(f.id)}/download" target="_blank" rel="noopener">${e(f.name)}</a>`).join('')||'<div class="lv-file is-empty">—</div>'}</div>`}).join('')}</div>`;
  const stats=`<div class="life-stats">${(d.stats||[]).map(([k,v])=>`<div><b>${e(v)}</b><small>${e(k)}</small></div>`).join('')}${r.closeout?.satisfaction!=null?`<div><b>${e(r.closeout.satisfaction)}%</b><small>满意度</small></div>`:''}</div>`;
- const body=`<div class="life-archive"><dl class="life-facts">${(d.facts||[]).map(([k,v])=>`<div><dt>${e(k)}：</dt><dd>${e(v)}</dd></div>`).join('')}</dl>${stats}${r.points?`<div class="lv-points">本项目将记积分：${e(r.points)}</div>`:''}<div class="lv-mat-head"><h3>运行材料 <span class="life-count">${files.length}</span></h3>${files.length?c.act('一键下载（'+files.length+' 个文件）','q-dl',x.id,'primary'):''}</div>${grid}</div>`;
- view2.files=files;
- return c.modal((x.label||'结项')+' · '+x.name,body,`${c.act('退回','q-ret',qid(x),'')}${c.act('同意','q-ok-close',qid(x),'primary')}${c.act('关闭','close')}`,true,'培训项目 / 结项审批');
+ const noUnits=!r.units,college=x.action==='approve';
+ const unitsNote=noUnits?`<div class="lv-gaps"><strong>老师还没上传参训明细表</strong></div>`:'';
+ const body=`<div class="life-archive">${unitsNote}<dl class="life-facts">${(d.facts||[]).map(([k,v])=>`<div><dt>${e(k)}：</dt><dd>${e(v)}</dd></div>`).join('')}</dl>${stats}${r.points?`<div class="lv-points">本项目将记积分：${e(r.points)}</div>`:''}<div class="lv-mat-head"><h3>运行材料 <span class="life-count">${files.length}</span></h3>${files.length?c.act('一键下载（'+files.length+' 个文件）','q-dl',x.id,'primary'):''}</div>${grid}</div>`;
+ view2.files=files;view2.review=r;
+ const ok=noUnits?'':college?c.act('同意','q-ok-close',qid(x),'primary'):c.act('同意','q-close-review',qid(x),'primary');
+ return c.modal((x.label||'结项')+' · '+x.name,body,`${c.act('退回','q-ret',qid(x),'')}${ok}${c.act('关闭','close')}`,true,'培训项目 / 结项审批');
+}
+// 学校结项核验：登记满意度（管理办法第十四条）和财务确认的到账收入、分配（第二十一条），填完才能同意。
+function schoolCloseForm(c,x){
+ const r=view2.review||{},co=r.closeout||{},income=Number(co.actual_income??r.expected_income??0)||0;
+ const measured=co.satisfaction!=null&&co.satisfaction!=='';
+ const body=(measured?'':`<fieldset class="form-field full"><legend>学员满意度</legend><div class="choice-row"><label class="choice"><input type="radio" name="sat" value="ok" checked><span>满意（85% 及以上）</span></label><label class="choice"><input type="radio" name="sat" value="low"><span>不满意（低于 85%）</span></label></div></fieldset>`)
+  +c.field('rectification_due','整改期限','date','',{required:false})
+  +c.field('actual_income','到账收入（元）','number',String(income),{min:0,step:'0.01'})
+  +(income>0?c.field('funding_source','资金来源','select','other_training',{options:[['other_training','其他培训收入'],['government_special','政府专项资金']]})+c.field('retained','学校留存（元）','number','',{required:false,min:0,step:'0.01'})+c.field('personnel','人员支出（元）','number','',{required:false,min:0,step:'0.01'})+c.field('finance_reference','财务到账依据','text','',{required:false}):'');
+ c.formModal('结项核验 · '+x.name,body,async(v,form)=>{
+  const low=!measured&&form?.querySelector?.('[name="sat"]:checked')?.value==='low';
+  const sat=measured?String(co.satisfaction):(low?'84':'85');
+  if((low||Number(sat)<85)&&!v.rectification_due)throw Error('满意度低于 85%，请定整改期限');
+  const got=Number(v.actual_income||0);
+  const review={satisfaction:sat,actual_income:String(got),finance_reference:String(v.finance_reference||'').trim()||(got===0?'零收入项目，无到账收入':'')};
+  if(got>0){
+   if(!review.finance_reference)throw Error('请填写财务到账依据');
+   review.funding_source=v.funding_source||'other_training';
+   if(review.funding_source==='other_training'){if(v.retained===''||v.personnel===''||v.retained==null||v.personnel==null)throw Error('请填写学校留存和人员支出');review.retained=String(v.retained);review.personnel=String(v.personnel)}
+  }
+  if(v.rectification_due)review.rectification_due=v.rectification_due;
+  await approveQ(c,x,{review});c.closeModal();c.toast('已结项');await c.render?.();
+ },{submit:'同意',stepper:false,contextLabel:'培训项目 / 结项核验'});
 }
 export async function queueAction(action,id,c){
  if(action==='lv-tab'){const [t,k]=id.split('|');view2.tab[t]=k;return c.render?.()}
@@ -402,6 +430,7 @@ export async function queueAction(action,id,c){
  if(!x)throw Error('这条已经办理过了，请刷新');
  if(action==='q-ok')return okForm(c,x);
  if(action==='q-ok-close'){c.closeModal();return okForm(c,x)}
+ if(action==='q-close-review'){c.closeModal();return schoolCloseForm(c,x)}
  if(action==='q-ret'){c.closeModal?.();return returnForm(c,x)}
  if(action==='q-view'){
   if(x.kind==='change')return c.runAction('life-change-view',x.id);
@@ -433,6 +462,6 @@ async function againForm(c,id){
   view2.tab.project='apply';c.closeModal();c.toast('已提交学院审批');await c.render?.();
  },{submit:'提交学院审批',stepper:false,contextLabel:'培训项目 / 再办一期'});
 }
-export const QUEUE_ACTIONS=['lv-tab','lv-rf','lv-again','q-tab','q-pick','q-all','q-bulk','q-dl','q-ok','q-ok-close','q-ret','q-view'];
+export const QUEUE_ACTIONS=['lv-tab','lv-rf','lv-again','q-tab','q-pick','q-all','q-bulk','q-dl','q-ok','q-ok-close','q-close-review','q-ret','q-view'];
 
 export const LIFE_ACTIONS=[...QUEUE_ACTIONS,'life-open','life-info','life-note','life-change','life-annual','life-stop','life-resume','life-close','life-upload','life-units','life-report','life-change-view','life-change-act','quick-apply'];

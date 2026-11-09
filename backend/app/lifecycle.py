@@ -923,9 +923,7 @@ def close_gaps(db, project):
         from .social_schemas import application_blockers
         if issues := application_blockers(d):
             gaps.append('还要补上报信息：' + '、'.join(i.replace('请填写', '').replace('请选择', '') for i in issues) + '，不补不能结项')
-    rows = st.units(db, project.id)
-    if not rows:
-        gaps.append('还没有参训明细，人次和积分都无法核算')
+    # 2026-11-09（9e98fb3 起）：老师结项不再被参训明细拦，明细由学院在审核结项时导入，学院、学校通过前必须有。
     files = st.attachments(db, 'social_project', project.id)
     names = [str(getattr(f, 'name', '') or (f.get('name') if isinstance(f, dict) else '')) for f in files]
     if not any(('签到' in n or '名册' in n or '名单' in n) for n in names):
@@ -935,6 +933,12 @@ def close_gaps(db, project):
     if (project.data or {}).get('category') == 'subsidy' and not any('报送' in n or '凭证' in n for n in names):
         gaps.append('缺报送凭证，补贴性培训不计积分')
     return gaps
+
+
+def close_notes(db, project):
+    """结项时只提示、不拦的事：参训明细由老师上传 Excel，学院、学校通过前必须有。"""
+    from . import social_training as st
+    return [] if st.units(db, project.id) else ['还没上传参训明细表']
 
 
 def _date_line(kind, obj):
@@ -1036,10 +1040,11 @@ def approval_queue(db, a, kind):
             if closing:
                 summary = '满意度 ' + str((p.closeout or {}).get('satisfaction', '—')) + '% · 材料 ' + str(len(st.attachments(db, 'social_project', p.id))) + ' 份'
             action = {'COLLEGE': 'approve', 'CLOSE_COLLEGE': 'approve', 'SUBMITTED': 'file', 'CLOSE_REVIEW': 'close'}[p.state]
+            unit_count = len(st.units(db, p.id)) if closing else None
             out.append({'kind': 'close' if closing else 'apply', 'label': ('结项核验' if p.state == 'CLOSE_REVIEW' else '结项') if closing else ('备案' if p.state == 'SUBMITTED' else '立项'),
                         'type': kind, 'id': p.id, 'name': d.get('name', ''), 'who': who_name(p.owner_id), 'on': str(apps.last_event_at(db, p) or p.created_at)[:10],
-                        'summary': summary, 'action': action, 'version': p.version,
-                        'batch': action in ('approve',) or (action == 'file' and not (d.get('category') == 'subsidy' or d.get('high_risk')))})
+                        'summary': summary, 'action': action, 'version': p.version, 'state': p.state, 'units': unit_count,
+                        'batch': (action == 'approve' and not (closing and not unit_count)) or (action == 'file' and not (d.get('category') == 'subsidy' or d.get('high_risk')))})
     else:
         for obj in db.scalars(select(SocialResource).where(SocialResource.kind == RESOURCE_KIND[kind], SocialResource.state.in_(apps.PENDING_STATES))):
             if not apps.is_application(obj):
@@ -1078,7 +1083,8 @@ def close_review(db, a, project):
     from . import social_training as st
     v = view(db, a, 'project', project)
     files = st.evidence(db, 'social_project', project.id)
-    return {'archive': v, 'files': files, 'points': points_line(db, project), 'closeout': serial(project.closeout or {})}
+    return {'archive': v, 'files': files, 'points': points_line(db, project), 'closeout': serial(project.closeout or {}),
+            'units': len(st.units(db, project.id)), 'expected_income': serial((project.data or {}).get('expected_income')), 'state': project.state}
 
 
 def points_view(db, a, project):
