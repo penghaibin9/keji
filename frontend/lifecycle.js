@@ -1,7 +1,7 @@
 // 2026-11-07 立项（申报）通过以后的运行过程：档案视图、申请变更、年度确认、停用与恢复。
 // 2026-11-09 按设计图 v2：老师“我的X”三步列表、详情只留三个按钮、上传自动分组、结项查缺、学院学校“待我审批”。
 // 菜单不变（培训项目 / 培训课程 / 培训基地 / 培训师资）；入口是详情里的三个主按钮。名称按验收人定的：项目立项、项目运行、项目结项。
-import {quickApply} from './apply-quick.js?v=20261109-v2f';
+import {quickApply} from './apply-quick.js?v=20261109-v2g';
 
 const TYPE_LABEL={project:'培训项目',course:'培训课程',base:'培训基地',trainer:'培训师资'};
 // 三个主按钮：[动作, 名称, 小字]
@@ -321,8 +321,9 @@ async function closeWithCheck(c,d){
  const r=await c.api('/social/lifecycle/close-check/'+encodeURIComponent(d.id));
  if(r.gaps?.length){
   const e=c.esc;
-  return c.modal('结项 · '+d.name,`<div class="lv-gaps"><strong>材料没传齐</strong><ul>${r.gaps.map(x=>`<li>${e(x)}</li>`).join('')}</ul></div>${r.points?`<div class="lv-points">本项目将记积分：${e(r.points)}</div>`:''}`,
-   `${d.can.upload?c.act('去上传','life-upload',d.type+'|'+d.id,'primary'):''}${c.act('关闭','close')}`,false,'培训项目 / 结项');
+  const report=r.gaps.some(x=>x.includes('上报信息')),files=r.gaps.some(x=>/签到|照片|凭证/.test(x));
+  return c.modal('结项 · '+d.name,`<div class="lv-gaps"><strong>还不能结项</strong><ul>${r.gaps.map(x=>`<li>${e(x)}</li>`).join('')}</ul></div>${r.points?`<div class="lv-points">本项目将记积分：${e(r.points)}</div>`:''}`,
+   `${report?c.act('补填上报信息','life-report',d.id,'primary'):''}${files&&d.can.upload?c.act('去上传','life-upload',d.type+'|'+d.id,report?'':'primary'):''}${c.act('关闭','close')}`,false,'培训项目 / 结项');
  }
  await c.runAction('social-detail','social_project|'+d.id);return c.runAction('social-close','');
 }
@@ -339,7 +340,7 @@ export async function lifeQueueHtml(c,type){
  const n=k=>items.filter(x=>k==='all'||x.kind===k).length,sel=rows.filter(x=>view2.sel.has(qid(x)));
  const all=rows.filter(x=>x.batch).length>0&&rows.filter(x=>x.batch).every(x=>view2.sel.has(qid(x)));
  return `<section class="lv-queue"><div class="lv-bar"><div class="lv-stages">${Q_TABS.map(([k,l])=>`<button type="button" class="lv-step${k===tab?' on':''}" data-action="q-tab" data-id="${type}|${k}">${l} ${n(k)}</button>`).join('')}</div><button type="button" class="btn primary" data-action="q-bulk" data-id="${type}"${sel.length?'':' disabled'}>批量同意${sel.length?'（'+sel.length+'）':''}</button></div>
-${rows.length?`<div class="lv-table"><table class="table"><thead><tr><th><input type="checkbox" data-action="q-all" data-id="${type}" aria-label="全选"${all?' checked':''}></th><th>事项</th><th>名称</th><th>提交人</th><th>日期</th><th>内容</th><th></th></tr></thead><tbody>${rows.map(x=>`<tr><td>${x.batch?`<input type="checkbox" data-action="q-pick" data-id="${e(qid(x))}" aria-label="选择"${view2.sel.has(qid(x))?' checked':''}>`:'<span class="lv-single" title="需单独办理">单</span>'}</td><td><span class="lv-kind k-${e(x.kind)}">${e(x.label)}</span></td><td><strong>${e(x.name)}</strong></td><td>${e(x.who)}</td><td>${e(x.on)}</td><td class="lv-sum">${e(x.summary)}</td><td class="lv-ops">${c.act('查看','q-view',qid(x),'sm')}${x.batch||x.needs_basis?c.act('同意','q-ok',qid(x),'sm primary'):''}${c.act('退回','q-ret',qid(x),'sm')}</td></tr>`).join('')}</tbody></table></div>`:'<p class="lv-empty">没有待审批事项</p>'}</section>`;
+${rows.length?`<div class="lv-table"><table class="table"><thead><tr><th><input type="checkbox" data-action="q-all" data-id="${type}" aria-label="全选"${all?' checked':''}></th><th>事项</th><th>名称</th><th>提交人</th><th>日期</th><th>内容</th><th></th></tr></thead><tbody>${rows.map(x=>`<tr><td>${x.batch?`<input type="checkbox" data-action="q-pick" data-id="${e(qid(x))}" aria-label="选择"${view2.sel.has(qid(x))?' checked':''}>`:'<span class="lv-single" title="需单独办理">单</span>'}</td><td><span class="lv-kind k-${e(x.kind)}">${e(x.label)}</span></td><td><strong>${e(x.name)}</strong></td><td>${e(x.who)}</td><td>${e(x.on)}</td><td class="lv-sum">${e(x.summary)}</td><td class="lv-ops">${c.act('查看','q-view',qid(x),'sm')}${x.batch||x.kind!=='close'?c.act('同意','q-ok',qid(x),'sm primary'):''}${c.act('退回','q-ret',qid(x),'sm')}</td></tr>`).join('')}</tbody></table></div>`:'<p class="lv-empty">没有待审批事项</p>'}</section>`;
 }
 const findQ=id=>(view2.items||[]).find(x=>qid(x)===id);
 async function approveQ(c,x,extra={}){

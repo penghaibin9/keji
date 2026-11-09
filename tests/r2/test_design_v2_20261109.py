@@ -113,3 +113,15 @@ def test_base_application_recognition_optional_until_school_approval(client2, ap
     r = post(c, '/api/applications/' + item['id'] + '/actions', {'action': 'approve', 'expected_version': version, 'reason': '同意', 'basis': '学院会议纪要（2026-11-01）'})
     assert r.status_code == 200, r.text
     assert c.get('/api/applications/' + item['id']).json()['item']['data']['recognition'] == '学院会议纪要（2026-11-01）'
+
+
+def test_close_check_lists_not_ended_and_report_info(setup_social, client2, app2):
+    """结项查缺也列出“培训还没结束”和“还要补上报信息”，不要等到结项表里才报错。"""
+    from app.social_models import SocialProject
+    with app2.state.sessions.begin() as db:
+        p = db.get(SocialProject, setup_social)
+        p.data = {**p.data, 'end_date': '2099-12-31', 'report_pending': True, 'audiences': [], 'audience_other': '', 'service_types': []}
+    auth(client2, 'teacher')
+    gaps = client2.get('/api/social/lifecycle/close-check/' + setup_social).json()['gaps']
+    assert any('2099-12-31' in g and '结束后才能结项' in g for g in gaps), gaps
+    assert any('上报信息' in g for g in gaps), gaps

@@ -1,4 +1,4 @@
-import {bindFormAssists,rememberForm,formSnapshot,dirtyForms,confirmFormReplacement} from './form-assist.js?v=20261109-v2f';
+import {bindFormAssists,rememberForm,formSnapshot,dirtyForms,confirmFormReplacement} from './form-assist.js?v=20261109-v2g';
 
 export const draftOwnerKey=owner=>[owner?.user_id,owner?.role_id,owner?.org_id].join('|');
 export function draftPayload(form){

@@ -917,6 +917,13 @@ def close_gaps(db, project):
     """结项前查缺：按积分口径说明缺了会怎样。"""
     from . import social_training as st
     gaps = []
+    d = project.data or {}
+    if d.get('end_date') and d['end_date'] > school_today().isoformat():
+        gaps.append('培训要到 ' + d['end_date'] + ' 才结束，结束后才能结项')
+    if d.get('report_pending'):
+        from .social_schemas import application_blockers
+        if issues := application_blockers(d):
+            gaps.append('还要补上报信息：' + '、'.join(i.replace('请填写', '').replace('请选择', '') for i in issues) + '，不补不能结项')
     rows = st.units(db, project.id)
     if not rows:
         gaps.append('还没有参训明细，人次和积分都无法核算')

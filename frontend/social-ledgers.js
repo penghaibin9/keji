@@ -1,4 +1,4 @@
-import {validateFormAssists} from './form-assist.js?v=20261109-v2f';
+import {validateFormAssists} from './form-assist.js?v=20261109-v2g';
 // 学院台账报送与口径检查、首页五项指标、课程视频分钟资源。
 // 推荐值按系统推荐口径计算，学校书面确认前只用于核对。
 import {mineSchoolData} from './school-data.js?v=20261019-merge1&display=20261019-clean2';
