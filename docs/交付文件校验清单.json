@@ -827,12 +827,12 @@
       "size": 14358
     },
     "frontend/app.js": {
-      "sha256": "907dc048cb1e9325b77ecefc5d5abd9edfd7de4f64c73ed49e6712cbd652828c",
-      "size": 540714
+      "sha256": "cec05a5d4b1e08dd769e1c778e476b56abc268d380ba77097d4d482569876220",
+      "size": 542794
     },
     "frontend/applications.js": {
-      "sha256": "772e5a2cc4bad19c1eb089a20cb91be2189f0bc040c975f87a0ebc3c492ea55d",
-      "size": 75206
+      "sha256": "13b3fb1aa2b8bb5e69a63791cf9b77b67167e30408266fec883fa2953955ebbd",
+      "size": 75195
     },
     "frontend/apply-quick.js": {
       "sha256": "3526fcb14844470560f5253834af054dbfe0ba3455608dff79d1a133bf6a83c3",
@@ -1575,12 +1575,12 @@
       "size": 4418
     },
     "frontend/form-assist.js": {
-      "sha256": "c384b37d4c1a656793c552b748afc0c6898029f88c4b5d0ce822a7443d8106d7",
-      "size": 27035
+      "sha256": "77c392491a77b4572e628ec556161a2d4a1d52edc6818d8f32223e85c0575d08",
+      "size": 27541
     },
     "frontend/form-drafts.js": {
-      "sha256": "c71fa48e6a80f58a4936f895a9dc8d2bba80398c64f90db82cd72de7e7cef723",
-      "size": 12991
+      "sha256": "7753ee63dbdc1223f529d52b9ed0de7a6c5f22f38a2cec1bf4f52cde3165c5d5",
+      "size": 13135
     },
     "frontend/help-content.js": {
       "sha256": "6b14d6a829ae5c3235b716dfc00058beb9ccf0e3b1a9026f5fda4bdb8d462eb3",
@@ -1599,8 +1599,8 @@
       "size": 3450
     },
     "frontend/help-system.js": {
-      "sha256": "ac145eb9684a45af07cfba3fac5e77fe866218ebfd0caa2071107ce9f53bf7fb",
-      "size": 29963
+      "sha256": "1186d6184bbefa6cae847fbaf8ffc004532beee2211e0ac551184fc33c57b873",
+      "size": 30073
     },
     "frontend/history-projects.js": {
       "sha256": "2a354347db4c4d503847dd5aaab85bda4901d5204f93436274d9e1fdf62d7f8f",
@@ -1611,7 +1611,7 @@
       "size": 2302
     },
     "frontend/index.html": {
-      "sha256": "cb6279ae0422aa2325f4c7cc2802f27dd8eda90425617bb1411c51b55ffdc3d1",
+      "sha256": "37471d0db11affc2f97d7fe9812a928e310105fa0dfad87b71c337d280fb408a",
       "size": 1862
     },
     "frontend/integration-drafts.js": {
@@ -1627,7 +1627,7 @@
       "size": 9594
     },
     "frontend/lifecycle.js": {
-      "sha256": "c64c5571c3bd190249b3b3cc7fd8c628359583bf0d1dc3d7867cd1ca6feeb2c0",
+      "sha256": "653909ba2177e76748dc283a0a729856e1185235391efe22aaa88ddfaf6594ee",
       "size": 45751
     },
     "frontend/login.css": {
@@ -1647,8 +1647,8 @@
       "size": 47694
     },
     "frontend/professional.css": {
-      "sha256": "8b9df169942c2e96c480cde2e9fbefbd8b979fa6b2a0de7abe4b38ac2924e773",
-      "size": 46894
+      "sha256": "4f7833c86584c91a7926dec6fc119056e8c8cedd1eb0cfd8c80385d02165d045",
+      "size": 47228
     },
     "frontend/school-cockpit.css": {
       "sha256": "cc25c5d17e16857a5e6aab6bc79254aad61d21faf8a860d480b10e4fb848cdbb",
@@ -1675,16 +1675,16 @@
       "size": 4615
     },
     "frontend/social-ledgers.js": {
-      "sha256": "1d6e426597efc6ac8b36f924a9379cac1aa2b06a5427cdce4ce44dd28258a110",
-      "size": 64561
+      "sha256": "6d5652e731301fa13a813b2aac7e81bfab66e83fac2392803e3026d3629d7be4",
+      "size": 65044
     },
     "frontend/social-training.css": {
       "sha256": "d88c7d1ce4ab99c4dda85139e3c2ab205663474d31a7977e4b776aee040ae5f2",
       "size": 71868
     },
     "frontend/social-training.js": {
-      "sha256": "554965e2f15d7b3f597b6e5adec0e796cc8cbefe2b3835dce05a31ba27c57f3b",
-      "size": 197450
+      "sha256": "ce87f9b1a9b16c321e886fd42a889c689affb76f0c55310ae8da0e6a96120588",
+      "size": 196899
     },
     "frontend/styles.css": {
       "sha256": "60b9696e59938050c07e549720196c62746d39837d59991f5cb37415ee4c02f9",
@@ -1703,8 +1703,8 @@
       "size": 35960
     },
     "frontend/training-workspace.js": {
-      "sha256": "63bca3096701371b168e5737ba335438245ee5ba70b9ca049f6fcf4441dccc5b",
-      "size": 26892
+      "sha256": "0ae22f38c284867dcc978059464df8f5f581013d9d661666a5a568bc72397197",
+      "size": 26769
     },
     "frontend/vendor/laydate/LICENSE": {
       "sha256": "a29d634f60ffed9a8030bdddca78dc0b886d8b822acdf9ae054e77e1bf0d8213",
@@ -2075,8 +2075,8 @@
       "size": 9470
     },
     "tests/js/r11_portal.test.mjs": {
-      "sha256": "44aed641b2af09f6d52ff16ccb24afe4493ce7da4cf4896dd9a7b7357cfaf4ed",
-      "size": 209939
+      "sha256": "e5d6d5651f4b40b5d4b5a393458783c4ce11eaebbc3b5263f31db921cfa59143",
+      "size": 210271
     },
     "tests/js/r3_org_assessment.test.mjs": {
       "sha256": "84e21d17d4741905a37819253e470fd0df42590d01a36d59ea946b0e82cea11f",
@@ -2123,8 +2123,8 @@
       "size": 45262
     },
     "tests/js/social-training.test.mjs": {
-      "sha256": "00fafc45473badb97ce57dbf5177756e986431dd4384f81c8018c7eb86df7e94",
-      "size": 95483
+      "sha256": "dba641c057dd1c747e6737db76e1151bb29feedf2a712605e98d62311283d505",
+      "size": 96406
     },
     "tests/js/training-workspace.test.mjs": {
       "sha256": "47b2952aff7d7b7a6156a08cd9572a9183c0b3e10d9a6bad54b3ae071646c634",
