@@ -387,7 +387,8 @@ body:not(.no-shell) #content .page-title .teacher-page-subtitle{font-size:15px;l
 .lv-queue{margin-bottom:16px}
 .lv-table{background:#fff;border:1px solid #dce6f3;border-radius:11px;overflow:hidden}
 .lv-table td{vertical-align:middle}
-.lv-sum{color:#536985;max-width:360px}
+.lv-sum{color:#536985;max-width:280px}
+.lv-table table{width:100%;table-layout:auto}.lv-ops .btn{padding:4px 10px}
 .lv-ops{white-space:nowrap}.lv-ops .btn{margin-left:4px}
 .lv-kind{display:inline-block;font-size:12px;padding:1px 8px;border-radius:4px;white-space:nowrap}
 .lv-kind.k-apply{background:#eaf1ff;color:#245ee0}.lv-kind.k-change{background:#fff3e0;color:#a35b00}.lv-kind.k-close{background:#f1ecff;color:#6340c8}

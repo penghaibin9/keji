@@ -156,11 +156,19 @@ def check_access(db, a, kind, obj, *, write=False):
         raise HTTPException(403, '只有负责人（申请人）或所属学院、学校可以办理')
     if mine or is_manager(a, obj):
         return
+    if kind == 'project' and a.role.kind == 'teacher' and is_member(db, a, obj):
+        return
     if a.role.kind == 'dept':
         who = applicant(db, kind, obj)
         if (who and who.org_id in a.org_ids) or obj.org_id in a.org_ids:
             return
     raise HTTPException(403, '超出你的查看范围')
+
+
+def is_member(db, a, obj):
+    """参与授课（在参训明细里有本人）但不是负责人的老师：能看档案、上传运行材料，不能变更、结项。"""
+    from . import social_training as st
+    return any(t.get('teacher_id') == a.id for u in st.units(db, obj.id) for t in (u.data or {}).get('teachers') or [])
 
 
 def running(kind, obj):
@@ -664,8 +672,10 @@ def view(db, a, kind, obj):
     if kind == 'project':
         rows = st.units(db, obj.id)
         effective = sum(st.unit_counts(u.data)['effective'] for u in rows)
-        stats = [['参训明细', str(len(rows)) + ' 条'], ['有效人次', str(effective) + ' / 预估 ' + str(obj.data.get('expected_participants') or 0)],
-                 ['运行记录', str(notes) + ' 笔'], ['材料', str(materials) + ' 份']]
+        # 2026-11-09 设计图 v2：已开期次、参训人次、到账收入、材料。
+        income = (obj.closeout or {}).get('actual_income')
+        stats = [['已开期次', str(len({u.data.get('class_code') for u in rows})) + ' 期'], ['参训人次', str(effective) + ' / 预估 ' + str(obj.data.get('expected_participants') or 0)],
+                 ['到账收入', (str(income) + ' 元') if income not in (None, '') else '—'], ['材料', str(materials) + ' 份']]
         if obj.state == 'FILED':
             end = date.fromisoformat(obj.data['end_date'])
             start = date.fromisoformat(obj.data['start_date'])
@@ -727,7 +737,8 @@ def view(db, a, kind, obj):
                     'resume': can_write and obj.state == STOPPED,
                     'close': kind == 'project' and obj.state == 'FILED' and (mine or (is_manager(a, obj) and 'records.write' in a.permissions)),
                     # 师资的认定材料办结后保持原样（不追加），运行材料只给项目、课程、基地。
-                    'upload': can_write and is_run and (kind == 'project' or kind in ('course', 'base') and bool(d.get('application')))}}
+                    'upload': (can_write or (kind == 'project' and a.role.kind == 'teacher' and is_member(db, a, obj))) and is_run and (kind == 'project' or kind in ('course', 'base') and bool(d.get('application')))},
+            'lead': can_write, 'points': points_view(db, a, obj) if kind == 'project' else None}
 
 
 # ---- 运行卡片（2026-11-09，按设计稿：列表页的“X运行”卡片 + 学院“待我审批的变更”） ----
@@ -1059,3 +1070,14 @@ def close_review(db, a, project):
     v = view(db, a, 'project', project)
     files = st.evidence(db, 'social_project', project.id)
     return {'archive': v, 'files': files, 'points': points_line(db, project), 'closeout': serial(project.closeout or {})}
+
+
+def points_view(db, a, project):
+    """详情页“运行汇总”里的积分：已结项且已归档的显示已记积分，否则按现行口径预估。"""
+    booked = points_booked(db, project)
+    if project.state == 'CLOSED' and booked:
+        return {'label': '已记积分', 'value': booked.get(a.id, '0'), 'line': '、'.join(booked.values()) and points_line(db, project)}
+    est = points_estimate(db, project)
+    if est is None:
+        return {'label': '预计积分', 'value': '口径未启用', 'line': ''}
+    return {'label': '预计积分', 'value': est.get(a.id, '0') if a.role.kind == 'teacher' else str(sum(Decimal(v) for v in est.values())), 'line': points_line(db, project)}

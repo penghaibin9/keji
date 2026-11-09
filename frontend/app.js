@@ -324,6 +324,7 @@ function openMaterialPreview(items,start,load,save=null){
 }
 function bindFileFeedback(form){
  $$('input[type=file]',form).forEach((input,index)=>{
+  if(input.dataset?.plainFile)return;  // 自己画分组预览的上传框（运行材料）不再套通用预览
   const status=document.createElement('p');status.className='file-selection-status';status.id=(input.id||'file-'+index)+'-selection';status.setAttribute('role','status');
   const previews=document.createElement('div');previews.className='material-selection';previews.setAttribute('aria-label','已选材料预览');input.insertAdjacentElement('afterend',previews);input.insertAdjacentElement('afterend',status);
   input.setAttribute('aria-describedby',[input.getAttribute('aria-describedby'),status.id].filter(Boolean).join(' '));let selection=0;

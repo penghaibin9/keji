@@ -289,7 +289,7 @@ export async function lifeListHtml(c,page){
 
 // 上传材料：一次拖多个，按文件名自动分组（签到表、照片、课件、其他），不填说明。
 const GROUPS=['签到表','照片','课件','其他'];
-export const groupOf=name=>/签到|名单|名册|花名册/.test(name)?'签到表':/\.(jpe?g|png|heic|webp)$/i.test(name)?'照片':/课件|教案|讲义/.test(name)?'课件':'其他';
+export const groupOf=name=>/签到|名单|名册|花名册/.test(name)?'签到表':/课件|教案|讲义/.test(name)?'课件':/\.(jpe?g|png|heic|webp)$/i.test(name)?'照片':'其他';
 function groupedHtml(c,files){
  const e=c.esc;if(!files.length)return '';
  return `<div class="lv-groups">${GROUPS.map(g=>{const fs=files.filter(f=>groupOf(f.name)===g);return `<div class="lv-group"><div class="lv-ghead"><b>${g}</b><span>${fs.length}</span></div>${fs.map(f=>`<div class="lv-file">${e(f.name)}</div>`).join('')||'<div class="lv-file is-empty">—</div>'}</div>`}).join('')}</div>`;
@@ -298,7 +298,7 @@ async function uploadGrouped(c,d,refresh){
  const kind=d.type==='project'?'social_project':'social_resource',ident=d.id;
  const latest=async()=>{const x=await c.api('/social/objects/'+kind+'/'+ident);return {version:x.item.version,attachments:x.attachments||[]}};
  const {checkUploadFiles,uploadEntries,uploadSequential}=await import('./approval-flow.js?v=20261021-form-merged1');
- const body=`<label class="lv-drop form-field full" id="lv-drop"><input type="file" id="lv-files" multiple accept=".pdf,.png,.jpg,.jpeg" hidden><b>拖入文件，或点击选择</b><span>可一次选多个</span></label><div id="lv-grouped" class="form-field full"></div>`;
+ const body=`<label class="lv-drop form-field full" id="lv-drop"><input type="file" id="lv-files" data-plain-file="1" data-assist-control="true" multiple accept=".pdf,.png,.jpg,.jpeg" hidden><b>拖入文件，或点击选择</b><span>可一次选多个</span></label><div id="lv-grouped" class="form-field full"></div>`;
  let picked=[];
  c.formModal('上传材料 · '+d.name,body,async()=>{
   if(!picked.length)throw Error('请选择文件');

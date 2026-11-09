@@ -73,7 +73,13 @@ def bound_object(db,a,kind,ident,*,write=False):
     if kind.startswith('social_'):
         from ..social_training import scoped
         a.require('records.read')
-        obj=scoped(db,a,kind,ident,write=write)
+        try:obj=scoped(db,a,kind,ident,write=write)
+        except HTTPException as error:
+            # 2026-11-09：参与授课的老师（不是负责人）可以给运行中的项目上传运行材料；改资料、变更、结项仍只给负责人。
+            if not (write and error.status_code==403 and kind=='social_project' and a.role.kind=='teacher'):raise
+            obj=scoped(db,a,kind,ident,allow_participant=True)
+            if obj.state!='FILED':raise HTTPException(403,'参与老师只能在项目运行期间上传运行材料')
+            a.require('records.read')
         if kind=='social_annual' and a.role.kind=='teacher':raise HTTPException(403,'年度公示仅开放评分摘要，原始材料由授权核验人员查看')
         if write and kind=='social_claim' and (obj.teacher_id!=a.id or obj.state not in {'DRAFT','RETURNED'}):raise HTTPException(403,'仅本人可为待补正积分上传材料')
         if write and kind=='social_resource' and obj.kind=='correction' and (obj.data['created_by']!=a.id or obj.state not in {'DRAFT','RETURNED'}):raise HTTPException(403,'仅更正申请人可在草稿或退回时补充依据')
