@@ -1,6 +1,6 @@
 import {HELP_VERSION,HELP_TOPICS,HELP_FAQS,HELP_ALIASES,GENERAL_TOPICS,FIELD_HELP,FIELD_LABEL_HELP,ROLE_NAMES,helpTopic} from './help-content.js?v=20261108-fix1';
 import {HELP_MEDIA} from './help-media.js?v=20261022';
-import {HELP_FORMS} from './help-forms.js?v=20261109-v2e';
+import {HELP_FORMS} from './help-forms.js?v=20261109-v2f';
 const escape=v=>String(v??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const button=(text,attr)=>`<button type="button" class="btn" ${attr}>${escape(text)}</button>`;
 let panel=null,returnFocus=null,current=null,context=null,background=[],panelTab='steps',underlyingDialog=null,videoKind='overview';
@@ -157,7 +157,8 @@ export function mountHelp(root,c){
  if(!root?.ownerDocument)return;
  context=c;
  const head=root.querySelector('.pagehead .page-title,.tw-heading h1,.modal-head > div,.login-access h2')||root.querySelector('h1');
- if(head&&!head.querySelector('[data-open-help]')){
+ // 2026-11-09 用户定：去掉各页和弹窗里的“使用帮助 / 填写说明”按钮，帮助内容只从左下角“帮助中心”菜单进。
+ if(false&&head&&!head.querySelector('[data-open-help]')){
   const b=document.createElement('button');b.type='button';b.className='btn help-entry';b.dataset.openHelp='true';b.textContent=root.querySelector('form#edit-form')?'填写说明':'使用帮助';head.append(b);
   b.addEventListener('click',()=>openHelp(localContext(root,c),b));
  }
