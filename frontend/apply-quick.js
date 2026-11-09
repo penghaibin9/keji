@@ -55,29 +55,28 @@ async function uploadFiles(c,kind,id,version,form){
 
 function projectForm(c){
  const e=c.esc;
- const body=`<p class="qa-intro form-field full">只填审批要用的内容，点选为主。受众、课时、教学方式等上报信息，开班后在“项目运行”里补，结项前补齐即可。</p>`
+ const body=`<p class="qa-intro form-field full">只填这几项就能提交，其余的开班后在“项目运行”里补。</p>`
   +c.field('name','项目名称','text','',{full:true,placeholder:'例如：社区居民茶艺技能培训'})
-  +chips(c,'category',CATEGORY,{label:'培训类别',hint:'补贴性培训需要说明重点群体；社区公益类预计收入自动为 0。'})
-  +c.field('start_date','开始日期','date','')+c.field('end_date','结束日期','date','')
-  +`<div class="form-field full qa-days"><span class="qa-label">按时长算结束日期</span>${quick(c,'days',[['1 天',1],['3 天',3],['1 周',7],['1 个月',30],['一学期',120]])}<p class="hint">先填开始日期，再点时长；分多期的填整个周期。</p></div>`
+  +chips(c,'category',CATEGORY,{label:'培训类别'})
+  +c.field('start_date','开始日期','date',today())+c.field('end_date','结束日期（点下面的时长自动算）','date','')
+  +`<div class="form-field full qa-days">${quick(c,'days',[['1 天',1],['3 天',3],['1 周',7],['1 个月',30],['一学期',120]])}</div>`
   +chips(c,'venue_type',VENUES,{label:'培训场地'})
-  +c.field('venue_place','具体地点','text','',{full:true,placeholder:'例如：茶艺实训室 / 实训楼 101 / XX 村茶厂'})
+  +c.field('venue_place','具体地点（选填）','text','',{required:false,full:true,placeholder:'不填就按上面的场地类型记'})
   +cond('venue_type=offsite',c.field('venue_reason','外出理由','text','',{required:false,full:true,placeholder:'例如：采茶制茶必须在茶园现场教学'})+c.field('venue_ref','议定文号或会议日期','text','',{required:false,full:true,placeholder:'例如：校长办公会 2026-08-20'}))
-  +c.field('expected_participants','预估人次','number','',{min:0,step:'1',placeholder:'大概数即可'})
-  +c.field('expected_income','预计收入（元）','number','',{min:0,step:'0.01',placeholder:'公益类自动为 0'})
-  +chips(c,'outcome',OUTCOMES.map(x=>[x,x]),{multi:true,label:'预期成果',hint:'可多选；写不清的在下面补一句，结项时再说明。'})
-  +c.field('outcome_other','预期成果补充（选填）','text','',{required:false,full:true,placeholder:'例如：30 人取得结业证书'})
+  +c.field('expected_participants','预估人次（大概数即可）','number','',{min:0,step:'1'})
+  +c.field('expected_income','预计收入（元，公益类自动为 0）','number','',{min:0,step:'0.01'})
+  +chips(c,'outcome',OUTCOMES.map(x=>[x,x]),{multi:true,label:'预期成果',checked:['结业证书']})
   +`<div class="form-field full"><label class="choice qa-check"><input type="checkbox" name="one_skill"><span>属于“一人一技”项目</span></label></div>`
   +cond('one_skill=on|category=subsidy',chips(c,'groups',GROUPS.map(x=>[x,x]),{multi:true,label:'重点群体'})+c.field('groups_note','行动对接（一句话）','text','',{required:false,full:true,placeholder:'例如：对接县人社局技能提升行动'}))
-  +upload(c,'方案材料','学校要求立项附正式依据（方案、通知或协议），PDF 或图片；照片也可以。')
+  +upload(c,'方案材料','附上方案、通知或协议（PDF 或图片，照片也行）')
   +`<details class="form-field full qa-more"><summary>积分核算口径（一般不用改，默认即可）</summary><div class="form-grid">${chips(c,'level',LEVELS,{label:'项目级别',checked:['school']})}${chips(c,'scene',SCENES,{label:'培训场景',checked:['ordinary']})}${chips(c,'mode',MODES,{label:'核算方式',checked:['module']})}${chips(c,'class_type',CLASS_TYPES,{label:'班型',checked:['technical']})}${c.field('cohort','期次','text','第一期',{required:false})}${c.field('code','项目编号（不填自动生成）','text','',{required:false,placeholder:'有材料编号就填'})}</div></details>`;
  c.formModal('新申报培训项目',wrap(body),async(v,form)=>{
-  const need=[[text(form,'name'),'项目名称'],[radio(form,'category'),'培训类别'],[text(form,'start_date'),'开始日期'],[text(form,'end_date'),'结束日期'],[radio(form,'venue_type'),'培训场地'],[text(form,'venue_place'),'具体地点']];
+  const need=[[text(form,'name'),'项目名称'],[radio(form,'category'),'培训类别'],[text(form,'start_date'),'开始日期'],[text(form,'end_date'),'结束日期'],[radio(form,'venue_type'),'培训场地']];
   for(const [val,l] of need)if(!val)throw Error('请填写或选择：'+l);
   if(text(form,'end_date')<text(form,'start_date'))throw Error('结束日期不能早于开始日期');
-  const outcomes=[...picked(form,'outcome',OUTCOMES.map(x=>[x,x])),text(form,'outcome_other')].filter(Boolean);
+  const outcomes=picked(form,'outcome',OUTCOMES.map(x=>[x,x]));
   if(!outcomes.length)throw Error('请选择预期成果');
-  const venue={type:radio(form,'venue_type'),place:text(form,'venue_place'),offsite_reason:text(form,'venue_reason'),offsite_ref:text(form,'venue_ref')};
+  const venue={type:radio(form,'venue_type'),place:text(form,'venue_place')||VENUES.find(x=>x[0]===radio(form,'venue_type'))?.[1]||'',offsite_reason:text(form,'venue_reason'),offsite_ref:text(form,'venue_ref')};
   if(venue.type==='offsite'&&!(venue.offsite_reason&&venue.offsite_ref))throw Error('校外培训请填写外出理由和议定文号（或会议日期）');
   const one=!!form.querySelector('[name="one_skill"]')?.checked,cat=radio(form,'category');
   const groups=[...picked(form,'groups',GROUPS.map(x=>[x,x])),text(form,'groups_note')].filter(Boolean).join('；');
@@ -103,13 +102,11 @@ function projectForm(c){
 }
 
 function courseForm(c){
- const body=`<p class="qa-intro form-field full">新开一门课。已有教务或超星课程的，关掉这个窗口点“从我的课程导入”。</p>`
+ const body=`<p class="qa-intro form-field full">只填这几项就能提交。已有教务或超星课程的，关掉这里点“从我的课程导入”。</p>`
   +c.field('name','课程名称','text','',{full:true,placeholder:'例如：社区茶艺入门'})
   +`<div class="form-field"><label for="f-hours">培训学时 <b>*</b></label><input type="number" id="f-hours" name="hours" min="0" step="0.5" required>${quick(c,'hours',[['4',4],['8',8],['16',16],['24',24],['32',32]])}</div>`
   +chips(c,'teaching_mode',TEACHING,{label:'教学方式',checked:['lecture']})
-  +chips(c,'ideology',IDEOLOGY,{label:'思政属性',checked:['course_ideology']})
-  +c.field('intro','课程简介（选填）','textarea','',{required:false,full:true,rows:2,textLimit:2000,placeholder:'面向哪些学员、教什么'})
-  +`<details class="form-field full qa-more"><summary>课程编号（不填自动生成）</summary><div class="form-grid">${c.field('code','课程编号','text','',{required:false,placeholder:'有材料编号就填'})}</div></details>`;
+  +`<details class="form-field full qa-more"><summary>更多（一般不用填）</summary><div class="form-grid">${chips(c,'ideology',IDEOLOGY,{label:'思政属性',checked:['course_ideology']})}${c.field('intro','课程简介','textarea','',{required:false,full:true,rows:2,textLimit:2000})}${c.field('code','课程编号（不填自动生成）','text','',{required:false})}</div></details>`;
  c.formModal('新申报培训课程',wrap(body),async(v,form)=>{
   if(!text(form,'name'))throw Error('请填写课程名称');if(v.hours==null)throw Error('请填写学时');
   const data={source:'manual',code:text(form,'code')||autoCode('KC'),name:text(form,'name'),project_code:'',teacher_id:null,hours:v.hours,teaching_mode:radio(form,'teaching_mode')||'lecture',ideology:radio(form,'ideology')||'course_ideology',intro:text(form,'intro')};
@@ -125,11 +122,8 @@ function baseForm(c){
   +cond('onsite=no',c.field('partner','共建单位','text','',{required:false,full:true,placeholder:'合作单位全称'}))
   +c.field('location','具体地点','text','',{full:true,placeholder:'例如：实训楼 101 / XX 镇 XX 村'})
   +chips(c,'usage',USAGES,{multi:true,label:'用途',checked:['practice']})
-  +chips(c,'level',[['school','校级'],['city','市级'],['province','省级及以上']],{label:'基地级别',checked:['school']})
-  +c.field('established_on','设立日期','date',today())
-  +c.field('manager_name','基地负责人（选填）','text','',{required:false,placeholder:'不填就是本人'})
   +`<div class="form-field full"><label for="f-recognition">认定依据 <b>*</b></label><input id="f-recognition" name="recognition" maxlength="200" required placeholder="协议、发文或会议纪要的名称和编号">${quick(c,'recognition',[['共建协议','共建协议（编号：）'],['学校发文','学校发文（文号：）'],['学院会议纪要','学院会议纪要（日期：）']])}</div>`
-  +`<details class="form-field full qa-more"><summary>来源编号（不填自动生成）</summary><div class="form-grid">${c.field('code','来源编号','text','',{required:false,placeholder:'协议编号或学院登记编号'})}</div></details>`;
+  +`<details class="form-field full qa-more"><summary>更多（一般不用填）</summary><div class="form-grid">${chips(c,'level',[['school','校级'],['city','市级'],['province','省级及以上']],{label:'基地级别',checked:['school']})}${c.field('established_on','设立日期','date',today())}${c.field('manager_name','基地负责人','text','',{required:false,placeholder:'不填就是本人'})}${c.field('code','来源编号（不填自动生成）','text','',{required:false})}</div></details>`;
  c.formModal('新申报培训基地',wrap(body),async(v,form)=>{
   const usages=picked(form,'usage',USAGES);
   if(!text(form,'name'))throw Error('请填写基地名称');if(!usages.length)throw Error('请选择用途');if(!text(form,'recognition'))throw Error('请填写认定依据');
@@ -149,14 +143,13 @@ async function trainerForm(c){
  const body=`<div class="form-field full qa-source"><strong>本人资料已带出</strong><span>${e(me.name||'')}${quals.length?' · 已审核资质：'+e(quals.map(q=>q.name).join('、')):''}</span></div>`
   +c.field('specialty','能教什么','text','',{full:true,placeholder:'例如：茶艺、电商运营、家政服务'})
   +chips(c,'dir',DIRECTIONS,{multi:true,label:'主要面向哪类培训'})
-  +c.field('title','职称或职务（选填）','text','',{required:false})
   +(quals.length?`<fieldset class="form-field full qa-field"><legend>引用已审核资质</legend><div class="choice-row">${quals.map(q=>`<label class="choice"><input type="checkbox" name="qual_${e(q.id)}" checked><span>${e(q.name)}</span></label>`).join('')}</div></fieldset>`:'')
-  +`<div class="form-field full"><label for="f-qualification_basis">资格依据 <b>*</b></label><input id="f-qualification_basis" name="qualification_basis" maxlength="2000" required placeholder="职称、职业资格或行业经历，一句话即可">${quick(c,'qualification_basis',[['职称','具有 职称，从事相关教学 年'],['职业资格','持有 职业资格证书'],['行业经历','有 年行业一线工作经历']])}</div>`;
+  +`<div class="form-field full"><label for="f-qualification_basis">资格依据（有已审核资质可不填）</label><input id="f-qualification_basis" name="qualification_basis" maxlength="2000" placeholder="职称、职业资格或行业经历，一句话即可">${quick(c,'qualification_basis',[['职称','具有 职称，从事相关教学 年'],['职业资格','持有 职业资格证书'],['行业经历','有 年行业一线工作经历']])}</div>`;
  c.formModal('申报培训师',wrap(body),async(v,form)=>{
   const directions=picked(form,'dir',DIRECTIONS);
-  if(!directions.length)throw Error('请至少选一类培训');if(!text(form,'qualification_basis'))throw Error('请填写资格依据');
+  if(!directions.length)throw Error('请至少选一类培训');const quals=[...form.querySelectorAll('input[name^="qual_"]:checked')];if(!text(form,'qualification_basis')&&!quals.length)throw Error('请填写资格依据，或勾选要引用的已审核资质');
   const data={source:'internal',name:'',unit:'',title:text(form,'title'),specialty:text(form,'specialty'),directions,
-   qualification_ids:[...form.querySelectorAll('input[name^="qual_"]:checked')].map(i=>i.name.slice(5)),qualification_basis:text(form,'qualification_basis'),experience:''};
+   qualification_ids:[...form.querySelectorAll('input[name^="qual_"]:checked')].map(i=>i.name.slice(5)),qualification_basis:text(form,'qualification_basis')||'引用本人已审核资质',experience:''};
   await c.api('/applications/trainers',{method:'POST',body:{data,reason:'申报培训师'}});
   c.closeModal();c.toast('已提交，学院审核后报组织人事部认定。');await c.render?.();
  },{submit:'提交学院审批',stepper:false,contextLabel:'培训师资 / 新申报',hint:'外聘培训师没有账号，由学院登记，报教务处备案。'});
