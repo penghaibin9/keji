@@ -555,7 +555,7 @@ async function reviewCredits(code){
 }
 const periodSelect=()=>`<select id="period-filter" class="period-name"><option value="">全部周期</option>${periods.map(p=>`<option value="${p.id}" ${p.id===periodId?'selected':''}>${esc(p.name)}</option>`).join('')}</select>`;
 // 统一页面顺序：标题与操作 → 页签 → 筛选 → 列表。
-const teacherPageHints={annual:'查看本学院已公示的评分摘要，公示期间可提出异议。',todos:'先处理需要本人办理的事项，再查看申请进度。',notices:'阅读学校政策和业务通知。',credits:'教务与超星课程已归集，申报审核后按实际培训业务认定积分。',mine:'按项目核对本人的培训参与、积分与台账分配。',qualifications:'点击证书图片预览，核对有效期和审核进度。',points:'查看已认定积分，核对每一笔计算依据。',recognition:'查看当前办理环节和需要补充的材料。',assessment:'查看本人年度结果，在需要时完成核对与确认。',records:'授课与本人参训分开查看，原始依据随时可查。',projects:'查看本人负责或参与的培训项目。',courses:'查阅培训课程及配套教学资源。',bases:'查阅所属学院的基地，按需发起申请。',outcomes:'查阅已认定成果，区分本人贡献与学院参考。',disputes:'跟进自己提出的数据核对，查看处理结论。',exports:'查看导出进度并下载已生成的文件。',help:'按具体任务找到办理步骤和对应入口。'};
+const teacherPageHints={annual:'查看本学院已公示的评分摘要，公示期间可提出异议。',todos:'先处理需要本人办理的事项，再查看申请进度。',notices:'阅读学校政策和业务通知。',credits:'教务与超星课程已归集，申报审核后按实际培训业务认定积分。',mine:'按项目核对本人的培训参与、积分与台账分配。',points:'查看已认定积分，核对每一笔计算依据。',recognition:'查看当前办理环节和需要补充的材料。',assessment:'查看本人年度结果，在需要时完成核对与确认。',records:'授课与本人参训分开查看，原始依据随时可查。',projects:'查看本人负责或参与的培训项目。',courses:'查阅培训课程及配套教学资源。',bases:'查阅所属学院的基地，按需发起申请。',outcomes:'查阅已认定成果，区分本人贡献与学院参考。',disputes:'跟进自己提出的数据核对，查看处理结论。',exports:'查看导出进度并下载已生成的文件。',help:'按具体任务找到办理步骤和对应入口。'};
 const deptPageHints={home:'先办理本教研室待办，再查看本室概况与考核进度。',todos:'按事项核验资料、退回补正或完成本级确认。',notices:'阅读学校政策与业务通知。',projects:'查看本室教师参与项目及授权范围内的资料。',courses:'查阅本室课程与资源，按需提交课程申报。',bases:'查阅所属学院基地，跟进本室提交的基地申请。',trainers:'查阅师资资格与认定状态；待审申请从统一待办进入。',records:'核对本室教师授课和参训数据，更正均保留依据。',outcomes:'查看已认定成果，区分教师贡献与学院参考。',qualifications:'先看证书材料和有效期，再办理本室资质审核。',credits:'按教师、学年核对授课学分；认定由学校指定人员办理。',points:'核对本室教师积分来源，完整周期台账由教师本人确认。',recognition:'跟进本室积分认定及核对、更正事项。',assessment:'核对教师考核并完成本级确认；教研室考核单独复核。',disputes:'核实原业务后填写复核结论，办理结果会反馈申请人。',ledgers:'查看本室年度平均积分及人数口径。',organization:'查看本室教师、业务概况及授权范围。',imports:'先预览错误和变更，再确认导入本室数据。',exports:'查看导出进度并下载授权范围内的文件。',help:'按教研室办理任务找到操作步骤和入口。'};
 const collegePageHints={...deptPageHints,home:'先处理待办，再查看本院业务进度。',projects:'申报本院培训项目，跟进备案、实施与结项。',courses:'查阅培训课程和资源，办理课程登记与审批。',bases:'查阅培训基地，办理本院申请及审批。',trainers:'查阅师资资格，按待办办理本级审核。',records:'核对本院教师授课与参训记录，更正均保留依据。',outcomes:'查阅已认定成果与依据。',qualifications:'查看证书、有效期和材料，按权限办理审核。',points:'核对本院教师积分来源，完整周期台账由教师本人确认。',recognition:'核验积分申报材料，按当前审批职责办理。',assessment:'核对教师考核并完成学院确认，学院考核单独复核。',ledgers:'上传并核对学院台账，查看待核定事项。',organization:'查看本院及下属教研室的教师和业务。',imports:'先预览错误和变更，再确认导入本院数据。',help:'按当前任务查找办理步骤和入口。'};
 function currentHelpContext(){return {page,role:me?.role?.kind,tab:filter?.tab,allowed:pageAllowed,aliases:navAliases}}
@@ -989,6 +989,7 @@ const pages={
   let search=filtersBar({states:[],teacher:!teacher,organization:!teacher,exportKind:'qualifications'});
   if(filter.state)search=search.replace('<div class="filter-primary">',`<input type="hidden" name="state" value="${esc(filter.state)}"><div class="filter-primary">`);
   const rows=d.items.map(x=>[can('file.read')?qualificationCertificate(x):`<strong>${teacher?link(x.name,'qualification',x.id):esc(x.name)}</strong><div class="cell-sub">${esc(x.category)}</div>`,...(teacher?[]:[`${esc(teacherName(x.teacher_id))}<div class="cell-sub">${esc(orgName(teachers.find(t=>t.id===x.teacher_id)?.org_id))}</div>`]),teacher?`${esc(x.certificate_no)}<div class="cell-sub">${esc(x.issuer||'发证机构未登记')}</div>`:esc(x.certificate_no),qualificationExpiry(x.expires,s?.expiry_days,x.state),badge(x.state),...(teacher?[]:['版本 '+x.version]),link(teacher&&can('qualification.write')?({DRAFT:'继续填写',RETURNED:'补充材料'}[x.state]||'查看详情'):'查看详情','qualification',x.id)]);
+  if(teacher)return pageHead()+await teacherQualificationCards(d.items)+(d.total>d.size?pager(d):'');
   return pageHead(teacher?'查看本人证书、审核进度和有效期。材料与历史版本保留在详情中。':'上传真实佐证 → 教师提交 → 授权审核 → 版本归档与到期提醒。',can('qualification.write')&&me.user.staff_no?act('申报我的资质','qualification-form','','primary','plus'):'')+summary+`<section class="card teacher-qualification-list">${stateTabs}${search}${table(teacher?['证书名称 / 类别','编号 / 发证机构','有效期至','状态','操作']:['证书名称 / 类别','教师 / 所属组织','证书编号','有效期至','状态','版本','操作'],rows)}${d.total>d.size?pager(d):d.total?`<p class="list-count">共 ${number(d.total)} 项${filter.q||filter.state?'符合筛选条件':''}</p>`:''}</section>`+qualificationWorkspaceGuide();
  },
  async points(){
@@ -1238,21 +1239,36 @@ async function teacherHome(){
  return `<div class="teacher-home">${hero}${metrics}<div class="teacher-dashboard"><div class="teacher-workspace">${todo}${mine}${applications}${a?.assessment?myAssessmentCard(a.assessment,a.period,{link:true}):''}</div><aside class="teacher-side" aria-label="业务申报与通知">${teacherApplyCard()}${notices}</aside></div>${courses}${points?`<details class="teacher-points-note"><summary>社会培训积分口径 · 近五年累计 ${number(five,2)} 分 <span>${number(target)}分条件待学校正式启用</span></summary>${points}</details>`:''}</div>`;
 }
 async function qualificationForm(id){const user=me.user.id,sourcePage=page,cats=await api('/qualification-categories');let x=id?(await api('/qualifications/'+id)).qualification:{};if(me.user.id!==user||page!==sourcePage)return;
- const section=(title,body)=>`<fieldset class="social-fieldset"><legend>${title}</legend><div class="social-form-fields">${body}</div></fieldset>`;
- const info=field('category','资质类别','select',x.category||cats.categories[0],{options:[...new Set([...(x.category?[x.category]:[]),...cats.categories])]})+field('name','证书名称','text',x.name||'')+field('certificate_no','证书编号','text',x.certificate_no||'')+field('issuer','发证机构','text',x.issuer||'')+field('obtained','取得日期','date',x.obtained||'')+field('expires','有效期至','date',x.expires||'',{required:false,longTerm:true,longTermSelected:!!id&&!x.expires,hint:'请选择到期日期，或勾选长期有效；判定考核资质以周期结束日是否有效为准。'});
- if(id)return formModal('补充 / 变更我的资质',section('证书信息',info)+section('变更说明',reasonFields('',undefined,false,undefined,'',false,'amend')),async v=>{v.teacher_id=me.user.id;v.expires=v.expires||null;v.expected_version=x.version;const r=await api('/qualifications/'+id,{method:'PUT',body:v});closeModal();await render();await showQualification(r.id)},{page:true,formDraft:{kind:'qualification',contextKey:'edit:'+id,sourceVersion:x.version},contextLabel:'教师资质 / 变更证书资料',submit:'保存修改',returnTo:()=>showQualification(id),hint:x.state==='APPROVED'?'已通过资质修改后会转为草稿，需重新核对材料并提交审核。':'修改后请在详情核对当前版本材料，再提交审核。'});
- formModal('申报我的资质',section('证书信息',info)+section('证书材料',field('file','证书图片或扫描件（可一次选多份）','file','',{required:false,uploadKind:'proof',uploadMax:20,multiple:true,accept:'.pdf,.png,.jpg,.jpeg',full:true,hint:'可一次选择多张照片或多份扫描件，支持 .jpg、.jpeg、.png、.pdf，单个最大 10 兆字节，单份资质最多 20 份。草稿可稍后补传；提交审核前必须上传。'})+'<div id="upload-progress" class="form-field full"></div>')+section('申报说明',field('reason','申报说明','textarea','申报本人资质证书，材料真实有效',{full:true,phrases:'qualification',textLimit:2000})),async(v,f,button)=>{
-  const submitNow=button?.value!=='draft',files=Array.from($('#f-file',f).files||[]);if(submitNow&&!files.length)throw Error('提交审核前请选择证书图片或扫描件；也可以先保存草稿。');
+ // 2026-11-09 用户定：只填证书名称（可点选已有资质类型，也能手填）和上传证书。其余由系统补齐。
+ const chips=`<div class="form-field full qual-chips">${(cats.categories||[]).map(n=>`<button type="button" class="btn sm light" data-qual-name="${esc(n)}">${esc(n)}</button>`).join('')}</div>`;
+ const nameField=field('name','证书名称','text',x.name||'',{full:true})+chips;
+ const fileField=field('file','上传证书','file','',{required:!id,uploadKind:'proof',uploadMax:20,multiple:true,accept:'.pdf,.png,.jpg,.jpeg',full:true});
+ const bindChips=()=>$$('#modal-root [data-qual-name]').forEach(b=>b.addEventListener('click',()=>{const t=$('#f-name');if(t){t.value=b.dataset.qualName;t.dispatchEvent(new Event('input',{bubbles:true}))}}));
+ const upload=async(rid,ver,files,f)=>{if(!files.length)return;const box=f.querySelector('#upload-progress'),result=await uploadSequential({api,kind:'qualification',id:rid,version:ver,entries:uploadEntries(files),reason:'本人上传资质证书',latest:async()=>{const fresh=await api('/qualifications/'+rid);return {version:fresh.qualification.version,attachments:fresh.attachments}},onProgress:list=>{if(box)box.innerHTML=uploadStatusHtml(list,esc)}});if(result.failed.length)throw Error(result.failed.length+' 份没传上：'+result.failed.map(entry=>entry.name).join('、'))};
+ const submit=async rid=>{const fresh=(await api('/qualifications/'+rid)).qualification;if(['DRAFT','RETURNED'].includes(fresh.state))await api('/qualifications/'+rid+'/actions',{method:'POST',body:{action:'submit',expected_version:fresh.version,reason:'提交资质审核'}})};
+ if(id){formModal('修改后重新提交',returnedNotice(x.state,(await api('/qualifications/'+id)).events)+nameField+fileField+'<div id="upload-progress" class="form-field full"></div>',async(v,f)=>{
+   const files=Array.from($('#f-file',f).files||[]);checkUploadFiles(files,0,{max:20});
+   const r=await api('/qualifications/'+id,{method:'PUT',body:{name:v.name,category:x.name===v.name?x.category:'',teacher_id:me.user.id,expected_version:x.version,reason:'修改证书名称或材料'}});
+   try{await upload(id,r.version,files,f);await submit(id);toast('已重新提交审核')}catch(err){toast('已保存，但'+(err.message||'没提交成功')+'；请在详情里补传后提交',true)}
+   closeModal();await render();
+  },{submit:'重新提交',stepper:false,contextLabel:'教师资质'});return bindChips()}
+ formModal('申报我的资质',nameField+fileField+'<div id="upload-progress" class="form-field full"></div>',async(v,f)=>{
+  const files=Array.from($('#f-file',f).files||[]);if(!files.length)throw Error('请上传证书');
   checkUploadFiles(files,0,{max:20});
-  const body={category:v.category,name:v.name,certificate_no:v.certificate_no,issuer:v.issuer,obtained:v.obtained,expires:v.expires||null,teacher_id:me.user.id,reason:v.reason};
-  const r=await api('/qualifications',{method:'POST',body});
-  try{
-   if(files.length){const box=f.querySelector('#upload-progress'),result=await uploadSequential({api,kind:'qualification',id:r.id,version:r.version,entries:uploadEntries(files),reason:'本人上传资质证书材料',latest:async()=>{const fresh=await api('/qualifications/'+r.id);return {version:fresh.qualification.version,attachments:fresh.attachments}},onProgress:list=>{if(box)box.innerHTML=uploadStatusHtml(list,esc)}});if(result.failed.length)throw Error('已上传 '+(files.length-result.failed.length)+' 份材料，'+result.failed.length+' 份未完成（'+result.failed.map(entry=>entry.name).join('、')+'）');}
-   if(submitNow){const fresh=(await api('/qualifications/'+r.id)).qualification;await api('/qualifications/'+r.id+'/actions',{method:'POST',body:{action:'submit',expected_version:fresh.version,reason:v.reason}})}
-   toast(submitNow?'已提交审核，教研室审核后生效':'已保存草稿，可在详情补充材料后提交审核');
-  }catch(err){toast('资料已存为草稿，但'+(err.message||'附件或提交未完成')+'；请在详情里补传附件后提交',true)}
-  closeModal();await render();await showQualification(r.id);
- },{page:true,formDraft:{kind:'qualification',contextKey:'new'},contextLabel:'教师资质 / 新增申报',draft:'保存草稿',submit:'提交审核',hint:'先填写完整的基本证书信息。草稿可稍后补传材料；提交审核后由教研室审核，通过前不会计入双师型和考核。'})
+  const r=await api('/qualifications',{method:'POST',body:{name:v.name,teacher_id:me.user.id,reason:'申报本人资质证书'}});
+  try{await upload(r.id,r.version,files,f);await submit(r.id);toast('已提交审核')}
+  catch(err){toast('已存为草稿，但'+(err.message||'没提交成功')+'；请在详情里补传后提交',true)}
+  closeModal();await render();
+ },{submit:'提交审核',stepper:false,contextLabel:'教师资质'});
+ bindChips();
+}
+const QUAL_STATE={DRAFT:['draft','草稿'],SUBMITTED:['review','审核中'],RETURNED:['change','已退回'],APPROVED:['run','有效'],VOID_PENDING:['closing','作废审核中'],VOID:['done','已作废'],DELETED:['done','已删除']};
+async function teacherQualificationCards(items){
+ const back=await Promise.all(items.map(x=>x.state==='RETURNED'?api('/qualifications/'+x.id).then(d=>[...(d.events||[])].reverse().find(e=>/退回/.test(e.action))?.reason||'').catch(()=>''):''));
+ const cards=items.map((x,i)=>{const [code,label]=x.state==='APPROVED'&&x.expires&&x.expires<new Date().toISOString().slice(0,10)?['done','已过期']:QUAL_STATE[x.state]||['draft',x.state];
+  const todo=x.state==='RETURNED'?`<div class="lv-todo">被退回：${esc(back[i]||'请补充后重新提交')}</div><div class="lv-btns"><button type="button" class="btn sm primary" data-action="qualification-form" data-id="${esc(x.id)}">修改后重新提交</button></div>`:x.state==='DRAFT'?`<div class="lv-btns"><button type="button" class="btn sm primary" data-action="qual-action" data-id="submit|${esc(x.id)}">提交审核</button></div>`:'';
+  return `<div class="lv-card" role="button" tabindex="0" data-action="qualification" data-id="${esc(x.id)}"><div class="lv-top"><strong>${esc(x.name)}</strong><span class="lv-pill lv-${code}">${esc(label)}</span></div>${todo}</div>`}).join('');
+ return `<div class="lv-grid">${cards}${can('qualification.write')&&me.user.staff_no?`<button type="button" class="lv-card lv-new" data-action="qualification-form" data-id="">＋ 申报我的资质</button>`:''}</div>`;
 }
 function returnedNotice(state,events){if(state!=='RETURNED')return '';const event=[...(events||[])].reverse().find(e=>/退回/.test(e.action));return note('退回意见：'+(event?.reason||'请核对审核记录，补充后重新提交。'),true)}
 async function showQualification(id){const d=await api('/qualifications/'+id),x=d.qualification;modalContext=x;const own=x.teacher_id===me.user.id;
