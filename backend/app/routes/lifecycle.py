@@ -31,6 +31,11 @@ def change_act(ident: str, data: ChangeAction, request: Request):
     return command(request, data.model_dump(), 'portal.read', apply)
 
 
+@router.get('/board/{kind}')
+def running_board(kind: str, request: Request):
+    return read_operation(request, 'portal.read', lambda db, a, s: lc.board(db, a, kind))
+
+
 @router.get('/{kind}/{ident}')
 def archive(kind: str, ident: str, request: Request):
     return read_operation(request, 'portal.read', lambda db, a, s: lc.view(db, a, kind, lc.load(db, a, kind, ident)))

@@ -214,7 +214,7 @@ test('资质读取失败时阻止打开不完整的培训师表单，原申请�
 test('四类申报页不重复标题或展开大空卡片，培训师已有单据只沿原单办理',async()=>{
  for(const key of ['apply_course','apply_project','apply_base','apply_trainer']){
   const c=formContext(),html=await applyPageHtml(c,key);assert.match(html,/申报记录/);assert.doesNotMatch(html,/<h2>申报培训|<h2>申请培训|apply-steps|empty-art/);
-  if(key==='apply_course'){assert.match(html,/从我的课程导入/);assert.match(html,/手动填写课程/);assert.match(html,/<details class="card apply-approved">/)}
+  if(key==='apply_course'){assert.match(html,/从我的课程导入/);assert.match(html,/新开一门课/);assert.match(html,/<details class="card apply-approved">/)}
  }
  for(const state of ['DEPT','ACTIVE','RETURNED','WITHDRAWN']){
   const c=formContext();c.api=async()=>({items:[{id:'t1',name:'本人培训师',flow:'trainer',state,state_label:'合成状态',progress:{text:'合成进度',tone:state==='ACTIVE'?'green':'blue'},info:{}}]});

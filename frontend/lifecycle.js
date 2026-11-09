@@ -1,6 +1,7 @@
 // 2026-11-07 立项（申报）通过以后的运行过程：档案视图、记一笔、申请变更、年度确认、停用与恢复。
 // 菜单不变（培训项目 / 培训课程 / 培训基地 / 培训师资）；入口是详情里的三个主按钮。名称按验收人定的：项目立项、项目运行、项目结项。
 import {materialUploadForm} from './approval-flow.js?v=20261021-form-merged1';
+import {quickApply} from './apply-quick.js?v=20261109-life2';
 
 const TYPE_LABEL={project:'培训项目',course:'培训课程',base:'培训基地',trainer:'培训师资'};
 // 三个主按钮：[动作, 名称, 小字]
@@ -24,37 +25,101 @@ function stepIndex(d){
  return d.running?2:['COLLEGE','SCHOOL','HR','JWC','DEPT'].includes(s)?1:0;
 }
 
-function archiveHtml(c,d){
- const e=c.esc,steps=STEPS[d.type],now=stepIndex(d);
- const stepper=`<ol class="life-stepper" aria-label="办理进度">${steps.map((l,i)=>`<li class="${i<now?'on':i===now?'now':''}">${e(l)}</li>`).join('')}</ol>`;
- const big=ACTS[d.type].map(([k,l,sub])=>{
-  const off=k==='note'?!d.can.note:k==='close'?!d.can.close:k==='annual'?!d.can.annual:k==='stop'?!(d.can.stop||d.can.resume):false;
-  const back=k==='stop'&&d.state==='STOPPED',label=back?'恢复运行':l,act=back?'life-resume':'life-'+k;
-  if(back&&!off)sub='需要时重新启用，历史记录不变';
-  const why=off?(k==='close'&&['CLOSE_COLLEGE','CLOSE_REVIEW','CLOSED'].includes(d.state)?'已提交结项':!d.running?(d.state==='STOPPED'?'已停用':'通过后才能办理'):'你没有办理权限'):'';
-  return `<button type="button" class="btn life-big${k==='info'||(k==='note'&&d.running)?' primary':''}" data-action="${act}" data-id="${e(d.type+'|'+d.id)}"${off?' disabled':''}><strong>${e(label)}</strong><small>${e(off?why:sub)}</small></button>`;
- }).join('');
- const minor=[d.can.change?c.act('申请变更','life-change',d.type+'|'+d.id,'light'):'',d.can.upload?c.act('上传材料','life-upload',d.type+'|'+d.id,'light','file'):'',
-  d.type==='project'&&d.running&&c.can?.('records.write')?c.act('导入参训明细','life-units',d.id,'light'):'',
-  d.type==='project'&&d.running&&(d.reminders||[]).some(x=>x.includes('上报信息'))?c.act('补填上报信息','life-report',d.id,'light'):'',
-  d.can.stop&&d.type!=='course'?c.act('停用','life-stop',d.type+'|'+d.id,'text'):'',
-  // 基地、师资没有“停用”大按钮，停用后在这里恢复（课程的恢复在大按钮上）。
-  d.can.resume&&d.type!=='course'?c.act('恢复运行','life-resume',d.type+'|'+d.id,'primary'):''].filter(Boolean).join('');
- const pending=d.pending_change?`<div class="life-pending" role="status"><strong>有一份变更在审批：</strong>${e(d.pending_change.summary)}（${e(d.pending_change.state_label)}）。审批期间按原资料照常运行。${c.act('查看变更','life-change-view',d.pending_change.id,'text')}</div>`:'';
- const remind=(d.reminders||[]).map(x=>`<div class="life-remind">${c.icon('clock')}<span>${e(x)}</span></div>`).join('');
- const tl=(d.timeline||[]).length?`<ol class="life-timeline">${d.timeline.map(t=>`<li class="k-${e(t.kind)}"><div class="t">${e(String(t.on||t.at||'').slice(0,10))} · ${e(t.who||'')}<span class="src ${t.source==='auto'?'auto':''}">${e(SOURCE[t.source]||'')}</span></div><div class="w">${e(t.what)}</div>${t.reason&&t.reason!==t.what&&t.kind!=='auto'?`<div class="r">${e(t.reason)}</div>`:''}</li>`).join('')}</ol>`:'<p class="muted small">还没有记录。</p>';
- const stats=`<div class="life-stats">${(d.stats||[]).map(([k,v])=>`<div><b>${e(v)}</b><small>${e(k)}</small></div>`).join('')}</div>`;
- const versions=(d.versions||[]).length?`<ul class="life-versions">${d.versions.map(v=>`<li><span class="v">第${e(v.v)}版</span>${e(String(v.at||'').slice(0,10))} · ${e(v.who||'')}<small>${e(v.summary||'')}${v.how?'（'+e(v.how)+'）':''}</small></li>`).join('')}</ul>`:'<p class="muted small">通过后生成第 1 版。</p>';
- return `<div class="life-archive"><div class="life-head"><div class="life-title"><span class="tw-status ${d.running?'is-ok':d.state==='STOPPED'?'is-wait':''}">${e(d.state_label)}</span><span class="life-ver">第 ${e(d.biz_version)} 版</span></div>
-<dl class="life-facts">${(d.facts||[]).map(([k,v])=>`<div><dt>${e(k)}</dt><dd>${e(v)}</dd></div>`).join('')}</dl>${stepper}<div class="life-actions">${big}</div>${minor?`<div class="life-minor">${minor}</div>`:''}${pending}${remind}</div>
-<div class="life-two"><section class="life-panel"><h3>${c.icon('clock')}运行过程</h3>${tl}</section><aside><section class="life-panel"><h3>${c.icon('chart')}运行汇总</h3>${stats}</section><section class="life-panel"><h3>${c.icon('file')}历次版本</h3>${versions}</section></aside></div></div>`;
+// 2026-11-09 按设计稿改成整页：列表里的“X运行”卡片 → 点开是整页档案（不是弹窗）。
+const RUN_TAB={project:'项目运行',course:'课程运行',base:'基地运行',trainer:'师资运行'};
+const PAGES={project:['apply_project','projects'],course:['apply_course','courses'],base:['apply_base','bases'],trainer:['apply_trainer','trainers']};
+const BOARD_SUB={project:'正在运行的项目：开了几期、多少人、改过什么，点开一眼看清；记一笔、申请变更、结项都在项目里办。',
+ course:'已入库的课程：被哪些项目用过、学时改过没有；变更和停用在课程里办。',base:'已认定的基地：使用情况自动汇总，每年确认一次是否还在用。',trainer:'已入库的培训师：授课记录自动汇总，每年确认一次是否继续授课。'};
+const END_ACT={project:['close','项目结项'],course:['stop','课程停用'],base:['annual','年度确认'],trainer:['annual','年度确认']};
+export const lifePageType=page=>Object.keys(PAGES).find(t=>PAGES[t].includes(page))||'';
+function targetPage(c,type){
+ const now=c.currentPage?.();
+ if(PAGES[type].includes(now))return now;
+ return c.me?.role?.kind==='teacher'?PAGES[type][0]:PAGES[type][1];
+}
+function go(c,type,id){
+ const hash='#'+targetPage(c,type)+'?life='+encodeURIComponent(type+'|'+id);
+ c.closeModal?.();
+ if(typeof location==='undefined')return;
+ if(location.hash===hash)return c.render?.();
+ location.hash=hash;
+}
+const refresh=async c=>{c.closeModal?.();await c.render?.()};
+function remindAct(c,d,text){
+ const id=d.type+'|'+d.id;
+ if(/项目结项/.test(text)&&d.can.close)return ['life-close',id];
+ if(/参训明细/.test(text)&&d.running&&c.can?.('records.write'))return ['life-units',d.id];
+ if(/上报信息/.test(text)&&d.running)return ['life-report',d.id];
+ if(/年度/.test(text)&&d.can.annual)return ['life-annual',id];
+ if(/申请变更/.test(text)&&d.can.change)return ['life-change',id];
+ if(/恢复运行/.test(text)&&d.can.resume)return ['life-resume',id];
+ return null;
 }
 
-async function openArchive(c,type,id){
- const d=await c.api('/social/lifecycle/'+type+'/'+encodeURIComponent(id));current=d;
- return c.modal(d.name,archiveHtml(c,d),c.act('关闭','close'),true,TYPE_LABEL[type]+' / 运行档案');
+function archiveHtml(c,d,page=''){
+ const e=c.esc,id=d.type+'|'+d.id,steps=STEPS[d.type],now=stepIndex(d),ended=['CLOSED'].includes(d.state);
+ const stepper=`<ol class="life-stepper" aria-label="办理进度">${steps.map((l,i)=>`<li class="${i<now||ended?'on':i===now?'now':''}">${e(l)}</li>`).join('')}</ol>`;
+ const remind=(d.reminders||[]).map((x,i)=>{const a=remindAct(c,d,x);return `<div class="life-remind" role="status"><span>⚠ ${e(x)}</span>${a?`<button type="button" class="btn sm" data-action="${a[0]}" data-id="${e(a[1])}">现在处理</button>`:''}</div>`}).join('');
+ const pending=d.pending_change?`<div class="life-pending" role="status"><span><strong>有一份变更在审批：</strong>${e(d.pending_change.summary)}（${e(d.pending_change.state_label)}，${e(d.pending_change.level_label||'')}）。审批期间仍按原内容运行，培训明细照常登记。</span>${c.act('查看变更','life-change-view',d.pending_change.id,'text')}</div>`:'';
+ const [endKey,endLabel]=END_ACT[d.type],stopped=d.state==='STOPPED';
+ const endOn=endKey==='close'?d.can.close:endKey==='annual'?d.can.annual:(d.can.stop||d.can.resume);
+ const endBtn=stopped&&d.can.resume?`<button type="button" class="btn primary" data-action="life-resume" data-id="${e(id)}">恢复运行</button>`
+  :`<button type="button" class="btn" data-action="life-${endKey}" data-id="${e(id)}"${endOn?'':' disabled'}${endOn?'':` title="${e(endKey==='close'&&['CLOSE_COLLEGE','CLOSE_REVIEW','CLOSED'].includes(d.state)?'已提交结项':!d.running?(stopped?'已停用':'通过后才能办理'):'你没有办理权限')}"`}>${e(endLabel)}</button>`;
+ const main=`<button type="button" class="btn primary life-main" data-action="life-note" data-id="${e(id)}"${d.can.note?'':' disabled'}>📷 记一笔</button>`
+  +`<button type="button" class="btn" data-action="life-change" data-id="${e(id)}"${d.can.change?'':' disabled'}${d.pending_change?' title="已有一份变更在审批，办完或撤回后再提"':''}>✎ 申请变更</button>`+endBtn;
+ const minor=[c.act(ACTS[d.type][0][1]+'信息','life-info',id,'text'),
+  d.can.upload?c.act('上传材料','life-upload',id,'text'):'',
+  d.type==='project'&&d.running&&c.can?.('records.write')?c.act('导入参训明细','life-units',d.id,'text'):'',
+  d.type==='project'&&d.running&&(d.reminders||[]).some(x=>x.includes('上报信息'))?c.act('补填上报信息','life-report',d.id,'text'):'',
+  d.can.stop&&d.type!=='course'?c.act('停用','life-stop',id,'text'):'',
+  d.can.resume&&d.type!=='course'&&!stopped?c.act('恢复运行','life-resume',id,'text'):''].filter(Boolean).join('');
+ const tl=(d.timeline||[]).length?`<ol class="life-timeline">${d.timeline.map(t=>`<li class="k-${e(t.kind)}"><div class="t">${e(String(t.on||t.at||'').slice(0,10))}<span class="src ${t.source==='auto'?'auto':''}">${e(SOURCE[t.source]||'')}</span>${t.who&&t.source!=='auto'?`<span class="who">${e(t.who)}</span>`:''}</div><div class="w">${e(t.what)}</div>${t.reason&&t.reason!==t.what&&t.kind!=='auto'?`<div class="r">${e(t.reason)}</div>`:''}</li>`).join('')}</ol>`:'<p class="muted small">还没有记录。</p>';
+ const stats=`<div class="life-stats">${(d.stats||[]).map(([k,v])=>`<div><b>${e(v)}</b><small>${e(k)}</small></div>`).join('')}</div><p class="life-hint">${d.type==='project'?'从培训明细、办理记录自动汇总，不用填。':'使用次数、人次从培训明细自动汇总，不用填。'}</p>`;
+ const versions=(d.versions||[]).length?`<ul class="life-versions">${d.versions.map(v=>`<li><span class="v">v${e(v.v)}</span>${e(v.summary||'')}<small>${e(String(v.at||'').slice(0,10))} · ${e(v.who||'')}${v.how?' · '+e(v.how):''}</small></li>`).join('')}</ul>`:'<p class="muted small">通过后生成第 1 版。</p>';
+ const sumTitle={project:'运行汇总',course:'使用汇总',base:'运行汇总',trainer:'授课汇总'}[d.type];
+ const crumb=`<nav class="life-crumb" aria-label="位置">培训业务 / ${e(TYPE_LABEL[d.type])} / ${e(RUN_TAB[d.type])} / ${e(d.name)}</nav>`;
+ const back=page?`<button type="button" class="life-back" data-action="nav" data-id="${e(page)}">‹ 返回${e(TYPE_LABEL[d.type])}</button>`:'';
+ return `<div class="life-archive life-page">${crumb}${back}<section class="life-head"><div class="life-title"><h2>${e(d.name)}</h2><span class="tw-status ${d.running?'is-ok':stopped?'is-wait':''}">${e(d.pending_change?'变更审批中':d.state_label)}</span><span class="life-ver">当前第 ${e(d.biz_version)} 版</span></div>
+<dl class="life-facts">${(d.facts||[]).map(([k,v])=>`<div><dt>${e(k)}：</dt><dd>${e(v)}</dd></div>`).join('')}</dl>${stepper}${remind}${pending}${ended?'':`<div class="life-actions">${main}</div>`}${minor?`<div class="life-minor">${minor}</div>`:''}</section>
+<div class="life-two"><section class="life-panel"><h3>运行过程</h3>${tl}</section><aside><section class="life-panel"><h3>${e(sumTitle)}</h3>${stats}</section><section class="life-panel"><h3>历次版本</h3>${versions}</section></aside></div></div>`;
 }
-const back=(c,type,id)=>()=>openArchive(c,type,id);
+
+export async function lifePageHtml(c,page,life){
+ const [type,id]=split(life);
+ if(!PAGES[type]||!PAGES[type].includes(page))throw Error('运行档案地址不正确，请从列表重新打开。');
+ const d=await c.api('/social/lifecycle/'+type+'/'+encodeURIComponent(id));current=d;
+ return archiveHtml(c,d,page);
+}
+
+function cardHtml(c,x){
+ const e=c.esc,pill=x.pending?'is-wait':x.running?'is-ok':x.state==='STOPPED'?'is-stop':'';
+ const alert=x.remind?`<div class="life-card-alert">${e(x.remind.split(/[（。]/)[0])}</div>`:x.pending?`<div class="life-card-alert is-blue">${e(x.pending)}</div>`:'';
+ return `<button type="button" class="life-card" data-action="life-open" data-id="${e(x.type+'|'+x.id)}"><span class="life-card-top"><strong>${e(x.name)}</strong><span class="tw-status ${pill}">${e(x.state_label)}</span></span>${x.sub?`<span class="life-card-meta">${e(x.sub)}</span>`:''}<span class="life-card-nums">${(x.stats||[]).map(([k,v])=>`<span><b>${e(v)}</b>${e(k)}</span>`).join('')}</span>${alert}</button>`;
+}
+function changesHtml(c,list){
+ const e=c.esc;
+ return `<section class="life-panel life-board-changes"><h3>待我审批的变更 <span class="life-count">${list.length}</span></h3>${list.map(x=>`<div class="life-chg-review"><div><strong>${e(x.name)}</strong> <span class="life-card-meta">${e(x.who)} · ${e(x.on)} 提交 · ${e(x.level_label)}${x.reason?' · 原因：'+e(x.reason):''}</span></div>
+<table class="life-cmp"><thead><tr><th>变更项</th><th>现在</th><th>改成</th></tr></thead><tbody>${(x.rows||[]).map(r=>`<tr><td>${e(r.label)}</td><td>${e(r.from_text)}</td><td class="life-new">${e(r.to_text)}</td></tr>`).join('')}</tbody></table>
+<div class="life-chg-btns">${c.act('同意','life-change-act','approve|'+x.id,'primary')}${c.act('退回','life-change-act','return|'+x.id,'')}${c.act('查看详情','life-change-view',x.id,'text')}<span class="life-hint">只看改动的这几项；同意后自动生成新版本，旧版本随时可查。</span></div></div>`).join('')}</section>`;
+}
+// 列表页上方的“X运行”卡片：老师在“我的申报”页看到本人负责的，学院、学校在业务列表页看到本院的，加上待我审批的变更。
+export async function lifeBoardHtml(c,page){
+ const type=lifePageType(page),teacher=c.me?.role?.kind==='teacher';
+ if(!type||(teacher?page!==PAGES[type][0]:page!==PAGES[type][1]))return '';
+ let b;try{b=await c.api('/social/lifecycle/board/'+type)}catch{return ''}
+ if(!b.cards?.length&&!b.changes?.length)return '';
+ const more=b.total>b.cards.length?`<p class="life-hint">还有 ${b.total-b.cards.length} 个，在下方列表里查找。</p>`:'';
+ return `<div class="life-board">${b.changes?.length?changesHtml(c,b.changes):''}${b.cards?.length?`<section class="life-board-run"><div class="life-board-head"><h2>${e2(c,RUN_TAB[type])} <span class="life-count">${b.total}</span></h2><p>${e2(c,BOARD_SUB[type])}</p></div><div class="life-cards">${b.cards.map(x=>cardHtml(c,x)).join('')}</div>${more}</section>`:''}</div>`;
+}
+const e2=(c,v)=>c.esc(v);
+// 卡片放在页面标题和页签下面（和页签的摆放方式一样，渲染后再挪位置）。
+export function placeLifeBoard(root){
+ const board=root?.querySelector?.('.life-board');if(!board)return;
+ const anchor=root.querySelector('.page-group-tabs')||root.querySelector('.pagehead');
+ if(anchor&&anchor.parentNode)anchor.parentNode.insertBefore(board,anchor.nextSibling);
+}
+
+async function openArchive(c,type,id){return go(c,type,id)}
 
 async function openInfo(c,d){
  // 立项（申报）信息就是原来的详情；项目在那里也能“申请变更”。
@@ -74,8 +139,8 @@ function noteForm(c,d){
  c.formModal(ACTS[d.type][1][1]+'：记一笔',body,async v=>{
   if(!String(v.text||'').trim())throw Error('请写一句发生了什么');
   await c.api('/social/lifecycle/'+d.type+'/'+d.id+'/notes',{method:'POST',body:{tag:v.tag,text:v.text.trim(),happened_on:v.happened_on||null}});
-  c.toast('已记下');await openArchive(c,d.type,d.id);
- },{submit:'记下来',stepper:false,returnTo:back(c,d.type,d.id),returnLabel:'返回档案',contextLabel:TYPE_LABEL[d.type]+' / 运行记录',hint:'只记录，不审批。材料（照片、签到表）请回到档案点“上传材料”。'});
+  c.toast('已记下');await refresh(c);
+ },{submit:'记下来',stepper:false,contextLabel:TYPE_LABEL[d.type]+' / 运行记录',hint:'只记录，不审批。材料（照片、签到表）请回到档案点“上传材料”。'});
  if(typeof document!=='undefined')document.querySelectorAll('#modal-root [data-fill]').forEach(b=>b.addEventListener('click',()=>{const t=document.getElementById('f-text');if(t){t.value=b.dataset.fill;t.focus();t.dispatchEvent(new Event('input',{bubbles:true}))}}));
 }
 
@@ -107,18 +172,20 @@ function readValue(f,form){
 }
 const LEVEL_HINT={project:'人次、收入变动不超过 30% 直接生效；换负责人、改类别、延期超过三个月、改到校外、人次或收入变动超过 30% 要学院审批后学校备案；其他学院审批。',
  course:'学时变动超过一半要学院审批后学校备案；面向对象、简介直接更新；其他学院审批。',base:'地点、级别要学院审批后学校备案；负责人直接更新；其他学院审批。',trainer:'业务类别要重新认定（校内：学院审批后组织人事部认定；外聘：教务处备案）；职称、单位、特长直接更新。'};
+const REASONS={project:['学员人数增加','学员时间调整','场地调整','负责人工作变动'],course:['内容增加','学员要求','主讲老师调整'],base:['场地调整','合作变化','负责人变动'],trainer:['职称晋升','单位变动','业务方向调整']};
 function changeForm(c,d){
  const e=c.esc;
- const rows=d.fields.map(f=>`<div class="life-chg" data-key="${e(f.key)}"><label class="life-chg-top"><input type="checkbox" name="pick-${e(f.key)}"><strong>${e(f.label)}</strong><span class="cur">现在：${e(valueText(f,f.value,c))}</span></label><div class="life-chg-new"><span class="muted small">改为</span>${inputFor(c,f)}</div></div>`).join('');
- c.formModal('申请变更',`<div class="form-field full">${c.note('只勾要改的项。审批期间按原资料照常运行；通过后档案生成新版本，原版本留着能查。')}${rows}<p class="hint">${e(LEVEL_HINT[d.type])}</p></div>`+c.field('reason','为什么要改（审批人会看到）','textarea','',{full:true,rows:2,textLimit:2000}),async(v,form)=>{
+ const rows=d.fields.map(f=>`<div class="life-chg" data-key="${e(f.key)}"><label class="life-chg-top"><input type="checkbox" name="pick-${e(f.key)}"><strong>${e(f.label)}</strong><span class="cur">现在：${e(valueText(f,f.value,c))}</span></label><div class="life-chg-new" hidden><span class="muted small">改为</span>${inputFor(c,f)}</div></div>`).join('');
+ c.formModal('申请变更',`<div class="form-field full">${`<p class="life-chg-intro">先勾选要改哪几项，勾上的才填新内容；没勾的保持不变。审批期间按原内容照常运行，通过后生成新版本，旧版本随时可查。</p>`}${rows}<p class="hint">${e(LEVEL_HINT[d.type])}</p></div>`+c.field('reason','为什么改（一句话即可，审批人会看到）','textarea','',{full:true,rows:2,textLimit:2000})+`<div class="form-field full life-quick">${(REASONS[d.type]||[]).map(q=>`<button type="button" class="btn sm light" data-reason="${e(q)}">${e(q)}</button>`).join('')}</div>`,async(v,form)=>{
   const values={};
   for(const f of d.fields)if(form.querySelector(`[name="pick-${f.key}"]`)?.checked)values[f.key]=readValue(f,form);
   if(!Object.keys(values).length)throw Error('请至少勾选一项要改的内容');
   const r=await c.api('/social/lifecycle/'+d.type+'/'+d.id+'/changes',{method:'POST',body:{values,reason:v.reason}});
   c.toast(r.applied?'已更新，档案升到第 '+r.archive.biz_version+' 版':'已提交：'+({college:'学院审批',school:'学院审批 → 学校备案',hr:'学院审批 → 组织人事部认定',jwc:'教务处备案审核'}[r.level]||'审批')+'。审批期间照常运行。');
-  await openArchive(c,d.type,d.id);
- },{submit:'提交变更',stepper:false,wide:true,returnTo:back(c,d.type,d.id),returnLabel:'返回档案',contextLabel:TYPE_LABEL[d.type]+' / 申请变更'});
- if(typeof document!=='undefined')document.querySelectorAll('#modal-root .life-chg').forEach(box=>box.addEventListener('input',ev=>{if(!ev.target.matches('[name^="pick-"]')){const cb=box.querySelector('[name^="pick-"]');if(cb)cb.checked=true}}));
+  await refresh(c);
+ },{submit:'提交变更',stepper:false,wide:true,contextLabel:TYPE_LABEL[d.type]+' / 申请变更'});
+ if(typeof document!=='undefined'){document.querySelectorAll('#modal-root .life-chg').forEach(box=>{const cb=box.querySelector('[name^="pick-"]'),nv=box.querySelector('.life-chg-new');cb?.addEventListener('change',()=>{if(nv){nv.hidden=!cb.checked;if(cb.checked)nv.querySelector('input,select,textarea')?.focus()}})});
+  document.querySelectorAll('#modal-root [data-reason]').forEach(b=>b.addEventListener('click',()=>{const t=document.getElementById('f-reason');if(t){t.value=b.dataset.reason;t.dispatchEvent(new Event('input',{bubbles:true}))}}))}
 }
 
 function annualForm(c,d){
@@ -129,15 +196,15 @@ function annualForm(c,d){
   +c.field('running','今年的情况','select',prior&&!prior.running?'no':'yes',{chips:true,options:[['yes',d.type==='base'?'在运行，有培训在用':'在授课，资格继续有效'],['no','今年暂未运行']]})
   +c.field('text','补充一句（选填）','textarea','',{full:true,required:false,rows:2,textLimit:1000,placeholder:d.type==='base'?'例：今年接待 3 期培训，共 120 人次':'例：今年主讲 2 个项目，共 32 学时'}),async v=>{
   await c.api('/social/lifecycle/'+d.type+'/'+d.id+'/annual',{method:'POST',body:{year:Number(v.year),running:v.running!=='no',text:v.text||''}});
-  c.toast('已确认');await openArchive(c,d.type,d.id);
- },{submit:'确认',stepper:false,returnTo:back(c,d.type,d.id),returnLabel:'返回档案',contextLabel:TYPE_LABEL[d.type]+' / 年度确认',hint:(doneNote?doneNote+'。同一年度再确认会记为更正，前后结论都留在运行过程里。':'每年一次，点选即可，不用审批。')+'今年不再运行的，可以回到档案点“停用”。'});
+  c.toast('已确认');await refresh(c);
+ },{submit:'确认',stepper:false,contextLabel:TYPE_LABEL[d.type]+' / 年度确认',hint:(doneNote?doneNote+'。同一年度再确认会记为更正，前后结论都留在运行过程里。':'每年一次，点选即可，不用审批。')+'今年不再运行的，可以回到档案点“停用”。'});
 }
 
 function stopForm(c,d,resume=false){
  c.formModal(resume?'恢复运行':'停用'+TYPE_LABEL[d.type],c.field('reason',resume?'恢复原因':'停用原因','textarea','',{full:true,rows:2,textLimit:2000,placeholder:resume?'例：本学期重新开设':'例：课程不再开设 / 协议到期 / 本人调离'}),async v=>{
   await c.api('/social/lifecycle/'+d.type+'/'+d.id+'/'+(resume?'resume':'stop'),{method:'POST',body:{reason:v.reason,expected_version:d.version}});
-  c.toast(resume?'已恢复运行':'已停用，历史记录都保留');await openArchive(c,d.type,d.id);await c.render?.();
- },{submit:resume?'恢复运行':'确认停用',stepper:false,returnTo:back(c,d.type,d.id),returnLabel:'返回档案',hint:resume?'':'停用不是作废：以前的记录、明细和积分都不动；停用后不能再登记新的使用'+(d.type==='course'?'（导入参训明细会拦下这门课）':'')+'，需要时可以恢复。'});
+  c.toast(resume?'已恢复运行':'已停用，历史记录都保留');await refresh(c);
+ },{submit:resume?'恢复运行':'确认停用',stepper:false,hint:resume?'':'停用不是作废：以前的记录、明细和积分都不动；停用后不能再登记新的使用'+(d.type==='course'?'（导入参训明细会拦下这门课）':'')+'，需要时可以恢复。'});
 }
 
 async function changeView(c,id){
@@ -149,16 +216,20 @@ async function changeView(c,id){
  return c.modal('变更申请：'+d.target.name,body,foot,true,TYPE_LABEL[d.target.type]+' / 变更审批');
 }
 
-function changeActForm(c,op,id){
- const d=current?.change,level=d?.item?.state,needBasis=op==='approve'&&['HR','JWC'].includes(level);
+async function changeActForm(c,op,id){
+ // 从变更详情或列表上方的“待我审批的变更”都能直接同意、退回。
+ const d=current?.change?.item?.id===id?current.change:await c.api('/social/lifecycle/changes/'+encodeURIComponent(id));
+ current={change:d};
+ const level=d?.item?.state,needBasis=op==='approve'&&['HR','JWC'].includes(level);
  const label={approve:'同意变更',return:'退回变更',withdraw:'撤回变更'}[op];
  c.formModal(label,c.field('reason',op==='approve'?'办理意见':op==='return'?'退回原因（告诉对方要补什么）':'撤回原因','textarea',op==='approve'?'同意变更':'',{full:true,rows:2,textLimit:2000})+(needBasis?c.field('basis',level==='HR'?'资格认定文号和日期':'备案依据','text','',{full:true}):''),async v=>{
   await c.api('/social/lifecycle/changes/'+id+'/actions',{method:'POST',body:{action:op,reason:v.reason,basis:v.basis||'',expected_version:d.item.version}});
-  c.toast(op==='approve'?'已办理':'已'+label.slice(0,2));c.closeModal();await c.render?.();
- },{submit:label,stepper:false,returnTo:()=>changeView(c,id),returnLabel:'返回变更'});
+  c.toast(op==='approve'?'已办理':'已'+label.slice(0,2));await refresh(c);
+ },{submit:label,stepper:false,contextLabel:TYPE_LABEL[d.target?.type]?TYPE_LABEL[d.target.type]+' / 变更审批':''});
 }
 
 export async function lifecycleAction(action,id,c){
+ if(action==='quick-apply')return quickApply(c,id);
  if(action==='life-open'){const [t,i]=split(id);return openArchive(c,t,i)}
  if(action==='life-change-view')return changeView(c,id);
  if(action==='life-change-act'){const [op,i]=split(id);return changeActForm(c,op,i)}
@@ -179,8 +250,8 @@ export async function lifecycleAction(action,id,c){
  if(action==='life-upload'){
   const kind=type==='project'?'social_project':'social_resource';
   const latest=async()=>{const x=await c.api('/social/objects/'+kind+'/'+ident);return {version:x.item.version,attachments:x.attachments||[]}};
-  return materialUploadForm(c,{kind,id:ident,title:'上传运行材料',intro:c.note('签到表、开班照片、检查记录、协议都可以；上传后自动记进运行过程。'),contextLabel:TYPE_LABEL[type]+' / 上传材料',latest,after:()=>openArchive(c,type,ident)});
+  return materialUploadForm(c,{kind,id:ident,title:'上传运行材料',intro:c.note('签到表、开班照片、检查记录、协议都可以；上传后自动记进运行过程。'),contextLabel:TYPE_LABEL[type]+' / 上传材料',latest,after:()=>refresh(c)});
  }
  throw Error('此操作入口暂不可用');
 }
-export const LIFE_ACTIONS=['life-open','life-info','life-note','life-change','life-annual','life-stop','life-resume','life-close','life-upload','life-units','life-report','life-change-view','life-change-act'];
+export const LIFE_ACTIONS=['life-open','life-info','life-note','life-change','life-annual','life-stop','life-resume','life-close','life-upload','life-units','life-report','life-change-view','life-change-act','quick-apply'];

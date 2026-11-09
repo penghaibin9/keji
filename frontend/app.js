@@ -1,13 +1,13 @@
-import {mountHelp,closeHelp,helpLibraryHTML,helpSearch,openHelp} from './help-system.js?v=20261108-walk1';
+import {mountHelp,closeHelp,helpLibraryHTML,helpSearch,openHelp} from './help-system.js?v=20261109-life2';
 import {bindFormDraft} from './form-drafts.js?v=20261021-form-merged1';
 import {coursePointsAction} from './course-points.js?v=20261021-form-merged1';
 import {renderTrainingWorkspace,trainingChange} from './training-workspace.js?v=20261107-life1';
 import {renderSchoolCockpit,bindSchoolCockpit} from './school-cockpit.js?v=20261019-walk3&display=20261019-clean2';
 import {icons} from './icons.js';
 import {dutiesTabHtml,dutiesAction} from './school-duties.js?v=20261104-simplify2';
-import {socialPage,socialAction,applicationProjectPicker} from './social-training.js?v=20261108-walk1';
-import {lifecycleAction,LIFE_ACTIONS} from './lifecycle.js?v=20261108-walk1';
-import {applicationAction,trainersHtml,applyPageHtml,APPLY_PAGES,myApplicationsHtml,homeApplicationsHtml,myCoursesHtml,libraryHtml,libraryFilterSubmit,homeCoursesHtml,courseAction} from './applications.js?v=20261108-walk1';
+import {socialPage,socialAction,applicationProjectPicker} from './social-training.js?v=20261109-life2';
+import {lifecycleAction,LIFE_ACTIONS,lifePageHtml,lifeBoardHtml,lifePageType,placeLifeBoard} from './lifecycle.js?v=20261109-life2';
+import {applicationAction,trainersHtml,applyPageHtml,APPLY_PAGES,myApplicationsHtml,homeApplicationsHtml,myCoursesHtml,libraryHtml,libraryFilterSubmit,homeCoursesHtml,courseAction} from './applications.js?v=20261109-life2';
 import {nextCode,runBatch,batchStage,batchMode,batchPerformer,BATCH_LABELS,materialUploadForm,checkUploadFiles,uploadEntries,uploadSequential,uploadStatusHtml} from './approval-flow.js?v=20261021-form-merged1';
 import {ledgerPage,resourceStatsPage,homeIndicators,ledgerAction,resetLedgerView,minePage,mineReminders} from './social-ledgers.js?v=20261021-form-merged1';
 import {rosterSection,rosterHandlers,onlineHandlers,showStaffDetail,showCourseDetail,presetRoster,loadCodeTables,courseFactsHtml,codeLabel} from './school-data.js?v=20261019-merge1&display=20261019-clean2';
@@ -820,7 +820,7 @@ function scopeNav(dest,extra={}){const f=drillFilters(dest,filter,extra);return 
 async function render(){
  closeHelp(false);if(!me)return;if(document.body?.dataset){document.body.dataset.training=String(['projects','courses','bases','trainers','records','outcomes'].includes(page));document.body.dataset.cockpit='false'}const seq=++renderSequence;$('#content').setAttribute('data-page',page);$('#breadcrumb').textContent=pageTitle(page);syncSidebar();
  $('#content').innerHTML='<div class="busy-panel">正在读取授权业务数据…</div>';
- try{if(!pageAllowed(page))throw Error('当前账号未授权访问此页面，请从左侧授权菜单进入。');let html=await pages[page]();if(!html.includes('page-group-tabs'))html=pageGroupTabs(page)+html;if(seq!==renderSequence)return;$('#content').innerHTML=html+`<footer class="footer"><span>${esc(me.school_name||'湖南科技职业学院')} · 一站式非学历教育智慧前台</span><span>权限范围：${esc(me.role.kind==='teacher'?'仅本人':orgName(me.user.org_id))}</span></footer>`;if(document.body?.dataset)document.body.dataset.cockpit=String(page==='cockpit'&&!!view.report?.available);mergePageHelp($('#content'));mountHelp($('#content'),currentHelpContext());collapseHeadActions($('#content'));placeGroupTabs($('#content'));labelEmptyStates($('#content'));bindFilters();bindPortalControls();bindFormAssists($('#content'));if(page==='cockpit'&&view.report?.available)bindSchoolCockpit($('#content'),view.report,f=>nav('cockpit',f),{sourceUnit:filter.report_unit,onSourceUnit:unit=>{filter.report_unit=unit;syncLocation(true)}})}
+ try{if(!pageAllowed(page))throw Error('当前账号未授权访问此页面，请从左侧授权菜单进入。');let html=filter.life&&lifePageType(page)?await lifePageHtml(socialContext(),page,filter.life):await pages[page]();if(!filter.life&&lifePageType(page))html=(await lifeBoardHtml(socialContext(),page))+html;if(!html.includes('page-group-tabs'))html=pageGroupTabs(page)+html;if(seq!==renderSequence)return;$('#content').innerHTML=html+`<footer class="footer"><span>${esc(me.school_name||'湖南科技职业学院')} · 一站式非学历教育智慧前台</span><span>权限范围：${esc(me.role.kind==='teacher'?'仅本人':orgName(me.user.org_id))}</span></footer>`;if(document.body?.dataset)document.body.dataset.cockpit=String(page==='cockpit'&&!!view.report?.available);mergePageHelp($('#content'));mountHelp($('#content'),currentHelpContext());collapseHeadActions($('#content'));placeGroupTabs($('#content'));placeLifeBoard($('#content'));labelEmptyStates($('#content'));bindFilters();bindPortalControls();bindFormAssists($('#content'));if(page==='cockpit'&&view.report?.available)bindSchoolCockpit($('#content'),view.report,f=>nav('cockpit',f),{sourceUnit:filter.report_unit,onSourceUnit:unit=>{filter.report_unit=unit;syncLocation(true)}})}
  catch(err){if(seq===renderSequence&&$('#content'))$('#content').innerHTML=pageHead()+note(friendlyError(err),true)+`<div class="mt16">${act('重新读取','refresh')}</div>`;}
 }
 // 培训业务页的标题在页面模块里生成，分组页签挪到标题下面，和其他页面一致。

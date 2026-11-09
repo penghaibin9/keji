@@ -728,3 +728,73 @@ def view(db, a, kind, obj):
                     'close': kind == 'project' and obj.state == 'FILED' and (mine or (is_manager(a, obj) and 'records.write' in a.permissions)),
                     # 师资的认定材料办结后保持原样（不追加），运行材料只给项目、课程、基地。
                     'upload': can_write and is_run and (kind == 'project' or kind in ('course', 'base') and bool(d.get('application')))}}
+
+
+# ---- 运行卡片（2026-11-09，按设计稿：列表页的“X运行”卡片 + 学院“待我审批的变更”） ----
+
+BOARD_STATES = {'project': ('FILED', 'CLOSE_COLLEGE', 'CLOSE_REVIEW'), 'course': ('ACTIVE', STOPPED),
+                'base': ('DRAFT', 'ACTIVE', STOPPED), 'trainer': ('ACTIVE', STOPPED)}
+BOARD_LIMIT = 24
+
+
+def _board_rows(db, a, kind):
+    if kind == 'project':
+        q = select(SocialProject).where(SocialProject.state.in_(BOARD_STATES[kind]))
+        if a.role.kind == 'teacher':
+            q = q.where(SocialProject.owner_id == a.id)
+        elif a.role.kind in ('college', 'school'):
+            q = q.where(SocialProject.org_id.in_(a.org_ids or {''}))
+        return db.scalars(q.order_by(SocialProject.created_at.desc())).all()
+    q = select(SocialResource).where(SocialResource.kind == RESOURCE_KIND[kind], SocialResource.state.in_(BOARD_STATES[kind]))
+    if a.role.kind in ('college', 'school'):
+        q = q.where(SocialResource.org_id.in_(a.org_ids or {''}))
+    rows = db.scalars(q.order_by(SocialResource.created_at.desc())).all()
+    # 学院直接登记、还没提交的申请草稿不算运行中的档案。
+    return [r for r in rows if not ((r.data or {}).get('application') and r.state == 'DRAFT')]
+
+
+def _card(db, a, kind, obj):
+    v = view(db, a, kind, obj)
+    d = obj.data or {}
+    if kind == 'project':
+        sub = [CATEGORY.get(d.get('category'), ''), d['start_date'] + ' 至 ' + d['end_date']]
+    elif kind == 'course':
+        sub = [(str(d.get('hours')) + ' 学时') if d.get('hours') not in (None, '') else '', d.get('teacher_name') or '']
+    elif kind == 'base':
+        sub = [d.get('location') or '', label_of('multi', d.get('usages'), BASE_USAGE)]
+    else:
+        sub = [d.get('unit') or '', label_of('multi', d.get('directions'), DIRECTIONS)]
+    pending = v['pending_change']
+    return {'type': kind, 'id': obj.id, 'name': v['name'], 'state': obj.state, 'running': v['running'],
+            'state_label': '变更审批中' if pending else v['state_label'], 'sub': ' · '.join(x for x in sub if x),
+            'stats': v['stats'][:3], 'remind': (v['reminders'] or [''])[0],
+            'pending': pending['summary'] + '（' + pending['state_label'] + '）' if pending else ''}
+
+
+def board(db, a, kind):
+    if kind not in TYPES:
+        raise HTTPException(422, '档案类型不支持')
+    cards = []
+    total = 0
+    for obj in _board_rows(db, a, kind):
+        try:
+            check_access(db, a, kind, obj)
+        except HTTPException:
+            continue
+        total += 1
+        if len(cards) < BOARD_LIMIT:
+            cards.append(_card(db, a, kind, obj))
+    # 要处理的排前面：在审变更、提醒，其余保持新的在前。
+    cards.sort(key=lambda c: (not c['pending'] and not c['remind'], not c['running']))
+    changes = []
+    for todo in change_todos(db, a):
+        change = db.get(SocialResource, todo['id'])
+        if change is None or change.data.get('target_type') != kind:
+            continue
+        who = db.get(User, change.data.get('teacher_id') or change.data['created_by'])
+        changes.append({'id': change.id, 'version': change.version, 'state': change.state, 'name': change.data['target_name'],
+                        'target_id': change.data.get('target_id'), 'who': who.name if who else '', 'on': str(change.created_at)[:10],
+                        'reason': change.data.get('reason') or '', 'level_label': CHANGE_LEVEL_LABEL[change.data['level']],
+                        'state_label': change_state_label(change),
+                        'rows': [{'label': r.get('label'), 'from_text': r.get('from_text'), 'to_text': r.get('to_text')} for r in change.data.get('rows') or []]})
+    return {'type': kind, 'type_label': TYPES[kind], 'cards': cards, 'total': total, 'changes': changes}

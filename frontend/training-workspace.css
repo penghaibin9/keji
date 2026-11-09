@@ -257,3 +257,82 @@ body:not(.no-shell) #content .page-title .teacher-page-subtitle{font-size:15px;l
 .life-new{color:#1756d4}
 @media(max-width:900px){.life-two{grid-template-columns:1fr}}
 @media(max-width:640px){.life-actions,.tw-life-actions{grid-template-columns:1fr}.life-chg-top{flex-wrap:wrap}.life-chg-top .cur{margin-left:0;text-align:left}.life-venue{grid-template-columns:1fr}}
+/* 2026-11-09 按设计稿：整页运行档案、列表上方的“X运行”卡片、待我审批的变更、申请变更只展开勾选项 */
+.life-page{max-width:1180px}
+.life-crumb{font-size:12px;color:#7b8ca3;margin:2px 0 6px}
+.life-back{border:0;background:transparent;color:#245ee0;padding:4px 0;margin:0 0 10px;font-size:14px;cursor:pointer}
+.life-page .life-head{padding:20px 24px;border-radius:11px}
+.life-title{flex-wrap:wrap}
+.life-title h2{margin:0;font-size:21px;color:var(--ink,#102b55)}
+.life-page .life-facts dt{color:#7b8ca3}.life-page .life-facts dd{font-weight:500}
+.life-page .life-actions{display:flex;flex-wrap:wrap;gap:10px;margin-top:16px}
+.life-page .life-actions .btn{min-height:42px;padding:0 18px;font-size:14px}
+.life-page .life-minor{gap:4px 18px;margin-top:12px}
+.life-page .life-minor .btn.text{padding:2px 0;min-height:28px}
+.life-remind{justify-content:space-between}
+.life-remind .btn{margin-left:auto;background:#fff}
+.life-pending{justify-content:space-between}
+.life-hint{margin:10px 0 0;font-size:12px;color:#7b8ca3}
+.life-page .life-two{grid-template-columns:minmax(0,1fr) 320px;gap:16px;margin-top:16px}
+.life-page .life-panel{border-radius:11px;padding:18px 22px}
+.life-page .life-timeline{max-height:none}
+.life-timeline .who{margin-left:6px;font-size:12px;color:#8090a7}
+.life-page .life-stats b{font-size:20px}
+.life-versions .v{min-width:32px}.life-versions small{margin-left:32px}
+.life-count{display:inline-block;font-size:12px;font-weight:500;padding:0 8px;border-radius:10px;background:#eaf1ff;color:#245ee0;vertical-align:2px}
+.life-board{margin:4px 0 18px}
+.life-board-head h2{margin:0;font-size:17px}
+.life-board-head p{margin:4px 0 12px;font-size:13px;color:#627797}
+.life-cards{display:grid;grid-template-columns:repeat(auto-fill,minmax(300px,1fr));gap:14px}
+.life-card{background:#fff;border:1px solid var(--line,#dce6f3);border-radius:11px;padding:16px 18px;text-align:left;display:flex;flex-direction:column;gap:8px;width:100%;cursor:pointer;font:inherit;color:inherit}
+.life-card:hover,.life-card:focus-visible{border-color:#a6bff0;box-shadow:0 4px 14px #1a365d14}
+.life-card-top{display:flex;justify-content:space-between;align-items:flex-start;gap:10px}
+.life-card-top strong{font-size:16px;color:var(--ink,#102b55)}
+.life-card-meta{font-size:12px;color:#627797}
+.life-card-nums{display:flex;flex-wrap:wrap;gap:6px 16px;font-size:12px;color:#435b7d}
+.life-card-nums b{font-size:15px;color:var(--ink,#102b55);margin-right:3px}
+.life-card-alert{font-size:12px;color:#9a5a10;background:#fff7ea;border-radius:5px;padding:5px 8px}
+.life-card-alert.is-blue{color:#23467e;background:#eef4ff}
+.tw-status.is-stop{background:#f6eeee;color:#9b3a3a}
+.life-board-changes{margin-bottom:16px}
+.life-chg-review{padding:4px 0 14px;border-bottom:1px solid #edf1f7;margin-bottom:12px}
+.life-chg-review:last-child{border-bottom:0;margin-bottom:0;padding-bottom:0}
+.life-cmp{width:100%;border-collapse:collapse;font-size:13px;margin:8px 0 10px}
+.life-cmp th{background:#f3f7fc;color:#536985;font-weight:500}
+.life-cmp th,.life-cmp td{border-bottom:1px solid #e6edf6;padding:9px 10px;text-align:left}
+.life-cmp .life-new{font-weight:600}
+.life-chg-btns{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+.life-chg-btns .life-hint{margin:0}
+.life-chg-intro{margin:0 0 12px;font-size:13px;color:#536985}
+.life-chg{padding:12px 14px;margin-bottom:10px}
+.life-chg-top{display:grid;grid-template-columns:auto auto minmax(0,1fr);align-items:center;gap:10px;margin:0}
+.life-chg-top input[type=checkbox]{width:16px;height:16px;margin:0}
+.life-chg-top strong{font-size:14px;white-space:nowrap}
+.life-chg-top .cur{justify-self:end}
+.life-chg-new[hidden]{display:none}
+.life-chg-new{margin-top:10px}
+@media(max-width:900px){.life-page .life-two{grid-template-columns:1fr}}
+@media(max-width:640px){.life-cards{grid-template-columns:1fr}.life-chg-top{grid-template-columns:auto 1fr}.life-chg-top .cur{grid-column:1/-1;justify-self:start}}
+/* 2026-11-09 老师新申报的普通弹窗（apply-quick.js） */
+.qa-intro{margin:0;font-size:13px;color:#536985;background:#f3f7fd;border-radius:8px;padding:9px 12px}
+.qa-field{border:0;padding:0;margin:0}
+.qa-field legend{font-size:14px;font-weight:600;color:var(--ink,#102b55);margin-bottom:8px;padding:0}
+.qa-field legend b,.qa-field legend .qa-opt{font-weight:400}
+.qa-field legend b{color:#d14343}
+.qa-opt{font-size:12px;color:#8a99ae}
+.qa-two{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.qa-quick{display:flex;gap:6px;flex-wrap:wrap;margin-top:8px}
+.qa-quick .btn{border-radius:14px}
+.qa-cond{background:#f7faff;border:1px solid #dfe8f6;border-radius:8px;padding:10px 12px}
+.qa-cond[hidden]{display:none}
+.qa-cond>.form-grid{margin:0}
+.qa-check{display:inline-flex;align-items:center;gap:8px}
+.qa-more{border:1px dashed #d5e0ef;border-radius:8px;padding:8px 12px}
+.qa-more summary{cursor:pointer;font-size:13px;color:#536985}
+.qa-more>.form-grid{margin-top:10px}
+.qa-source{display:flex;flex-direction:column;gap:2px;background:#eef8f3;border-radius:8px;padding:10px 12px;font-size:13px;color:#2f5b47}
+@media(max-width:640px){.qa-two{grid-template-columns:1fr}}
+.qa-form{display:contents}
+.qa-form .field-how{display:none}
+.qa-label{font-size:13px;color:#536985}
+.qa-days .qa-quick{margin-top:6px}

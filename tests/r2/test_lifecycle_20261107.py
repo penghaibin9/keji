@@ -220,3 +220,23 @@ def test_base_annual_confirmation(setup_social, client2):
     item = c.get('/api/applications/' + ident).json()['item']
     r = put(c, '/api/social/resources/' + ident, {'kind': 'base', 'org_id': item['org_id'], 'code': item['code'], 'name': '改名', 'expected_version': item['version'], 'reason': '直接改'})
     assert r.status_code in (409, 422)
+
+
+def test_running_board_cards_and_changes(setup_social, client2):
+    """列表上方的“X运行”卡片：老师看本人负责的，学院看本院的并带着待审批变更。"""
+    c = client2
+    pid = setup_social
+    auth(c, 'teacher')
+    cid = change(c, 'project', pid, {'end_date': '2026-12-31'}).json()['change']['id']
+    body = c.get('/api/social/lifecycle/board/project')
+    assert body.status_code == 200, body.text
+    body = body.json()
+    card = next(x for x in body['cards'] if x['id'] == pid)
+    assert body['total'] >= 1 and card['running'] and card['state_label'] == '变更审批中' and card['pending']
+    assert {'name', 'sub', 'stats', 'remind'} <= set(card)
+    assert c.get('/api/social/lifecycle/board/nothing').status_code == 422
+    auth(c, 'collegehead')
+    college = c.get('/api/social/lifecycle/board/project').json()
+    assert any(x['id'] == cid and x['rows'] and x['rows'][0]['to_text'] for x in college['changes'])
+    auth(c, 'otherteacher')
+    assert not c.get('/api/social/lifecycle/board/project').json()['cards']
