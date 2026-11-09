@@ -23,39 +23,74 @@ const base={type:'project',id:'p1',name:'茶艺培训',state:'FILED',state_label
  can:{note:true,change:true,annual:false,stop:false,resume:false,close:true,upload:true}};
 
 // 2026-11-09 按设计稿：运行档案是整页（不是弹窗），卡片列表在“项目运行”下。
-test('项目运行档案是整页：进度条、提醒、三个按钮、时间线、汇总、版本',async()=>{
- const c=ctx(base);const html=await lifePageHtml(c,'apply_project','project|p1');
- for(const name of ['上传材料','申请变更','项目结项','项目立项信息','运行过程','运行汇总','历次版本'])assert.match(html,new RegExp(name),name);
- assert.doesNotMatch(html,/记一笔/);
- assert.match(html,/当前第 2 版/);assert.match(html,/v2/);assert.match(html,/life-stepper/);assert.match(html,/培训业务 \/ 培训项目 \/ 项目运行 \/ 茶艺培训/);
- assert.match(html,/data-action="life-change"/);assert.ok(LIFE_ACTIONS.includes('life-change-act')&&LIFE_ACTIONS.includes('quick-apply'));
+test('项目运行档案是整页：只留上传材料、申请变更、结项三个按钮，6 个状态，积分在运行汇总里',async()=>{
+ const c=ctx({...base,points:{label:'预计积分',value:'3.20',line:'张老师（负责人） 3.20 分'}});const html=await lifePageHtml(c,'apply_project','project|p1');
+ for(const name of ['上传材料','申请变更','结项','运行过程','运行汇总','历次版本','预计积分','将记积分'])assert.match(html,new RegExp(name),name);
+ for(const gone of ['记一笔','项目立项信息','改简介','项目运行 \/'])assert.doesNotMatch(html,new RegExp(gone),gone);
+ assert.match(html,/第 2 版/);assert.match(html,/lv-pill lv-run">运行中/);assert.match(html,/life-stepper/);assert.match(html,/培训业务 \/ 培训项目 \/ 茶艺培训/);
+ assert.match(html,/data-action="life-change"/);assert.ok(LIFE_ACTIONS.includes('life-change-act')&&LIFE_ACTIONS.includes('quick-apply')&&LIFE_ACTIONS.includes('q-bulk'));
  await assert.rejects(()=>lifePageHtml(c,'courses','project|p1'));
 });
 
-test('课程停用后第三个按钮变成恢复运行，申请变更不可点',async()=>{
+test('参与老师（不是负责人）只能上传材料',async()=>{
+ const c=ctx({...base,lead:false});const html=await lifePageHtml(c,'apply_project','project|p1');
+ assert.match(html,/data-action="life-upload"/);assert.doesNotMatch(html,/data-action="life-change"/);assert.doesNotMatch(html,/data-action="life-close"/);
+});
+
+test('课程停用后第三个按钮变成恢复运行，状态显示已停用，申请变更不可点',async()=>{
  const c=ctx({...base,type:'course',state:'STOPPED',state_label:'已停用',running:false,can:{...base.can,note:false,change:false,close:false,resume:true}});
  const html=await lifePageHtml(c,'apply_course','course|r1');
- assert.match(html,/data-action="life-resume"/);assert.match(html,/课程申报信息/);
+ assert.match(html,/data-action="life-resume"/);assert.match(html,/已停用/);
  assert.match(html,/data-action="life-change"[^>]*disabled/);
 });
 
-test('提醒带“现在处理”按钮，已有变更在审批时申请变更不可点',async()=>{
- const c=ctx({...base,reminders:['培训已于 2026-11-01 结束，材料齐了就可以点“项目结项”。'],pending_change:{id:'c1',summary:'结束日期 → 2027-04-30',state_label:'待学院审批',level_label:'学院审批'},can:{...base.can,change:false}});
+test('同时只显示一条最急的提醒；已有变更在审批时显示变更中、申请变更不可点',async()=>{
+ const c=ctx({...base,reminders:['培训已于 2026-11-01 结束，材料齐了就可以点“项目结项”。','培训已经开始，还没有导入参训明细（人次从明细自动核算）。'],pending_change:{id:'c1',summary:'结束日期 → 2027-04-30',state_label:'待学院审批',level_label:'学院审批'},can:{...base.can,change:false}});
  const html=await lifePageHtml(c,'apply_project','project|p1');
- assert.match(html,/现在处理/);assert.match(html,/data-action="life-close"/);assert.match(html,/变更审批中/);
- assert.match(html,/data-action="life-change"[^>]*disabled/);
+ assert.equal((html.match(/life-remind/g)||[]).length,1);assert.match(html,/参训明细/);assert.doesNotMatch(html,/材料齐了/);
+ assert.match(html,/变更中/);assert.match(html,/data-action="life-change"[^>]*disabled/);
 });
 
-test('运行卡片：老师在我的申报页、学院在列表页看到，点开进整页',async()=>{
- const board={cards:[{type:'project',id:'p1',name:'茶艺培训',state:'FILED',running:true,state_label:'运行中',sub:'社区公益培训 · 2026-10-08 至 2026-12-20',stats:[['参训明细','0 条']],remind:'培训已经开始（人次从明细核算）',pending:''}],total:1,
-  changes:[{id:'ch1',name:'茶艺培训',who:'张老师',on:'2026-11-08',level_label:'学院审批',reason:'延期',rows:[{label:'结束日期',from_text:'2026-12-20',to_text:'2027-04-30'}]}]};
- const c=ctx(base);c.api=async()=>board;
- const html=await lifeBoardHtml(c,'apply_project');
- assert.match(html,/项目运行/);assert.match(html,/data-action="life-open" data-id="project\|p1"/);assert.match(html,/待我审批的变更/);assert.match(html,/data-id="approve\|ch1"/);assert.match(html,/2027-04-30/);
- assert.equal(await lifeBoardHtml(c,'projects'),'');           // 老师在“我负责或参与的”页不重复出现
- c.me.role.kind='college';assert.match(await lifeBoardHtml(c,'projects'),/life-card/);
+test('学院、学校在列表页上方看到“待我审批”，老师不出现；可勾选批量同意',async()=>{
+ const items=[{kind:'apply',label:'立项',type:'project',id:'p1',name:'茶艺培训',who:'张老师',on:'2026-11-08',summary:'社区公益培训',action:'approve',version:3,batch:true},
+  {kind:'change',label:'变更',type:'project',id:'ch1',name:'茶艺培训',who:'张老师',on:'2026-11-08',summary:'结束日期：2026-12-20 → 2027-04-30',action:'approve',version:1,batch:true},
+  {kind:'close',label:'结项核验',type:'project',id:'p2',name:'面点培训',who:'李老师',on:'2026-11-07',summary:'满意度 96%',action:'close',version:5,batch:false}];
+ const c=ctx(base);c.api=async url=>{c.calls.push([url]);return {items}};
+ assert.equal(await lifeBoardHtml(c,'apply_project'),'');
+ c.me.role.kind='college';
+ const html=await lifeBoardHtml(c,'projects');
+ assert.match(html,/全部 3/);assert.match(html,/立项 1/);assert.match(html,/变更 1/);assert.match(html,/结项 1/);assert.match(html,/批量同意/);
+ assert.match(html,/data-action="q-pick" data-id="apply\|project\|p1"/);assert.doesNotMatch(html,/data-action="q-pick" data-id="close\|project\|p2"/);
  assert.equal(await lifeBoardHtml(c,'apply_project'),'');
  assert.equal(lifePageType('trainers'),'trainer');assert.equal(lifePageType('home'),'');
+ await lifecycleAction('q-pick','apply|project|p1',c);
+ const posts=[];c.api=async(url,opt)=>{if(opt)posts.push([url,opt.body]);return {items}};
+ await lifecycleAction('q-bulk','project',c);
+ assert.deepEqual(posts.map(x=>[x[0],x[1].action]),[['/social/projects/p1/actions','approve']]);
+});
+
+test('老师“我的培训项目”：三步按钮、全部/我负责的/我参与的、新建只在立项、被退回直接显示原因',async()=>{
+ const items=[{type:'project',id:'a',name:'插花',status:'draft',status_label:'草稿',stage:'apply',dates:'2026-12-05 至 2026-12-26',lead:true,todo:{text:'被退回：人次偏高',act:'social-detail',id:'social_project|a',btn:'修改后重新提交',tone:'warn'}},
+  {type:'project',id:'b',name:'茶艺',status:'run',status_label:'运行中',stage:'run',dates:'2026-09-01 至 2026-12-31',lead:true,todo:{text:'培训已结束，去结项',act:'life-close',id:'project|b',btn:'去结项',tone:'warn'}},
+  {type:'project',id:'m',name:'养生茶',status:'run',status_label:'运行中',stage:'run',dates:'2026-10-15 至 2026-12-15',lead:false,todo:null},
+  {type:'project',id:'d',name:'茶农',status:'done',status_label:'已结项',stage:'close',dates:'',lead:true,todo:null,again:true}];
+ const c=ctx(base);c.api=async()=>({items});
+ const {lifeListHtml}=await import('../../frontend/lifecycle.js');
+ let html=await lifeListHtml(c,'apply_project');
+ assert.match(html,/项目立项/);assert.match(html,/项目运行/);assert.match(html,/项目结项/);assert.match(html,/我参与的/);
+ assert.match(html,/茶艺/);assert.match(html,/养生茶/);assert.match(html,/去结项/);assert.doesNotMatch(html,/新建培训项目/);
+ await lifecycleAction('lv-rf','member',c);html=await lifeListHtml(c,'apply_project');assert.doesNotMatch(html,/>茶艺</);assert.match(html,/养生茶/);
+ await lifecycleAction('lv-rf','all',c);
+ await lifecycleAction('lv-tab','project|apply',c);html=await lifeListHtml(c,'apply_project');
+ assert.match(html,/被退回：人次偏高/);assert.match(html,/修改后重新提交/);assert.match(html,/新建培训项目/);
+ await lifecycleAction('lv-tab','project|close',c);html=await lifeListHtml(c,'apply_project');assert.match(html,/再办一期/);
+ await lifecycleAction('lv-tab','project|run',c);
+});
+
+test('上传材料按文件名自动分组',async()=>{
+ const {groupOf}=await import('../../frontend/lifecycle.js');
+ assert.equal(groupOf('第3期签到表.pdf'),'签到表');assert.equal(groupOf('学员名单.pdf'),'签到表');assert.equal(groupOf('现场.JPG'),'照片');
+ assert.equal(groupOf('茶艺课件.pdf'),'课件');assert.equal(groupOf('成果报告.pdf'),'其他');
 });
 
 test('申请变更只提交勾选的项，没勾的项不展开',async()=>{

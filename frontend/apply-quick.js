@@ -55,37 +55,39 @@ async function uploadFiles(c,kind,id,version,form){
 
 function projectForm(c){
  const e=c.esc;
- const body=`<p class="qa-intro form-field full">只填这几项就能提交，其余的开班后在“项目运行”里补。</p>`
-  +c.field('name','项目名称','text','',{full:true,placeholder:'例如：社区居民茶艺技能培训'})
+ // 2026-11-09 设计图 v2：必填只有名称、类别、起止日期、预估人次（外加学校要求的方案材料）；场地、收入、成果等收进“结项前补”，带默认值。
+ const body=c.field('name','项目名称','text','',{full:true})
   +chips(c,'category',CATEGORY,{label:'培训类别'})
-  +c.field('start_date','开始日期','date',today())+c.field('end_date','结束日期（点下面的时长自动算）','date','')
+  +c.field('start_date','开始日期','date',today())+c.field('end_date','结束日期','date','')
   +`<div class="form-field full qa-days">${quick(c,'days',[['1 天',1],['3 天',3],['1 周',7],['1 个月',30],['一学期',120]])}</div>`
-  +chips(c,'venue_type',VENUES,{label:'培训场地'})
-  +c.field('venue_place','具体地点（选填）','text','',{required:false,full:true,placeholder:'不填就按上面的场地类型记'})
-  +cond('venue_type=offsite',c.field('venue_reason','外出理由','text','',{required:false,full:true,placeholder:'例如：采茶制茶必须在茶园现场教学'})+c.field('venue_ref','议定文号或会议日期','text','',{required:false,full:true,placeholder:'例如：校长办公会 2026-08-20'}))
-  +c.field('expected_participants','预估人次（大概数即可）','number','',{min:0,step:'1'})
-  +c.field('expected_income','预计收入（元，公益类自动为 0）','number','',{min:0,step:'0.01'})
-  +chips(c,'outcome',OUTCOMES.map(x=>[x,x]),{multi:true,label:'预期成果',checked:['结业证书']})
-  +`<div class="form-field full"><label class="choice qa-check"><input type="checkbox" name="one_skill"><span>属于“一人一技”项目</span></label></div>`
-  +cond('one_skill=on|category=subsidy',chips(c,'groups',GROUPS.map(x=>[x,x]),{multi:true,label:'重点群体'})+c.field('groups_note','行动对接（一句话）','text','',{required:false,full:true,placeholder:'例如：对接县人社局技能提升行动'}))
-  +upload(c,'方案材料','附上方案、通知或协议（PDF 或图片，照片也行）')
-  +`<details class="form-field full qa-more"><summary>积分核算口径（一般不用改，默认即可）</summary><div class="form-grid">${chips(c,'level',LEVELS,{label:'项目级别',checked:['school']})}${chips(c,'scene',SCENES,{label:'培训场景',checked:['ordinary']})}${chips(c,'mode',MODES,{label:'核算方式',checked:['module']})}${chips(c,'class_type',CLASS_TYPES,{label:'班型',checked:['technical']})}${c.field('cohort','期次','text','第一期',{required:false})}${c.field('code','项目编号（不填自动生成）','text','',{required:false,placeholder:'有材料编号就填'})}</div></details>`;
+  +c.field('expected_participants','预估人次','number','',{min:0,step:'1'})
+  +cond('category=subsidy',chips(c,'groups',GROUPS.map(x=>[x,x]),{multi:true,label:'重点群体'})+c.field('groups_note','行动对接','text','',{required:false,full:true}))
+  +upload(c,'方案材料','')
+  +`<details class="form-field full qa-more"><summary>结项前补：场地、收入、预期成果、一人一技、积分口径</summary><div class="form-grid">`
+  +chips(c,'venue_type',VENUES,{label:'培训场地',checked:['base'],required:false})
+  +c.field('venue_place','具体地点','text','',{required:false,full:true})
+  +cond('venue_type=offsite',c.field('venue_reason','外出理由','text','',{required:false,full:true})+c.field('venue_ref','议定文号或会议日期','text','',{required:false,full:true}))
+  +c.field('expected_income','预计收入（元）','number','',{min:0,step:'0.01',required:false})
+  +chips(c,'outcome',OUTCOMES.map(x=>[x,x]),{multi:true,label:'预期成果',checked:['结业证书'],required:false})
+  +`<div class="form-field full"><label class="choice qa-check"><input type="checkbox" name="one_skill"><span>“一人一技”项目</span></label></div>`
+  +cond('one_skill=on',chips(c,'groups1',GROUPS.map(x=>[x,x]),{multi:true,label:'重点群体'}))
+  +chips(c,'level',LEVELS,{label:'项目级别',checked:['school'],required:false})+chips(c,'scene',SCENES,{label:'培训场景',checked:['ordinary'],required:false})+chips(c,'mode',MODES,{label:'核算方式',checked:['module'],required:false})+chips(c,'class_type',CLASS_TYPES,{label:'班型',checked:['technical'],required:false})+c.field('cohort','期次','text','第一期',{required:false})+c.field('code','项目编号','text','',{required:false})
+  +`</div></details>`;
  c.formModal('新申报培训项目',wrap(body),async(v,form)=>{
-  const need=[[text(form,'name'),'项目名称'],[radio(form,'category'),'培训类别'],[text(form,'start_date'),'开始日期'],[text(form,'end_date'),'结束日期'],[radio(form,'venue_type'),'培训场地']];
+  const need=[[text(form,'name'),'项目名称'],[radio(form,'category'),'培训类别'],[text(form,'start_date'),'开始日期'],[text(form,'end_date'),'结束日期'],[v.expected_participants!=null&&v.expected_participants!=='','预估人次']];
   for(const [val,l] of need)if(!val)throw Error('请填写或选择：'+l);
   if(text(form,'end_date')<text(form,'start_date'))throw Error('结束日期不能早于开始日期');
   const outcomes=picked(form,'outcome',OUTCOMES.map(x=>[x,x]));
-  if(!outcomes.length)throw Error('请选择预期成果');
-  const venue={type:radio(form,'venue_type'),place:text(form,'venue_place')||VENUES.find(x=>x[0]===radio(form,'venue_type'))?.[1]||'',offsite_reason:text(form,'venue_reason'),offsite_ref:text(form,'venue_ref')};
+  if(!outcomes.length)outcomes.push('结业证书');
+  const venue={type:radio(form,'venue_type')||'base',place:text(form,'venue_place')||VENUES.find(x=>x[0]===(radio(form,'venue_type')||'base'))?.[1]||'',offsite_reason:text(form,'venue_reason'),offsite_ref:text(form,'venue_ref')};
   if(venue.type==='offsite'&&!(venue.offsite_reason&&venue.offsite_ref))throw Error('校外培训请填写外出理由和议定文号（或会议日期）');
   const one=!!form.querySelector('[name="one_skill"]')?.checked,cat=radio(form,'category');
-  const groups=[...picked(form,'groups',GROUPS.map(x=>[x,x])),text(form,'groups_note')].filter(Boolean).join('；');
+  const groups=[...new Set([...picked(form,'groups',GROUPS.map(x=>[x,x])),...picked(form,'groups1',GROUPS.map(x=>[x,x])),text(form,'groups_note')].filter(Boolean))].join('；');
   if((one||cat==='subsidy')&&!groups)throw Error('补贴性培训或“一人一技”项目请选择重点群体');
   const files=form.querySelector('[name="qa_files"]')?.files||[];
-  if(!files.length)throw Error('请附上方案材料（学校要求立项附正式依据）');
+  if(!files.length)throw Error('请附上方案材料');
   checkUploadFiles(files);
-  const income=cat==='community'?'0':String(v.expected_income??'');
-  if(income===''||v.expected_participants==null)throw Error('请填写预估人次和预计收入');
+  const income=cat==='community'?'0':(v.expected_income==null||v.expected_income===''?'0':String(v.expected_income));
   const data={code:text(form,'code')||autoCode('XM'),name:text(form,'name'),cohort:text(form,'cohort')||'第一期',org_id:(c.me?.org?.kind==='college'?c.me.org.id:c.me?.org?.parent_id)||c.me.user.org_id,owner_id:c.me.user.id,
    category:cat,high_risk:false,expected_income:income,expected_participants:Number(v.expected_participants),expected_outcomes:outcomes.join('；'),
    start_date:text(form,'start_date'),end_date:text(form,'end_date'),mode:radio(form,'mode')||'module',class_type:radio(form,'class_type')||'technical',
@@ -96,7 +98,7 @@ function projectForm(c){
   if(up.failed?.length){c.closeModal();c.toast('项目已保存为草稿，但有材料没传上：'+up.failed.map(x=>x.name).join('、')+'。请在详情里补传后提交。',true);await c.render?.();return}
   try{await c.api('/social/projects/'+r.item.id+'/actions',{method:'POST',body:{action:'submit',expected_version:up.version,reason:'提交学院审批'}})}
   catch(err){c.closeModal();c.toast('项目已保存为草稿，暂未提交：'+err.message,true);await c.render?.();return}
-  c.closeModal();c.toast('已提交学院审批。通过后在“项目运行”里补受众、课时等上报信息。');await c.render?.();
+  c.closeModal();c.toast('已提交学院审批');await c.render?.();
  },{submit:'提交学院审批',stepper:false,contextLabel:'培训项目 / 新申报',hint:''});
  bind();
 }

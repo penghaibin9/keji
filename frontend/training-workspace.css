@@ -340,3 +340,57 @@ body:not(.no-shell) #content .page-title .teacher-page-subtitle{font-size:15px;l
 .apply-entry-spacer{flex:1}.apply-entry-hint:empty{display:none}.apply-entry-simple{align-items:center}
 .apply-entry:has(.apply-entry-simple){background:transparent;border:0;box-shadow:none;padding:0 0 8px}
 .apply-entry-simple .apply-entry-actions{margin-left:auto}
+
+/* 2026-11-09 设计图 v2：三步列表、6 个状态、上传分组、待我审批 */
+.lv-bar{display:flex;align-items:center;justify-content:space-between;gap:12px;margin:14px 0 14px;flex-wrap:wrap}
+.lv-stages{display:flex;align-items:center;gap:6px;flex-wrap:wrap}
+.lv-step{background:#fff;border:1px solid #dce6f3;border-radius:8px;padding:7px 16px;font-size:14px;color:#435b7d;cursor:pointer}
+.lv-step:hover{border-color:#a6bff0}
+.lv-step.on{background:#245ee0;border-color:#245ee0;color:#fff;font-weight:700}
+.lv-arrow{color:#9fb0c8}
+.lv-seg{display:flex;background:#fff;border:1px solid #dce6f3;border-radius:8px;padding:3px}
+.lv-seg button{border:0;background:none;padding:4px 12px;border-radius:6px;color:#536985;font-size:13px;cursor:pointer}
+.lv-seg button.on{background:#eef4ff;color:#245ee0;font-weight:700}
+.lv-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(300px,1fr));gap:14px}
+.lv-card{background:#fff;border:1px solid #dce6f3;border-radius:11px;padding:16px 18px;text-align:left;display:flex;flex-direction:column;gap:8px;cursor:pointer;font:inherit;color:inherit}
+.lv-card:hover{border-color:#a6bff0;box-shadow:0 4px 14px #1a365d10}
+.lv-top{display:flex;justify-content:space-between;align-items:flex-start;gap:10px}
+.lv-top strong{font-size:16px}
+.lv-meta{font-size:12px;color:#627797}
+.lv-todo{font-size:12px;color:#9a5a10;background:#fff7ea;border-radius:5px;padding:5px 8px}
+.lv-todo.is-info{background:#eef4ff;color:#23467e}
+.lv-btns{display:flex;gap:8px;flex-wrap:wrap}
+.lv-new{border:1px dashed #b9cce8;background:#fafcff;color:#245ee0;align-items:center;justify-content:center;min-height:120px;font-size:15px}
+.lv-new.is-sub{min-height:60px;font-size:14px}
+.lv-empty{color:#8a97ab;padding:16px 0}
+.lv-pill{display:inline-block;font-size:12px;padding:1px 9px;border-radius:10px;white-space:nowrap;font-weight:500}
+.lv-draft,.lv-done{background:#eef1f5;color:#5c6b80}
+.lv-review{background:#eaf1ff;color:#245ee0}
+.lv-run{background:#e6f5ee;color:#167656}
+.lv-change{background:#fff3e0;color:#a35b00}
+.lv-closing{background:#f1ecff;color:#6340c8}
+.life-stats .is-pt{background:#f4f0ff}.life-stats .is-pt b{color:#6340c8}
+.lv-points{font-size:13px;color:#4b2fa8;background:#f4f0ff;border:1px solid #e1d8ff;border-radius:8px;padding:8px 12px;margin:10px 0}
+.lv-drop{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:4px;border:1.5px dashed #a9c0e6;border-radius:10px;background:#f7faff;padding:26px;cursor:pointer;color:#245ee0}
+.lv-drop span{font-size:12px;color:#627797}.lv-drop.over{background:#e8f0ff;border-color:#245ee0}
+.lv-groups,.lv-mat{display:grid;grid-template-columns:repeat(2,1fr);gap:10px;margin-top:12px}
+.lv-mat{grid-template-columns:repeat(4,1fr)}
+.lv-group{border:1px solid #dce6f3;border-radius:8px;padding:10px 12px;background:#fff}
+.lv-ghead{display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;font-size:13px}
+.lv-ghead span{font-size:12px;color:#fff;background:#8aa2c4;border-radius:9px;padding:0 7px}
+.lv-file{font-size:12px;padding:5px 0;border-top:1px solid #f0f4f9;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;display:block}
+.lv-file.is-empty{color:#b3c0d2}.lv-file.is-link{color:#245ee0;text-decoration:none}
+.lv-gaps{background:#fff7ea;border:1px solid #f3dcb3;border-radius:8px;padding:12px 14px;color:#7c4a08;font-size:13px}
+.lv-gaps ul{margin:6px 0 0 18px;padding:0}
+.lv-mat-head{display:flex;justify-content:space-between;align-items:center;margin-top:14px}
+.lv-mat-head h3{margin:0;font-size:15px}
+.lv-queue{margin-bottom:16px}
+.lv-table{background:#fff;border:1px solid #dce6f3;border-radius:11px;overflow:hidden}
+.lv-table td{vertical-align:middle}
+.lv-sum{color:#536985;max-width:360px}
+.lv-ops{white-space:nowrap}.lv-ops .btn{margin-left:4px}
+.lv-kind{display:inline-block;font-size:12px;padding:1px 8px;border-radius:4px;white-space:nowrap}
+.lv-kind.k-apply{background:#eaf1ff;color:#245ee0}.lv-kind.k-change{background:#fff3e0;color:#a35b00}.lv-kind.k-close{background:#f1ecff;color:#6340c8}
+.lv-single{font-size:11px;color:#8a97ab;border:1px solid #dce6f3;border-radius:4px;padding:0 4px}
+.lv-copied{display:flex;flex-wrap:wrap;gap:6px 16px;padding:10px 12px;background:#f7faff;border-radius:8px;font-size:12px;color:#536985}
+@media (max-width:760px){.lv-mat,.lv-groups{grid-template-columns:1fr}}
