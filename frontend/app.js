@@ -1,13 +1,13 @@
-import {mountHelp,closeHelp,helpLibraryHTML,helpSearch,openHelp} from './help-system.js?v=20261109-v2b';
+import {mountHelp,closeHelp,helpLibraryHTML,helpSearch,openHelp} from './help-system.js?v=20261109-v2c';
 import {bindFormDraft} from './form-drafts.js?v=20261021-form-merged1';
 import {coursePointsAction} from './course-points.js?v=20261021-form-merged1';
 import {renderTrainingWorkspace,trainingChange} from './training-workspace.js?v=20261107-life1';
 import {renderSchoolCockpit,bindSchoolCockpit} from './school-cockpit.js?v=20261019-walk3&display=20261019-clean2';
 import {icons} from './icons.js';
 import {dutiesTabHtml,dutiesAction} from './school-duties.js?v=20261104-simplify2';
-import {socialPage,socialAction,applicationProjectPicker} from './social-training.js?v=20261109-v2b';
-import {lifecycleAction,LIFE_ACTIONS,lifePageHtml,lifeBoardHtml,lifePageType,placeLifeBoard,lifeListHtml} from './lifecycle.js?v=20261109-v2b';
-import {applicationAction,trainersHtml,applyPageHtml,APPLY_PAGES,myApplicationsHtml,homeApplicationsHtml,myCoursesHtml,libraryHtml,libraryFilterSubmit,homeCoursesHtml,courseAction} from './applications.js?v=20261109-v2b';
+import {socialPage,socialAction,applicationProjectPicker} from './social-training.js?v=20261109-v2c';
+import {lifecycleAction,LIFE_ACTIONS,lifePageHtml,lifeBoardHtml,lifePageType,placeLifeBoard,lifeListHtml} from './lifecycle.js?v=20261109-v2c';
+import {applicationAction,trainersHtml,applyPageHtml,APPLY_PAGES,myApplicationsHtml,homeApplicationsHtml,myCoursesHtml,libraryHtml,libraryFilterSubmit,homeCoursesHtml,courseAction} from './applications.js?v=20261109-v2c';
 import {nextCode,runBatch,batchStage,batchMode,batchPerformer,BATCH_LABELS,materialUploadForm,checkUploadFiles,uploadEntries,uploadSequential,uploadStatusHtml} from './approval-flow.js?v=20261021-form-merged1';
 import {ledgerPage,resourceStatsPage,homeIndicators,ledgerAction,resetLedgerView,minePage,mineReminders} from './social-ledgers.js?v=20261021-form-merged1';
 import {rosterSection,rosterHandlers,onlineHandlers,showStaffDetail,showCourseDetail,presetRoster,loadCodeTables,courseFactsHtml,codeLabel} from './school-data.js?v=20261019-merge1&display=20261019-clean2';
@@ -1246,12 +1246,18 @@ async function qualificationForm(id){const user=me.user.id,sourcePage=page,cats=
  const bindChips=()=>$$('#modal-root [data-qual-name]').forEach(b=>b.addEventListener('click',()=>{const t=$('#f-name');if(t){t.value=b.dataset.qualName;t.dispatchEvent(new Event('input',{bubbles:true}))}}));
  const upload=async(rid,ver,files,f)=>{if(!files.length)return;const box=f.querySelector('#upload-progress'),result=await uploadSequential({api,kind:'qualification',id:rid,version:ver,entries:uploadEntries(files),reason:'本人上传资质证书',latest:async()=>{const fresh=await api('/qualifications/'+rid);return {version:fresh.qualification.version,attachments:fresh.attachments}},onProgress:list=>{if(box)box.innerHTML=uploadStatusHtml(list,esc)}});if(result.failed.length)throw Error(result.failed.length+' 份没传上：'+result.failed.map(entry=>entry.name).join('、'))};
  const submit=async rid=>{const fresh=(await api('/qualifications/'+rid)).qualification;if(['DRAFT','RETURNED'].includes(fresh.state))await api('/qualifications/'+rid+'/actions',{method:'POST',body:{action:'submit',expected_version:fresh.version,reason:'提交资质审核'}})};
- if(id){formModal('修改后重新提交',returnedNotice(x.state,(await api('/qualifications/'+id)).events)+nameField+fileField+'<div id="upload-progress" class="form-field full"></div>',async(v,f)=>{
+ if(id){const full=await api('/qualifications/'+id),current=full.attachments||[];
+  const existing=current.length?`<fieldset class="form-field full qual-existing"><legend>已上传的证书</legend>${current.map(a=>`<label class="choice"><input type="checkbox" name="drop_${esc(a.id)}"><span>删除 ${esc(a.name)}</span></label>`).join('')}</fieldset>`:'';
+  formModal('修改',returnedNotice(x.state,full.events)+nameField+existing+field('file','上传证书','file','',{required:false,uploadKind:'proof',uploadMax:20,multiple:true,accept:'.pdf,.png,.jpg,.jpeg',full:true})+'<div id="upload-progress" class="form-field full"></div>',async(v,f)=>{
    const files=Array.from($('#f-file',f).files||[]);checkUploadFiles(files,0,{max:20});
+   const drop=current.filter(a=>f.querySelector(`[name="drop_${a.id}"]`)?.checked);
+   if(drop.length===current.length&&!files.length)throw Error('请上传证书');
    const r=await api('/qualifications/'+id,{method:'PUT',body:{name:v.name,category:x.name===v.name?x.category:'',teacher_id:me.user.id,expected_version:x.version,reason:'修改证书名称或材料'}});
-   try{await upload(id,r.version,files,f);await submit(id);toast('已重新提交审核')}catch(err){toast('已保存，但'+(err.message||'没提交成功')+'；请在详情里补传后提交',true)}
+   let ver=r.version;
+   for(const a of drop){const fresh=(await api('/qualifications/'+id)).qualification;await api('/attachments/'+a.id+'/detach',{method:'POST',body:{expected_version:fresh.version,reason:'更换证书图片'}});ver=fresh.version+1}
+   try{await upload(id,ver,files,f);await submit(id);toast('已提交审核')}catch(err){toast('已保存，但'+(err.message||'没提交成功')+'；请再点“修改”补传后提交',true)}
    closeModal();await render();
-  },{submit:'重新提交',stepper:false,contextLabel:'教师资质'});return bindChips()}
+  },{submit:'提交审核',stepper:false,contextLabel:'教师资质'});return bindChips()}
  formModal('申报我的资质',nameField+fileField+'<div id="upload-progress" class="form-field full"></div>',async(v,f)=>{
   const files=Array.from($('#f-file',f).files||[]);if(!files.length)throw Error('请上传证书');
   checkUploadFiles(files,0,{max:20});
@@ -1272,7 +1278,9 @@ async function teacherQualificationCards(items){
 }
 function returnedNotice(state,events){if(state!=='RETURNED')return '';const event=[...(events||[])].reverse().find(e=>/退回/.test(e.action));return note('退回意见：'+(event?.reason||'请核对审核记录，补充后重新提交。'),true)}
 async function showQualification(id){const d=await api('/qualifications/'+id),x=d.qualification;modalContext=x;const own=x.teacher_id===me.user.id;
- let actions=act('关闭','close');if(own&&x.state==='DELETED')actions+=act('恢复','qual-action','restore|'+id,'primary');if(own&&!['SUBMITTED','DELETED','VOID_PENDING','VOID'].includes(x.state))actions+=act('编辑资料','qualification-form',id,'','edit');if(own&&d.can_void)actions+=act('申请作废','qual-action','void_request|'+id,'danger');if(own&&x.state==='VOID_PENDING')actions+=act('撤回作废申请','qual-action','withdraw|'+id);if(own&&d.can_delete)actions+=act('删除','qual-action','delete|'+id,'danger');if(own&&['DRAFT','RETURNED'].includes(x.state))actions+=act('上传佐证','upload','qualification|'+id,'','plus')+act('提交审核','qual-action','submit|'+id,'primary','check');if(own&&x.state==='SUBMITTED')actions+=act('撤回修改','qual-action','withdraw|'+id);
+ const mineTeacher=own&&me.role.kind==='teacher';
+ let actions=act('关闭','close');if(mineTeacher){if(['DRAFT','RETURNED','APPROVED'].includes(x.state))actions+=act('修改','qualification-form',id,'','edit');if(d.can_delete)actions+=act('删除','qual-action','delete|'+id,'danger');if(x.state==='DRAFT')actions+=act('提交审核','qual-action','submit|'+id,'primary','check');if(x.state==='SUBMITTED')actions+=act('撤回修改','qual-action','withdraw|'+id);if(x.state==='DELETED')actions+=act('恢复','qual-action','restore|'+id,'primary');if(d.can_void)actions+=act('申请作废','qual-action','void_request|'+id,'danger');if(x.state==='VOID_PENDING')actions+=act('撤回作废申请','qual-action','withdraw|'+id)}
+ else{if(own&&x.state==='DELETED')actions+=act('恢复','qual-action','restore|'+id,'primary');if(own&&!['SUBMITTED','DELETED','VOID_PENDING','VOID'].includes(x.state))actions+=act('编辑资料','qualification-form',id,'','edit');if(own&&d.can_void)actions+=act('申请作废','qual-action','void_request|'+id,'danger');if(own&&x.state==='VOID_PENDING')actions+=act('撤回作废申请','qual-action','withdraw|'+id);if(own&&d.can_delete)actions+=act('删除','qual-action','delete|'+id,'danger');if(own&&['DRAFT','RETURNED'].includes(x.state))actions+=act('上传佐证','upload','qualification|'+id,'','plus')+act('提交审核','qual-action','submit|'+id,'primary','check');if(own&&x.state==='SUBMITTED')actions+=act('撤回修改','qual-action','withdraw|'+id)}
  if(!own&&can('qualification.review')&&x.state==='SUBMITTED')actions+=act('退回补充','qual-action','return|'+id,'danger')+act('审核通过','qual-action','approve|'+id,'primary','check');if(d.can_review_void)actions+=act('不同意作废','qual-action','void_reject|'+id)+act('同意作废','qual-action','void_approve|'+id,'danger','check');
  const teacher=me.role.kind==='teacher',focused=['teacher','dept','college'].includes(me.role.kind);
  const facts=[['证书编号',x.certificate_no],['发证机构',x.issuer],['取得时间',x.obtained],['有效期至',x.expires||'长期有效']];
@@ -1280,6 +1288,10 @@ async function showQualification(id){const d=await api('/qualifications/'+id),x=
  const certificateContent=focused?`<div class="qualification-detail-content"><div>${qualificationMaterials(d.attachments,materialEmpty)}</div><section class="qualification-detail-data" aria-label="证书资料"><h3>证书资料</h3><dl class="qualification-facts">${facts.map(([label,value])=>`<div><dt>${label}</dt><dd>${esc(value||'未填写')}</dd></div>`).join('')}</dl><p class="cell-sub">当前版本共 ${d.attachments?.length??0} 份材料</p></section></div>`:`<dl class="kv mt20">${facts.map(([label,value])=>`<dt>${label}</dt><dd>${esc(value||'未填写')}</dd>`).join('')}</dl><div class="detail-section-title"><h3>当前版本材料</h3><span>${d.attachments?.length??0} 份</span></div>${downloads(d.attachments,materialEmpty)}`;
 
  const statusText=['dept','college'].includes(me.role.kind)&&!own&&x.state==='RETURNED'?'已退回申请人补充资料；重新提交后会回到本级审核。':['dept','college'].includes(me.role.kind)&&!own&&x.state==='SUBMITTED'?'请核验证书、有效期和材料，确认通过或写明原因退回。':{DRAFT:'资料尚未提交。补齐证书和佐证材料后，再提交审核。',RETURNED:'申请已退回，请先查看审核意见，再补充资料和材料。',SUBMITTED:'正在等待审核，当前可以查看已提交资料和办理记录。',APPROVED:'资质已通过审核，是否计入考核仍按对应周期核验有效性。'}[x.state]||'请核对证书资料与当前办理状态。';
+ if(mineTeacher){const submitted=[...(d.events||[])].reverse().find(e=>/提交/.test(e.action));const label=(QUAL_STATE[x.state]||[,''])[1]||x.state;
+  const facts=[['状态',label],...(submitted?[['提交时间',ts(submitted.created_at)]]:[])];
+  const pics=qualificationMaterials(d.attachments,'还没有上传证书').replace(/<p[^>]*>点击图片放大查看[^<]*<\/p>/,'');
+  return modal(x.name,`${returnedNotice(x.state,d.events)}<div class="qualification-detail-content"><div>${pics}</div><section class="qualification-detail-data" aria-label="证书"><dl class="qualification-facts">${facts.map(([l,v])=>`<div><dt>${l}</dt><dd>${esc(v)}</dd></div>`).join('')}</dl></section></div><details class="detail-fold mt20" open><summary>审核流转</summary><div class="mt12">${eventsHtml(d.events)}</div></details>`,actions,true,'教师资质');}
  modal('教师资质 · '+x.name,`${focused?`<div class="qualification-detail-lead"><span class="qualification-symbol" aria-hidden="true">${icon('cert')}</span><div><strong>${teacher?'':esc(teacherName(x.teacher_id))+' · '}${esc(x.category)}</strong><p>${esc(statusText)}</p></div>${badge(x.state)}</div>`:`<div class="between"><div><h2>${esc(x.name)}</h2><p class="muted small mt8">${esc(teacherName(x.teacher_id))} · ${esc(x.category)}</p></div>${badge(x.state)}</div>`}${returnedNotice(x.state,d.events)}${x.expires&&x.expires<new Date(Date.now()+28800000).toISOString().slice(0,10)?note('此证书已超过有效期，可保留历史资质；正式考核仍按考核周期核验有效性。',true):''}${certificateContent}${own&&['DRAFT','RETURNED'].includes(x.state)?d.attachments.map(a=>`<div class="mt8">${link('从当前材料移除：'+a.name,'detach',a.id)}</div>`).join(''):''}<details class="detail-fold mt20" open><summary>审核流转</summary><div class="mt12">${eventsHtml(d.events)}</div></details>`,actions,true,teacher?'教师资质 / 证书详情':'教师资质 / 证书详情');
 }
 const boundEvidenceTitles={assessment:'考核佐证材料',org_assessment:'组织考核佐证材料',sync_task:'同步佐证材料'};
