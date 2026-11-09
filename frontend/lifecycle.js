@@ -1,7 +1,7 @@
 // 2026-11-07 立项（申报）通过以后的运行过程：档案视图、申请变更、年度确认、停用与恢复。
 // 2026-11-09 按设计图 v2：老师“我的X”三步列表、详情只留三个按钮、上传自动分组、结项查缺、学院学校“待我审批”。
 // 菜单不变（培训项目 / 培训课程 / 培训基地 / 培训师资）；入口是详情里的三个主按钮。名称按验收人定的：项目立项、项目运行、项目结项。
-import {quickApply} from './apply-quick.js?v=20261109-v2g';
+import {quickApply} from './apply-quick.js?v=20261109-v2h';
 
 const TYPE_LABEL={project:'培训项目',course:'培训课程',base:'培训基地',trainer:'培训师资'};
 // 三个主按钮：[动作, 名称, 小字]
@@ -182,7 +182,7 @@ const REASONS={project:['学员人数增加','学员时间调整','场地调整'
 function changeForm(c,d){
  const e=c.esc;
  const rows=d.fields.map(f=>`<div class="life-chg" data-key="${e(f.key)}"><label class="life-chg-top"><input type="checkbox" name="pick-${e(f.key)}"><strong>${e(f.label)}</strong><span class="cur">现在：${e(valueText(f,f.value,c))}</span></label><div class="life-chg-new" hidden><span class="muted small">改为</span>${inputFor(c,f)}</div></div>`).join('');
- c.formModal('申请变更',`<div class="form-field full">${`<p class="life-chg-intro">先勾选要改哪几项，勾上的才填新内容；没勾的保持不变。审批期间按原内容照常运行，通过后生成新版本，旧版本随时可查。</p>`}${rows}<p class="hint">${e(LEVEL_HINT[d.type])}</p></div>`+c.field('reason','为什么改（一句话即可，审批人会看到）','textarea','',{full:true,rows:2,textLimit:2000})+`<div class="form-field full life-quick">${(REASONS[d.type]||[]).map(q=>`<button type="button" class="btn sm light" data-reason="${e(q)}">${e(q)}</button>`).join('')}</div>`,async(v,form)=>{
+ c.formModal('申请变更',`<div class="form-field full">${rows}</div>`+c.field('reason','变更原因','textarea','',{full:true,rows:2,textLimit:2000})+`<div class="form-field full life-quick">${(REASONS[d.type]||[]).map(q=>`<button type="button" class="btn sm light" data-reason="${e(q)}">${e(q)}</button>`).join('')}</div>`,async(v,form)=>{
   const values={};
   for(const f of d.fields)if(form.querySelector(`[name="pick-${f.key}"]`)?.checked)values[f.key]=readValue(f,form);
   if(!Object.keys(values).length)throw Error('请至少勾选一项要改的内容');
@@ -203,7 +203,7 @@ function annualForm(c,d){
   +c.field('text','补充一句（选填）','textarea','',{full:true,required:false,rows:2,textLimit:1000,placeholder:d.type==='base'?'例：今年接待 3 期培训，共 120 人次':'例：今年主讲 2 个项目，共 32 学时'}),async v=>{
   await c.api('/social/lifecycle/'+d.type+'/'+d.id+'/annual',{method:'POST',body:{year:Number(v.year),running:v.running!=='no',text:v.text||''}});
   c.toast('已确认');await refresh(c);
- },{submit:'确认',stepper:false,contextLabel:TYPE_LABEL[d.type]+' / 年度确认',hint:(doneNote?doneNote+'。同一年度再确认会记为更正，前后结论都留在运行过程里。':'每年一次，点选即可，不用审批。')+'今年不再运行的，可以回到档案点“停用”。'});
+ },{submit:'确认',stepper:false,contextLabel:TYPE_LABEL[d.type]+' / 年度确认',hint:doneNote});
 }
 
 function stopForm(c,d,resume=false){

@@ -313,7 +313,8 @@ def validate_units(db,a,project,rows):
 def import_units(ident:str,operation:str,data:UnitsIn,request:Request):
     def apply(db,a,s):
         obj=st.scoped(db,a,'social_project',ident,write=True);check_version(obj,data.expected_version)
-        if obj.state!='FILED':raise HTTPException(409,'仅已备案项目可登记培训明细')
+        # 2026-11-09 学院审核结项时也能导入（老师结项不再被明细拦住）。
+        if obj.state not in {'FILED','CLOSE_COLLEGE','CLOSE_REVIEW'}:raise HTTPException(409,'仅已备案或结项审核中的项目可登记培训明细')
         result=validate_units(db,a,obj,data.rows)
         if operation=='preview':return result
         if operation!='confirm':raise HTTPException(422,'导入操作无效')
@@ -355,7 +356,8 @@ def project_action(ident:str,data:SocialAction,request:Request):
             if data.action=='approve':
                 if ap.same_person(db,'social_project',obj.id,a):handling['same_person']=ap.SAME_PERSON
                 if flow=='project':st.require_project_confirmed(obj)
-                elif obj.data.get('quality'):
+                elif not st.units(db,obj.id):raise HTTPException(409,'尚无参训核算明细，请先导入参训明细再通过结项')
+                if flow=='project_close' and obj.data.get('quality'):
                     # 学院结项核验即核对了主讲教师资格审查表和课件内容审查记录（两项审查都由学院做）。
                     q=obj.data['quality']
                     if not review_done(q.get('teacher_review')) or not review_done(q.get('courseware_review')):raise HTTPException(409,'还没有登记主讲教师资格审查和课件内容审查的百分比')
@@ -388,15 +390,16 @@ def project_action(ident:str,data:SocialAction,request:Request):
             if obj.state!='FILED' or not data.closeout:raise HTTPException(409,'请提交已备案项目的完整结项材料')
             st.require_project_confirmed(obj)
             if issues:=st.person_day_blockers([u.data for u in st.units(db,ident)]):raise HTTPException(409,'；'.join(issues))
-            if not st.units(db,ident):raise HTTPException(409,'尚无参训核算明细')
+            # 2026-11-09 老师结项不再要求先有参训明细（管理办法没有这条）；明细由学院在审核结项时导入，学院、学校通过前必须有。
             from ..lifecycle import pending_change
             if pending_change(db,'project',obj) is not None:raise HTTPException(409,'有一份变更正在审批，请等它办完或先撤回，再提交结项')
             if obj.data.get('report_pending') and (issues:=application_blockers(obj.data)):raise HTTPException(409,'结项前请先补齐上报信息（立项时可以不填）：'+'；'.join(issues))
             st.require_evidence(db,'social_project',ident);c=data.closeout
-            st.require_closeout_distribution(serial(c.model_dump()))
             if c.closed_on.isoformat()<obj.data['end_date'] or c.closed_on>st.today():raise HTTPException(422,'结项日期应在培训结束后且不晚于今天')
             if obj.data['category']=='subsidy' and not (c.province_receipt.strip() and c.special_evidence.strip()):raise HTTPException(422,'补贴项目须提交报送凭证及专项材料')
-            if c.satisfaction<85 and not (c.rectification.strip() and c.rectification_due):raise HTTPException(422,'满意度低于85%，须填写整改报告和整改办理期限')
+            if obj.data.get('one_skill') and not c.special_evidence.strip():raise HTTPException(422,'“一人一技”项目须另附重点群体参训、技能考证、就业转化等专项材料')
+            # 2026-11-09 老师只交成果报告；满意度、到账收入和分配由学校结项核验时登记。场地按立项带出。
+            c=c.model_copy(update={'location':'offsite' if (obj.data.get('venue') or {}).get('type')=='offsite' else 'onsite'})
             # 2026-11-09：老师提交结项先到学院审核，再到学校结项核验（学院、学校代办的直接到学校）；材料核对由学校在核验时勾选。
             # 老师以前勾过的核对项（在途数据）保留，学校核验时可以沿用。
             values=serial(c.model_dump());old_checked=list(obj.closeout.get('materials_checked',[])) if obj.closeout else []
@@ -407,8 +410,19 @@ def project_action(ident:str,data:SocialAction,request:Request):
             st.duty(db,a,'coordinator',obj.owner_id,obj.org_id)
             if obj.state!='CLOSE_REVIEW':raise HTTPException(409,'项目不在结项核验阶段')
             st.require_project_confirmed(obj)
+            if not st.units(db,ident):raise HTTPException(409,'尚无参训核算明细，请学院先导入参训明细')
             if issues:=st.person_day_blockers([u.data for u in st.units(db,ident)]):raise HTTPException(409,'；'.join(issues))
-            st.require_closeout_distribution(obj.closeout)
+            # 2026-11-09 满意度和财务数在这一步由学校登记（老师结项不再填）；在途项目老师已填过的沿用。
+            merged=dict(obj.closeout)
+            if data.review is not None:merged.update(serial(data.review.model_dump()))
+            if merged.get('satisfaction') in (None,''):raise HTTPException(422,'请登记学员满意度')
+            if merged.get('actual_income') in (None,''):
+                if D(str(obj.data.get('expected_income') or 0))>0:raise HTTPException(422,'请登记财务确认到账收入')
+                merged['actual_income']='0'
+            if D(str(merged['actual_income']))==0 and not str(merged.get('finance_reference') or '').strip():merged['finance_reference']='零收入项目，无到账收入'
+            if D(str(merged['satisfaction']))<85 and not merged.get('rectification_due'):raise HTTPException(422,'满意度低于85%，请定整改期限')
+            st.require_closeout_distribution(merged)
+            obj.closeout=merged
             required={'plan','filing_form','roster','attendance','hours','process','assessment','outcomes'}
             # 材料核对由学校在这一步勾选（2026-11-04 起老师结项不再勾）；在途数据里老师已勾过的沿用。
             checked=set(obj.closeout.get('materials_checked',[]))|set(data.materials_checked or [])

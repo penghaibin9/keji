@@ -209,7 +209,8 @@ test('结项补正回填原成果金额日期和核对项，明确零值不被�
  c.formModal=(_title,_body,callback)=>{saved=callback};
  await socialAction('social-close','',c);
  const values=Object.fromEntries(fields);
- for(const [key,value] of Object.entries(old))if(key!=='materials_checked')assert.equal(values[key],value,key);
+ for(const key of ['closed_on','outcome_report'])assert.equal(values[key],old[key],key);
+ for(const key of ['satisfaction','actual_income','finance_reference','retained','personnel'])assert.equal(Object.hasOwn(values,key),false,'老师结项不再填'+key);
  assert.equal(values.checked_plan,undefined,'老师结项不再勾材料核对');assert.equal(values.checked_roster,undefined);assert.equal(typeof saved,'function');
 });
 
@@ -859,7 +860,7 @@ test('学院项目详情复用分区折叠流程和更多操作，开班准备�
  assert.match(modal.body,/data-detail-section="social-info"/);assert.match(modal.body,/<details class="detail-fold application-flow"><summary>查看完整办理流程/);assert.match(modal.buttons,/<details class="detail-more-actions">/);assert.match(modal.buttons,/social-export/);assert.equal((modal.buttons.match(/data-action="social-prep"/g)||[]).length,1);assert.equal(modal.contextLabel,'培训项目 / 业务详情');assert.match(modal.buttons,/data-action="social-unit-import"/);
  // 2026-11-07 已备案项目改资料走“申请变更”（运行档案），不再出“申请重新备案”。
  assert.match(modal.buttons,/data-action="life-change" data-id="project\|college-project"/);assert.match(modal.buttons,/data-action="life-open" data-id="project\|college-project"/);assert.doesNotMatch(modal.buttons,/data-id="refile"/);
- await socialAction('social-close','',c);assert.equal(form.options.page,true);assert.match(form.body,/结项情况/);assert.doesNotMatch(form.body,/结项材料核对/);
+ await socialAction('social-close','',c);assert.equal(form.options.page,true);assert.match(form.body,/成果报告/);assert.doesNotMatch(form.body,/结项材料核对/);
 });
 
 test('学院年度自评复用整页分区，补正保持原组织周期与版本并保留零值',async()=>{
@@ -901,7 +902,7 @@ test('学校结项核验在办理区勾选材料：一键全部核对带展开�
   await socialAction('social-transition','close',c);await new Promise(resolve=>setTimeout(resolve,5));
   assert.match(form.body,/结项材料核对/);assert.match(form.body,/id="close-check-all"/);assert.match(form.body,/材料已全部核对/);assert.match(form.body,/<details/);
   assert.match(form.body,/name="checked_plan" data-close-material="plan" checked/);assert.match(form.body,/name="checked_roster" data-close-material="roster">/);
-  assert.match(form.body,/已带出申报人以前勾过的核对项/);
+  assert.match(form.body,/结项登记/);
   all.checked=true;all.change();assert.ok(boxes.every(x=>x.checked));
   boxes[0].checked=false;boxes[0].change();assert.equal(all.checked,false);
  }finally{globalThis.document=original}
@@ -924,14 +925,14 @@ test('财务纪检和制度确认不预填结论，采用需要本人补齐依�
 });
 
 // 2026-11-08 走查修复：结项前先看培训是否结束、有没有参训明细，不让老师填完两页表单才被拦。
-test('老师结项前没有参训明细或培训未结束时先说明原因，不打开结项表单',async()=>{
+test('老师结项不再被参训明细拦住；培训未结束时先说明原因，不打开结项表单',async()=>{
  const c=renderContext({},['records.read','file.write']);c.me={user:{id:'teacher'},role:{kind:'teacher'}};await renderSocial('projects',c);
  let modal,form;c.modal=(title,body,buttons)=>{modal={title,body,buttons}};c.formModal=(title)=>{form=title};c.downloads=()=>'';c.eventsHtml=()=>'';
  const item=(end)=>({id:'pc',owner_id:'teacher',state:'FILED',version:2,data:{name:'合成项目',code:'PC1',category:'community',start_date:'2026-01-05',end_date:end,expected_income:0},closeout:{}});
  c.api=async()=>({item:item('2026-01-10'),state_label:'已备案',facts:{units:[],followups:[],effective:0,excluded:0},attachments:[{id:'a'}],events:[]});
  await socialAction('social-detail','social_project|pc',c);await socialAction('social-close','',c);
- assert.equal(form,undefined);assert.match(modal.body,/参训明细由学院导入/);assert.match(modal.buttons,/返回详情/);
+ assert.equal(form,'提交项目结项','没有参训明细也能结项，明细由学院审核时导入');form=undefined;
  c.api=async()=>({item:item('2999-12-31'),state_label:'已备案',facts:{units:[{external_key:'U1',data:{event_date:'2026-01-05',course_code:'C1',learners:[]}}],followups:[],effective:0,excluded:0},attachments:[{id:'a'}],events:[]});
  modal=undefined;await socialAction('social-detail','social_project|pc',c);await socialAction('social-close','',c);
- assert.equal(form,undefined);assert.match(modal.body,/2999-12-31 才结束/);
+ assert.equal(form,undefined);assert.match(modal.body,/2999-12-31 结束后才能结项/);
 });

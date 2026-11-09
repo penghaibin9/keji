@@ -199,14 +199,15 @@ class UnitsIn(Reason):
 class Closeout(Input):
     closed_on: date
     outcome_report: Text
-    satisfaction: Decimal = Field(ge=0, le=100, allow_inf_nan=False)
+    # 2026-11-09 结项按管理办法只要老师交成果报告（第十三条）；满意度（第十四条由继续教育学院组织测评）和财务数（第二十一条由财务处负责）在学校结项核验时登记。
+    satisfaction: Decimal | None = Field(default=None, ge=0, le=100, allow_inf_nan=False)
     province_receipt: str = Field(default='', max_length=500)
     special_evidence: str = Field(default='', max_length=2000)
-    actual_income: Nonnegative
-    finance_reference: Text
+    actual_income: Nonnegative | None = None
+    finance_reference: str = Field(default='', max_length=200)
     settlement_on: date | None = None
     implicit_cost: Nonnegative = Decimal(0)
-    location: Literal['onsite', 'offsite']
+    location: Literal['onsite', 'offsite'] = 'onsite'
     rectification: str = Field(default='', max_length=2000)
     rectification_due: date | None = None
     materials_checked: list[Literal['plan','filing_form','roster','attendance','hours','process','assessment','outcomes','teacher_review','courseware_review']] = Field(default_factory=list,max_length=10)
@@ -219,6 +220,7 @@ class Closeout(Input):
         # 管理办法第二十一条：校外办学校留存不低于10%、人员支出不高于70%；校内办学校留存不低于20%、人员支出不高于60%；项目公用为20%。
         if self.retained is None and self.personnel is None: return self
         if self.retained is None or self.personnel is None: raise ValueError('收入分配须同时填写学校留存和人员支出')
+        if self.actual_income is None: raise ValueError('请先填写财务确认到账收入')
         income = self.actual_income
         if self.retained+self.personnel>income:raise ValueError('学校留存与人员支出合计不能超过到账收入')
         if self.funding_source=='government_special':return self
@@ -230,10 +232,24 @@ class Closeout(Input):
         return self
 
 
+class CloseoutReview(Input):
+    """学校结项核验时登记：满意度（管理办法第十四条）和财务确认的收入分配（第二十一条）。"""
+    satisfaction: Decimal = Field(ge=0, le=100, allow_inf_nan=False)
+    actual_income: Nonnegative = Decimal(0)
+    finance_reference: str = Field(default='', max_length=200)
+    funding_source: Literal['other_training','government_special'] | None = None
+    retained: Nonnegative | None = None
+    personnel: Nonnegative | None = None
+    funding_basis: str = Field(default='', max_length=2000)
+    settlement_on: date | None = None
+    rectification_due: date | None = None
+
+
 class SocialAction(Reason):
     expected_version: int = Field(ge=1)
     action: str = Field(min_length=1, max_length=40)
     closeout: Closeout | None = None
+    review: CloseoutReview | None = None
     prior_review_on: date | None = None
     # 学校结项核验时逐项勾选的结项材料（2026-11-04 起材料核对由学校在核验这一步做）。
     materials_checked: list[Literal['plan','filing_form','roster','attendance','hours','process','assessment','outcomes','teacher_review','courseware_review']] | None = Field(default=None, max_length=10)

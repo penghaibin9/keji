@@ -133,16 +133,27 @@ def test_quality_reviews_are_added_automatically_at_school_close(setup_social, c
     assert {'teacher_review', 'courseware_review'} <= set(r.json()['item']['closeout']['materials_checked'])
 
 
-def test_low_satisfaction_needs_rectification_due_at_close_submit(setup_social, client2):
+def test_teacher_close_only_needs_outcome_report_and_school_records_review(setup_social, client2):
+    # 2026-11-09 管理办法第十三条：老师结项只交成果报告；满意度（第十四条）和财务（第二十一条）由学校结项核验时登记。
     c = client2
     pid = setup_social
-    assert import_rows(c, pid, [row()]).status_code == 200
     auth(c, 'teacher')
-    low = {**CLOSEOUT, 'satisfaction': '80', 'rectification': '整改报告'}
-    r = action(c, 'projects', 'social_project', pid, 'close_submit', closeout=low)
-    assert r.status_code == 422 and '整改办理期限' in r.text
-    r = action(c, 'projects', 'social_project', pid, 'close_submit', closeout={**low, 'rectification_due': '2026-12-31'})
+    r = action(c, 'projects', 'social_project', pid, 'close_submit', closeout={'closed_on': CLOSEOUT['closed_on'], 'outcome_report': '结项报告'})
+    assert r.status_code == 200, r.text  # 没有参训明细也能提交
+    auth(c, 'collegehead')
+    r = action(c, 'projects', 'social_project', pid, 'approve')
+    assert r.status_code == 409 and '参训明细' in r.text  # 学院导入明细后才能通过
+    assert import_rows(c, pid, [row()]).status_code == 200
+    assert action(c, 'projects', 'social_project', pid, 'approve').status_code == 200
+    auth(c, 'reviewer')
+    r = action(c, 'projects', 'social_project', pid, 'close', materials_checked=MATERIALS)
+    assert r.status_code == 422 and '满意度' in r.text
+    r = action(c, 'projects', 'social_project', pid, 'close', materials_checked=MATERIALS, review={'satisfaction': '80'})
+    assert r.status_code == 422 and '整改期限' in r.text
+    r = action(c, 'projects', 'social_project', pid, 'close', materials_checked=MATERIALS, review={'satisfaction': '80', 'rectification_due': '2026-12-31'})
     assert r.status_code == 200, r.text
+    z = r.json()['item']['closeout']
+    assert z['finance_reference'] == '零收入项目，无到账收入' and z['rectification_due'] == '2026-12-31'
 
 
 # ---- 在途旧链路按原链走完 ----

@@ -1075,6 +1075,9 @@ def todo_items(db,a):
         elif p.state in {'DRAFT','RETURNED'} and 'records.write' in a.permissions:add('social_project',p,'补充项目申报：'+p.data['name'])
         elif p.state in {'SUBMITTED','CLOSE_REVIEW'} and 'coordinator' in duties and p.owner_id!=a.id and may_review(db,a,p):add('social_project',p,'项目审核：'+p.data['name'])
         elif p.state=='FILED' and today().isoformat()>p.data['end_date']:add('social_project',p,'培训已结束，请办理结项：'+p.data['name'],'待结项')
+        # 2026-11-09 培训开始了还没有参训明细：直接进学院待办，老师不用线下去找管理员。
+        if p.state=='FILED' and a.role.kind=='college' and 'records.write' in a.permissions and p.data.get('start_date','')<=today().isoformat() and db.scalar(select(SocialUnit.id).where(SocialUnit.project_id==p.id).limit(1)) is None:
+            add('social_project',p,'待导入参训明细：'+p.data['name'],'待导入明细')
         followups=project_followups(db,p.id)
         if any(x.get('invalidate_cohort') for x in followups) and 'secretary' in duties:
             for claim in db.scalars(select(SocialClaim).where(SocialClaim.project_id==p.id,SocialClaim.state=='ARCHIVED')):

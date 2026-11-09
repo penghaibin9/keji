@@ -684,8 +684,7 @@ def view(db, a, kind, obj):
             elif (end - today).days <= 30:
                 reminders.append('还有 ' + str((end - today).days) + ' 天培训结束；需要延期请点“项目立项”里的“申请变更”。')
             if today >= start and not rows:
-                reminders.append('培训已经开始，还没有导入参训明细（人次从明细自动核算，没有明细不能结项）。'
-                                 + ('' if 'records.write' in a.permissions else '参训明细由学院导入，请把签到和结业名单交给本院培训管理员。'))
+                reminders.append('还没有参训明细' + ('，请导入。' if 'records.write' in a.permissions else '，已在学院待办里提醒导入。'))
             if obj.data.get('report_pending'):
                 from .social_schemas import application_blockers
                 if issues := application_blockers(obj.data):

@@ -205,10 +205,12 @@ def test_positive_income_cannot_close_without_distribution(setup_social,client2,
     pid=setup_social
     assert import_rows(client2,pid,[row()]).status_code==200
     result=action(client2,'projects','social_project',pid,'close_submit',closeout=closeout())
+    assert result.status_code==200,result.text
+    result=action(client2,'projects','social_project',pid,'close')
     assert result.status_code in (409,422),result.text
     with app2.state.sessions() as db:
         project=db.get(SocialProject,pid)
-        assert project.state=='FILED', '不完整分配不得改变原项目状态'
+        assert project.state=='CLOSE_REVIEW', '不完整分配不得结项'
 
 
 @pytest.mark.parametrize('permission,section',[('records.read','records'),('points.read','points'),('qualification.read','qualifications')])
@@ -254,12 +256,14 @@ def test_declared_conflict_blocks_correction_approval(recognized,client2,kind,ta
 ])
 def test_zero_income_and_government_funding_require_explicit_basis(setup_social,client2,values,allowed):
     pid=setup_social;assert import_rows(client2,pid,[row()]).status_code==200
+    # 2026-11-09 老师结项只交成果报告；资金分配在学校结项核验时登记和校验。
     response=action(client2,'projects','social_project',pid,'close_submit',closeout=closeout(**values))
-    if not allowed:
-        assert response.status_code in (409,422),response.text
-        return
     assert response.status_code==200,response.text
     response=action(client2,'projects','social_project',pid,'close')
+    if not allowed:
+        assert response.status_code in (409,422),response.text
+        assert detail(client2,'social_project',pid)['item']['state']=='CLOSE_REVIEW'
+        return
     assert response.status_code==200,response.text
     assert response.json()['item']['state']=='CLOSED'
 

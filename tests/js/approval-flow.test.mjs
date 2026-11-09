@@ -258,11 +258,9 @@ test('结项整改条件放在结项情况内，不创建隐藏后的空整改�
  await socialAction('social-detail','social_project|close-steps',c);
  await socialAction('social-close','',c);
  const first=state.form.body.match(/<fieldset class="social-fieldset">([\s\S]*?)<\/fieldset>/)?.[1];
- assert.ok(first,'应存在结项情况分组');
- assert.match(first,/<legend>一、结项情况<\/legend>/);
- assert.match(first,/id="cond-rect"/);
- assert.match(first,/name="rectification"/);assert.match(first,/name="rectification_due"/);
- assert.doesNotMatch(state.form.body,/<legend>整改/);
- assert.equal((state.form.body.match(/class="social-fieldset"/g)||[]).length,3,'普通结项只剩结项情况、经费与财务核验两个业务分组加办理说明');
+ assert.ok(first,'应存在结项分组');
+ assert.match(first,/name="closed_on"/);assert.match(first,/name="outcome_report"/);
+ assert.doesNotMatch(state.form.body,/name="rectification|name="actual_income|name="satisfaction/,'满意度、整改和财务由学校结项核验时登记');
+ assert.equal((state.form.body.match(/class="social-fieldset"/g)||[]).length,1,'老师结项只有一组，不再有办理说明');
  assert.doesNotMatch(state.form.body,/结项材料核对|close-check-all|name="checked_/,'材料核对改由学校在结项核验时勾选');
 });
