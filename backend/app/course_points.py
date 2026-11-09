@@ -88,7 +88,7 @@ def course_points_progress(db, actor, application, project_id=''):
         result['can_open_claim'] = True
         done[4] = claim.state == 'ARCHIVED'
         responsible={'DRAFT':'申报人','RETURNED':'申报人','SUBMITTED':'二级学院院长','DEAN':'学校归口复审人员',
-                     'COORDINATOR':'分管副校长','APPROVED':'教学秘书','ARCHIVED':'已归档入账，无需继续办理'}
+                     'COORDINATOR':'分管副校长','APPROVED':'教学秘书','DEPT':'教研室负责人','COLLEGE':'学院负责人','SCHOOL':'学校审核人','ARCHIVED':'已归档入账，无需继续办理'}
         return finish('claim', '已认定积分' if done[4] else st.state_label(claim),
                       '本项目本人积分已归档入账；其他课程沿用此认定，不再重复申报。' if done[4] else
                       '本项目已有本人积分申请，请继续原申请；其他课程沿用同一份申请。', responsible.get(claim.state,'当前积分审核人'))

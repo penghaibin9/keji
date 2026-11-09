@@ -794,6 +794,8 @@ def resource_stats(request: Request):
 
 ROLE_LABELS = {'lecturer': '主讲', 'instructor': '实训指导', 'manager': '管理辅助'}
 CLAIM_STEPS = [('DRAFT', '本人填报'), ('SUBMITTED', '院长初审'), ('DEAN', '继教复审'), ('COORDINATOR', '分管副校长审批'), ('APPROVED', '教学秘书归档'), ('ARCHIVED', '已归档')]
+# 2026-11-09 起新申报走三级（教研室 → 学院 → 学校）。
+CLAIM_STEPS_3 = [('DRAFT', '系统生成'), ('DEPT', '教研室审核'), ('COLLEGE', '学院审批'), ('SCHOOL', '学校认定'), ('ARCHIVED', '已入账')]
 
 
 def claim_deadline(db, closed_on):
@@ -855,11 +857,12 @@ def mine(request: Request, year: int = Query(..., ge=2020, le=2100)):
         claim_rows = []
         for c in claims:
             trial = (c.snapshot or {}).get('trial') or st.point_trial(db, c)
-            order = [k for k, _ in CLAIM_STEPS]
+            chain = CLAIM_STEPS_3 if (c.data or {}).get('chain') == 3 or c.state in ('DEPT', 'COLLEGE', 'SCHOOL') else CLAIM_STEPS
+            order = [k for k, _ in chain]
             at = order.index(c.state) if c.state in order else 0
             claim_rows.append({'id': c.id, 'project': names.get(c.project_id) or (db.get(SocialProject, c.project_id).data.get('name')), 'state': c.state, 'state_label': st.STATES.get(c.state, c.state),
                                'total': trial.get('total'), 'blockers': len(trial.get('blockers') or []), 'deadline': trial.get('deadline'),
-                               'steps': [{'label': label, 'done': i < at or c.state == 'ARCHIVED', 'current': i == at and c.state != 'ARCHIVED'} for i, (_, label) in enumerate(CLAIM_STEPS)]})
+                               'steps': [{'label': label, 'done': i < at or c.state == 'ARCHIVED', 'current': i == at and c.state != 'ARCHIVED'} for i, (_, label) in enumerate(chain)]})
             waiting = c.state == 'DRAFT' and any('尚未正式启用' in x for x in trial.get('blockers') or [])
             expired = c.state == 'DRAFT' and any('超过结项后15个工作日' in x for x in trial.get('blockers') or [])
             if c.state in ('DRAFT', 'RETURNED'):

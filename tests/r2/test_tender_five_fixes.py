@@ -57,7 +57,7 @@ def test_project_claim_reuses_original_draft_and_returned_application(setup_soci
     assert action(client2,'claims','social_claim',ident,'submit').status_code==200
     overview=client2.get('/api/social/overview?year=2026').json()['points']
     assert Decimal(overview['trial'])==Decimal('1.56') and overview['trial_claims']==1
-    auth(client2,'collegehead');assert action(client2,'claims','social_claim',ident,'return').status_code==200
+    auth(client2,'depthead');assert action(client2,'claims','social_claim',ident,'return').status_code==200
     auth(client2,'teacher')
     duplicate=post(client2,'/api/social/claims',claim_payload(pid,'overlap-rule','overlap'))
     assert duplicate.status_code==409 and '同一项目' in duplicate.text
@@ -131,7 +131,7 @@ def test_enterprise_city_weight_computes_correctly_and_archives(setup_social,cli
     auth(client2,'teacher');r=post(client2,'/api/social/claims',claim_payload(pid,pol));assert r.status_code==200,r.text
     assert r.json()['trial']['teaching']=='1.10' and not r.json()['trial']['blockers']
     item=r.json()['item'];proof(client2,'social_claim',item['id'],item['version']);assert action(client2,'claims','social_claim',item['id'],'submit').status_code==200
-    for user in ('collegehead','reviewer','vice','depthead'):
+    for user in ('depthead','collegehead','reviewer'):  # 2026-11-09 三级
         auth(client2,user);r=action(client2,'claims','social_claim',item['id'],'approve');assert r.status_code==200,r.text
     assert r.json()['item']['snapshot']['trial']['teaching']=='1.10'
 

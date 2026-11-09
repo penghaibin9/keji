@@ -10,6 +10,7 @@ from .reference_data import TrainingProjectMaster, TrainingCourseMaster
 from .social_models import SocialProject, SocialUnit, SocialPolicy, SocialClaim, SocialAnnual, SocialResource
 
 D = Decimal
+LIVE_CLAIM_STATES = ['SUBMITTED','DEAN','COORDINATOR','APPROVED','DEPT','COLLEGE','SCHOOL','ARCHIVED']
 STATES = {'DRAFT':'草稿', 'SUBMITTED':'待院长初审', 'DEAN':'待归口复审', 'COORDINATOR':'待分管副校长审批',
           'APPROVED':'待教学秘书归档', 'ARCHIVED':'已归档', 'FILED':'已备案', 'CLOSE_REVIEW':'待结项核验',
           'CLOSED':'已结项', 'RETURNED':'退回补正', 'REVIEW':'待职能部门核验', 'COMMITTEE':'待委员会评分',
@@ -170,11 +171,11 @@ def check_project_conflicts(db, actor, project):
         if db.get(User,teacher_id):check_conflicts(db,actor,teacher_id,project.org_id)
 
 
-def review_staff_blockers(db,obj):
-    """发送前按实际授权及回避规则确认后续每个环节有人可办。"""
+def review_staff_blockers(db,obj,codes=('dean','coordinator','vice_president','secretary')):
+    """发送前按实际授权及回避规则确认后续每个环节有人可办。三级积分申报只查学校一级（codes=('coordinator',)）。"""
     project=db.get(SocialProject,db.get(SocialClaim,obj.data['claim_id']).project_id)
     blocked=[]
-    for code in ('dean','coordinator','vice_president','secretary'):
+    for code in codes:
         available=False
         people=list(assignments(db).get(code,[]))
         if code=='dean':  # 学院经办人代授权院长办理院长初审
@@ -553,7 +554,7 @@ def missing(config, keys):
 
 def duplicate_claim(db, project_id, teacher_id, ident=None):
     query=select(SocialClaim.id).where(SocialClaim.project_id==project_id,SocialClaim.teacher_id==teacher_id,
-        SocialClaim.state.in_(['SUBMITTED','DEAN','COORDINATOR','APPROVED','ARCHIVED']))
+        SocialClaim.state.in_(LIVE_CLAIM_STATES))
     if ident:query=query.where(SocialClaim.id!=ident)
     return db.scalar(query.limit(1)) is not None
 
@@ -626,7 +627,7 @@ def point_trial(db, claim):
             daily[x['work_date']]=daily.get(x['work_date'],D(0))+D(x['amount'])
         for line in details:
             if line['role']=='0.6': daily[line['date']]=daily.get(line['date'],D(0))+D(line['score'] or 0)
-        other_work=db.scalars(select(SocialClaim).where(SocialClaim.teacher_id==claim.teacher_id,SocialClaim.id!=claim.id,SocialClaim.state.in_(['SUBMITTED','DEAN','COORDINATOR','APPROVED','ARCHIVED']))).all()
+        other_work=db.scalars(select(SocialClaim).where(SocialClaim.teacher_id==claim.teacher_id,SocialClaim.id!=claim.id,SocialClaim.state.in_(LIVE_CLAIM_STATES))).all()
         for previous in other_work:
             for row in previous.data.get('auxiliary',[]):
                 if row['work_date'] in daily:daily[row['work_date']]+=D(row['amount'])
@@ -634,7 +635,7 @@ def point_trial(db, claim):
                 if row['role']=='0.6' and row['date'] in daily:daily[row['date']]+=D(row['score'] or 0)
         if p.get('auxiliary_daily_cap') is not None and any(v>D(p['auxiliary_daily_cap']) for v in daily.values()): blockers.append('辅助积分超过个人每日限额')
     auxiliary += managerial
-    other = db.scalars(select(SocialClaim).where(SocialClaim.project_id==project.id,SocialClaim.id!=claim.id,SocialClaim.state.in_(['SUBMITTED','DEAN','COORDINATOR','APPROVED','ARCHIVED']))).all()
+    other = db.scalars(select(SocialClaim).where(SocialClaim.project_id==project.id,SocialClaim.id!=claim.id,SocialClaim.state.in_(LIVE_CLAIM_STATES))).all()
     reserved=sum((D((c.snapshot.get('trial') or {}).get('auxiliary','0')) for c in other),D(0))
     if auxiliary+reserved>facts['effective']: blockers.append('全项目辅助积分超过有效培训总人次')
     computed=cfg.get('cap_mode') is not None and cfg.get('precision') is not None and cfg.get('rounding') is not None and (p['mode']!='person_day' or cfg.get('person_day_unit') is not None)
@@ -1024,6 +1025,34 @@ def open_point_reviews(db, teacher_id):
 
 
 REVIEW_STAGES={'SUBMITTED':'dean','DEAN':'coordinator','COORDINATOR':'vice_president','APPROVED':'secretary'}
+# 2026-11-09 用户定：社会培训项目积分和授课认定一样走 教研室 → 学院 → 学校 三级；结项通过后系统自动生成申报，老师不用填。
+# 教研室缺位交学院、学院缺位交学校（同授课认定）；学校一级由继续教育学院归口审核人（coordinator 职责）认定并入账。
+# 在途的旧四级申报（SUBMITTED/DEAN/COORDINATOR/APPROVED）按原链走完。
+CLAIM_FLOW={'DEPT':'COLLEGE','COLLEGE':'SCHOOL','SCHOOL':'ARCHIVED'}
+CLAIM_LEVEL={'DEPT':'dept','COLLEGE':'college','SCHOOL':'school'}
+
+
+def claim_first_state(db,teacher_id):
+    from .teaching_review import effective_level
+    level,_=effective_level(db,db.get(User,teacher_id),'dept')
+    return {'dept':'DEPT','college':'COLLEGE'}.get(level,'SCHOOL')
+
+
+def claim_next_state(db,claim):
+    nxt=CLAIM_FLOW[claim.state]
+    if nxt=='COLLEGE':
+        from .teaching_review import effective_level
+        if effective_level(db,db.get(User,claim.teacher_id),'college')[0]=='school':nxt='SCHOOL'
+    return nxt
+
+
+def claim_level_check(db,a,claim,project):
+    level=CLAIM_LEVEL[claim.state]
+    if level=='school':duty(db,a,'coordinator',claim.teacher_id,project.org_id)
+    else:
+        from .teaching_review import check_level
+        teacher=db.get(User,claim.teacher_id);check_level(db,a,teacher,teacher.staff_no if teacher else '',level)
+    check_project_conflicts(db,a,project)
 
 
 def review_check(db,a,obj):
@@ -1034,6 +1063,7 @@ def review_check(db,a,obj):
         duty(db,a,'coordinator',obj.owner_id,obj.org_id);check_project_conflicts(db,a,obj);return True
     if isinstance(obj,SocialClaim):
         project=db.get(SocialProject,obj.project_id)
+        if project is not None and obj.state in CLAIM_LEVEL:claim_level_check(db,a,obj,project);return True
         if obj.state not in REVIEW_STAGES or project is None:return False
         duty(db,a,REVIEW_STAGES[obj.state],obj.teacher_id,project.org_id);check_project_conflicts(db,a,project);return True
     if isinstance(obj,SocialResource) and obj.kind=='point_review':
@@ -1075,9 +1105,9 @@ def todo_items(db,a):
         elif p.state in {'DRAFT','RETURNED'} and 'records.write' in a.permissions:add('social_project',p,'补充项目申报：'+p.data['name'])
         elif p.state in {'SUBMITTED','CLOSE_REVIEW'} and 'coordinator' in duties and p.owner_id!=a.id and may_review(db,a,p):add('social_project',p,'项目审核：'+p.data['name'])
         elif p.state=='FILED' and today().isoformat()>p.data['end_date']:add('social_project',p,'培训已结束，请办理结项：'+p.data['name'],'待结项')
-        # 2026-11-09 培训开始了还没有参训明细：直接进学院待办，老师不用线下去找管理员。
-        if p.state=='FILED' and a.role.kind=='college' and 'records.write' in a.permissions and p.data.get('start_date','')<=today().isoformat() and db.scalar(select(SocialUnit.id).where(SocialUnit.project_id==p.id).limit(1)) is None:
-            add('social_project',p,'待导入参训明细：'+p.data['name'],'待导入明细')
+        # 2026-11-09 培训开始了还没有参训明细：提醒老师自己上传参训明细表。
+        if p.state=='FILED' and p.owner_id==a.id and p.data.get('start_date','')<=today().isoformat()<=p.data.get('end_date','') and db.scalar(select(SocialUnit.id).where(SocialUnit.project_id==p.id).limit(1)) is None:
+            add('social_project',p,'请上传参训明细表：'+p.data['name'],'待传明细')
         followups=project_followups(db,p.id)
         if any(x.get('invalidate_cohort') for x in followups) and 'secretary' in duties:
             for claim in db.scalars(select(SocialClaim).where(SocialClaim.project_id==p.id,SocialClaim.state=='ARCHIVED')):
@@ -1105,7 +1135,7 @@ def todo_items(db,a):
                 action_required=not waiting,
                 action_hint='等待学校确认积分口径和申报期限，可先查看准备材料。' if waiting else '请核对申报资料，补充后提交。',
                 action_label='查看进度' if waiting else '补充并提交')
-        elif stages.get(claim.state) in duties and claim.teacher_id!=a.id and may_review(db,a,claim):add('social_claim',claim,'社会培训积分认定',teacher_id=claim.teacher_id)
+        elif (claim.state in CLAIM_LEVEL or stages.get(claim.state) in duties) and claim.teacher_id!=a.id and may_review(db,a,claim):add('social_claim',claim,'社会培训积分认定',teacher_id=claim.teacher_id)
     for obj in db.scalars(select(SocialResource).where(SocialResource.kind=='correction')):
         if obj.data['teacher_id'] not in a.teacher_ids:continue
         if obj.state in {'DRAFT','RETURNED'} and obj.data['created_by']==a.id:add('social_resource',obj,'补充积分更正依据',teacher_id=obj.data['teacher_id'])

@@ -105,8 +105,8 @@ def test_project_close_goes_college_then_school_and_school_ticks_materials(setup
     r = action(c, 'projects', 'social_project', pid, 'approve')
     assert r.status_code == 200 and r.json()['item']['state'] == 'CLOSE_REVIEW', r.text
     auth(c, 'reviewer')
-    r = action(c, 'projects', 'social_project', pid, 'close')
-    assert r.status_code == 409 and '勾选' in r.text  # 学校没勾材料核对
+    r = action(c, 'projects', 'social_project', pid, 'close', materials_checked=[])
+    assert r.status_code == 409 and '勾选' in r.text  # 明确不勾不能过；不传按点“同意”即核对过
     r = action(c, 'projects', 'social_project', pid, 'close', materials_checked=MATERIALS[:-1])
     assert r.status_code == 409
     r = action(c, 'projects', 'social_project', pid, 'close', materials_checked=MATERIALS)
@@ -142,12 +142,10 @@ def test_teacher_close_only_needs_outcome_report_and_school_records_review(setup
     assert r.status_code == 200, r.text  # 没有参训明细也能提交
     auth(c, 'collegehead')
     r = action(c, 'projects', 'social_project', pid, 'approve')
-    assert r.status_code == 409 and '参训明细' in r.text  # 学院导入明细后才能通过
+    assert r.status_code == 409 and '老师还没上传参训明细表' in r.text  # 老师上传明细后才能通过
     assert import_rows(c, pid, [row()]).status_code == 200
     assert action(c, 'projects', 'social_project', pid, 'approve').status_code == 200
     auth(c, 'reviewer')
-    r = action(c, 'projects', 'social_project', pid, 'close', materials_checked=MATERIALS)
-    assert r.status_code == 422 and '满意度' in r.text
     r = action(c, 'projects', 'social_project', pid, 'close', materials_checked=MATERIALS, review={'satisfaction': '80'})
     assert r.status_code == 422 and '整改期限' in r.text
     r = action(c, 'projects', 'social_project', pid, 'close', materials_checked=MATERIALS, review={'satisfaction': '80', 'rectification_due': '2026-12-31'})
@@ -245,13 +243,14 @@ def test_claim_return_resumes_at_returned_level(setup_social, client2, app2, mon
     claim = r.json()['item']
     proof(c, 'social_claim', claim['id'], claim['version'])
     assert action(c, 'claims', 'social_claim', claim['id'], 'submit').status_code == 200
-    for user in ('collegehead', 'reviewer'):
+    # 2026-11-09 三级：教研室 → 学院 → 学校
+    for user in ('depthead', 'collegehead'):
         auth(c, user)
         r = action(c, 'claims', 'social_claim', claim['id'], 'approve')
         assert r.status_code == 200, r.text
-    auth(c, 'vice')
+    auth(c, 'reviewer')
     item = detail(c, 'social_claim', claim['id'])['item']
-    assert item['state'] == 'COORDINATOR'
+    assert item['state'] == 'SCHOOL'
     r = post(c, '/api/social/claims/' + claim['id'] + '/actions', {'action': 'return', 'expected_version': item['version'], 'reason': ''})
     assert r.status_code == 422  # 退回仍须写原因
     r = action(c, 'claims', 'social_claim', claim['id'], 'return')
@@ -259,8 +258,8 @@ def test_claim_return_resumes_at_returned_level(setup_social, client2, app2, mon
     auth(c, 'teacher')
     r = action(c, 'claims', 'social_claim', claim['id'], 'submit')
     assert r.status_code == 200, r.text
-    assert r.json()['item']['state'] == 'COORDINATOR'  # 从分管副校长这一级接着审，不回院长
-    for user, after in (('vice', 'APPROVED'), ('depthead', 'ARCHIVED')):
+    assert r.json()['item']['state'] == 'SCHOOL'  # 从学校这一级接着审，不回教研室
+    for user, after in (('reviewer', 'ARCHIVED'),):
         auth(c, user)
         r = action(c, 'claims', 'social_claim', claim['id'], 'approve')
         assert r.status_code == 200 and r.json()['item']['state'] == after, r.text

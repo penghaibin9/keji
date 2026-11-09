@@ -1,11 +1,11 @@
-import {parseCalendarDates,calendarDateError,normalizeDate,dateError,setFieldCondition,actionPhrases,validateFormAssists} from './form-assist.js?v=20261109-v2i';
+import {parseCalendarDates,calendarDateError,normalizeDate,dateError,setFieldCondition,actionPhrases,validateFormAssists} from './form-assist.js?v=20261109-v2j';
 // School business pages reuse the portal's forms, permissions, navigation and attachments.
 import {checkUploadFiles,uploadEntries,uploadSequential,uploadStatusHtml,failedEntries,MAX_ATTACHMENTS} from './approval-flow.js?v=20261021-form-merged1';
-import {renderTrainingWorkspace,trainingChange} from './training-workspace.js?v=20261109-v2i';
+import {renderTrainingWorkspace,trainingChange} from './training-workspace.js?v=20261109-v2j';
 import {imageField,takeImage,saveImageAfter,coverButton} from './display-image.js?v=20261021-form-merged1';
 import {historyProjectsPage,projectViewTabs} from './history-projects.js?v=20261019-walk3&display=20261019-clean2&history_dates=20261020-images1';
 const COPY_KEYS=['name','org_id','owner_id','category','high_risk','expected_income','expected_participants','expected_outcomes','mode','class_type','level','level_basis','scene','target_groups','one_skill','province_report','province_basis','auxiliary_standard','auxiliary_daily_cap','total_hours','audiences','audience_other','service_types','teaching_methods','video_minutes','base_count','venue','quality'];
-import {progressHtml,AUDIENCE,TEACHING_MODES,IDEOLOGY} from './applications.js?v=20261109-v2i';
+import {progressHtml,AUDIENCE,TEACHING_MODES,IDEOLOGY} from './applications.js?v=20261109-v2j';
 const names={module:'模块式',person_day:'人天式',technical:'技术类',lecture:'讲座类',province:'省级',city:'市级或企业定制',school:'校级',dispatched:'统一委派异地送教',full_day:'全天实操或脱产',ordinary:'常规',subsidy:'补贴性培训',enterprise:'企业定制培训',community:'社区公益培训',rural:'乡村帮扶培训',other:'其他非学历培训',national:'国家级'};
 let workspace,context,opened,workspaceUser;
 let listSection='',listPage=1,listSearch='',resourcePage=1;
@@ -428,8 +428,8 @@ async function showDetail(kind,id,courseList=null){
  if(kind==='social_project'&&(c.can('records.write')||ownTeacher)){
   if(['DRAFT','RETURNED'].includes(x.state)){const resume=x.state==='RETURNED'?{college:'补正后提交学院审批',school:'补正后提交学校备案'}[x.data.returned_level]:'';add(resume||(c.me?.role?.kind==='teacher'||c.me?.role?.kind==='dept'?'提交学院审批':'提交审核备案'),'submit');buttons.push(act('修改项目资料','social-project-edit'))}
   if(x.state==='SUBMITTED'&&workspace.my_duties.includes('coordinator')&&d.can_review!==false){add('完成审核备案','file');add('退回补正','return')}
-  if(x.state==='FILED'){if(c.can('records.write')){buttons.push(c.me?.role?.kind==='school'?act('关联已入库课程','social-course-link')+act('登记本项目课程','social-course-for-project'):act('申请本项目课程','app-course-new',x.data.code));buttons.push(act('导入参训明细','social-unit-import'))}buttons.push(act('提交结项','social-close'));buttons.push(act('申请变更','life-change','project|'+x.id));buttons.push(act('运行档案','life-open','project|'+x.id,'primary'))}
-  if(['CLOSE_COLLEGE','CLOSE_REVIEW'].includes(x.state)&&c.can('records.write')&&!(d.facts?.units||[]).length)buttons.push(act('导入参训明细','social-unit-import'));
+  if(x.state==='FILED'){if(c.can('records.write')){buttons.push(c.me?.role?.kind==='school'?act('关联已入库课程','social-course-link')+act('登记本项目课程','social-course-for-project'):act('申请本项目课程','app-course-new',x.data.code));}buttons.push(act('上传参训明细表','social-unit-import'));buttons.push(act('提交结项','social-close'));buttons.push(act('申请变更','life-change','project|'+x.id));buttons.push(act('运行档案','life-open','project|'+x.id,'primary'))}
+  if(['CLOSE_COLLEGE','CLOSE_REVIEW'].includes(x.state)&&(x.owner_id===c.me?.user?.id||c.can('records.write')))buttons.push(act('上传参训明细表','social-unit-import'));
   if(x.state==='CLOSE_REVIEW'&&workspace.my_duties.includes('coordinator')&&d.can_review!==false){add('核验通过结项','close');add('退回补充材料','return')}
  }
  // 负责人自己撤回审批中的申报、删除从未备案过的申报草稿、恢复已删除的（后端再核对是否负责人或登记人、有无明细）。
@@ -445,6 +445,8 @@ async function showDetail(kind,id,courseList=null){
   if(x.teacher_id===c.me.user.id&&['DRAFT','RETURNED'].includes(x.state)){if(d.trial?.blockers?.length)buttons.push('<button type="button" class="btn primary" disabled title="请先处理上方列出的提交条件">暂不能提交积分申报</button>');else add('提交本人积分申报','submit');buttons.push(act('补正及辅助积分','social-claim-edit'))}
   const duty={SUBMITTED:'dean',DEAN:'coordinator',COORDINATOR:'vice_president',APPROVED:'secretary'}[x.state];
   if(workspace.my_duties.includes(duty)&&d.can_review!==false){add(x.state==='APPROVED'?'归档并计入个人台账':'审核通过','approve');if(x.state==='APPROVED')opened.archiveStep=true;add('退回补正','return')}
+  // 2026-11-09 三级：教研室 → 学院 → 学校（学校一级认定并入账）。
+  if(['DEPT','COLLEGE','SCHOOL'].includes(x.state)&&d.can_review===true){add(x.state==='SCHOOL'?'认定并计入个人积分':'审核通过','approve');add('退回补正','return')}
  }
  if(kind==='social_resource'&&x.kind==='point_review'){
   if(x.data.correction_id)buttons.push(act('查看更正单','social-detail','social_resource|'+x.data.correction_id,'primary'));
@@ -485,7 +487,7 @@ async function showDetail(kind,id,courseList=null){
   if(x.state==='VOID')body+=note('原公示期间积分来源已变化，已由新公示替代。下方保留原公示快照，不再作为当前公示或归档依据。',true);
   else if(x.data.replaces?.length)body+=note('这是按最新归档积分重新生成的公示，公示期限从本次发布日重新计算，不能沿用旧公示期限。');
  }
- const steps=kind==='social_project'?[['DRAFT','项目申报'],['SUBMITTED','审核备案'],['FILED','培训实施'],['CLOSE_REVIEW','结项核验'],['CLOSED','正常结项']]:kind==='social_claim'?[['DRAFT','本人填写'],['SUBMITTED','院长初审'],['DEAN','归口复审'],['COORDINATOR','分管副校长审批'],['APPROVED','教学秘书归档'],['ARCHIVED','已入账']]:kind==='social_annual'?[['DRAFT','学院自评'],['REVIEW','职能核验'],['COMMITTEE','委员会评分'],['PUBLIC','公示'],['ARCHIVED','已归档']]:[];
+ const steps=kind==='social_project'?[['DRAFT','项目申报'],['SUBMITTED','审核备案'],['FILED','培训实施'],['CLOSE_REVIEW','结项核验'],['CLOSED','正常结项']]:kind==='social_claim'?(x.data?.chain===3||['DEPT','COLLEGE','SCHOOL'].includes(x.state)?[['DRAFT','系统生成'],['DEPT','教研室审核'],['COLLEGE','学院审批'],['SCHOOL','学校认定'],['ARCHIVED','已入账']]:[['DRAFT','本人填写'],['SUBMITTED','院长初审'],['DEAN','归口复审'],['COORDINATOR','分管副校长审批'],['APPROVED','教学秘书归档'],['ARCHIVED','已入账']]):kind==='social_annual'?[['DRAFT','学院自评'],['REVIEW','职能核验'],['COMMITTEE','委员会评分'],['PUBLIC','公示'],['ARCHIVED','已归档']]:[];
  const handling=opened.inlineApprove?handlePanel(kind,x,d):null;if(handling)body+=handling.summary;
  if(!selfOwned&&c.queueNext?.(kind+'|'+id))buttons.push(act('查看下一条','social-next','','light'));
  const progress=kind==='social_project'&&d.progress?progressHtml(d.progress,esc):steps.length?'<nav class="social-progress" aria-label="办理流程"><ol>'+steps.map(([state,label])=>'<li data-current="'+(x.state===state)+'"'+(x.state===state?' aria-current="step"':'')+'>'+label+'</li>').join('')+'</ol></nav>':'';
@@ -907,15 +909,13 @@ export async function socialAction(action,id,c){
  }
 
  if(action==='social-unit-import'){
-  const header='单元编号\t课程编号\t班级编号\t模块名称\t培训日期\t学员编号\t本校全日制生\t准毕业生例外\t实名签到\t学时达标\t全程参训\t结业通过\t重点群体\t剔除原因\t教师工号\t岗位\t人员类型\t佐证说明';
-  const code=opened.item.data.code,list=await c.api('/social/workspace?section=courses&q='+encodeURIComponent(code)).then(w=>(w.courses?.items||w.courses||[]).filter(x=>x.project_code===code)).catch(()=>[]);
-  setTimeout(()=>typeof document!=='undefined'&&document.getElementById('unit-template')?.addEventListener('click',()=>{const sample=['U001','C001','B01','模块一','2026-09-10','S0001','否','否','是','是','是','是','否','','J001','主讲','校内','签到表第1页'];const blob=new Blob(['\ufeff'+header.split('\t').join(',')+'\r\n'+sample.join(',')+'\r\n'],{type:'text/csv;charset=utf-8'}),a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download='参训明细导入模板.csv';a.click();setTimeout(()=>URL.revokeObjectURL(a.href),5000)}),0);
-  const courseNote=list.length?c.note('本项目已登记课程（“课程编号”列填这些编号）：'+list.map(x=>x.code+' '+x.name).join('；')):c.note('本项目还没有登记课程，参训明细里的课程编号无处关联。请先点下面“返回详情”，再点“登记本项目课程”（学院点“申请本项目课程”，学校审批后入库）。',true);
-  return commonForm('导入参训明细',courseNote+c.note('三步完成：①下载模板，用 Excel 打开，删掉示例行后按行填写（每位学员每个单元一行）；②另存为 CSV 后在下面选择文件，或直接从 Excel 复制整表粘贴；③先预检，确认人数无误后再入库。判断项填“是/否”，学员编号用学校内部编号，不填身份证号；同一项目同一学员跨班仍须用同一编号，人天式同一天只计一次。',false,'填写与计数说明')+'<div class="form-field full"><button type="button" class="btn light" id="unit-template">下载导入模板</button><p class="hint">岗位填：主讲 / 实训指导 / 管理辅助；人员类型填：校内 / 外聘。多人同堂使用相同单元编号。</p></div>'+c.field('file','选择填好的逗号分隔表格','file','',{required:false,accept:'.csv,.txt,.tsv'})+c.field('rows','或粘贴电子表格内容（含表头）','textarea',header,{rows:8,full:true,required:false}),async(v,f)=>{
-   const file=f?.querySelector('input[type=file]')?.files?.[0],text=file?await readImportFile(file):v.rows;
-   const projectId=opened.id,project=opened.item,rows=parseTrainingRows(text,project.data.mode,c.teachers),body={rows,expected_version:project.version,reason:v.reason,basis:v.basis};const preview=await c.api('/social/projects/'+projectId+'/units/preview',{method:'POST',body});
-   setTimeout(()=>c.formModal('确认参训明细入库','<div class="detail-action-context"><span>本次导入项目</span><strong>'+c.esc(project.data.name)+'</strong><p>'+c.esc(project.data.code)+' · '+c.esc(project.cohort||'')+'</p></div>'+c.note('预检通过：'+preview.rows+'个核算单元，有效'+preview.effective+'人次，剔除'+preview.excluded+'人次。'),async()=>{await c.api('/social/projects/'+projectId+'/units/confirm',{method:'POST',body:{...body,preview_hash:preview.preview_hash}});c.closeModal();await c.render();await showDetail('social_project',projectId).catch(()=>{})},{submit:'确认整批入库',returnLabel:'返回修改',returnTo:async()=>{await socialAction('social-unit-import','',c);for(const [key,value]of Object.entries({rows:text,reason:v.reason,basis:v.basis})){const el=document.getElementById('f-'+key);if(el)el.value=value||''}}}),0);
-  },{submit:'先预检',reasonLabel:'办理说明',reasonDefault:'导入参训明细',reopen:true,after:()=>{}});
+  // 2026-11-09 老师自己上传一张参训明细表（五列），再传一次会替换上次的。
+  const projectId=opened.id;
+  return commonForm('上传参训明细表','<div class="form-field full"><a class="btn light" href="/api/social/units/template.xlsx" download>下载模板</a></div>'+c.field('file','参训明细表','file','',{accept:'.xlsx',full:true}),async(v,f)=>{
+   const file=f?.querySelector('input[type=file]')?.files?.[0];if(!file)throw Error('请选择填好的参训明细表');
+   const fd=new FormData;fd.set('file',file);const r=await c.api('/social/projects/'+projectId+'/unit-sheet',{method:'POST',body:fd});
+   c.toast('已导入'+r.imported+'行，有效'+r.effective+'人次'+(r.error_count?'；'+r.error_count+'行没导入：'+r.errors.slice(0,3).map(x=>'第'+x.row+'行'+x.reason).join('；'):''));
+  },{submit:'上传',hideReason:true,hideBasis:true,reasonDefault:'上传参训明细表',reopen:true});
  }
  if(action==='social-duties')return c.runAction?c.runAction('permissions-duties',''):dutiesForm();
  if(action==='social-note')return caseNoteForm(c,id);

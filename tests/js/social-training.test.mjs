@@ -247,16 +247,16 @@ test('学校可为已备案项目关联已有入库课程，保留项目版本�
  }
 });
 
-test('参训入库确认显示预检项目和期次，确认请求保留原项目及预检版本',async()=>{
- const c=renderContext({courses:[{code:'C1',name:'合成课程',project_code:'P1'}]},['records.write']);c.me={user:{id:'school'},role:{kind:'school'}};c.teachers=teachers;await renderSocial('projects',c);
- let form,posted;c.modal=()=>{};c.downloads=()=>'';c.eventsHtml=()=>'';c.formModal=(title,body,save)=>{form={title,body,save}};
- const detail={item:{id:'project',cohort:'第<一期>',owner_id:'teacher',org_id:'college',state:'FILED',version:9,data:{code:'P1',name:'合成<项目>',mode:'module'},closeout:{}},kind:'social_project',state_label:'已备案',facts:{effective:0,excluded:0,units:[],followups:[]},attachments:[],events:[]};
- c.api=async(url,options)=>{if(url.endsWith('/units/preview'))return {rows:1,effective:1,excluded:0,preview_hash:'checked-hash'};if(options)posted={url,body:options.body};return detail};
+test('老师上传参训明细表：传 xlsx 到本项目，返回导入行数',async()=>{
+ const c=renderContext({courses:[{code:'C1',name:'合成课程',project_code:'P1'}]},[]);c.me={user:{id:'teacher'},role:{kind:'teacher'}};c.teachers=teachers;await renderSocial('projects',c);
+ let form,posted,toast='';c.modal=()=>{};c.downloads=()=>'';c.eventsHtml=()=>'';c.toast=m=>{toast=m};c.formModal=(title,body,save)=>{form={title,body,save}};
+ const detail={item:{id:'project',cohort:'第一期',owner_id:'teacher',org_id:'college',state:'FILED',version:9,data:{code:'P1',name:'合成项目',mode:'module'},closeout:{}},kind:'social_project',state_label:'已备案',facts:{effective:0,excluded:0,units:[],followups:[]},attachments:[],events:[]};
+ c.api=async(url,options)=>{if(options){posted={url,body:options.body};return {imported:3,units:1,effective:2,excluded:1,error_count:1,errors:[{row:5,reason:'学员没填'}]}}return detail};
  await socialAction('social-detail','social_project|project',c);await socialAction('social-unit-import','',c);
- await form.save({rows:[header,row()].join('\n'),reason:'合成预检',basis:'合成依据'},{querySelector:()=>null});
- await new Promise(resolve=>setTimeout(resolve,0));
- assert.equal(form.title,'确认参训明细入库');assert.match(form.body,/合成&lt;项目&gt;/);assert.match(form.body,/P1 · 第&lt;一期&gt;/);assert.match(form.body,/有效1人次/);
- await form.save();assert.equal(posted.url,'/social/projects/project/units/confirm');assert.equal(posted.body.expected_version,9);assert.equal(posted.body.preview_hash,'checked-hash');assert.equal(posted.body.rows.length,1);
+ assert.equal(form.title,'上传参训明细表');assert.match(form.body,/units\/template\.xlsx/);
+ const file={name:'明细.xlsx'};
+ await form.save({},{querySelector:()=>({files:[file]})});
+ assert.equal(posted.url,'/social/projects/project/unit-sheet');assert.ok(posted.body instanceof FormData);assert.match(toast,/已导入3行/);assert.match(toast,/第5行学员没填/);
 });
 
 test('零收入结项不催补资金来源，缺失收入不能被显示为零收入',async()=>{
