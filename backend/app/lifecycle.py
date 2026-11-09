@@ -684,8 +684,7 @@ def view(db, a, kind, obj):
             elif (end - today).days <= 30:
                 reminders.append('还有 ' + str((end - today).days) + ' 天培训结束；需要延期请点“项目立项”里的“申请变更”。')
             if today >= start and not rows:
-                reminders.append('培训已经开始，还没有导入参训明细（人次从明细自动核算，没有明细不能结项）。'
-                                 + ('' if 'records.write' in a.permissions else '参训明细由学院导入，请把签到和结业名单交给本院培训管理员。'))
+                reminders.append('还没有参训明细' + ('，请导入。' if 'records.write' in a.permissions else '，已在学院待办里提醒导入。'))
             if obj.data.get('report_pending'):
                 from .social_schemas import application_blockers
                 if issues := application_blockers(obj.data):
@@ -917,9 +916,14 @@ def close_gaps(db, project):
     """结项前查缺：按积分口径说明缺了会怎样。"""
     from . import social_training as st
     gaps = []
-    rows = st.units(db, project.id)
-    if not rows:
-        gaps.append('还没有参训明细，人次和积分都无法核算')
+    d = project.data or {}
+    if d.get('end_date') and d['end_date'] > school_today().isoformat():
+        gaps.append('培训要到 ' + d['end_date'] + ' 才结束，结束后才能结项')
+    if d.get('report_pending'):
+        from .social_schemas import application_blockers
+        if issues := application_blockers(d):
+            gaps.append('还要补上报信息：' + '、'.join(i.replace('请填写', '').replace('请选择', '') for i in issues) + '，不补不能结项')
+    # 2026-11-09（9e98fb3 起）：老师结项不再被参训明细拦，明细由学院在审核结项时导入，学院、学校通过前必须有。
     files = st.attachments(db, 'social_project', project.id)
     names = [str(getattr(f, 'name', '') or (f.get('name') if isinstance(f, dict) else '')) for f in files]
     if not any(('签到' in n or '名册' in n or '名单' in n) for n in names):
@@ -929,6 +933,12 @@ def close_gaps(db, project):
     if (project.data or {}).get('category') == 'subsidy' and not any('报送' in n or '凭证' in n for n in names):
         gaps.append('缺报送凭证，补贴性培训不计积分')
     return gaps
+
+
+def close_notes(db, project):
+    """结项时只提示、不拦的事：参训明细由老师上传 Excel，学院、学校通过前必须有。"""
+    from . import social_training as st
+    return [] if st.units(db, project.id) else ['还没上传参训明细表']
 
 
 def _date_line(kind, obj):
@@ -1030,10 +1040,11 @@ def approval_queue(db, a, kind):
             if closing:
                 summary = '满意度 ' + str((p.closeout or {}).get('satisfaction', '—')) + '% · 材料 ' + str(len(st.attachments(db, 'social_project', p.id))) + ' 份'
             action = {'COLLEGE': 'approve', 'CLOSE_COLLEGE': 'approve', 'SUBMITTED': 'file', 'CLOSE_REVIEW': 'close'}[p.state]
+            unit_count = len(st.units(db, p.id)) if closing else None
             out.append({'kind': 'close' if closing else 'apply', 'label': ('结项核验' if p.state == 'CLOSE_REVIEW' else '结项') if closing else ('备案' if p.state == 'SUBMITTED' else '立项'),
                         'type': kind, 'id': p.id, 'name': d.get('name', ''), 'who': who_name(p.owner_id), 'on': str(apps.last_event_at(db, p) or p.created_at)[:10],
-                        'summary': summary, 'action': action, 'version': p.version,
-                        'batch': action in ('approve',) or (action == 'file' and not (d.get('category') == 'subsidy' or d.get('high_risk')))})
+                        'summary': summary, 'action': action, 'version': p.version, 'state': p.state, 'units': unit_count,
+                        'batch': (action == 'approve' and not (closing and not unit_count)) or (action == 'file' and not (d.get('category') == 'subsidy' or d.get('high_risk')))})
     else:
         for obj in db.scalars(select(SocialResource).where(SocialResource.kind == RESOURCE_KIND[kind], SocialResource.state.in_(apps.PENDING_STATES))):
             if not apps.is_application(obj):
@@ -1072,7 +1083,8 @@ def close_review(db, a, project):
     from . import social_training as st
     v = view(db, a, 'project', project)
     files = st.evidence(db, 'social_project', project.id)
-    return {'archive': v, 'files': files, 'points': points_line(db, project), 'closeout': serial(project.closeout or {})}
+    return {'archive': v, 'files': files, 'points': points_line(db, project), 'closeout': serial(project.closeout or {}),
+            'units': len(st.units(db, project.id)), 'expected_income': serial((project.data or {}).get('expected_income')), 'state': project.state}
 
 
 def points_view(db, a, project):

@@ -104,11 +104,10 @@ function projectForm(c){
 }
 
 function courseForm(c){
- const body=`<p class="qa-intro form-field full">只填这几项就能提交。已有教务或超星课程的，关掉这里点“从我的课程导入”。</p>`
-  +c.field('name','课程名称','text','',{full:true,placeholder:'例如：社区茶艺入门'})
+ const body=c.field('name','课程名称','text','',{full:true,placeholder:'例如：社区茶艺入门'})
   +`<div class="form-field"><label for="f-hours">培训学时 <b>*</b></label><input type="number" id="f-hours" name="hours" min="0" step="0.5" required>${quick(c,'hours',[['4',4],['8',8],['16',16],['24',24],['32',32]])}</div>`
   +chips(c,'teaching_mode',TEACHING,{label:'教学方式',checked:['lecture']})
-  +`<details class="form-field full qa-more"><summary>更多（一般不用填）</summary><div class="form-grid">${chips(c,'ideology',IDEOLOGY,{label:'思政属性',checked:['course_ideology']})}${c.field('intro','课程简介','textarea','',{required:false,full:true,rows:2,textLimit:2000})}${c.field('code','课程编号（不填自动生成）','text','',{required:false})}</div></details>`;
+  +`<details class="form-field full qa-more"><summary>更多</summary><div class="form-grid">${chips(c,'ideology',IDEOLOGY,{label:'思政属性',checked:['course_ideology']})}${c.field('intro','课程简介','textarea','',{required:false,full:true,rows:2,textLimit:2000})}${c.field('code','课程编号（不填自动生成）','text','',{required:false})}</div></details>`;
  c.formModal('新申报培训课程',wrap(body),async(v,form)=>{
   if(!text(form,'name'))throw Error('请填写课程名称');if(v.hours==null)throw Error('请填写学时');
   const data={source:'manual',code:text(form,'code')||autoCode('KC'),name:text(form,'name'),project_code:'',teacher_id:null,hours:v.hours,teaching_mode:radio(form,'teaching_mode')||'lecture',ideology:radio(form,'ideology')||'course_ideology',intro:text(form,'intro')};
@@ -153,7 +152,7 @@ async function trainerForm(c){
    qualification_ids:[...form.querySelectorAll('input[name^="qual_"]:checked')].map(i=>i.name.slice(5)),qualification_basis:text(form,'qualification_basis')||'引用本人已审核资质',experience:''};
   await c.api('/applications/trainers',{method:'POST',body:{data,reason:'申报培训师'}});
   c.closeModal();c.toast('已提交，学院审核后报组织人事部认定。');await c.render?.();
- },{submit:'提交学院审批',stepper:false,contextLabel:'培训师资 / 新申报',hint:'外聘培训师没有账号，由学院登记，报教务处备案。'});
+ },{submit:'提交学院审批',stepper:false,contextLabel:'培训师资 / 新申报',hint:''});
  bind();
 }
 

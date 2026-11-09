@@ -35,7 +35,8 @@ def events(app,ident):
 
 @pytest.fixture
 def submitted_claims(setup_social,client2,app2,monkeypatch):
-    """同一项目、同一环节（待院长初审）的多条申报，供逐条批量办理。"""
+    """同一项目、同一环节（待院长初审）的多条申报，供逐条批量办理。
+    2026-11-09 起新申报走三级；这里模拟改版前已在途的旧四级申报，验证它们按原链走完。"""
     monkeypatch.setattr(st,'today',lambda:date(2026,9,3));pid=setup_social
     assert import_rows(client2,pid,[row()]).status_code==200;close_project(client2,pid);pol=policy(client2,True)
     auth(client2,'teacher')
@@ -52,7 +53,7 @@ def submitted_claims(setup_social,client2,app2,monkeypatch):
         unit=db.scalar(select(SocialUnit).where(SocialUnit.project_id==pid))
         unit.data={**unit.data,'teachers':[*unit.data['teachers'],*({'teacher_id':t,'staff_type':'internal','role':'instructor'} for t in extra)]}
         db.flush()
-        base=db.get(SocialClaim,first['id'])
+        base=db.get(SocialClaim,first['id']);base.state='SUBMITTED';base.data={k:v for k,v in base.data.items() if k!='chain'}
         for ident in extra:
             claim=SocialClaim(project_id=pid,teacher_id=ident,period_id='period2026',policy_id=pol,state='SUBMITTED',data={'auxiliary':[],'recognition_form_reference':'学校制式认定表','submitted_on':'2026-09-03'})
             db.add(claim);db.flush();claim.snapshot=st.freeze(st.point_trial(db,claim));ids[ident]=claim.id
@@ -183,7 +184,7 @@ def test_resubmit_saves_correction_and_upload_before_submit_check(setup_social,c
     r=post(client2,'/api/social/claims',{'project_id':pid,'period_id':'period2026','policy_id':pol,'recognition_form_reference':'学校制式认定表','reason':'本人申报'})
     claim=r.json()['item'];proof(client2,'social_claim',claim['id'],claim['version'])
     assert action(client2,'claims','social_claim',claim['id'],'submit').status_code==200
-    auth(client2,'collegehead');assert action(client2,'claims','social_claim',claim['id'],'return').status_code==200
+    auth(client2,'depthead');assert action(client2,'claims','social_claim',claim['id'],'return').status_code==200
     auth(client2,'teacher');item=detail(client2,'social_claim',claim['id'])['item']
     # 前端“保存补正并重新提交”：PUT → 上传 → submit，版本每步加一
     edit=put(client2,'/api/social/claims/'+claim['id'],{'project_id':pid,'period_id':'period2026','policy_id':pol,'recognition_form_reference':'补正后的认定表编号','auxiliary':[],'expected_version':item['version'],'reason':'按退回意见补正'})
@@ -193,7 +194,7 @@ def test_resubmit_saves_correction_and_upload_before_submit_check(setup_social,c
     assert submit.status_code==expected,submit.text
     saved=detail(client2,'social_claim',claim['id'])
     assert saved['item']['data']['recognition_form_reference']=='补正后的认定表编号' and len(saved['attachments'])==2  # 原材料与补正材料都保留
-    assert saved['item']['state']==('RETURNED' if expected==409 else 'SUBMITTED')
+    assert saved['item']['state']==('RETURNED' if expected==409 else 'DEPT')  # 2026-11-09 三级：从退回的教研室这一级接着审
     if expected==409:assert '退回补正的期限口径' in submit.json()['detail']
 
 

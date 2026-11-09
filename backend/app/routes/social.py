@@ -1,14 +1,14 @@
 """Social training within the existing authenticated portal and transaction boundary."""
 from decimal import Decimal as D
 from types import SimpleNamespace
-from fastapi import APIRouter, Request, HTTPException, Query
+from fastapi import APIRouter, Request, HTTPException, Query, UploadFile, File
 from fastapi.responses import Response
 from sqlalchemy import select, func, or_
 from ..core import command, read_operation, serial, audit, workflow, check_version, require_open_period, digest
 from ..models import Org, User, Role, Setting, Period, PointEntry, Notice, WorkflowEvent, Attachment
 from ..reference_data import TrainingProjectMaster, TrainingCourseMaster, TrainingClassMaster
 from ..social_models import SocialProject, SocialUnit, SocialPolicy, SocialClaim, SocialAnnual, SocialResource
-from ..social_schemas import ReportInfoIn,review_done,PrepIn,ProjectIn, UnitsIn, SocialAction, PolicyIn, PolicyUpdate, RecommendedPolicyIn, PolicyCalendarIn, PolicyData, ClaimIn, AnnualIn, ResourceIn, ResourceUpdate, DutiesIn, CourseIn, CourseLinkIn, CourseBatchIn, CaseNoteIn, CorrectionIn, ReportIn, PointReviewIn
+from ..social_schemas import ReportInfoIn,review_done,PrepIn,ProjectIn, UnitsIn, UnitData, SocialAction, PolicyIn, PolicyUpdate, RecommendedPolicyIn, PolicyCalendarIn, PolicyData, ClaimIn, AnnualIn, ResourceIn, ResourceUpdate, DutiesIn, CourseIn, CourseLinkIn, CourseBatchIn, CaseNoteIn, CorrectionIn, ReportIn, PointReviewIn
 from .. import social_training as st
 
 router=APIRouter(prefix='/api/social',tags=['社会培训项目与制度'])
@@ -313,7 +313,8 @@ def validate_units(db,a,project,rows):
 def import_units(ident:str,operation:str,data:UnitsIn,request:Request):
     def apply(db,a,s):
         obj=st.scoped(db,a,'social_project',ident,write=True);check_version(obj,data.expected_version)
-        if obj.state!='FILED':raise HTTPException(409,'仅已备案项目可登记培训明细')
+        # 2026-11-09 学院审核结项时也能导入（老师结项不再被明细拦住）。
+        if obj.state not in {'FILED','CLOSE_COLLEGE','CLOSE_REVIEW'}:raise HTTPException(409,'仅已备案或结项审核中的项目可登记培训明细')
         result=validate_units(db,a,obj,data.rows)
         if operation=='preview':return result
         if operation!='confirm':raise HTTPException(422,'导入操作无效')
@@ -323,6 +324,42 @@ def import_units(ident:str,operation:str,data:UnitsIn,request:Request):
         db.flush();event(db,a,'social_project',obj,'确认培训明细整批入库',before,data.reason)
         return result
     return command(request,data.model_dump(),'records.write',apply)
+
+# 2026-11-09 老师（项目负责人）自己上传一张参训明细表，学院不用再导。
+@router.get('/units/template.xlsx')
+def unit_sheet_template():
+    from ..unit_sheet import template_bytes
+    return Response(template_bytes(),media_type='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+                    headers={'Content-Disposition':"attachment; filename*=UTF-8''%E5%8F%82%E8%AE%AD%E6%98%8E%E7%BB%86%E8%A1%A8.xlsx"})
+
+
+@router.post('/projects/{ident}/unit-sheet')
+async def upload_unit_sheet(ident:str,request:Request,file:UploadFile=File(...)):
+    from ..unit_sheet import read_rows, build_units, KEY_PREFIX
+    from hashlib import sha256
+    from starlette.concurrency import run_in_threadpool
+    from ..core import current_actor
+    def authorize():
+        with request.app.state.sessions.begin() as db:current_actor(db,request,write=True)[0].require('portal.read')
+    await run_in_threadpool(authorize)  # 先确认登录再读表
+    data=await file.read(5*1024*1024+1);name=(file.filename or '').replace('\\','/').rsplit('/',1)[-1][:200]
+    rows=read_rows(data,name)
+    def apply(db,a,s):
+        obj=st.scoped(db,a,'social_project',ident,write=True)
+        if obj.owner_id!=a.id:a.require('records.write')
+        if obj.state not in {'FILED','CLOSE_COLLEGE','CLOSE_REVIEW'}:raise HTTPException(409,'项目备案后到结项通过前才能上传参训明细表')
+        units,errors,ok=build_units(db,obj,rows,name)
+        if not units:raise HTTPException(422,'表里没有能导入的行'+('：'+'；'.join(f"第{e['row']}行{e['reason']}" for e in errors[:5]) if errors else ''))
+        before=serial(obj)
+        for old in st.units(db,obj.id):
+            if old.external_key.startswith(KEY_PREFIX+obj.id+':'):db.delete(old)
+        db.flush()
+        parsed=[UnitData.model_validate(u) for u in units]
+        result=validate_units(db,a,obj,parsed)
+        for row in parsed:db.add(SocialUnit(project_id=obj.id,external_key=row.external_key,data=serial(row.model_dump())))
+        db.flush();event(db,a,'social_project',obj,f'上传参训明细表 {name}（导入{ok}行）',before,'上传参训明细表')
+        return {'imported':ok,'units':len(parsed),'effective':result['effective'],'excluded':result['excluded'],'errors':errors[:200],'error_count':len(errors)}
+    return command(request,{'name':name,'sha256':sha256(data).hexdigest()},'portal.read',apply)
 
 
 @router.post('/projects/{ident}/actions')
@@ -355,7 +392,8 @@ def project_action(ident:str,data:SocialAction,request:Request):
             if data.action=='approve':
                 if ap.same_person(db,'social_project',obj.id,a):handling['same_person']=ap.SAME_PERSON
                 if flow=='project':st.require_project_confirmed(obj)
-                elif obj.data.get('quality'):
+                elif not st.units(db,obj.id):raise HTTPException(409,'老师还没上传参训明细表')
+                if flow=='project_close' and obj.data.get('quality'):
                     # 学院结项核验即核对了主讲教师资格审查表和课件内容审查记录（两项审查都由学院做）。
                     q=obj.data['quality']
                     if not review_done(q.get('teacher_review')) or not review_done(q.get('courseware_review')):raise HTTPException(409,'还没有登记主讲教师资格审查和课件内容审查的百分比')
@@ -388,15 +426,16 @@ def project_action(ident:str,data:SocialAction,request:Request):
             if obj.state!='FILED' or not data.closeout:raise HTTPException(409,'请提交已备案项目的完整结项材料')
             st.require_project_confirmed(obj)
             if issues:=st.person_day_blockers([u.data for u in st.units(db,ident)]):raise HTTPException(409,'；'.join(issues))
-            if not st.units(db,ident):raise HTTPException(409,'尚无参训核算明细')
+            # 2026-11-09 老师结项不再要求先有参训明细（管理办法没有这条）；明细由学院在审核结项时导入，学院、学校通过前必须有。
             from ..lifecycle import pending_change
             if pending_change(db,'project',obj) is not None:raise HTTPException(409,'有一份变更正在审批，请等它办完或先撤回，再提交结项')
             if obj.data.get('report_pending') and (issues:=application_blockers(obj.data)):raise HTTPException(409,'结项前请先补齐上报信息（立项时可以不填）：'+'；'.join(issues))
             st.require_evidence(db,'social_project',ident);c=data.closeout
-            st.require_closeout_distribution(serial(c.model_dump()))
             if c.closed_on.isoformat()<obj.data['end_date'] or c.closed_on>st.today():raise HTTPException(422,'结项日期应在培训结束后且不晚于今天')
             if obj.data['category']=='subsidy' and not (c.province_receipt.strip() and c.special_evidence.strip()):raise HTTPException(422,'补贴项目须提交报送凭证及专项材料')
-            if c.satisfaction<85 and not (c.rectification.strip() and c.rectification_due):raise HTTPException(422,'满意度低于85%，须填写整改报告和整改办理期限')
+            if obj.data.get('one_skill') and not c.special_evidence.strip():raise HTTPException(422,'“一人一技”项目须另附重点群体参训、技能考证、就业转化等专项材料')
+            # 2026-11-09 老师只交成果报告；满意度、到账收入和分配由学校结项核验时登记。场地按立项带出。
+            c=c.model_copy(update={'location':'offsite' if (obj.data.get('venue') or {}).get('type')=='offsite' else 'onsite'})
             # 2026-11-09：老师提交结项先到学院审核，再到学校结项核验（学院、学校代办的直接到学校）；材料核对由学校在核验时勾选。
             # 老师以前勾过的核对项（在途数据）保留，学校核验时可以沿用。
             values=serial(c.model_dump());old_checked=list(obj.closeout.get('materials_checked',[])) if obj.closeout else []
@@ -407,11 +446,26 @@ def project_action(ident:str,data:SocialAction,request:Request):
             st.duty(db,a,'coordinator',obj.owner_id,obj.org_id)
             if obj.state!='CLOSE_REVIEW':raise HTTPException(409,'项目不在结项核验阶段')
             st.require_project_confirmed(obj)
+            if not st.units(db,ident):raise HTTPException(409,'老师还没上传参训明细表')
             if issues:=st.person_day_blockers([u.data for u in st.units(db,ident)]):raise HTTPException(409,'；'.join(issues))
-            st.require_closeout_distribution(obj.closeout)
+            # 2026-11-09 满意度和财务数在这一步由学校登记（老师结项不再填）；在途项目老师已填过的沿用。
+            merged=dict(obj.closeout)
+            if data.review is not None:merged.update(serial(data.review.model_dump()))
+            # 学校点“同意”即可：满意度不填按“满意”（85%），到账收入不填按已登记数或0；资金来源、留存等由财务处管（第二十一条），这里不拦。
+            if merged.get('satisfaction') in (None,''):merged['satisfaction']='85'
+            if merged.get('actual_income') in (None,''):merged['actual_income']='0'
+            if not str(merged.get('finance_reference') or '').strip():merged['finance_reference']='零收入项目，无到账收入' if D(str(merged['actual_income']))==0 else '以财务处到账记录为准'
+            if D(str(merged['satisfaction']))<85 and not merged.get('rectification_due'):raise HTTPException(422,'满意度低于85%，请定整改期限')
+            if D(str(merged['actual_income']))>0 and any(merged.get(k) not in (None,'') for k in ('funding_source','retained','personnel')):st.require_closeout_distribution(merged)  # 填了分配就按规则校验
+            else:
+                from ..social_schemas import Closeout
+                from pydantic import ValidationError
+                try:Closeout.model_validate({k:v for k,v in merged.items() if k!='college_checked_by'})
+                except ValidationError as exc:raise HTTPException(422,'结项登记有误：'+'；'.join(e['msg'] for e in exc.errors())) from None
+            obj.closeout=merged
             required={'plan','filing_form','roster','attendance','hours','process','assessment','outcomes'}
             # 材料核对由学校在这一步勾选（2026-11-04 起老师结项不再勾）；在途数据里老师已勾过的沿用。
-            checked=set(obj.closeout.get('materials_checked',[]))|set(data.materials_checked or [])
+            checked=set(obj.closeout.get('materials_checked',[]))|set(data.materials_checked if data.materials_checked is not None else {'plan','filing_form','roster','attendance','hours','process','assessment','outcomes'})
             # 有“立德树人与质量”的项目，结项还要核对主讲教师资格审查表和课件内容审查记录：两项审查由学院登记，登记了百分比就自动补上。
             if obj.data.get('quality'):
                 required|={'teacher_review','courseware_review'}
@@ -426,7 +480,7 @@ def project_action(ident:str,data:SocialAction,request:Request):
             handling={'flow':'project_close','decision':'approve','level':'school'}
         else:raise HTTPException(422,'项目操作无效')
         result=event(db,a,'social_project',obj,'项目办理：'+st.state_label(obj),before,data.reason,data.basis,handling)
-        if obj.state=='CLOSED':satisfaction_achievement(db,a,obj,data.reason)
+        if obj.state=='CLOSED':satisfaction_achievement(db,a,obj,data.reason);auto_claims(db,a,obj)
         if handling and handling.get('decision')=='return':
             from .. import message_push
             message_push.queue(db,[obj.owner_id],'培训项目被退回',obj.data['name']+'：'+data.reason)
@@ -512,6 +566,31 @@ def project_report_info(ident:str,data:ReportInfoIn,request:Request):
         result=event(db,a,'social_project',obj,'补填上报信息',before,data.reason,data.basis)
         return result
     return command(request,data.model_dump(mode='json'),'portal.read',apply)
+
+
+def auto_claims(db,a,project):
+    """2026-11-09 结项通过后，给参训明细里每位有工号的校内老师生成积分申报并直接送教研室，老师不用填表。
+    找不到含结项日期的开放周期或已启用口径的不生成（老师仍可自己申报）；试算有拦截的留成草稿，老师在待办里看到原因。"""
+    closed=date_from(project.closeout['closed_on'])
+    teachers=dict.fromkeys(t['teacher_id'] for u in st.units(db,project.id) for t in u.data['teachers'] if t.get('teacher_id') and t.get('staff_type','internal')=='internal')
+    period=db.scalar(select(Period).where(Period.state=='OPEN',Period.start_date<=closed,Period.end_date>=closed).order_by(Period.start_date.desc()).limit(1))
+    policy=period and db.scalar(select(SocialPolicy).where(SocialPolicy.period_id==period.id,SocialPolicy.state=='ACTIVE').limit(1))
+    if not policy:return
+    for tid in teachers:
+        user=db.get(User,tid)
+        if not user or not user.staff_no:continue
+        if db.scalar(select(SocialClaim.id).where(SocialClaim.project_id==project.id,SocialClaim.teacher_id==tid,SocialClaim.state!='VOID').limit(1)):continue
+        claim=SocialClaim(project_id=project.id,teacher_id=tid,period_id=period.id,policy_id=policy.id,
+                          data={'auxiliary':[],'recognition_form_reference':'结项通过后系统自动生成','auto':True})
+        db.add(claim);db.flush();before=serial(claim)
+        try:
+            with db.begin_nested():
+                claim.data={**claim.data,'submitted_on':st.today().isoformat(),'chain':3}
+                trial=st.point_trial(db,claim);st.require_unblocked(trial)
+                claim.snapshot=st.freeze(trial);claim.state=st.claim_first_state(db,tid)
+        except HTTPException:
+            db.refresh(claim)
+        event(db,a,'social_claim',claim,'结项通过，系统生成积分申报'+('' if claim.state=='DRAFT' else '：'+st.STATES[claim.state]),before,'结项通过后自动生成','')
 
 
 def satisfaction_achievement(db,a,project,reason):
@@ -632,24 +711,28 @@ def claim_action(ident:str,data:SocialAction,request:Request):
         stages={'SUBMITTED':('dean','DEAN'),'DEAN':('coordinator','COORDINATOR'),'COORDINATOR':('vice_president','APPROVED'),'APPROVED':('secretary','ARCHIVED')}
         if data.action=='submit':
             if a.id!=obj.teacher_id or obj.state not in {'DRAFT','RETURNED'}:raise HTTPException(403,'仅本人可提交待办申报')
-            st.require_evidence(db,'social_claim',ident)
+            back=obj.data.get('returned_stage') if obj.state=='RETURNED' else None
+            if back in stages:st.require_evidence(db,'social_claim',ident)  # 旧四级在途申报照旧要本人材料；三级申报用项目结项材料
             cfg=db.get(SocialPolicy,obj.policy_id).data
             if obj.state=='RETURNED' and cfg.get('resubmission_mode') is None:raise HTTPException(409,'退回补正的期限口径尚待学校确认')
             submitted=st.today().isoformat() if cfg.get('resubmission_mode')=='resubmission_date' else obj.data.get('submitted_on',st.today().isoformat())
             # 退回补正后从退回的那一级接着审（2026-11-04），不再从院长重走；4 级本身不变。
             # 先改好申报资料再试算冻结，否则冻结的依据和审批时重算的不一致。
-            resume=obj.data.get('returned_stage') if obj.state=='RETURNED' else None
-            resume=resume if resume in stages else None
+            resume=back if back in stages or back in st.CLAIM_FLOW else None
             kept={k:v for k,v in obj.data.items() if k not in ('returned_stage','resumed_from')}
-            obj.data={**kept,'submitted_on':submitted,**({'resumed_from':resume} if resume else {})}
+            obj.data={**kept,'submitted_on':submitted,**({'resumed_from':resume} if resume else {}),**({} if resume in stages else {'chain':3})}
             trial=st.point_trial(db,obj);st.require_unblocked(trial)
-            blockers=st.review_staff_blockers(db,SimpleNamespace(org_id=db.get(SocialProject,obj.project_id).org_id,data={'claim_id':obj.id,'teacher_id':obj.teacher_id,'created_by':obj.teacher_id}))
+            blockers=st.review_staff_blockers(db,SimpleNamespace(org_id=db.get(SocialProject,obj.project_id).org_id,data={'claim_id':obj.id,'teacher_id':obj.teacher_id,'created_by':obj.teacher_id}),
+                                              *(() if resume in stages else (('coordinator',),)))
             if blockers:raise HTTPException(409,'审批职责尚未就绪：'+'；'.join(blockers))
-            obj.snapshot=st.freeze(trial);obj.state=resume or 'SUBMITTED'
+            obj.snapshot=st.freeze(trial);obj.state=resume or st.claim_first_state(db,obj.teacher_id)
         elif data.action in {'approve','return'}:
-            if obj.state not in stages:raise HTTPException(409,'当前积分申报不在审批阶段')
-            code,next_state=stages[obj.state];st.duty(db,a,code,obj.teacher_id,db.get(SocialProject,obj.project_id).org_id)
-            st.check_project_conflicts(db,a,db.get(SocialProject,obj.project_id))
+            if obj.state not in stages and obj.state not in st.CLAIM_FLOW:raise HTTPException(409,'当前积分申报不在审批阶段')
+            if obj.state in st.CLAIM_FLOW:
+                st.claim_level_check(db,a,obj,db.get(SocialProject,obj.project_id));next_state=st.claim_next_state(db,obj)
+            else:
+                code,next_state=stages[obj.state];st.duty(db,a,code,obj.teacher_id,db.get(SocialProject,obj.project_id).org_id)
+                st.check_project_conflicts(db,a,db.get(SocialProject,obj.project_id))
             if data.action=='return':
                 obj.data={**obj.data,'returned_stage':obj.state};obj.state='RETURNED'
                 from ..message_push import queue

@@ -252,7 +252,7 @@ def records(db, actor, tab):
             row = waiting_condition(db, actor, obj, describe(db, actor, kind, obj))
             action = event.action.replace('Excel', '表格')
             if action.startswith(('积分认定：', '积分更正：')):
-                action = {'DEAN':'院长初审通过', 'COORDINATOR':'归口复审通过', 'APPROVED':'分管审批通过',
+                action = {'DEAN':'院长初审通过', 'COORDINATOR':'归口复审通过', 'APPROVED':'分管审批通过', 'COLLEGE':'教研室审核通过', 'SCHOOL':'学院审批通过',
                           'ARCHIVED':'归档入账', 'RETURNED':'退回补正'}.get(event.after_state, action)
             elif action.startswith('项目办理：'):
                 action = {('COLLEGE','SUBMITTED'):'学院审批通过', ('SUBMITTED','FILED'):'完成学校备案',

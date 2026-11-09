@@ -87,7 +87,7 @@ def test_manual_course_approval_link_work_close_claim_and_archive(setup_social,c
         'recognition_form_reference':'重复课程入口','reason':'重复建草稿检查'})
     assert duplicate.status_code==409 and '已有本人积分申请' in duplicate.json()['detail']
     proof(c,'social_claim',claim['id'],claim['version']);assert action(c,'claims','social_claim',claim['id'],'submit').status_code==200
-    for user in ('collegehead','reviewer','vice','depthead'):
+    for user in ('depthead','collegehead','reviewer'):  # 2026-11-09 三级
         auth(c,user);r=action(c,'claims','social_claim',claim['id'],'approve');assert r.status_code==200,r.text
     auth(c,'teacher');p=progress(c,ident)
     assert p['label']=='已认定积分' and p['steps'][-1]['done'] and p['claim']['id']==claim['id']

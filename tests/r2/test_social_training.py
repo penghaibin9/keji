@@ -237,7 +237,7 @@ def test_full_recognition_roles_and_no_duplicate_booking(setup_social,client2,ap
     claim=r.json()['item'];assert r.json()['trial']['teaching']=='1.56'
     proof(client2,'social_claim',claim['id'],claim['version']);r=action(client2,'claims','social_claim',claim['id'],'submit');assert r.status_code==200,r.text
     auth(client2,'schooladmin');assert action(client2,'claims','social_claim',claim['id'],'approve').status_code==403
-    for user in ('collegehead','reviewer','vice','depthead'):
+    for user in ('depthead','collegehead','reviewer'):  # 2026-11-09 三级
         auth(client2,user);r=action(client2,'claims','social_claim',claim['id'],'approve');assert r.status_code==200,r.text
     assert r.json()['item']['state']=='ARCHIVED'
     assert action(client2,'claims','social_claim',claim['id'],'approve').status_code==409
@@ -260,7 +260,7 @@ def test_returned_claim_deadline_requires_confirmed_basis(setup_social,client2,m
     assert r.status_code==200,r.text
     claim=r.json()['item'];proof(client2,'social_claim',claim['id'],claim['version'])
     assert action(client2,'claims','social_claim',claim['id'],'submit').status_code==200
-    auth(client2,'collegehead');assert action(client2,'claims','social_claim',claim['id'],'return').status_code==200
+    auth(client2,'depthead');assert action(client2,'claims','social_claim',claim['id'],'return').status_code==200
     monkeypatch.setattr(st,'today',lambda:date(2026,10,8));auth(client2,'teacher')
     result=action(client2,'claims','social_claim',claim['id'],'submit')
     assert result.status_code==expected_status,result.text
@@ -310,13 +310,13 @@ def recognized(setup_social,client2,monkeypatch,request):
     assert r.status_code==200,r.text
     claim=r.json()['item'];proof(client2,'social_claim',claim['id'],claim['version'])
     assert action(client2,'claims','social_claim',claim['id'],'submit').status_code==200
-    for user in ('collegehead','reviewer','vice','depthead'):
+    for user in ('depthead','collegehead','reviewer'):  # 2026-11-09 三级
         auth(client2,user);r=action(client2,'claims','social_claim',claim['id'],'approve');assert r.status_code==200,r.text
     return claim['id'],pol
 
 
 def test_correction_is_reviewed_append_only_and_summary_tracks_it(recognized,client2,app2):
-    ident,_=recognized;original=detail(client2,'social_claim',ident)['item']['snapshot']
+    ident,_=recognized;auth(client2,'depthead');original=detail(client2,'social_claim',ident)['item']['snapshot']
     auth(client2,'teacher');r=post(client2,'/api/social/corrections',{'claim_id':ident,'period_id':'period2026','teaching':'-0.56','auxiliary':'0','decision_reference':'学校正式更正决定','reason':'原始签到核实后更正'})
     assert r.status_code==200,r.text
     correction=r.json()['item'];proof(client2,'social_resource',correction['id'],correction['version'])
@@ -526,7 +526,7 @@ def test_missing_closeout_materials_and_chinese_project_search(setup_social,clie
     assert import_rows(client2,pid,[row()]).status_code==200
     r=action(client2,'projects','social_project',pid,'close_submit',closeout={'closed_on':'2026-09-02','outcome_report':'材料待补','satisfaction':84,'rectification':'补齐材料并整改','rectification_due':'2026-12-31','actual_income':0,'finance_reference':'零收入核验','location':'onsite'})
     assert r.status_code==200,r.text
-    assert action(client2,'projects','social_project',pid,'close').status_code==409
+    assert action(client2,'projects','social_project',pid,'close',materials_checked=[]).status_code==409
     returned=action(client2,'projects','social_project',pid,'return')
     assert returned.status_code==200,returned.text
     assert returned.json()['item']['state']=='FILED'

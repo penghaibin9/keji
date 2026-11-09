@@ -55,7 +55,7 @@ def close_review(ident: str, request: Request):
 def close_check(ident: str, request: Request):
     def read(db, a, s):
         obj = lc.load(db, a, 'project', ident)
-        return {'gaps': lc.close_gaps(db, obj), 'points': lc.points_line(db, obj)}
+        return {'gaps': lc.close_gaps(db, obj), 'notes': lc.close_notes(db, obj), 'points': lc.points_line(db, obj)}
     return read_operation(request, 'portal.read', read)
 
 

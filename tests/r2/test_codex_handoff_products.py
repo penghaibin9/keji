@@ -88,13 +88,13 @@ def test_claim_submission_requires_available_reviewers_without_self_review(setup
     pol=policy(client2,True);ident=claim_draft(client2,pid,pol)
     for assigned,active in [([],True),(['depthead'],False),(['teacher'],True)]:
         with app2.state.sessions.begin() as db:
-            cfg=db.get(Setting,'social_training_duties');cfg.value={**cfg.value,'secretary':assigned}
+            cfg=db.get(Setting,'social_training_duties');cfg.value={**cfg.value,'coordinator':assigned}
             db.get(User,'depthead').active=active
         response=action(client2,'claims','social_claim',ident,'submit')
-        assert response.status_code==409 and '教学秘书' in response.text
+        assert response.status_code==409 and '归口学院复审' in response.text  # 2026-11-09 三级：提交前确认学校一级有人可办
         with app2.state.sessions() as db:assert db.get(SocialClaim,ident).state=='DRAFT'
     with app2.state.sessions.begin() as db:
-        cfg=db.get(Setting,'social_training_duties');cfg.value={**cfg.value,'secretary':['depthead']}
+        cfg=db.get(Setting,'social_training_duties');cfg.value={**cfg.value,'coordinator':['reviewer']}
         db.get(User,'depthead').active=True
     assert action(client2,'claims','social_claim',ident,'submit').status_code==200
 

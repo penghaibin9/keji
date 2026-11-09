@@ -94,11 +94,12 @@ test('待确认草稿编辑表单覆盖日期、核算方式、层级和场景',
  c.teacherField=()=>'';await socialAction('social-detail','social_project|p1',c);assert.match(c.modalData.body,/台账草稿待核实/);assert.match(c.modalData.body,/不能直接正式备案/);await socialAction('social-project-edit','',c);
  for(const name of ['dates_confirmed','mode_confirmed','level_confirmed','scene_confirmed'])assert.ok(c.formData.body.includes(`name="${name}"`));
 });
-test('结项表单要求明确资金分类，零收入空来源按空值提交',async()=>{
+test('老师结项只交成果报告，不填资金和满意度（管理办法第十三条）',async()=>{
  const c=context({'/social/projects':{}});await socialAction('social-close','',c);
- assert.match(c.formData.body,/name="funding_source"/);assert.match(c.formData.body,/name="funding_basis"/);assert.match(c.formData.body,/政府专项按主管部门规定/);
- await c.formData.save({reason:'合成结项',basis:'合成依据',funding_source:'',actual_income:0,retained:'',personnel:'',rectification_due:'',settlement_on:''});
- assert.equal(c.requests.findLast(r=>r.options?.body?.closeout).options.body.closeout.funding_source,null);
+ for(const name of ['funding_source','funding_basis','actual_income','satisfaction','finance_reference','retained'])assert.doesNotMatch(c.formData.body,new RegExp('name="'+name+'"'),name);
+ assert.match(c.formData.body,/name="outcome_report"/);assert.doesNotMatch(c.formData.body,/办理说明/);
+ await c.formData.save({closed_on:'2026-03-02',outcome_report:'成果'});
+ const closeout=c.requests.findLast(r=>r.options?.body?.closeout).options.body.closeout;assert.equal(closeout.outcome_report,'成果');assert.equal(Object.hasOwn(closeout,'funding_source'),false);
 });
 test('台账人员关联使用明确账号与最新版本，拒绝只凭姓名',async()=>{
  const d={id:'l1',version:7,can_draft:true,data:{rows:[{row_no:4,name:'合成项目',allocations:[{name:'同名教师'}]}]},teacher_options:[{id:'t1',name:'同名教师',employee_no:'J001'},{id:'t2',name:'同名教师',employee_no:'J002'}]};
@@ -230,5 +231,5 @@ test('复制为新一期带入上一期资料但不带编号、期次和日期�
  assert.match(c.formData.options.hint,/新的项目编号、期次和培训日期/);
  // 结项表：按培训结束日期和培训场地带出默认值
  await socialAction('social-close','',c);
- assert.match(c.formData.body,/name="closed_on" value="2026-03-02"/);assert.match(c.formData.body,/name="location" value="offsite"/);
+ assert.match(c.formData.body,/name="closed_on" value="2026-03-02"/);assert.doesNotMatch(c.formData.body,/name="location"/,'场地由后端按立项带出');assert.match(c.formData.body,/name="special_evidence"/,'一人一技另附专项材料');
 });
