@@ -124,17 +124,16 @@ function baseForm(c){
   +cond('onsite=no',c.field('partner','共建单位','text','',{required:false,full:true,placeholder:'合作单位全称'}))
   +c.field('location','具体地点','text','',{full:true,placeholder:'例如：实训楼 101 / XX 镇 XX 村'})
   +chips(c,'usage',USAGES,{multi:true,label:'用途',checked:['practice']})
-  +`<div class="form-field full"><label for="f-recognition">认定依据 <b>*</b></label><input id="f-recognition" name="recognition" maxlength="200" required placeholder="协议、发文或会议纪要的名称和编号">${quick(c,'recognition',[['共建协议','共建协议（编号：）'],['学校发文','学校发文（文号：）'],['学院会议纪要','学院会议纪要（日期：）']])}</div>`
-  +`<details class="form-field full qa-more"><summary>更多（一般不用填）</summary><div class="form-grid">${chips(c,'level',[['school','校级'],['city','市级'],['province','省级及以上']],{label:'基地级别',checked:['school']})}${c.field('established_on','设立日期','date',today())}${c.field('manager_name','基地负责人','text','',{required:false,placeholder:'不填就是本人'})}${c.field('code','来源编号（不填自动生成）','text','',{required:false})}</div></details>`;
+  +`<details class="form-field full qa-more"><summary>选填：认定依据、级别、设立日期、负责人</summary><div class="form-grid"><div class="form-field full"><label for="f-recognition">认定依据</label><input id="f-recognition" name="recognition" maxlength="200">${quick(c,'recognition',[['共建协议','共建协议（编号：）'],['学校发文','学校发文（文号：）'],['学院会议纪要','学院会议纪要（日期：）']])}</div>${chips(c,'level',[['school','校级'],['city','市级'],['province','省级及以上']],{label:'基地级别',checked:['school'],required:false})}${c.field('established_on','设立日期','date','',{required:false})}${c.field('manager_name','基地负责人','text','',{required:false,placeholder:'不填就是本人'})}${c.field('code','来源编号（不填自动生成）','text','',{required:false})}</div></details>`;
  c.formModal('新申报培训基地',wrap(body),async(v,form)=>{
   const usages=picked(form,'usage',USAGES);
-  if(!text(form,'name'))throw Error('请填写基地名称');if(!usages.length)throw Error('请选择用途');if(!text(form,'recognition'))throw Error('请填写认定依据');
+  if(!text(form,'name'))throw Error('请填写基地名称');if(!usages.length)throw Error('请选择用途');
   const onsite=radio(form,'onsite')!=='no';if(!onsite&&!text(form,'partner'))throw Error('校外基地请填写共建单位');
   const data={code:text(form,'code')||autoCode('JD'),name:text(form,'name'),teacher_id:null,usages,onsite,partner:text(form,'partner'),level:radio(form,'level')||'school',
    established_on:text(form,'established_on')||today(),manager_name:text(form,'manager_name'),recognized_on:null,location:text(form,'location'),recognition:text(form,'recognition')};
   await c.api('/applications/bases',{method:'POST',body:{data,reason:'申请培训基地'}});
-  c.closeModal();c.toast('已提交学院审批。认定后每年确认一次是否还在使用。');await c.render?.();
- },{submit:'提交学院审批',stepper:false,contextLabel:'培训基地 / 新申报',hint:'校外基地的共建协议在学校审批前要补上。'});
+  c.closeModal();c.toast('已提交学院审批');await c.render?.();
+ },{submit:'提交学院审批',stepper:false,contextLabel:'培训基地 / 新申报',hint:''});
  bind();
 }
 

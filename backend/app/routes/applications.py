@@ -324,6 +324,8 @@ def trainer_recommend(ident: str, data: Reason, request: Request):
 
 def base_values(db, applicant, college, data):
     values = serial(data.model_dump())
+    if not values.get('established_on'):
+        values['established_on'] = apps.school_today().isoformat()
     if data.project_id:
         p = db.get(SocialProject, data.project_id)
         if p is None or p.org_id != college.id:
@@ -420,6 +422,11 @@ def action(ident: str, data: ApplicationAction, request: Request):
             raise HTTPException(409, '申请不在审批中')
         if data.action == 'approve' and level in ('hr', 'jwc') and not (data.basis or '').strip():
             raise HTTPException(422, '请填写' + ('资格认定文号和日期' if level == 'hr' else '备案依据'))
+        if data.action == 'approve' and flow == 'base' and level == 'school' and not str(obj.data.get('recognition') or '').strip():
+            # 申报时认定依据选填，学校审批认定基地时必须有：审批人在“依据”里填协议、发文或会议纪要，记为认定依据。
+            if not (data.basis or '').strip():
+                raise HTTPException(422, '请在“依据”里填写认定依据（协议、发文或会议纪要的名称和编号）')
+            obj.data = {**obj.data, 'recognition': data.basis.strip()}
         handling = ap.check_handler(db, a, applicant, level, obj.org_id)
         handling.update(flow=flow, decision=data.action)
         if data.courseware is not None:

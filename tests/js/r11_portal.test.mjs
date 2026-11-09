@@ -1610,11 +1610,11 @@ test('无错待确认导入继续显示确认入库',async()=>{
  await e.t.handlers.import('ok');const html=e.node('#modal-root').innerHTML;
  assert.match(html,/data-action="import-confirm"/);assert.doesNotMatch(html,/data-action="import-discard"|导入有误/);
 });
-test('过期资质详情提示有效期并解释记录版本',async()=>{
+test('过期资质详情提示有效期，只保留审核流转',async()=>{
  const e=engine(async()=>({qualification:{id:'q',teacher_id:'u',name:'隔离证书',category:'职业资格',version:3,state:'DRAFT',certificate_no:'TEST',issuer:'测试机构',obtained:'1999-01-01',expires:'2000-01-01'},attachments:[],events:[],revisions:[]}));
  await vm.runInContext("showQualification('q')",e.ctx);
  const html=e.node('#modal-root').innerHTML;
- assert.match(html,/已超过有效期/);assert.match(html,/记录版本 3（含上传与办理）/);
+ assert.match(html,/已超过有效期/);assert.match(html,/<summary>审核流转<\/summary>/);assert.doesNotMatch(html,/记录版本|历史版本/);
 });
 
 test('秘书双月报送待办有独立分类、计数与办理入口',async()=>{
@@ -1699,10 +1699,10 @@ test('本人授课表省去重复教师列，行内展开仍对应正确列数�
 });
 
 
-test('本人核对清单保留提交时间而省去重复姓名，单页只显示记录数',async()=>{
+test('本人核对清单只是一张表：提交时间、业务、原因、状态，不带筛选',async()=>{
  const e=engine(async()=>({items:[{id:'d',created_at:'2026-10-17T00:00:00Z',teacher_id:'u',object_type:'record',reason:'待核对人次',state:'OPEN'}],total:1,page:1,size:20}),'teacher');
  e.t.setState('disputes');const html=await e.t.pages.disputes();
- assert.match(html,/>提交时间</);assert.doesNotMatch(html,/>教师</);assert.match(html,/2026/);assert.match(html,/等待授权人员核对/);assert.doesNotMatch(html,/class="pagination"/);
+ assert.match(html,/>提交时间</);assert.doesNotMatch(html,/>教师</);assert.match(html,/2026/);assert.match(html,/待核对/);assert.doesNotMatch(html,/class="pagination"|id="filters"|统计周期/);
 });
 
 test('教师导出空页面只显示一个空状态并提供有权限的业务返回入口',async()=>{
@@ -1768,10 +1768,10 @@ test('教师通知使用阅读列表并转义标题与摘要，管理角色保�
  const manager=engine(async()=>answer,'school');manager.t.setState('notices');assert.match(await manager.t.pages.notices(),/<table/);
 });
 
-test('教师证书详情仅保留一个业务标题，材料和历史记录仍完整可读',async()=>{
+test('教师证书详情仅保留一个业务标题，审核流转默认展开',async()=>{
  const e=engine(async()=>({qualification:{id:'q',teacher_id:'u',name:'<证书>',category:'教学资质',state:'APPROVED',certificate_no:'Q1',issuer:'<机构>',obtained:'2026-01-01',expires:null,version:2},attachments:[],events:[],revisions:[]}), 'teacher');
  await e.t.handlers.qualification('q');const html=e.node('#modal-root').innerHTML;
- assert.equal((html.match(/<h2>/g)||[]).length,1);assert.match(html,/qualification-facts/);assert.match(html,/&lt;机构&gt;/);assert.match(html,/长期有效/);assert.match(html,/记录版本 2/);assert.match(html,/审核记录与历史版本/);
+ assert.equal((html.match(/<h2>/g)||[]).length,1);assert.match(html,/qualification-facts/);assert.match(html,/&lt;机构&gt;/);assert.match(html,/长期有效/);assert.match(html,/<details class="detail-fold mt20" open><summary>审核流转/);assert.doesNotMatch(html,/历史版本/);
 });
 
 
@@ -1785,9 +1785,9 @@ test('切换页面在最新渲染完成后回到顶部，旧请求和当前页�
 });
 
 
-test('教师按周期查询考核后保留展开的记录区，筛选名称对应本人环节',async()=>{
+test('老师的三级考核只有本人历年考核一张表，不带筛选和流程说明',async()=>{
  const e=engine(async()=>({items:[],total:0,page:1,size:20}),'teacher');e.t.setState('assessment',{},1,1,'period');
- const html=await e.t.pages.assessment();assert.match(html,/<details class="teacher-assess-list" open>/);assert.match(html,/待我确认/);assert.match(html,/已过本人环节/);assert.doesNotMatch(html,/本级 =/);
+ const html=await e.t.pages.assessment();assert.match(html,/历年考核/);assert.doesNotMatch(html,/teacher-assess-list|查看完整办理流程|待我确认|id="filters"|本级 =/);
 });
 
 

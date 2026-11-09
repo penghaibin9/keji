@@ -86,3 +86,30 @@ def test_teacher_qualification_needs_only_name(client2):
     assert r.status_code == 200, r.text
     assert r.json()['certificate_no'] == q['certificate_no'] and r.json()['category'] == q['category']
     assert other['certificate_no'] != q['certificate_no']
+
+
+def test_base_application_recognition_optional_until_school_approval(client2, app2):
+    """2026-11-09：新申报基地时认定依据、设立日期、级别都选填；学校审批认定时必须有认定依据（审批人在“依据”里补）。"""
+    from test_applications import act
+    from test_social_training import setup_social  # noqa: F401
+    from app.models import User, Setting
+    with app2.state.sessions.begin() as db:
+        if not db.get(User, 'reviewer'):
+            db.add(User(id='reviewer', username='reviewer', name='隔离审核人', org_id='school', role_id='role-school', password_hash=HASH, must_change_password=False, active=True))
+        if not db.get(Setting, 'social_training_duties'):
+            db.add(Setting(key='social_training_duties', value={'coordinator': ['reviewer']}))
+    c = client2
+    auth(c, 'teacher')
+    r = post(c, '/api/applications/bases', {'data': {'code': 'V2-B1', 'name': '简化基地', 'location': '实训楼', 'onsite': True, 'usages': ['practice']}, 'reason': '申请基地'})
+    assert r.status_code == 200, r.text
+    item = r.json()['item']
+    assert item['data']['established_on'] and item['data']['level'] == 'school' and item['data']['recognition'] == ''
+    auth(c, 'collegehead')
+    assert act(c, item['id'], 'approve').status_code == 200
+    auth(c, 'reviewer')
+    r = act(c, item['id'], 'approve')
+    assert r.status_code == 422 and '认定依据' in r.text, r.text
+    version = c.get('/api/applications/' + item['id']).json()['item']['version']
+    r = post(c, '/api/applications/' + item['id'] + '/actions', {'action': 'approve', 'expected_version': version, 'reason': '同意', 'basis': '学院会议纪要（2026-11-01）'})
+    assert r.status_code == 200, r.text
+    assert c.get('/api/applications/' + item['id']).json()['item']['data']['recognition'] == '学院会议纪要（2026-11-01）'

@@ -568,9 +568,10 @@ class BaseApplyData(Input):
     name: Name
     location: str = Field(default='', max_length=500)
     onsite: bool = True
-    recognition: Text
+    # 2026-11-09 用户定：认定依据、设立日期申报时选填（级别默认校级）；认定依据改到学校审批时补（见 routes/applications.py）。
+    recognition: str = Field(default='', max_length=2000)
     usages: list[Literal['practice', 'ideology']] = Field(min_length=1, max_length=2)
-    established_on: date
+    established_on: date | None = None
     partner: str = Field(default='', max_length=200)
     # 基地负责人（校外基地可填共建单位联系人）与认定日期，和设立日期、审批生效日期分开记录。
     manager_name: str = Field(default='', max_length=80)
