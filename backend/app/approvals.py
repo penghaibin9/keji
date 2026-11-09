@@ -30,13 +30,14 @@ LEVEL_VERB = {'dept': '审核', 'college': '审批', 'school': '审批', 'hr': '
 SAME_PERSON = '同一人连审'
 
 # 每类申请：审批链、每一级对应的 state、生效后的 state、名称。
-# 2026-11-04 精简：去掉制度未规定的审批级（培训课程去教研室；校内培训师去教研室、学校；项目结项去学院核验）。
+# 2026-11-04 精简：去掉制度未规定的审批级（培训课程去教研室；校内培训师去教研室、学校）。
+# 2026-11-09 用户定：项目结项恢复为学院审核 → 学校核验，学校通过才算已结项。
 # legacy_chain 是精简前的链路：精简前已提交、还在审批中的申请按原链路走完，新提交的走新链路
 # （新提交在 data 里记 chain=2，结项记 close_chain=2；不改数据库结构）。
 FLOWS = {
     'project': {'label': '培训项目申请', 'chain': ('college', 'school'), 'states': {'college': 'COLLEGE', 'school': 'SUBMITTED'},
                 'done': 'FILED', 'final': '已备案', 'object_type': 'social_project'},
-    'project_close': {'label': '培训项目结项', 'chain': ('school',), 'legacy_chain': ('college', 'school'), 'marker': 'close_chain',
+    'project_close': {'label': '培训项目结项', 'chain': ('college', 'school'), 'legacy_chain': ('college', 'school'), 'marker': 'close_chain',
                       'states': {'college': 'CLOSE_COLLEGE', 'school': 'CLOSE_REVIEW'},
                       'done': 'CLOSED', 'final': '已结项', 'object_type': 'social_project'},
     # 培训课程申报（管理办法第十六条课程遴选）：从我的课程带出（teaching_course）和新填一门（course）是同一条流程。

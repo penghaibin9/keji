@@ -36,6 +36,29 @@ def running_board(kind: str, request: Request):
     return read_operation(request, 'portal.read', lambda db, a, s: lc.board(db, a, kind))
 
 
+@router.get('/mine/{kind}')
+def my_items(kind: str, request: Request):
+    return read_operation(request, 'portal.read', lambda db, a, s: lc.my_items(db, a, kind))
+
+
+@router.get('/queue/{kind}')
+def approval_queue(kind: str, request: Request):
+    return read_operation(request, 'portal.read', lambda db, a, s: lc.approval_queue(db, a, kind))
+
+
+@router.get('/close-review/{ident}')
+def close_review(ident: str, request: Request):
+    return read_operation(request, 'portal.read', lambda db, a, s: lc.close_review(db, a, lc.load(db, a, 'project', ident)))
+
+
+@router.get('/close-check/{ident}')
+def close_check(ident: str, request: Request):
+    def read(db, a, s):
+        obj = lc.load(db, a, 'project', ident)
+        return {'gaps': lc.close_gaps(db, obj), 'points': lc.points_line(db, obj)}
+    return read_operation(request, 'portal.read', read)
+
+
 @router.get('/{kind}/{ident}')
 def archive(kind: str, ident: str, request: Request):
     return read_operation(request, 'portal.read', lambda db, a, s: lc.view(db, a, kind, lc.load(db, a, kind, ident)))

@@ -397,11 +397,11 @@ def project_action(ident:str,data:SocialAction,request:Request):
             if c.closed_on.isoformat()<obj.data['end_date'] or c.closed_on>st.today():raise HTTPException(422,'结项日期应在培训结束后且不晚于今天')
             if obj.data['category']=='subsidy' and not (c.province_receipt.strip() and c.special_evidence.strip()):raise HTTPException(422,'补贴项目须提交报送凭证及专项材料')
             if c.satisfaction<85 and not (c.rectification.strip() and c.rectification_due):raise HTTPException(422,'满意度低于85%，须填写整改报告和整改办理期限')
-            # 2026-11-04 精简：结项提交后直接到学校结项核验，不再经学院结项核验；材料核对由学校在核验时勾选。
+            # 2026-11-09：老师提交结项先到学院审核，再到学校结项核验（学院、学校代办的直接到学校）；材料核对由学校在核验时勾选。
             # 老师以前勾过的核对项（在途数据）保留，学校核验时可以沿用。
             values=serial(c.model_dump());old_checked=list(obj.closeout.get('materials_checked',[])) if obj.closeout else []
             if not values.get('materials_checked') and old_checked:values['materials_checked']=old_checked
-            obj.closeout=values;obj.data=ap.mark_new_chain('project_close',obj.data);obj.state='CLOSE_REVIEW'
+            obj.closeout=values;obj.data=ap.mark_new_chain('project_close',obj.data);obj.state='CLOSE_COLLEGE' if via_college else 'CLOSE_REVIEW'
             handling={'flow':'project_close','decision':'submit'}
         elif data.action=='close':
             st.duty(db,a,'coordinator',obj.owner_id,obj.org_id)

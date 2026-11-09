@@ -798,3 +798,264 @@ def board(db, a, kind):
                         'state_label': change_state_label(change),
                         'rows': [{'label': r.get('label'), 'from_text': r.get('from_text'), 'to_text': r.get('to_text')} for r in change.data.get('rows') or []]})
     return {'type': kind, 'type_label': TYPES[kind], 'cards': cards, 'total': total, 'changes': changes}
+
+
+# ---- 2026-11-09 设计图 v2：老师“我的X”三步列表、学院和学校“待我审批”、积分预估 ----
+# 状态只用 6 个：草稿、审批中、运行中、变更中、结项中（课程/基地/师资叫“停用中”）、已结项（“已停用”）。
+
+STATUS6 = {'draft': '草稿', 'review': '审批中', 'run': '运行中', 'change': '变更中', 'closing': '结项中', 'done': '已结项'}
+STAGE_OF = {'draft': 'apply', 'review': 'apply', 'run': 'run', 'change': 'run', 'closing': 'close', 'done': 'close'}
+REVIEW_STATES = ('COLLEGE', 'SUBMITTED', 'DEPT', 'SCHOOL', 'HR', 'JWC')
+
+
+def status6(db, kind, obj):
+    s = obj.state
+    if kind == 'project':
+        if s in ('DRAFT', 'RETURNED', 'WITHDRAWN'):
+            return 'draft'
+        if s in ('COLLEGE', 'SUBMITTED'):
+            return 'review'
+        if s in ('CLOSE_COLLEGE', 'CLOSE_REVIEW'):
+            return 'closing'
+        if s == 'CLOSED':
+            return 'done'
+        return 'change' if pending_change(db, kind, obj) is not None else 'run'
+    if s in ('RETURNED', 'WITHDRAWN'):
+        return 'draft'
+    if s in REVIEW_STATES:
+        return 'review'
+    if s == STOPPED:
+        return 'done'
+    if running(kind, obj):
+        return 'change' if pending_change(db, kind, obj) is not None else 'run'
+    return 'draft'
+
+
+def status_label(kind, code):
+    if kind != 'project' and code in ('closing', 'done'):
+        return '停用中' if code == 'closing' else '已停用'
+    return STATUS6[code]
+
+
+def last_return(db, kind, obj):
+    """最近一次退回的原因和退回人（还处在退回后的状态时才有意义）。"""
+    for ev in reversed(events(db, kind, obj)):
+        h = (ev.after or {}).get('handling') or {}
+        if h.get('decision') == 'return':
+            return {'reason': ev.reason or '', 'by': ev.actor_name or '', 'on': str(ev.created_at)[:10], 'flow': h.get('flow')}
+        if h.get('decision') in ('submit', 'approve', 'refile'):
+            return None
+    return None
+
+
+def active_policy(db):
+    from .social_models import SocialPolicy
+    return db.scalar(select(SocialPolicy).where(SocialPolicy.state == 'ACTIVE').order_by(SocialPolicy.created_at.desc()).limit(1))
+
+
+def points_estimate(db, project):
+    """按学校现行社会培训积分口径（social_training.point_trial 的同一套公式）预估每位校内老师的积分。
+    只用于显示“预计积分 / 将记积分”；正式积分仍以积分申报审批归档为准。口径未启用时返回 None。"""
+    from . import social_training as st
+    policy = active_policy(db)
+    cfg = (policy.data if policy else None) or {}
+    if not cfg.get('cap_mode'):
+        return None
+    p = project.data or {}
+    D = st.D
+    try:
+        standard = D(30 if p.get('class_type') == 'technical' else 50)
+        level = D({'province': '1.2', 'city': '1.1', 'school': '1.0'}[p.get('level') or 'school'])
+        scene = D({'dispatched': '1.3', 'full_day': '1.1', 'ordinary': '1.0'}[p.get('scene') or 'ordinary'])
+    except KeyError:
+        return None
+    out = {}
+    for u in st.units(db, project.id):
+        count = st.unit_counts(u.data)['effective']
+        ratio = D(count) / standard
+        base = min(ratio, D(2)) if cfg.get('cap_mode') == 'ratio_cap' else (D(2) if count > standard else ratio)
+        for t in u.data.get('teachers') or []:
+            if t.get('staff_type') == 'external' or not t.get('teacher_id'):
+                continue
+            role = D({'lecturer': '1', 'instructor': '0.8', 'manager': '0.6'}.get(t.get('role'), '1'))
+            out[t['teacher_id']] = out.get(t['teacher_id'], D(0)) + base * level * scene * role
+    return {k: st.number(v) for k, v in out.items()}
+
+
+def points_booked(db, project):
+    """已归档入账的社会培训积分（按老师）。"""
+    from .social_models import SocialClaim
+    out = {}
+    for c in db.scalars(select(SocialClaim).where(SocialClaim.project_id == project.id, SocialClaim.state == 'ARCHIVED')):
+        total = ((c.snapshot or {}).get('trial') or {}).get('total')
+        if total is not None:
+            out[c.teacher_id] = str(Decimal(str(out.get(c.teacher_id, 0))) + Decimal(str(total)))
+    return out
+
+
+def points_line(db, project):
+    est = points_estimate(db, project)
+    if not est:
+        return ''
+    names = dict(db.execute(select(User.id, User.name).where(User.id.in_(list(est)))).all())
+    order = sorted(est, key=lambda k: (k != project.owner_id, names.get(k, '')))
+    return '、'.join(names.get(k, k) + ('（负责人）' if k == project.owner_id else '') + ' ' + est[k] + ' 分' for k in order)
+
+
+def close_gaps(db, project):
+    """结项前查缺：按积分口径说明缺了会怎样。"""
+    from . import social_training as st
+    gaps = []
+    rows = st.units(db, project.id)
+    if not rows:
+        gaps.append('还没有参训明细，人次和积分都无法核算')
+    files = st.attachments(db, 'social_project', project.id)
+    names = [str(getattr(f, 'name', '') or (f.get('name') if isinstance(f, dict) else '')) for f in files]
+    if not any(('签到' in n or '名册' in n or '名单' in n) for n in names):
+        gaps.append('缺签到表或学员名册，参训人次不能认定，不计积分')
+    if not any(n.lower().endswith(('.jpg', '.jpeg', '.png', '.heic', '.webp')) for n in names):
+        gaps.append('缺现场照片，过程材料不全')
+    if (project.data or {}).get('category') == 'subsidy' and not any('报送' in n or '凭证' in n for n in names):
+        gaps.append('缺报送凭证，补贴性培训不计积分')
+    return gaps
+
+
+def _date_line(kind, obj):
+    d = obj.data or {}
+    if kind == 'project':
+        return (d.get('start_date') or '') + ' 至 ' + (d.get('end_date') or '')
+    for key, label in (('effective_on', '生效 '), ('established_on', '设立 ')):
+        if d.get(key):
+            return label + str(d[key])
+    return '提交 ' + str(obj.created_at)[:10]
+
+
+def _todo(db, a, kind, obj, code, lead):
+    ident = kind + '|' + obj.id
+    if code == 'draft':
+        back = last_return(db, kind, obj)
+        act = 'social-detail' if kind == 'project' else 'app-edit'
+        aid = 'social_project|' + obj.id if kind == 'project' else obj.id
+        if back and back['reason']:
+            return {'text': '被退回：' + back['reason'], 'act': act, 'id': aid, 'btn': '修改后重新提交', 'tone': 'warn', 'rejected': back}
+        return {'text': '还没提交', 'act': act, 'id': aid, 'btn': '继续填写', 'tone': 'warn'}
+    if code == 'review':
+        return {'text': ap.LEVEL_STATES.get(obj.state) or ('待学校备案' if obj.state == 'SUBMITTED' else '审批中'), 'tone': 'info'}
+    if code == 'closing':
+        return {'text': {'CLOSE_COLLEGE': '待学院结项审核', 'CLOSE_REVIEW': '待学校结项核验'}.get(obj.state, '停用审批中'), 'tone': 'info'}
+    if code == 'done':
+        return None
+    if kind == 'project' and lead and obj.state == 'FILED' and (obj.data or {}).get('end_date', '9999') < school_today().isoformat():
+        back = last_return(db, kind, obj)
+        if back and back.get('flow') == 'project_close':
+            return {'text': '结项被退回：' + back['reason'], 'act': 'life-close', 'id': ident, 'btn': '重新结项', 'tone': 'warn'}
+        return {'text': '培训已结束，去结项', 'act': 'life-close', 'id': ident, 'btn': '去结项', 'tone': 'warn'}
+    if code == 'change':
+        pc = pending_change(db, kind, obj)
+        return {'text': '变更待审批：' + (pc.data.get('summary') if pc else ''), 'act': 'life-change-view', 'id': pc.id if pc else '', 'btn': '查看', 'tone': 'info'}
+    if kind in ('base', 'trainer') and school_today().month >= 9 and str(school_today().year) not in ((obj.data or {}).get('annual') or {}):
+        return {'text': '请做 ' + str(school_today().year) + ' 年度确认', 'act': 'life-annual', 'id': ident, 'btn': '年度确认', 'tone': 'warn'}
+    return None
+
+
+def my_items(db, a, kind):
+    """老师“我的X”：本人负责（申请）的和本人参与授课的，按三步分好。"""
+    from . import applications as apps
+    from . import social_training as st
+    if kind not in TYPES:
+        raise HTTPException(422, '档案类型不支持')
+    rows = []
+    if kind == 'project':
+        member_ids = st.participated_project_ids(db, a.id)
+        q = select(SocialProject).where(SocialProject.state != 'DELETED')
+        for obj in db.scalars(q.where((SocialProject.owner_id == a.id) | (SocialProject.id.in_(member_ids or {''})))):
+            rows.append((obj, obj.owner_id == a.id))
+    else:
+        for obj in db.scalars(select(SocialResource).where(SocialResource.kind == RESOURCE_KIND[kind], SocialResource.state != 'DELETED')):
+            d = obj.data or {}
+            if a.id in {d.get('teacher_id'), d.get('created_by')} and (apps.is_application(obj) or running(kind, obj) or obj.state == STOPPED):
+                rows.append((obj, True))
+    items = []
+    for obj, lead in rows:
+        code = status6(db, kind, obj)
+        todo = _todo(db, a, kind, obj, code, lead)
+        items.append({'type': kind, 'id': obj.id, 'name': name_of(kind, obj), 'state': obj.state, 'status': code, 'status_label': status_label(kind, code),
+                      'stage': STAGE_OF[code], 'dates': _date_line(kind, obj), 'lead': lead, 'todo': todo,
+                      'again': kind == 'project' and lead and code == 'done', 'updated_at': str(apps.last_event_at(db, obj) or obj.created_at)})
+    items.sort(key=lambda x: x['updated_at'], reverse=True)
+    items.sort(key=lambda x: x['todo'] is None or x['todo'].get('tone') != 'warn')
+    return {'type': kind, 'items': items}
+
+
+def approval_queue(db, a, kind):
+    """学院、学校“待我审批”：立项（申报/备案）、变更、结项。只列本人这一级能办的。"""
+    from . import applications as apps
+    from . import social_training as st
+    if kind not in TYPES:
+        raise HTTPException(422, '档案类型不支持')
+    out = []
+    names = {}
+
+    def who_name(uid):
+        if uid not in names:
+            u = db.get(User, uid) if uid else None
+            names[uid] = u.name if u else ''
+        return names[uid]
+    if kind == 'project':
+        for p in db.scalars(select(SocialProject).where(SocialProject.state.in_(('COLLEGE', 'SUBMITTED', 'CLOSE_COLLEGE', 'CLOSE_REVIEW')))):
+            owner = db.get(User, p.owner_id)
+            if p.state in ('COLLEGE', 'CLOSE_COLLEGE'):
+                if a.role.kind != 'college' or p.org_id not in a.org_ids:
+                    continue
+                try:
+                    ap.check_handler(db, a, owner, 'college', p.org_id)
+                except HTTPException:
+                    continue
+            elif not st.may_review(db, a, p):
+                continue
+            closing = p.state in ('CLOSE_COLLEGE', 'CLOSE_REVIEW')
+            d = p.data or {}
+            summary = CATEGORY.get(d.get('category'), '') + ' · ' + d.get('start_date', '') + ' 至 ' + d.get('end_date', '')
+            if closing:
+                summary = '满意度 ' + str((p.closeout or {}).get('satisfaction', '—')) + '% · 材料 ' + str(len(st.attachments(db, 'social_project', p.id))) + ' 份'
+            action = {'COLLEGE': 'approve', 'CLOSE_COLLEGE': 'approve', 'SUBMITTED': 'file', 'CLOSE_REVIEW': 'close'}[p.state]
+            out.append({'kind': 'close' if closing else 'apply', 'label': ('结项核验' if p.state == 'CLOSE_REVIEW' else '结项') if closing else ('备案' if p.state == 'SUBMITTED' else '立项'),
+                        'type': kind, 'id': p.id, 'name': d.get('name', ''), 'who': who_name(p.owner_id), 'on': str(apps.last_event_at(db, p) or p.created_at)[:10],
+                        'summary': summary, 'action': action, 'version': p.version,
+                        'batch': action in ('approve',) or (action == 'file' and not (d.get('category') == 'subsidy' or d.get('high_risk')))})
+    else:
+        for obj in db.scalars(select(SocialResource).where(SocialResource.kind == RESOURCE_KIND[kind], SocialResource.state.in_(apps.PENDING_STATES))):
+            if not apps.is_application(obj):
+                continue
+            flow = apps.flow_of(obj)
+            level = ap.level_of(flow, obj.state)
+            if not level:
+                continue
+            applicant = apps.applicant_of(db, obj)
+            try:
+                ap.check_handler(db, a, applicant, level, obj.org_id)
+            except HTTPException:
+                continue
+            out.append({'kind': 'apply', 'label': {'college': '申报', 'school': '入库' if kind == 'course' else '审批', 'hr': '认定', 'jwc': '备案', 'dept': '申报'}.get(level, '申报'),
+                        'type': kind, 'id': obj.id, 'name': obj.name, 'who': applicant.name if applicant else '', 'on': str(obj.created_at)[:10],
+                        'summary': ap.FLOWS[flow]['label'], 'action': 'approve', 'version': obj.version, 'batch': level not in ('hr', 'jwc')})
+    for todo in change_todos(db, a):
+        change = db.get(SocialResource, todo['id'])
+        if change is None or change.data.get('target_type') != kind:
+            continue
+        lv = ap.level_of(change.data['flow'], change.state)
+        out.append({'kind': 'change', 'label': '变更', 'type': kind, 'id': change.id, 'name': change.data['target_name'],
+                    'who': who_name(change.data.get('teacher_id') or change.data.get('created_by')), 'on': str(change.created_at)[:10],
+                    'summary': change.data.get('summary', ''), 'action': 'approve', 'version': change.version, 'batch': lv not in ('hr', 'jwc'),
+                    'rows': [{'label': r.get('label'), 'from_text': r.get('from_text'), 'to_text': r.get('to_text')} for r in change.data.get('rows') or []],
+                    'reason': change.data.get('reason') or ''})
+    out.sort(key=lambda x: x['on'], reverse=True)
+    return {'type': kind, 'items': out}
+
+
+def close_review(db, a, project):
+    """结项审批页：运行汇总、平铺材料、将记积分。"""
+    from . import social_training as st
+    v = view(db, a, 'project', project)
+    files = st.evidence(db, 'social_project', project.id)
+    return {'archive': v, 'files': files, 'points': points_line(db, project), 'closeout': serial(project.closeout or {})}
