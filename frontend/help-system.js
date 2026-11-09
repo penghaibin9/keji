@@ -1,6 +1,6 @@
 import {HELP_VERSION,HELP_TOPICS,HELP_FAQS,HELP_ALIASES,GENERAL_TOPICS,FIELD_HELP,FIELD_LABEL_HELP,ROLE_NAMES,helpTopic} from './help-content.js?v=20261108-fix1';
 import {HELP_MEDIA} from './help-media.js?v=20261022';
-import {HELP_FORMS} from './help-forms.js?v=20261109-v2b';
+import {HELP_FORMS} from './help-forms.js?v=20261109-v2e';
 const escape=v=>String(v??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const button=(text,attr)=>`<button type="button" class="btn" ${attr}>${escape(text)}</button>`;
 let panel=null,returnFocus=null,current=null,context=null,background=[],panelTab='steps',underlyingDialog=null,videoKind='overview';
@@ -145,6 +145,7 @@ function bindLibrary(root,c){
 function existingNotes(root){return [...root.querySelectorAll('.page-help p,.page-help-part,.business-guide,.social-guide,.workflow-context')].map(e=>e.textContent.trim()).filter(Boolean).slice(0,12)}
 function localContext(root,c){const title=root.querySelector('.modal-head h2')?.textContent||'';return {...c,page:root.dataset.helpPage||inferHelpPage(c.page,title),root,title,notes:existingNotes(root)}}
 function decorateHelpFields(root){
+ return;  // 2026-11-09 用户定：字段下不再放“怎么填”说明（全站帮助入口仍保留）
  const fields=[...(root.matches?.('.form-field,.rule-control')?[root]:[]),...root.querySelectorAll('.form-field,.rule-control')];
  for(const wrap of fields){
   if(wrap.querySelector(':scope > .field-how'))continue;const input=wrap.querySelector('input:not([type=hidden]),select,textarea');if(!input||input.closest('.rule-control,.form-field')!==wrap)continue;

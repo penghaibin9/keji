@@ -1,11 +1,11 @@
-import {parseCalendarDates,calendarDateError,normalizeDate,dateError,setFieldCondition,actionPhrases,validateFormAssists} from './form-assist.js?v=20261021-form-merged1';
+import {parseCalendarDates,calendarDateError,normalizeDate,dateError,setFieldCondition,actionPhrases,validateFormAssists} from './form-assist.js?v=20261109-v2e';
 // School business pages reuse the portal's forms, permissions, navigation and attachments.
 import {checkUploadFiles,uploadEntries,uploadSequential,uploadStatusHtml,failedEntries,MAX_ATTACHMENTS} from './approval-flow.js?v=20261021-form-merged1';
-import {renderTrainingWorkspace,trainingChange} from './training-workspace.js?v=20261107-life1';
+import {renderTrainingWorkspace,trainingChange} from './training-workspace.js?v=20261109-v2e';
 import {imageField,takeImage,saveImageAfter,coverButton} from './display-image.js?v=20261021-form-merged1';
 import {historyProjectsPage,projectViewTabs} from './history-projects.js?v=20261019-walk3&display=20261019-clean2&history_dates=20261020-images1';
 const COPY_KEYS=['name','org_id','owner_id','category','high_risk','expected_income','expected_participants','expected_outcomes','mode','class_type','level','level_basis','scene','target_groups','one_skill','province_report','province_basis','auxiliary_standard','auxiliary_daily_cap','total_hours','audiences','audience_other','service_types','teaching_methods','video_minutes','base_count','venue','quality'];
-import {progressHtml,AUDIENCE,TEACHING_MODES,IDEOLOGY} from './applications.js?v=20261109-v2b';
+import {progressHtml,AUDIENCE,TEACHING_MODES,IDEOLOGY} from './applications.js?v=20261109-v2e';
 const names={module:'模块式',person_day:'人天式',technical:'技术类',lecture:'讲座类',province:'省级',city:'市级或企业定制',school:'校级',dispatched:'统一委派异地送教',full_day:'全天实操或脱产',ordinary:'常规',subsidy:'补贴性培训',enterprise:'企业定制培训',community:'社区公益培训',rural:'乡村帮扶培训',other:'其他非学历培训',national:'国家级'};
 let workspace,context,opened,workspaceUser;
 let listSection='',listPage=1,listSearch='',resourcePage=1;
@@ -243,10 +243,11 @@ export async function socialPage(section,c){
  if(['projects','courses','bases','outcomes'].includes(section)){
   const resourceAction=section==='courses'?buttons.find(b=>b.includes('data-id="course_resource"')):null,ordered=resourceAction?[buttons[0],resourceAction,...buttons.filter(b=>b!==buttons[0]&&b!==resourceAction)]:buttons;
   const actions=ordered.slice(0,2).join('')+(ordered.length>2?'<details class="tw-more"><summary>更多操作</summary><div>'+ordered.slice(2).join('')+'</div></details>':'');
-  const supplementary='<details class="tw-supplement"><summary>完整清单与统计口径</summary>'+((c.me?.role?.kind==='teacher'&&['projects','outcomes'].includes(section))?'':summary)+content+resourceTable+(scopeNote?note(scopeNote,false,'查看范围'):'')+note('统计仅包含当前账号有权查看的记录；“本页”数量随分页与检索变化。',false,'统计口径')+'</details>';
-  return renderTrainingWorkspace(section,workspace,c,{actions,serverSearch:listSearch,socialPager:pager,before:(section==='projects'&&workspace.history_available?projectViewTabs(c,'business'):'')+(scopeNote?note(scopeNote,false,'查看范围'):''),after:supplementary});
+  const listed=((c.me?.role?.kind==='teacher'&&['projects','outcomes'].includes(section))?'':summary)+content+resourceTable;
+  const supplementary=listed.replace(/<[^>]+>/g,'').trim()?'<details class="tw-supplement"><summary>完整清单</summary>'+listed+'</details>':'';
+  return renderTrainingWorkspace(section,workspace,c,{actions,serverSearch:listSearch,socialPager:pager,before:(section==='projects'&&workspace.history_available?projectViewTabs(c,'business'):''),after:supplementary});
  }
- return '<div class="social-workspace">'+pageHead(description,buttons.join(''))+(c.me?.role?.kind==='teacher'?(['projects','outcomes'].includes(section)?'':section==='recognition'?'<p class="teacher-list-summary">本页 '+items.filter(x=>x.state==='RETURNED').length+' 项退回待补 · '+items.filter(x=>['SUBMITTED','DEAN','COORDINATOR','APPROVED'].includes(x.state)).length+' 项审核中 · '+items.filter(x=>x.state==='ARCHIVED').length+' 项已归档'+(items.some(x=>x.state==='DRAFT')?' · '+items.filter(x=>x.state==='DRAFT').length+' 项草稿':'')+'</p>':summary):summary)+main+'<div class="page-guides">'+guide+(scopeNote?note(scopeNote,false,'查看范围'):'')+note('统计仅包含当前账号有权查看的记录；“本页”数量随分页与检索变化。'+stats.map(([label,,hint])=>label+'：'+hint).join('；')+'。未完成审核的记录及候选试算不代表学校正式认定。',false,'统计与认定说明')+'</div></div>';
+ return '<div class="social-workspace">'+pageHead(description,buttons.join(''))+(c.me?.role?.kind==='teacher'?(['projects','outcomes'].includes(section)?'':section==='recognition'?'<p class="teacher-list-summary">本页 '+items.filter(x=>x.state==='RETURNED').length+' 项退回待补 · '+items.filter(x=>['SUBMITTED','DEAN','COORDINATOR','APPROVED'].includes(x.state)).length+' 项审核中 · '+items.filter(x=>x.state==='ARCHIVED').length+' 项已归档'+(items.some(x=>x.state==='DRAFT')?' · '+items.filter(x=>x.state==='DRAFT').length+' 项草稿':'')+'</p>':summary):summary)+main+'</div>';
 }
 
 export function claimBlockersHtml(blockers,esc){

@@ -570,3 +570,6 @@ body:has(.modal-overlay:not(.hidden)){overflow:hidden}
 .sync-card .overview-interface h2{margin:0}
 .sync-card .overview-actions{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
 .sync-card .card-foot{display:flex;gap:8px;flex-wrap:wrap}
+
+/* 2026-11-09 更多筛选：各项同高对齐，快捷日期按钮单独一行 */
+.filter-advanced-grid{align-items:end}.filter-advanced-grid>label{display:flex;flex-direction:column;gap:6px}.filter-advanced-grid input,.filter-advanced-grid select{height:40px}.filter-advanced-grid .range-shortcuts{grid-column:1/-1}
