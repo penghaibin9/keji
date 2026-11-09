@@ -88,7 +88,8 @@ def test_new_internal_trainer_chain_is_college_then_hr(app2, client2):
     assert approve(c, ident, '湘科人认〔2026〕12号').json()['item']['state'] == 'ACTIVE'
 
 
-def test_project_close_goes_straight_to_school_and_school_ticks_materials(setup_social, client2, app2, monkeypatch):
+def test_project_close_goes_college_then_school_and_school_ticks_materials(setup_social, client2, app2, monkeypatch):
+    # 2026-11-09 用户定：结项恢复为学院审核 → 学校核验（原 2026-11-04 精简为直接到学校）。
     c = client2
     pid = setup_social
     assert import_rows(c, pid, [row()]).status_code == 200
@@ -96,10 +97,13 @@ def test_project_close_goes_straight_to_school_and_school_ticks_materials(setup_
     r = action(c, 'projects', 'social_project', pid, 'close_submit', closeout=CLOSEOUT)
     assert r.status_code == 200, r.text
     d = r.json()
-    assert d['item']['state'] == 'CLOSE_REVIEW' and d['item']['data']['close_chain'] == 2
-    assert [n['label'] for n in d['progress']['nodes']] == ['提交', '学校审批', '已结项']
+    assert d['item']['state'] == 'CLOSE_COLLEGE' and d['item']['data']['close_chain'] == 2
+    assert [n['label'] for n in d['progress']['nodes']] == ['提交', '学院审批', '学校审批', '已结项']
+    auth(c, 'reviewer')
+    assert action(c, 'projects', 'social_project', pid, 'close', materials_checked=MATERIALS).status_code == 409  # 学院没审核前学校不能核验
     auth(c, 'collegehead')
-    assert action(c, 'projects', 'social_project', pid, 'approve').status_code in (403, 409, 422)  # 学院不再核验结项
+    r = action(c, 'projects', 'social_project', pid, 'approve')
+    assert r.status_code == 200 and r.json()['item']['state'] == 'CLOSE_REVIEW', r.text
     auth(c, 'reviewer')
     r = action(c, 'projects', 'social_project', pid, 'close')
     assert r.status_code == 409 and '勾选' in r.text  # 学校没勾材料核对
@@ -121,6 +125,8 @@ def test_quality_reviews_are_added_automatically_at_school_close(setup_social, c
         p.data = {**p.data, 'quality': {'teacher_review': {'percent': 100}, 'courseware_review': {'percent': 90}}}
     auth(c, 'teacher')
     assert action(c, 'projects', 'social_project', pid, 'close_submit', closeout=CLOSEOUT).status_code == 200
+    auth(c, 'collegehead')
+    assert action(c, 'projects', 'social_project', pid, 'approve').status_code == 200
     auth(c, 'reviewer')
     r = action(c, 'projects', 'social_project', pid, 'close', materials_checked=MATERIALS)
     assert r.status_code == 200, r.text

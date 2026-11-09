@@ -1,13 +1,13 @@
-import {mountHelp,closeHelp,helpLibraryHTML,helpSearch,openHelp} from './help-system.js?v=20261109-life2';
+import {mountHelp,closeHelp,helpLibraryHTML,helpSearch,openHelp} from './help-system.js?v=20261109-v2a';
 import {bindFormDraft} from './form-drafts.js?v=20261021-form-merged1';
 import {coursePointsAction} from './course-points.js?v=20261021-form-merged1';
 import {renderTrainingWorkspace,trainingChange} from './training-workspace.js?v=20261107-life1';
 import {renderSchoolCockpit,bindSchoolCockpit} from './school-cockpit.js?v=20261019-walk3&display=20261019-clean2';
 import {icons} from './icons.js';
 import {dutiesTabHtml,dutiesAction} from './school-duties.js?v=20261104-simplify2';
-import {socialPage,socialAction,applicationProjectPicker} from './social-training.js?v=20261109-life2';
-import {lifecycleAction,LIFE_ACTIONS,lifePageHtml,lifeBoardHtml,lifePageType,placeLifeBoard} from './lifecycle.js?v=20261109-life2';
-import {applicationAction,trainersHtml,applyPageHtml,APPLY_PAGES,myApplicationsHtml,homeApplicationsHtml,myCoursesHtml,libraryHtml,libraryFilterSubmit,homeCoursesHtml,courseAction} from './applications.js?v=20261109-life2';
+import {socialPage,socialAction,applicationProjectPicker} from './social-training.js?v=20261109-v2a';
+import {lifecycleAction,LIFE_ACTIONS,lifePageHtml,lifeBoardHtml,lifePageType,placeLifeBoard,lifeListHtml} from './lifecycle.js?v=20261109-v2a';
+import {applicationAction,trainersHtml,applyPageHtml,APPLY_PAGES,myApplicationsHtml,homeApplicationsHtml,myCoursesHtml,libraryHtml,libraryFilterSubmit,homeCoursesHtml,courseAction} from './applications.js?v=20261109-v2a';
 import {nextCode,runBatch,batchStage,batchMode,batchPerformer,BATCH_LABELS,materialUploadForm,checkUploadFiles,uploadEntries,uploadSequential,uploadStatusHtml} from './approval-flow.js?v=20261021-form-merged1';
 import {ledgerPage,resourceStatsPage,homeIndicators,ledgerAction,resetLedgerView,minePage,mineReminders} from './social-ledgers.js?v=20261021-form-merged1';
 import {rosterSection,rosterHandlers,onlineHandlers,showStaffDetail,showCourseDetail,presetRoster,loadCodeTables,courseFactsHtml,codeLabel} from './school-data.js?v=20261019-merge1&display=20261019-clean2';
@@ -324,6 +324,7 @@ function openMaterialPreview(items,start,load,save=null){
 }
 function bindFileFeedback(form){
  $$('input[type=file]',form).forEach((input,index)=>{
+  if(input.dataset?.plainFile)return;  // 自己画分组预览的上传框（运行材料）不再套通用预览
   const status=document.createElement('p');status.className='file-selection-status';status.id=(input.id||'file-'+index)+'-selection';status.setAttribute('role','status');
   const previews=document.createElement('div');previews.className='material-selection';previews.setAttribute('aria-label','已选材料预览');input.insertAdjacentElement('afterend',previews);input.insertAdjacentElement('afterend',status);
   input.setAttribute('aria-describedby',[input.getAttribute('aria-describedby'),status.id].filter(Boolean).join(' '));let selection=0;
@@ -554,7 +555,7 @@ async function reviewCredits(code){
 }
 const periodSelect=()=>`<select id="period-filter" class="period-name"><option value="">全部周期</option>${periods.map(p=>`<option value="${p.id}" ${p.id===periodId?'selected':''}>${esc(p.name)}</option>`).join('')}</select>`;
 // 统一页面顺序：标题与操作 → 页签 → 筛选 → 列表。
-const teacherPageHints={annual:'查看本学院已公示的评分摘要，公示期间可提出异议。',todos:'先处理需要本人办理的事项，再查看申请进度。',notices:'阅读学校政策和业务通知。',apply_course:'复用已有课程或手动填写，随时查看审批进度。',apply_project:'申报本人负责的项目，跟进备案与结项。',apply_base:'填写基地资料，查看审核与入库结果。',apply_trainer:'提交资质与授课经历，跟进培训师认定。',credits:'教务与超星课程已归集，申报审核后按实际培训业务认定积分。',mine:'按项目核对本人的培训参与、积分与台账分配。',qualifications:'点击证书图片预览，核对有效期和审核进度。',points:'查看已认定积分，核对每一笔计算依据。',recognition:'查看当前办理环节和需要补充的材料。',assessment:'查看本人年度结果，在需要时完成核对与确认。',records:'授课与本人参训分开查看，原始依据随时可查。',projects:'查看本人负责或参与的培训项目。',courses:'查阅培训课程及配套教学资源。',bases:'查阅所属学院的基地，按需发起申请。',outcomes:'查阅已认定成果，区分本人贡献与学院参考。',disputes:'跟进自己提出的数据核对，查看处理结论。',exports:'查看导出进度并下载已生成的文件。',help:'按具体任务找到办理步骤和对应入口。'};
+const teacherPageHints={annual:'查看本学院已公示的评分摘要，公示期间可提出异议。',todos:'先处理需要本人办理的事项，再查看申请进度。',notices:'阅读学校政策和业务通知。',credits:'教务与超星课程已归集，申报审核后按实际培训业务认定积分。',mine:'按项目核对本人的培训参与、积分与台账分配。',qualifications:'点击证书图片预览，核对有效期和审核进度。',points:'查看已认定积分，核对每一笔计算依据。',recognition:'查看当前办理环节和需要补充的材料。',assessment:'查看本人年度结果，在需要时完成核对与确认。',records:'授课与本人参训分开查看，原始依据随时可查。',projects:'查看本人负责或参与的培训项目。',courses:'查阅培训课程及配套教学资源。',bases:'查阅所属学院的基地，按需发起申请。',outcomes:'查阅已认定成果，区分本人贡献与学院参考。',disputes:'跟进自己提出的数据核对，查看处理结论。',exports:'查看导出进度并下载已生成的文件。',help:'按具体任务找到办理步骤和对应入口。'};
 const deptPageHints={home:'先办理本教研室待办，再查看本室概况与考核进度。',todos:'按事项核验资料、退回补正或完成本级确认。',notices:'阅读学校政策与业务通知。',projects:'查看本室教师参与项目及授权范围内的资料。',courses:'查阅本室课程与资源，按需提交课程申报。',bases:'查阅所属学院基地，跟进本室提交的基地申请。',trainers:'查阅师资资格与认定状态；待审申请从统一待办进入。',records:'核对本室教师授课和参训数据，更正均保留依据。',outcomes:'查看已认定成果，区分教师贡献与学院参考。',qualifications:'先看证书材料和有效期，再办理本室资质审核。',credits:'按教师、学年核对授课学分；认定由学校指定人员办理。',points:'核对本室教师积分来源，完整周期台账由教师本人确认。',recognition:'跟进本室积分认定及核对、更正事项。',assessment:'核对教师考核并完成本级确认；教研室考核单独复核。',disputes:'核实原业务后填写复核结论，办理结果会反馈申请人。',ledgers:'查看本室年度平均积分及人数口径。',organization:'查看本室教师、业务概况及授权范围。',imports:'先预览错误和变更，再确认导入本室数据。',exports:'查看导出进度并下载授权范围内的文件。',help:'按教研室办理任务找到操作步骤和入口。'};
 const collegePageHints={...deptPageHints,home:'先处理待办，再查看本院业务进度。',projects:'申报本院培训项目，跟进备案、实施与结项。',courses:'查阅培训课程和资源，办理课程登记与审批。',bases:'查阅培训基地，办理本院申请及审批。',trainers:'查阅师资资格，按待办办理本级审核。',records:'核对本院教师授课与参训记录，更正均保留依据。',outcomes:'查阅已认定成果与依据。',qualifications:'查看证书、有效期和材料，按权限办理审核。',points:'核对本院教师积分来源，完整周期台账由教师本人确认。',recognition:'核验积分申报材料，按当前审批职责办理。',assessment:'核对教师考核并完成学院确认，学院考核单独复核。',ledgers:'上传并核对学院台账，查看待核定事项。',organization:'查看本院及下属教研室的教师和业务。',imports:'先预览错误和变更，再确认导入本院数据。',help:'按当前任务查找办理步骤和入口。'};
 function currentHelpContext(){return {page,role:me?.role?.kind,tab:filter?.tab,allowed:pageAllowed,aliases:navAliases}}
@@ -931,10 +932,10 @@ const pages={
  mine:()=>minePage(ledgerContext()),
  collegestaff:()=>collegeStaffPage(),
  ledgers:()=>ledgerPage(ledgerContext()),resources:()=>resourceStatsPage(ledgerContext()),
- apply_course:async()=>pageHead('课程申报：选课、填表、看进度。')+await applyPageHtml(socialContext(),'apply_course'),
- apply_project:async()=>pageHead('项目申报：填表、提交、看进度。')+await applyPageHtml(socialContext(),'apply_project'),
- apply_base:async()=>pageHead('基地申请：填表、提交、看进度。')+await applyPageHtml(socialContext(),'apply_base'),
- apply_trainer:async()=>pageHead('培训师申报：填表、提交、看进度。')+await applyPageHtml(socialContext(),'apply_trainer'),
+ apply_course:async()=>me.role.kind==='teacher'?pageHead()+await lifeListHtml(socialContext(),'apply_course'):pageHead('课程申报：选课、填表、看进度。')+await applyPageHtml(socialContext(),'apply_course'),
+ apply_project:async()=>me.role.kind==='teacher'?pageHead()+await lifeListHtml(socialContext(),'apply_project'):pageHead('项目申报：填表、提交、看进度。')+await applyPageHtml(socialContext(),'apply_project'),
+ apply_base:async()=>me.role.kind==='teacher'?pageHead()+await lifeListHtml(socialContext(),'apply_base'):pageHead('基地申请：填表、提交、看进度。')+await applyPageHtml(socialContext(),'apply_base'),
+ apply_trainer:async()=>me.role.kind==='teacher'?pageHead()+await lifeListHtml(socialContext(),'apply_trainer'):pageHead('培训师申报：填表、提交、看进度。')+await applyPageHtml(socialContext(),'apply_trainer'),
  trainers:async()=>await trainersHtml(socialContext()),
  ...Object.fromEntries(['projects','courses','bases','outcomes','recognition','annual','policy'].map(section=>[section,()=>socialPage(section,socialContext())])),
  async home(){

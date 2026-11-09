@@ -543,7 +543,7 @@ def test_missing_closeout_materials_and_chinese_project_search(setup_social,clie
     assert current['progress']['tone']=='red' and current['item']['closeout']['actual_income']=='0'
     submitted=action(client2,'projects','social_project',pid,'close_submit',closeout=current['item']['closeout'])
     assert submitted.status_code==200,submitted.text
-    assert submitted.json()['item']['state']=='CLOSE_REVIEW' and submitted.json()['progress']['tone']=='blue'  # 2026-11-04 起结项直接到学校核验
+    assert submitted.json()['item']['state']=='CLOSE_COLLEGE' and submitted.json()['progress']['tone']=='blue'  # 2026-11-09 起老师提交结项先到学院审核
     result=client2.get('/api/social/workspace?section=projects&q=隔离技能').json()
     assert result['pagination']['total']==1;assert result['projects'][0]['id']==pid
 
@@ -590,7 +590,8 @@ def test_college_quality_review_metadata_does_not_block_school_closeout(setup_so
     assert forged.status_code==422
     result=action(c,'projects','social_project',pid,'close_submit',closeout=closeout)
     assert result.status_code==200,result.text
-    assert result.json()['item']['state']=='CLOSE_REVIEW'  # 2026-11-04 起结项直接到学校核验，学院审查百分比已登记时自动计入
+    assert result.json()['item']['state']=='CLOSE_COLLEGE'  # 2026-11-09 起老师提交结项先到学院审核，学院审查百分比已登记时自动计入
+    auth(c,'collegehead');assert action(c,'projects','social_project',pid,'approve').status_code==200
     auth(c,'reviewer');result=action(c,'projects','social_project',pid,'close')
     assert result.status_code==200,result.text
     closed=result.json()['item']
