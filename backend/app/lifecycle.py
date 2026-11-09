@@ -1049,7 +1049,10 @@ def approval_queue(db, a, kind):
                 continue
             out.append({'kind': 'apply', 'label': {'college': '申报', 'school': '入库' if kind == 'course' else '审批', 'hr': '认定', 'jwc': '备案', 'dept': '申报'}.get(level, '申报'),
                         'type': kind, 'id': obj.id, 'name': obj.name, 'who': applicant.name if applicant else '', 'on': str(obj.created_at)[:10],
-                        'summary': ap.FLOWS[flow]['label'], 'action': 'approve', 'version': obj.version, 'batch': level not in ('hr', 'jwc')})
+                        'summary': ap.FLOWS[flow]['label'], 'action': 'approve', 'version': obj.version,
+                        # 基地到学校认定时若申报没填认定依据，要审批人补，不进批量。
+                        'needs_basis': kind == 'base' and level == 'school' and not str((obj.data or {}).get('recognition') or '').strip(),
+                        'batch': level not in ('hr', 'jwc') and not (kind == 'base' and level == 'school' and not str((obj.data or {}).get('recognition') or '').strip())})
     for todo in change_todos(db, a):
         change = db.get(SocialResource, todo['id'])
         if change is None or change.data.get('target_type') != kind:
