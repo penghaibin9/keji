@@ -227,7 +227,8 @@ function bindRangeShortcuts(form){
  for(const [key,label] of [['month','本月'],['previous-month','上月'],['year','本年']]){
   bar.append(button(label,()=>{const [from,to]=quickDateRange(key);if(year)year.value='';start.value=from;end.value=to;emitValue(start,from);emitValue(end,to)},'btn light sm'));
  }
- form.append(bar);
+ const grid=form.querySelector('.filter-advanced-grid');
+ (grid||form).append(bar);
 }
 function bindCalendarMulti(input,root){
  if(input.dataset.multiBound||!window.laydate)return;input.dataset.multiBound='true';
@@ -264,6 +265,7 @@ function bindCalendarMulti(input,root){
 }
 function bindDate(input,root){
  if(input.dataset.dateBound||input.readOnly||!window.laydate)return;
+ if(input.closest('#filters,.filterbar'))return;  // 筛选区用原生日期框，和其他筛选项同高对齐
  const dateLabel=(input.getAttribute('aria-label')||input.labels?.[0]?.textContent||'日期').replace(/\*/g,'').trim();
  input.setAttribute('aria-label',dateLabel);
  input.dataset.dateBound='true';input.type='text';input.inputMode='numeric';input.autocomplete='off';input.placeholder='例：2026-10-20';

@@ -382,7 +382,7 @@ test('分页统计区分授权总数、本页记录和本页已结项',async()=>
  const projects=[{id:'p1',cohort:'第一期',state:'CLOSED',state_label:'已结项',data:{name:'项目一',code:'P1',mode:'module'}},{id:'p2',cohort:'第二期',state:'DRAFT',data:{name:'项目二',code:'P2',mode:'module'}}];
  const html=await renderSocial('projects',renderContext({projects,pagination:{total:82,page:3,size:20}}));
  assert.deepEqual(summaryValues(html),{'培训项目总数':'82','本页记录':'2','本页已结项':'1'});
- assert.match(html,/“本页”数量随分页与检索变化/);
+ assert.doesNotMatch(html,/“本页”数量随分页与检索变化|查看范围/);
  assert.match(html,/共 82 项 · 第 3 页/);
 });
 
@@ -735,7 +735,7 @@ test('教研室课程和基地范围说明保留申请入口，不暗示可以�
  for(const [section,action] of [['courses','app-course-new'],['bases','app-base-new']]){
   const c=renderContext({},['records.read','records.write']);c.me={user:{id:'dept-scope-copy'},role:{kind:'dept'}};
   const html=await renderSocial(section,c);assert.match(html,new RegExp('data-action="'+action+'"'));
-  assert.match(html,/提交申请/);assert.doesNotMatch(html,/只能查看。|data-action="social-course-new"|data-action="social-resource-new"/);
+  assert.doesNotMatch(html,/只能查看。|data-action="social-course-new"|data-action="social-resource-new"/);
  }
 });
 

@@ -258,11 +258,10 @@ test('分步表单阻止缺项、定位错误并允许返回保留字段',()=>{
  inputs[1].valid=true;assert.equal(flow.submit(),false);assert.equal(flow.submit(),true);
  flow.reveal(inputs[0]);assert.equal(groups[0].hidden,false);assert.equal(inputs[1].valid,true);
 });
-test('页面和辅助说明按需展开，阻断提醒始终直接显示且转义内容',()=>{
+test('标题下不放页面说明（说明文字一律不要），阻断提醒始终直接显示且转义内容',()=>{
  const e=engine();e.t.setState('records');
  const header=vm.runInContext('pageHead',e.ctx)('业务<说明>','<button>新增</button>');
- assert.match(header,/<h1>培训数据<\/h1>/);assert.match(header,/<details class="page-help"><summary>页面说明<\/summary>/);
- assert.match(header,/业务&lt;说明&gt;/);assert.doesNotMatch(header,/page-help" open/);assert.match(header,/<button>新增<\/button>/);
+ assert.match(header,/<h1>培训数据<\/h1>/);assert.doesNotMatch(header,/page-help|业务&lt;说明&gt;|teacher-page-subtitle/);assert.match(header,/<button>新增<\/button>/);
  const note=vm.runInContext('note',e.ctx);
  assert.match(note('统计依据',false,'统计说明'),/<details class="ui-note"><summary>统计说明<\/summary>/);
  const blocked=note('材料缺失，暂不能提交',true,'查看说明');
@@ -1972,7 +1971,7 @@ test('审批中心三分区复用原单并显示具体事项与周期，教师�
 
 test('已办分区可从地址恢复，保留我的动作并不出现审批勾选',async()=>{
  const e=engine(()=>({items:[{type:'assessment',id:'a',business_name:'本人已办<原单>',title:'教师考核',teacher_id:'t',state:'待学校审核',my_action:'学院<确认>',handled_at:'2026-10-18T02:00:00'}],total:1,page:2,size:20,counts:{assessment:1},stages:['待学校审核']}),'college');e.t.setState('todos',{tab:'handled',q:'J001'},2);
- const html=await e.t.pages.todos();assert.match(e.requests[0].url,/tab=handled/);assert.match(e.requests[0].url,/page=2/);assert.match(html,/学院&lt;确认&gt;/);assert.match(html,/本级完成不等于整单办结/);assert.doesNotMatch(html,/batch-pick|data-action="todo-batch"/);
+ const html=await e.t.pages.todos();assert.match(e.requests[0].url,/tab=handled/);assert.match(e.requests[0].url,/page=2/);assert.match(html,/学院&lt;确认&gt;/);assert.doesNotMatch(html,/batch-pick|data-action="todo-batch"/);
 });
 
 test('审批批量条默认收起，等待公示期限单独展示且不冒称可办理',async()=>{
