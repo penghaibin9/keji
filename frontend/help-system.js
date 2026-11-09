@@ -1,6 +1,6 @@
 import {HELP_VERSION,HELP_TOPICS,HELP_FAQS,HELP_ALIASES,GENERAL_TOPICS,FIELD_HELP,FIELD_LABEL_HELP,ROLE_NAMES,helpTopic} from './help-content.js?v=20261108-fix1';
 import {HELP_MEDIA} from './help-media.js?v=20261022';
-import {HELP_FORMS} from './help-forms.js?v=20261109-v2d';
+import {HELP_FORMS} from './help-forms.js?v=20261109-v2e';
 const escape=v=>String(v??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const button=(text,attr)=>`<button type="button" class="btn" ${attr}>${escape(text)}</button>`;
 let panel=null,returnFocus=null,current=null,context=null,background=[],panelTab='steps',underlyingDialog=null,videoKind='overview';
