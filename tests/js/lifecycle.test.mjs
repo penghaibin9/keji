@@ -25,17 +25,18 @@ const base={type:'project',id:'p1',name:'茶艺培训',state:'FILED',state_label
 // 2026-11-09 按设计稿：运行档案是整页（不是弹窗），卡片列表在“项目运行”下。
 test('项目运行档案是整页：进度条、提醒、三个按钮、时间线、汇总、版本',async()=>{
  const c=ctx(base);const html=await lifePageHtml(c,'apply_project','project|p1');
- for(const name of ['记一笔','申请变更','项目结项','项目立项信息','运行过程','运行汇总','历次版本'])assert.match(html,new RegExp(name),name);
+ for(const name of ['上传材料','申请变更','项目结项','项目立项信息','运行过程','运行汇总','历次版本'])assert.match(html,new RegExp(name),name);
+ assert.doesNotMatch(html,/记一笔/);
  assert.match(html,/当前第 2 版/);assert.match(html,/v2/);assert.match(html,/life-stepper/);assert.match(html,/培训业务 \/ 培训项目 \/ 项目运行 \/ 茶艺培训/);
  assert.match(html,/data-action="life-change"/);assert.ok(LIFE_ACTIONS.includes('life-change-act')&&LIFE_ACTIONS.includes('quick-apply'));
  await assert.rejects(()=>lifePageHtml(c,'courses','project|p1'));
 });
 
-test('课程停用后第三个按钮变成恢复运行，记一笔不可点',async()=>{
+test('课程停用后第三个按钮变成恢复运行，申请变更不可点',async()=>{
  const c=ctx({...base,type:'course',state:'STOPPED',state_label:'已停用',running:false,can:{...base.can,note:false,change:false,close:false,resume:true}});
  const html=await lifePageHtml(c,'apply_course','course|r1');
  assert.match(html,/data-action="life-resume"/);assert.match(html,/课程申报信息/);
- assert.match(html,/data-action="life-note"[^>]*disabled/);
+ assert.match(html,/data-action="life-change"[^>]*disabled/);
 });
 
 test('提醒带“现在处理”按钮，已有变更在审批时申请变更不可点',async()=>{

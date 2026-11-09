@@ -65,16 +65,15 @@ function archiveHtml(c,d,page=''){
  const endOn=endKey==='close'?d.can.close:endKey==='annual'?d.can.annual:(d.can.stop||d.can.resume);
  const endBtn=stopped&&d.can.resume?`<button type="button" class="btn primary" data-action="life-resume" data-id="${e(id)}">恢复运行</button>`
   :`<button type="button" class="btn" data-action="life-${endKey}" data-id="${e(id)}"${endOn?'':' disabled'}${endOn?'':` title="${e(endKey==='close'&&['CLOSE_COLLEGE','CLOSE_REVIEW','CLOSED'].includes(d.state)?'已提交结项':!d.running?(stopped?'已停用':'通过后才能办理'):'你没有办理权限')}"`}>${e(endLabel)}</button>`;
- const main=`<button type="button" class="btn primary life-main" data-action="life-note" data-id="${e(id)}"${d.can.note?'':' disabled'}>📷 记一笔</button>`
-  +`<button type="button" class="btn" data-action="life-change" data-id="${e(id)}"${d.can.change?'':' disabled'}${d.pending_change?' title="已有一份变更在审批，办完或撤回后再提"':''}>✎ 申请变更</button>`+endBtn;
+ const main=(d.can.upload?`<button type="button" class="btn primary life-main" data-action="life-upload" data-id="${e(id)}">📎 上传材料</button>`:'')
+  +`<button type="button" class="btn${d.can.upload?'':' primary'}" data-action="life-change" data-id="${e(id)}"${d.can.change?'':' disabled'}${d.pending_change?' title="已有一份变更在审批，办完或撤回后再提"':''}>✎ 申请变更</button>`+endBtn;
  const minor=[c.act(ACTS[d.type][0][1]+'信息','life-info',id,'text'),
-  d.can.upload?c.act('上传材料','life-upload',id,'text'):'',
   d.type==='project'&&d.running&&c.can?.('records.write')?c.act('导入参训明细','life-units',d.id,'text'):'',
   d.type==='project'&&d.running&&(d.reminders||[]).some(x=>x.includes('上报信息'))?c.act('补填上报信息','life-report',d.id,'text'):'',
   d.can.stop&&d.type!=='course'?c.act('停用','life-stop',id,'text'):'',
   d.can.resume&&d.type!=='course'&&!stopped?c.act('恢复运行','life-resume',id,'text'):''].filter(Boolean).join('');
  const tl=(d.timeline||[]).length?`<ol class="life-timeline">${d.timeline.map(t=>`<li class="k-${e(t.kind)}"><div class="t">${e(String(t.on||t.at||'').slice(0,10))}<span class="src ${t.source==='auto'?'auto':''}">${e(SOURCE[t.source]||'')}</span>${t.who&&t.source!=='auto'?`<span class="who">${e(t.who)}</span>`:''}</div><div class="w">${e(t.what)}</div>${t.reason&&t.reason!==t.what&&t.kind!=='auto'?`<div class="r">${e(t.reason)}</div>`:''}</li>`).join('')}</ol>`:'<p class="muted small">还没有记录。</p>';
- const stats=`<div class="life-stats">${(d.stats||[]).map(([k,v])=>`<div><b>${e(v)}</b><small>${e(k)}</small></div>`).join('')}</div><p class="life-hint">${d.type==='project'?'从培训明细、办理记录自动汇总，不用填。':'使用次数、人次从培训明细自动汇总，不用填。'}</p>`;
+ const stats=`<div class="life-stats">${(d.stats||[]).map(([k,v])=>`<div><b>${e(v)}</b><small>${e(k)}</small></div>`).join('')}</div>`;
  const versions=(d.versions||[]).length?`<ul class="life-versions">${d.versions.map(v=>`<li><span class="v">v${e(v.v)}</span>${e(v.summary||'')}<small>${e(String(v.at||'').slice(0,10))} · ${e(v.who||'')}${v.how?' · '+e(v.how):''}</small></li>`).join('')}</ul>`:'<p class="muted small">通过后生成第 1 版。</p>';
  const sumTitle={project:'运行汇总',course:'使用汇总',base:'运行汇总',trainer:'授课汇总'}[d.type];
  const crumb=`<nav class="life-crumb" aria-label="位置">培训业务 / ${e(TYPE_LABEL[d.type])} / ${e(RUN_TAB[d.type])} / ${e(d.name)}</nav>`;
@@ -109,7 +108,7 @@ export async function lifeBoardHtml(c,page){
  let b;try{b=await c.api('/social/lifecycle/board/'+type)}catch{return ''}
  if(!b.cards?.length&&!b.changes?.length)return '';
  const more=b.total>b.cards.length?`<p class="life-hint">还有 ${b.total-b.cards.length} 个，在下方列表里查找。</p>`:'';
- return `<div class="life-board">${b.changes?.length?changesHtml(c,b.changes):''}${b.cards?.length?`<section class="life-board-run"><div class="life-board-head"><h2>${e2(c,RUN_TAB[type])} <span class="life-count">${b.total}</span></h2><p>${e2(c,BOARD_SUB[type])}</p></div><div class="life-cards">${b.cards.map(x=>cardHtml(c,x)).join('')}</div>${more}</section>`:''}</div>`;
+ return `<div class="life-board">${b.changes?.length?changesHtml(c,b.changes):''}${b.cards?.length?`<section class="life-board-run"><div class="life-board-head"><h2>${e2(c,RUN_TAB[type])} <span class="life-count">${b.total}</span></h2></div><div class="life-cards">${b.cards.map(x=>cardHtml(c,x)).join('')}</div>${more}</section>`:''}</div>`;
 }
 const e2=(c,v)=>c.esc(v);
 // 卡片放在页面标题和页签下面（和页签的摆放方式一样，渲染后再挪位置）。

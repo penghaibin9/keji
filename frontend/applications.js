@@ -342,6 +342,8 @@ export async function applyPageHtml(ctx, key) {
   try { m = await c.api('/applications/mine'); } catch (err) { return c.note('读取失败：' + err.message, true); }
   const mine = (m.items || []).filter(x => cfg.flows.includes(x.flow));
   const active = mine.filter(x => x.progress?.tone === 'green');
+  // 项目已备案、运行中、结项审批中的，已经在上面“项目运行”卡片里，申报记录里不再重复。
+  const listed = key === 'apply_project' ? mine.filter(x => !['FILED', 'CLOSE_COLLEGE', 'CLOSE_REVIEW'].includes(x.state)) : mine;
   const trainer = key === 'apply_trainer' ? mine[0] : null;
   const back = mine.filter(x => x.state === 'RETURNED').length;
   const open = x => '<div class="action-row">'+(x.type === 'social_project' ? c.act(x.state === 'DRAFT' ? '继续完善' : '查看详情', 'social-detail', 'social_project|' + x.id, 'sm') : c.act(x.state === 'RETURNED' ? '去补正' : '查看详情', 'app-detail', x.id, x.state === 'RETURNED' ? 'sm primary' : 'sm'))+(key==='apply_course'&&x.state==='ACTIVE'&&c.can?.('points.read')?c.act('积分办理','course-points',x.id,'sm primary'):'')+runButton(x)+'</div>';
@@ -352,10 +354,10 @@ export async function applyPageHtml(ctx, key) {
   const actions = key === 'apply_course'
     ? c.act('从我的课程导入', 'teacher-apply', 'credits|', 'primary') + (quickType ? c.act('新开一门课', 'quick-apply', 'course', '') : c.act('手动填写课程', 'teacher-apply', 'courses|app-course-new', ''))
     : trainer ? c.act(['RETURNED','WITHDRAWN'].includes(trainer.state) ? '补正原申请' : '查看原申请', ['RETURNED','WITHDRAWN'].includes(trainer.state) ? 'app-edit' : 'app-detail', trainer.id, 'primary') : quickType ? c.act(cfg.button, 'quick-apply', quickType, 'primary') : c.act(cfg.button, 'teacher-apply', cfg.action, 'primary');
-  const html = `<div class="teacher-apply-page"><section class="card apply-entry"><div class="apply-entry-top"><div><p class="apply-intro">${e(cfg.intro)}</p><p class="apply-entry-hint">${key === 'apply_project' ? (quickType ? '一页填完、点选为主，附上方案材料直接提交学院审批；上报信息在项目运行里补。' : '先保存草稿，再上传材料并提交学院审批。') : key === 'apply_course' ? '已有教务或超星课程可导入；课程入库不直接记社会培训积分。' : trainer ? '培训师实行一人一单；后续查看、补正和重新提交均沿原申请办理。' : '填写资料后提交；审核进度和补正意见在下方查看。'}</p></div><div class="apply-entry-actions">${actions}</div></div></section>` +
-    `<section class="card teacher-applications apply-list"><div class="card-head"><div><h2>申报记录</h2><p>查看当前办理方；完整流程和材料在详情中保留。</p></div><span class="badge ${back ? 'orange-b' : 'gray-b'}">${back ? '待补正 ' + back + ' 项' : '共 ' + mine.length + ' 项'}</span></div>` +
-    (mine.length ? c.table(['申请', '当前进度', '操作'], mine.map(x => [`<strong>${e(x.name)}</strong><p class="cell-sub">${e(x.label)} · ${e(x.state_label)}</p>`,
-      `<div class="apply-progress-copy"><strong class="apply-current">${e(x.progress?.text || x.state_label)}</strong><p class="cell-sub">${e(x.progress?.headline || '')}</p></div>`, open(x)])) : '<p class="apply-empty">还没有申报记录。从上方选择申报方式，提交后会在这里显示进度。</p>') + deletedApplicationsHtml((m.deleted || []).filter(x => cfg.flows.includes(x.flow))) + '</section>';
+  const html = `<div class="teacher-apply-page"><section class="card apply-entry"><div class="apply-entry-top apply-entry-simple"><div class="apply-entry-spacer"><p class="apply-entry-hint">${trainer ? '培训师一人一单，查看、补正都在原申请上办。' : ''}</p></div><div class="apply-entry-actions">${actions}</div></div></section>` +
+    (key === 'apply_project' && !listed.length ? '' : `<section class="card teacher-applications apply-list"><div class="card-head"><div><h2>申报记录</h2><p>查看当前办理方；完整流程和材料在详情中保留。</p></div><span class="badge ${back ? 'orange-b' : 'gray-b'}">${back ? '待补正 ' + back + ' 项' : '共 ' + listed.length + ' 项'}</span></div>` +
+    (listed.length ? c.table(['申请', '当前进度', '操作'], listed.map(x => [`<strong>${e(x.name)}</strong><p class="cell-sub">${e(x.label)} · ${e(x.state_label)}</p>`,
+      `<div class="apply-progress-copy"><strong class="apply-current">${e(x.progress?.text || x.state_label)}</strong><p class="cell-sub">${e(x.progress?.headline || '')}</p></div>`, open(x)])) : '<p class="apply-empty">还没有申报记录。从上方选择申报方式，提交后会在这里显示进度。</p>') + deletedApplicationsHtml((m.deleted || []).filter(x => cfg.flows.includes(x.flow))) + '</section>');
   const approved = (title, description, headers, rows, empty) => `<details class="card apply-approved"${rows.length ? ' open' : ''}><summary><strong>${title}</strong><span>${rows.length} 项</span></summary><p class="apply-approved-note">${description}</p>${rows.length ? c.table(headers, rows) : `<p class="apply-empty">${empty}</p>`}</details></div>`;
   if (key === 'apply_base') {
     const usage = Object.fromEntries(BASE_USAGES);

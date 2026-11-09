@@ -336,3 +336,7 @@ body:not(.no-shell) #content .page-title .teacher-page-subtitle{font-size:15px;l
 .qa-form .field-how{display:none}
 .qa-label{font-size:13px;color:#536985}
 .qa-days .qa-quick{margin-top:6px}
+.apply-entry-simple{justify-content:flex-end}
+.apply-entry-spacer{flex:1}.apply-entry-hint:empty{display:none}.apply-entry-simple{align-items:center}
+.apply-entry:has(.apply-entry-simple){background:transparent;border:0;box-shadow:none;padding:0 0 8px}
+.apply-entry-simple .apply-entry-actions{margin-left:auto}
