@@ -179,3 +179,10 @@ test('项目负责人在项目详情里能“上传参训明细表”，没明�
  const member=await lifePageHtml(ctx({...base,lead:false}),'apply_project','project|p1');
  assert.doesNotMatch(member,/上传参训明细表/);
 });
+
+test('上传材料四个格子：签到表、课件格里的文件名自动补关键字，后端能认出来',async()=>{
+ const {nameFor,groupOf}=await import('../../frontend/lifecycle.js');
+ assert.equal(nameFor('第一天.pdf','签到表'),'签到表_第一天.pdf');assert.equal(groupOf(nameFor('第一天.pdf','签到表')),'签到表');
+ assert.equal(nameFor('学员名册.xlsx','签到表'),'学员名册.xlsx');
+ assert.equal(nameFor('茶艺.pptx','课件'),'课件_茶艺.pptx');assert.equal(nameFor('现场.jpg','照片'),'现场.jpg');assert.equal(nameFor('总结.docx','其他'),'总结.docx');
+});

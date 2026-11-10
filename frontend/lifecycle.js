@@ -289,33 +289,55 @@ export async function lifeListHtml(c,page){
  return `<div class="lv-page"><div class="lv-bar">${bar}${seg}</div><div class="lv-grid">${rows.map(x=>lvCard(c,x)).join('')}${add}${!rows.length&&!add?'<p class="lv-empty">暂无</p>':''}</div></div>`;
 }
 
-// 上传材料：一次拖多个，按文件名自动分组（签到表、照片、课件、其他），不填说明。
+// 上传材料：四个格子（签到表、现场照片、课件、其他）一打开就显示，点哪格就往哪格传，也可以把文件拖进格子。
+// 后端按文件名认材料（签到/名册、图片），所以签到表和课件格里的文件名不带关键字时，上传时自动在前面加“签到表_”“课件_”。
 const GROUPS=['签到表','照片','课件','其他'];
+const GROUP_UI={'签到表':['签到表','签到表、学员名册'],'照片':['现场照片','只收 jpg、png 图片'],'课件':['课件','课件、教案、讲义'],'其他':['其他材料','方案、总结、报送凭证等']};
+const GROUP_ACCEPT={'照片':'.jpg,.jpeg,.png'};
+const ALL_ACCEPT='.pdf,.png,.jpg,.jpeg,.docx,.xlsx,.pptx';
 export const groupOf=name=>/签到|名单|名册|花名册/.test(name)?'签到表':/课件|教案|讲义/.test(name)?'课件':/\.(jpe?g|png|heic|webp)$/i.test(name)?'照片':'其他';
-function groupedHtml(c,files){
- const e=c.esc;if(!files.length)return '';
- return `<div class="lv-groups">${GROUPS.map(g=>{const fs=files.filter(f=>groupOf(f.name)===g);return `<div class="lv-group"><div class="lv-ghead"><strong>${g}</strong><span>${fs.length}</span></div>${fs.map(f=>`<div class="lv-file">${e(f.name)}</div>`).join('')||'<div class="lv-file is-empty">—</div>'}</div>`}).join('')}</div>`;
+export const nameFor=(name,group)=>group==='签到表'&&groupOf(name)!=='签到表'?'签到表_'+name:group==='课件'&&groupOf(name)!=='课件'?'课件_'+name:name;
+function groupedHtml(c,picked,existing){
+ const e=c.esc;
+ return `<div class="lv-groups">${GROUPS.map(g=>{
+  const old=existing.filter(f=>groupOf(f.name)===g),now=picked.map((x,i)=>[x,i]).filter(([x])=>x.group===g);
+  const rows=old.map(f=>`<div class="lv-file is-done">${e(f.name)}<em>已上传</em></div>`).join('')+now.map(([x,i])=>`<div class="lv-file is-new">${e(x.file.name)}<button type="button" class="lv-x" data-lv-remove="${i}" aria-label="移除">×</button></div>`).join('');
+  return `<div class="lv-group lv-pick" data-lv-group="${g}"><div class="lv-ghead"><strong>${GROUP_UI[g][0]}</strong><span>${old.length+now.length}</span></div><div class="lv-ghint">${GROUP_UI[g][1]}</div>${rows}<button type="button" class="btn light lv-add" data-lv-add="${g}">＋ 选择文件</button></div>`}).join('')}</div>`;
 }
 async function uploadGrouped(c,d,refresh){
  const kind=d.type==='project'?'social_project':'social_resource',ident=d.id;
  const latest=async()=>{const x=await c.api('/social/objects/'+kind+'/'+ident);return {version:x.item.version,attachments:x.attachments||[]}};
  const {checkUploadFiles,uploadEntries,uploadSequential}=await import('./approval-flow.js?v=20261110-doc2');
- const body=`<label class="lv-drop form-field full" id="lv-drop"><input type="file" id="lv-files" data-plain-file="1" data-assist-control="true" multiple accept=".pdf,.png,.jpg,.jpeg,.docx,.xlsx,.pptx" hidden><strong>拖入文件，或点击选择</strong><span>可一次选多个</span></label><div id="lv-grouped" class="form-field full"></div>`;
- let picked=[];
+ let existing=[];try{existing=(await latest()).attachments}catch{}
+ const body=`<input type="file" id="lv-files" data-plain-file="1" data-assist-control="true" multiple accept="${ALL_ACCEPT}" hidden><p class="lv-tip">点格子里的“选择文件”，或把文件拖进对应格子；每格可选多个。</p><div id="lv-grouped" class="form-field full">${groupedHtml(c,[],existing)}</div>`;
+ let picked=[],target='其他';
  c.formModal('上传材料 · '+d.name,body,async()=>{
-  if(!picked.length)throw Error('请选择文件');
-  const files=checkUploadFiles(picked),fresh=await latest();
-  const r=await uploadSequential({api:c.api,kind,id:ident,version:fresh.version,entries:uploadEntries(files),reason:'上传运行材料（'+GROUPS.map(g=>[g,files.filter(f=>groupOf(f.name)===g).length]).filter(x=>x[1]).map(x=>x[0]+' '+x[1]).join('、')+'）',latest});
+  if(!picked.length)throw Error('请先在格子里选择文件');
+  checkUploadFiles(picked.map(x=>x.file));
+  const files=picked.map(x=>{const n=nameFor(x.file.name,x.group);return n===x.file.name?x.file:new File([x.file],n,{type:x.file.type})});
+  const fresh=await latest();
+  const r=await uploadSequential({api:c.api,kind,id:ident,version:fresh.version,entries:uploadEntries(files),reason:'上传运行材料（'+GROUPS.map(g=>[GROUP_UI[g][0],picked.filter(x=>x.group===g).length]).filter(x=>x[1]).map(x=>x[0]+' '+x[1]).join('、')+'）',latest});
   if(r.failed?.length)throw Error('有 '+r.failed.length+' 个文件没传上：'+r.failed.map(x=>x.name||x.file?.name||'').join('、'));
   c.closeModal();c.toast('已上传 '+files.length+' 个文件');await refresh();
  },{submit:'保存',stepper:false,wide:true,contextLabel:TYPE_LABEL[d.type]+' / 上传材料'});
  if(typeof document==='undefined')return;
- const drop=document.getElementById('lv-drop'),input=document.getElementById('lv-files'),box=document.getElementById('lv-grouped');
- const add=list=>{picked=[...picked,...Array.from(list||[])];box.innerHTML=groupedHtml(c,picked)};
- input?.addEventListener('change',()=>{add(input.files);input.value=''});
- drop?.addEventListener('dragover',ev=>{ev.preventDefault();drop.classList.add('over')});
- drop?.addEventListener('dragleave',()=>drop.classList.remove('over'));
- drop?.addEventListener('drop',ev=>{ev.preventDefault();drop.classList.remove('over');add(ev.dataTransfer?.files)});
+ const input=document.getElementById('lv-files'),box=document.getElementById('lv-grouped');
+ const draw=()=>{box.innerHTML=groupedHtml(c,picked,existing)};
+ const add=(list,g)=>{
+  const fs=Array.from(list||[]);
+  if(g==='照片'){const bad=fs.filter(f=>!/\.(jpe?g|png)$/i.test(f.name));if(bad.length)c.toast('现场照片只收 jpg、png 图片：'+bad.map(f=>f.name).join('、')+' 没加进去',true);picked=[...picked,...fs.filter(f=>!bad.includes(f)).map(file=>({file,group:g}))]}
+  else picked=[...picked,...fs.map(file=>({file,group:g}))];
+  draw();
+ };
+ input?.addEventListener('change',()=>{add(input.files,target);input.value=''});
+ box?.addEventListener('click',ev=>{
+  const addBtn=ev.target.closest?.('[data-lv-add]'),rm=ev.target.closest?.('[data-lv-remove]');
+  if(addBtn){target=addBtn.dataset.lvAdd;input.accept=GROUP_ACCEPT[target]||ALL_ACCEPT;input.click()}
+  if(rm){picked.splice(Number(rm.dataset.lvRemove),1);draw()}
+ });
+ box?.addEventListener('dragover',ev=>{const g=ev.target.closest?.('[data-lv-group]');if(!g)return;ev.preventDefault();box.querySelectorAll('.lv-pick.over').forEach(x=>x!==g&&x.classList.remove('over'));g.classList.add('over')});
+ box?.addEventListener('dragleave',ev=>{const g=ev.target.closest?.('[data-lv-group]');if(g&&!g.contains(ev.relatedTarget))g.classList.remove('over')});
+ box?.addEventListener('drop',ev=>{const g=ev.target.closest?.('[data-lv-group]');if(!g)return;ev.preventDefault();g.classList.remove('over');add(ev.dataTransfer?.files,g.dataset.lvGroup)});
 }
 
 // 结项前查缺：缺什么列出来，传齐才进结项表。
