@@ -387,6 +387,27 @@ export async function homeApplicationsHtml(ctx) {
   return `<section class="card"><div class="card-head"><div><h2>我的申请</h2></div>${c.act('全部申请', 'todos-tab', 'mine', 'text')}</div><div class="card-pad">${open.map(row).join('')}</div></section>`;
 }
 
+// 首页：本人运行中的培训项目、课程、基地、师资，四块并排，点“运行”直接进运行档案。
+const RUNNING = [
+  ['project', '培训项目', '全部项目', 'projects', '项目运行', x => x.type === 'social_project' && ['FILED', 'CLOSE_COLLEGE', 'CLOSE_REVIEW'].includes(x.state)],
+  ['course', '培训课程', '全部课程', 'courses', '课程运行', x => x.flow === 'course' && ['ACTIVE', 'STOPPED'].includes(x.state)],
+  ['base', '培训基地', '全部基地', 'bases', '基地运行', x => x.flow === 'base' && ['ACTIVE', 'STOPPED'].includes(x.state)],
+  ['trainer', '培训师资', '师资库', 'apply_trainer', '师资运行', x => x.flow === 'trainer' && ['ACTIVE', 'STOPPED'].includes(x.state)],
+];
+export async function homeRunningHtml(ctx) {
+  c = ctx;
+  const e = c.esc;
+  let m;
+  try { m = await c.api('/applications/mine'); } catch { return ''; }
+  const items = m?.items || [];
+  const block = ([type, title, all, dest, label, test]) => {
+    const rows = items.filter(test);
+    const body = rows.length ? rows.slice(0, 5).map(x => `<div class="home-run-row"><div><strong>${e(x.name)}</strong>${x.progress?.text ? `<p class="cell-sub">${e(x.progress.text)}</p>` : ''}</div>${c.act(label, 'life-open', type + '|' + x.id, 'sm')}</div>`).join('') : `<p class="muted home-run-empty">暂无运行中的${e(title.replace('培训', ''))}</p>`;
+    return `<section class="card home-run-card"><div class="card-head"><h2>运行中的${e(title)} <span class="workbench-count">${rows.length}</span></h2>${c.act(all, 'nav', dest, 'text')}</div>${body}</section>`;
+  };
+  return `<div class="home-running">${RUNNING.map(block).join('')}</div>`;
+}
+
 // ---- 我的课程（老师）与在线课程库（教研室、学院、学校） ----
 
 let mine = null, mineVisible = [], library = null, libFilter = {}, libPage = 1, detailRequest = 0;

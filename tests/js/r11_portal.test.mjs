@@ -2045,3 +2045,14 @@ test('授课认定分组全选初始化及单项联动，不串改另一来源',
  jw[0].checked=false;jw[0].change();assert.equal(allJw.checked,false);assert.equal(allJw.indeterminate,true);
  allJw.checked=true;allJw.change();assert.ok(jw.every(x=>x.checked));assert.equal(allJw.indeterminate,false);assert.equal(cx[0].checked,false);
 });
+
+test('教师首页显示运行中的培训项目、课程、基地、师资四块，没有时写明暂无',async()=>{
+ const e=engine(url=>url.startsWith('/api/applications/mine')?{items:[
+  {id:'p1',type:'social_project',flow:'project',state:'FILED',name:'测试项目2',progress:{text:'已备案',tone:'green'}},
+  {id:'p2',type:'social_project',flow:'project',state:'DRAFT',name:'草稿项目',progress:{text:'草稿'}},
+  {id:'c1',type:'application',flow:'course',state:'ACTIVE',name:'运行中课程',progress:{text:'已入库',tone:'green'}},
+  {id:'c2',type:'application',flow:'course',state:'COLLEGE',name:'审批中课程',progress:{text:'学院审批中'}}]}:homeResponse(url),'teacher');
+ e.t.setState('home');const html=await e.t.pages.home();
+ for(const t of ['运行中的培训项目','运行中的培训课程','运行中的培训基地','运行中的培训师资','测试项目2','运行中课程','data-action="life-open" data-id="project|p1"','data-action="life-open" data-id="course|c1"','暂无运行中的基地','暂无运行中的师资'])assert.ok(html.includes(t),t);
+ assert.doesNotMatch(html,/草稿项目|审批中课程/);
+});

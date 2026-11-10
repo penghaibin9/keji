@@ -1018,3 +1018,11 @@ body[data-role="teacher"] #content[data-page="records"] .tw-detail h3{font-size:
  body[data-role="teacher"] #modal-root .modal-foot .detail-more-actions{flex-basis:100%}
  body[data-role="teacher"] .material-viewer>footer .btn{min-height:44px;font-size:14px}
 }
+
+.home-running{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:16px;margin-bottom:16px}
+.home-run-card{margin:0}
+.home-run-row{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:11px 20px;border-bottom:1px solid #edf2f9}
+.home-run-row:last-child{border-bottom:0}
+.home-run-row strong{display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.home-run-empty{padding:14px 20px;margin:0}
+@media(max-width:900px){.home-running{grid-template-columns:1fr}}
