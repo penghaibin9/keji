@@ -1,7 +1,7 @@
 // 2026-11-07 立项（申报）通过以后的运行过程：档案视图、申请变更、年度确认、停用与恢复。
 // 2026-11-09 按设计图 v2：老师“我的X”三步列表、详情只留三个按钮、上传自动分组、结项查缺、学院学校“待我审批”。
 // 菜单不变（培训项目 / 培训课程 / 培训基地 / 培训师资）；入口是详情里的三个主按钮。名称按验收人定的：项目立项、项目运行、项目结项。
-import {quickApply} from './apply-quick.js?v=20261110-chg1';
+import {quickApply} from './apply-quick.js?v=20261110-chg2';
 
 const TYPE_LABEL={project:'培训项目',course:'培训课程',base:'培训基地',trainer:'培训师资'};
 // 三个主按钮：[动作, 名称, 小字]
@@ -408,10 +408,10 @@ async function closeReviewModal(c,x){
  const grid=`<div class="lv-mat">${GROUPS.map(g=>{const fs=files.filter(f=>groupOf(f.name)===g);return `<div class="lv-group"><div class="lv-ghead"><strong>${g}</strong><span>${fs.length}</span></div>${fs.map(f=>`<a class="lv-file is-link" href="/api/attachments/${e(f.id)}/download" target="_blank" rel="noopener">${e(f.name)}</a>`).join('')||'<div class="lv-file is-empty">—</div>'}</div>`}).join('')}</div>`;
  const stats=`<div class="life-stats">${(d.stats||[]).map(([k,v])=>`<div><b>${e(v)}</b><small>${e(k)}</small></div>`).join('')}${r.closeout?.satisfaction!=null?`<div><b>${e(r.closeout.satisfaction)}%</b><small>满意度</small></div>`:''}</div>`;
  const noUnits=!r.units,college=x.action==='approve';
- const unitsNote=noUnits?`<div class="lv-gaps"><strong>老师还没上传参训明细表</strong></div>`:'';
+ const unitsNote=noUnits?`<div class="lv-gaps"><strong>老师还没上传参训明细表</strong>（不影响结项，参训人次按 0 计）</div>`:'';
  const body=`<div class="life-archive">${unitsNote}<dl class="life-facts">${(d.facts||[]).map(([k,v])=>`<div><dt>${e(k)}：</dt><dd>${e(v)}</dd></div>`).join('')}</dl>${stats}${r.points?`<div class="lv-points">本项目将记积分：${e(r.points)}</div>`:''}<div class="lv-mat-head"><h3>运行材料 <span class="life-count">${files.length}</span></h3>${files.length?c.act('一键下载（'+files.length+' 个文件）','q-dl',x.id,'primary'):''}</div>${grid}</div>`;
  view2.files=files;view2.review=r;
- const ok=noUnits?'':college?c.act('同意','q-ok-close',qid(x),'primary'):c.act('同意','q-close-review',qid(x),'primary');
+ const ok=college?c.act('同意','q-ok-close',qid(x),'primary'):c.act('同意','q-close-review',qid(x),'primary');
  return c.modal((x.label||'结项')+' · '+x.name,body,`${c.act('退回','q-ret',qid(x),'')}${ok}${c.act('关闭','close')}`,true,'培训项目 / 结项审批');
 }
 // 学校结项核验：登记满意度（管理办法第十四条）和财务确认的到账收入、分配（第二十一条），填完才能同意。

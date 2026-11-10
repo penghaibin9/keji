@@ -141,10 +141,8 @@ def test_teacher_close_only_needs_outcome_report_and_school_records_review(setup
     r = action(c, 'projects', 'social_project', pid, 'close_submit', closeout={'closed_on': CLOSEOUT['closed_on'], 'outcome_report': '结项报告'})
     assert r.status_code == 200, r.text  # 没有参训明细也能提交
     auth(c, 'collegehead')
-    r = action(c, 'projects', 'social_project', pid, 'approve')
-    assert r.status_code == 409 and '老师还没上传参训明细表' in r.text  # 老师上传明细后才能通过
     assert import_rows(c, pid, [row()]).status_code == 200
-    assert action(c, 'projects', 'social_project', pid, 'approve').status_code == 200
+    assert action(c, 'projects', 'social_project', pid, 'approve').status_code == 200  # 2026-11-10 起明细不是必传，这里照常导入
     auth(c, 'reviewer')
     r = action(c, 'projects', 'social_project', pid, 'close', materials_checked=MATERIALS, review={'satisfaction': '80'})
     assert r.status_code == 422 and '整改期限' in r.text

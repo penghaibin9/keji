@@ -6,7 +6,7 @@ import {renderSchoolCockpit,bindSchoolCockpit} from './school-cockpit.js?v=20261
 import {icons} from './icons.js';
 import {dutiesTabHtml,dutiesAction} from './school-duties.js?v=20261104-simplify2';
 import {socialPage,socialAction,applicationProjectPicker} from './social-training.js?v=20261110-chg1';
-import {lifecycleAction,LIFE_ACTIONS,lifePageHtml,lifeBoardHtml,lifePageType,placeLifeBoard,lifeListHtml} from './lifecycle.js?v=20261110-chg1';
+import {lifecycleAction,LIFE_ACTIONS,lifePageHtml,lifeBoardHtml,lifePageType,placeLifeBoard,lifeListHtml} from './lifecycle.js?v=20261110-chg2';
 import {applicationAction,trainersHtml,applyPageHtml,APPLY_PAGES,myApplicationsHtml,homeApplicationsHtml,myCoursesHtml,libraryHtml,libraryFilterSubmit,homeCoursesHtml,courseAction} from './applications.js?v=20261109-v2l';
 import {nextCode,runBatch,batchStage,batchMode,batchPerformer,BATCH_LABELS,materialUploadForm,checkUploadFiles,uploadEntries,uploadSequential,uploadStatusHtml} from './approval-flow.js?v=20261110-doc2';
 import {ledgerPage,resourceStatsPage,homeIndicators,ledgerAction,resetLedgerView,minePage,mineReminders} from './social-ledgers.js?v=20261021-form-merged1';

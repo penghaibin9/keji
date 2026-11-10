@@ -392,7 +392,6 @@ def project_action(ident:str,data:SocialAction,request:Request):
             if data.action=='approve':
                 if ap.same_person(db,'social_project',obj.id,a):handling['same_person']=ap.SAME_PERSON
                 if flow=='project':st.require_project_confirmed(obj)
-                elif not st.units(db,obj.id):raise HTTPException(409,'老师还没上传参训明细表')
                 if flow=='project_close' and obj.data.get('quality'):
                     # 学院结项核验即核对了主讲教师资格审查表和课件内容审查记录（两项审查都由学院做）。
                     q=obj.data['quality']
@@ -446,7 +445,7 @@ def project_action(ident:str,data:SocialAction,request:Request):
             st.duty(db,a,'coordinator',obj.owner_id,obj.org_id)
             if obj.state!='CLOSE_REVIEW':raise HTTPException(409,'项目不在结项核验阶段')
             st.require_project_confirmed(obj)
-            if not st.units(db,ident):raise HTTPException(409,'老师还没上传参训明细表')
+            # 2026-11-10 用户定：参训明细不是必传项，没有明细也能结项（人次和授课积分按 0 计）。
             if issues:=st.person_day_blockers([u.data for u in st.units(db,ident)]):raise HTTPException(409,'；'.join(issues))
             # 2026-11-09 满意度和财务数在这一步由学校登记（老师结项不再填）；在途项目老师已填过的沿用。
             merged=dict(obj.closeout)

@@ -73,7 +73,7 @@ def test_school_close_needs_satisfaction_score_income_defaults_zero(setup_social
     assert r.status_code == 200, r.text
     auth(client2, 'reviewer')
     r = action(client2, 'projects', 'social_project', pid, 'close')
-    assert r.status_code == 409 and r.json()['detail'] == '老师还没上传参训明细表'
+    assert r.status_code == 422 and r.json()['detail'] == '请填满意度分数'  # 2026-11-10 起没明细也不拦
     auth(client2, 'teacher')
     assert upload(client2, pid, sheet([('2026-09-01', '', '张三', '', '')])).status_code == 200
     auth(client2, 'reviewer')
@@ -124,3 +124,14 @@ def test_project_without_courses_uses_project_as_course_and_template_has_help(se
     wb = load_workbook(BytesIO(client2.get('/api/social/units/template.xlsx').content))
     assert wb.sheetnames == ['参训明细', '填写说明']
     assert any('是,否' in (dv.formula1 or '') for dv in wb['参训明细'].data_validations.dataValidation)
+
+
+def test_school_close_without_unit_sheet_is_allowed(setup_social, client2, app2):
+    pid = setup_social
+    auth(client2, 'schooladmin')
+    assert action(client2, 'projects', 'social_project', pid, 'close_submit', closeout={'closed_on': '2026-09-02', 'outcome_report': '结项报告'}).status_code == 200
+    auth(client2, 'reviewer')
+    r = action(client2, 'projects', 'social_project', pid, 'close', review={'satisfaction': '96'})
+    assert r.status_code == 200, r.text
+    with app2.state.sessions() as db:
+        assert db.get(SocialProject, pid).state == 'CLOSED'

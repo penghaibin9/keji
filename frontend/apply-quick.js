@@ -55,20 +55,24 @@ async function uploadFiles(c,kind,id,version,form){
 
 function projectForm(c){
  const e=c.esc;
- // 2026-11-09 设计图 v2：必填只有名称、类别、起止日期、预估人次（外加学校要求的方案材料）；场地、收入、成果等收进“结项前补”，带默认值。
- const body=c.field('name','项目名称','text','',{full:true})
+ // 2026-11-10 用户定：立项申请就是变更单里的那几项——名称、时间、地点、人次、学时、收入、成果、负责人（本人），外加培训类别。
+ // 必填只有名称、类别、起止日期、预估人次；地点默认校内培训基地，收入不填按 0，成果默认结业证书。其余收进“更多（选填）”。
+ const me=c.me?.user||{};
+ const body=c.field('name','项目名称','text','',{full:true,placeholder:'例：社区茶艺入门培训班'})
   +chips(c,'category',CATEGORY,{label:'培训类别'})
+  +cond('category=subsidy',chips(c,'groups',GROUPS.map(x=>[x,x]),{multi:true,label:'重点群体'})+c.field('groups_note','行动对接','text','',{required:false,full:true}))
   +c.field('start_date','开始日期','date',today())+c.field('end_date','结束日期','date','')
   +`<div class="form-field full qa-days">${quick(c,'days',[['1 天',1],['3 天',3],['1 周',7],['1 个月',30],['一学期',120]])}</div>`
-  +c.field('expected_participants','预估人次','number','',{min:0,step:'1'})
-  +cond('category=subsidy',chips(c,'groups',GROUPS.map(x=>[x,x]),{multi:true,label:'重点群体'})+c.field('groups_note','行动对接','text','',{required:false,full:true}))
-  +upload(c,'方案材料（选填）','有方案可以附上，没有也能先提交')
-  +`<details class="form-field full qa-more"><summary>结项前补：场地、收入、预期成果、一人一技、积分口径</summary><div class="form-grid">`
-  +chips(c,'venue_type',VENUES,{label:'培训场地',checked:['base'],required:false})
-  +c.field('venue_place','具体地点','text','',{required:false,full:true})
+  +chips(c,'venue_type',VENUES,{label:'培训地点',checked:['base'],required:false})
+  +c.field('venue_place','具体地点','text','',{required:false,full:true,placeholder:'例：校内培训基地 3 楼实训室'})
   +cond('venue_type=offsite',c.field('venue_reason','外出理由','text','',{required:false,full:true})+c.field('venue_ref','议定文号或会议日期','text','',{required:false,full:true}))
-  +c.field('expected_income','预计收入（元）','number','',{min:0,step:'0.01',required:false})
+  +c.field('expected_participants','预估人次','number','',{min:0,step:'1'})
+  +`<div class="form-field"><label for="f-total_hours">总学时 <span class="qa-opt">选填</span></label><input type="number" id="f-total_hours" name="total_hours" min="0" step="0.5">${quick(c,'total_hours',[['8',8],['16',16],['32',32],['64',64]])}</div>`
+  +c.field('expected_income','预计收入（元）','number','',{min:0,step:'0.01',required:false,placeholder:'不填按 0'})
   +chips(c,'outcome',OUTCOMES.map(x=>[x,x]),{multi:true,label:'预期成果',checked:['结业证书'],required:false})
+  +`<div class="form-field full"><label>项目负责人</label><div class="qa-owner">本人：${e(me.name||'')}${me.staff_no?'（'+e(me.staff_no)+'）':''}<span class="hint">立项后要换负责人，在项目里申请变更</span></div></div>`
+  +upload(c,'方案材料（选填）','有方案可以附上，没有也能先提交')
+  +`<details class="form-field full qa-more"><summary>更多（选填）：一人一技、项目级别、核算方式、期次</summary><div class="form-grid">`
   +`<div class="form-field full"><label class="choice qa-check"><input type="checkbox" name="one_skill"><span>“一人一技”项目</span></label></div>`
   +cond('one_skill=on',chips(c,'groups1',GROUPS.map(x=>[x,x]),{multi:true,label:'重点群体'}))
   +chips(c,'level',LEVELS,{label:'项目级别',checked:['school'],required:false})+chips(c,'scene',SCENES,{label:'培训场景',checked:['ordinary'],required:false})+chips(c,'mode',MODES,{label:'核算方式',checked:['module'],required:false})+chips(c,'class_type',CLASS_TYPES,{label:'班型',checked:['technical'],required:false})+c.field('cohort','期次','text','第一期',{required:false})+c.field('code','项目编号','text','',{required:false})
@@ -91,7 +95,7 @@ function projectForm(c){
    category:cat,high_risk:false,expected_income:income,expected_participants:Number(v.expected_participants),expected_outcomes:outcomes.join('；'),
    start_date:text(form,'start_date'),end_date:text(form,'end_date'),mode:radio(form,'mode')||'module',class_type:radio(form,'class_type')||'technical',
    level:radio(form,'level')||'school',scene:radio(form,'scene')||'ordinary',target_groups:groups,one_skill:one,
-   dates_confirmed:true,level_confirmed:true,scene_confirmed:true,mode_confirmed:true,venue};
+   dates_confirmed:true,level_confirmed:true,scene_confirmed:true,mode_confirmed:true,venue,...(text(form,'total_hours')?{total_hours:text(form,'total_hours')}:{})};
   const r=await c.api('/social/projects',{method:'POST',body:{reason:'申报培训项目',data}});
   const up=await uploadFiles(c,'social_project',r.item.id,r.item.version,form);
   if(up.failed?.length){c.closeModal();c.toast('项目已保存为草稿，但有材料没传上：'+up.failed.map(x=>x.name).join('、')+'。请在详情里补传后提交。',true);await c.render?.();return}

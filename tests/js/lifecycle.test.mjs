@@ -157,7 +157,7 @@ test('结项审批：没明细时只写“老师还没上传参训明细表”�
  c.api=async url=>url.includes('/queue/')?{items:[college,school]}:review(url.includes('p1')?0:2);
  await lifeBoardHtml(c,'projects');
  await lifecycleAction('q-view','close|project|p1',c);
- assert.match(c.last.body,/老师还没上传参训明细表/);assert.doesNotMatch(c.last.foot,/q-ok-close|life-units/);
+ assert.match(c.last.body,/老师还没上传参训明细表/);assert.match(c.last.foot,/q-ok-close/);assert.doesNotMatch(c.last.foot,/life-units/);
  await lifecycleAction('q-view','close|project|p2',c);
  assert.match(c.last.foot,/data-action="q-close-review"/);
  await lifecycleAction('q-close-review','close|project|p2',c);
