@@ -90,3 +90,19 @@ def test_upload_needs_login(setup_social, client2):
     client2.cookies.clear()
     r = upload(client2, setup_social, sheet([('2026-09-01', '', '张三', '', '')]))
     assert r.status_code in (401, 403)
+
+
+def test_owner_can_name_same_college_teacher_other_college_row_skipped(setup_social, client2, app2):
+    pid = setup_social
+    with app2.state.sessions.begin() as db:
+        owner = db.get(User, 'teacher'); far = db.get(User, 'otherteacher')
+        assert far.org_id != owner.org_id and far.staff_no
+        db.add(User(id='mate', username='mate', name='同院老师', staff_no='MATE01', org_id=owner.org_id, role_id=owner.role_id,
+                    password_hash=owner.password_hash, must_change_password=False, active=True))
+        far_no = far.staff_no
+    auth(client2, 'teacher')
+    r = upload(client2, pid, sheet([('2026-09-01', '', '张三', '', 'MATE01'), ('2026-09-01', '', '李四', '', far_no)]))
+    assert r.status_code == 200, r.text
+    body = r.json()
+    assert body['imported'] == 1 and body['errors'] == [{'row': 3, 'reason': '工号 ' + far_no + ' 的老师不在本院，不能填'}]
+    assert units(app2, pid)[0].data['teachers'] == [{'teacher_id': 'mate', 'staff_type': 'internal', 'role': 'lecturer'}]
