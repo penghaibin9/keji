@@ -299,7 +299,7 @@ function groupedHtml(c,files){
 async function uploadGrouped(c,d,refresh){
  const kind=d.type==='project'?'social_project':'social_resource',ident=d.id;
  const latest=async()=>{const x=await c.api('/social/objects/'+kind+'/'+ident);return {version:x.item.version,attachments:x.attachments||[]}};
- const {checkUploadFiles,uploadEntries,uploadSequential}=await import('./approval-flow.js?v=20261110-doc1');
+ const {checkUploadFiles,uploadEntries,uploadSequential}=await import('./approval-flow.js?v=20261110-doc2');
  const body=`<label class="lv-drop form-field full" id="lv-drop"><input type="file" id="lv-files" data-plain-file="1" data-assist-control="true" multiple accept=".pdf,.png,.jpg,.jpeg,.docx,.xlsx,.pptx" hidden><strong>拖入文件，或点击选择</strong><span>可一次选多个</span></label><div id="lv-grouped" class="form-field full"></div>`;
  let picked=[];
  c.formModal('上传材料 · '+d.name,body,async()=>{
@@ -451,7 +451,7 @@ async function againForm(c,id){
   +`<div class="form-field full lv-copied">${copied.map(([k,v])=>`<span>${e(k)}：<b>${e(v)}</b></span>`).join('')}</div>`+c.field('lv_files','方案材料','file','',{multiple:true,accept:'.pdf,.png,.jpg,.jpeg,.docx,.xlsx,.pptx',full:true}),async(v,form)=>{
   if(!v.start_date||!v.end_date||!v.expected_participants)throw Error('请填写起止日期和预估人次');
   if(v.end_date<v.start_date)throw Error('结束日期不能早于开始日期');
-  const {checkUploadFiles,uploadEntries,uploadSequential}=await import('./approval-flow.js?v=20261110-doc1');
+  const {checkUploadFiles,uploadEntries,uploadSequential}=await import('./approval-flow.js?v=20261110-doc2');
   const files=checkUploadFiles(form.querySelector('#f-lv_files')?.files||[]);
   if(!files.length)throw Error('请附上方案材料（立项需要正式依据）');
   const keep=['category','high_risk','expected_income','expected_outcomes','mode','class_type','level','scene','target_groups','one_skill','venue','total_hours','audience','service_type','teaching_mode'];

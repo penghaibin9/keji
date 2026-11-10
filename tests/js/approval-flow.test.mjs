@@ -289,3 +289,9 @@ test('三级积分申报：办理区带出认定积分，改了积分必须写�
  try{await socialAction('social-handle','approve',c)}finally{delete globalThis.document}
  assert.equal(state.posts[1].options.body.teaching_points,undefined);
 });
+
+test('旧版 doc、xls、ppt 提示转换成新版格式',()=>{
+ assert.throws(()=>checkUploadFiles([file('方案.doc')]),/方案\.doc：这是旧版格式，请先在 Office 里另存为 \.docx/);
+ assert.throws(()=>checkUploadFiles([file('表.XLS')]),/\.xlsx/);
+ assert.doesNotThrow(()=>checkUploadFiles([file('汇报.pptx'),file('表.xlsx')]));
+});

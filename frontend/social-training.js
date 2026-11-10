@@ -1,6 +1,6 @@
 import {parseCalendarDates,calendarDateError,normalizeDate,dateError,setFieldCondition,actionPhrases,validateFormAssists} from './form-assist.js?v=20261109-v2l';
 // School business pages reuse the portal's forms, permissions, navigation and attachments.
-import {checkUploadFiles,uploadEntries,uploadSequential,uploadStatusHtml,failedEntries,MAX_ATTACHMENTS} from './approval-flow.js?v=20261110-doc1';
+import {checkUploadFiles,uploadEntries,uploadSequential,uploadStatusHtml,failedEntries,MAX_ATTACHMENTS} from './approval-flow.js?v=20261110-doc2';
 import {renderTrainingWorkspace,trainingChange} from './training-workspace.js?v=20261109-v2l';
 import {imageField,takeImage,saveImageAfter,coverButton} from './display-image.js?v=20261021-form-merged1';
 import {historyProjectsPage,projectViewTabs} from './history-projects.js?v=20261019-walk3&display=20261019-clean2&history_dates=20261020-images1';

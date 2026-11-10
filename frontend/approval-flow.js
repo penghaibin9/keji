@@ -6,7 +6,9 @@ export const UPLOAD_PATTERN=/\.(pdf|png|jpe?g|docx|xlsx|pptx)$/i;
 export function checkUploadFiles(files,existing=0,{maxBytes=10*1024*1024,max=MAX_ATTACHMENTS}={}){
  const list=[...(files||[])],bad=[];
  for(const file of list){
-  if(!UPLOAD_PATTERN.test(file.name))bad.push(file.name+'：只能是 .pdf、.jpg、.png、.docx、.xlsx 或 .pptx 文件（旧版 .doc、.xls、.ppt 请另存为新版格式）');
+  const legacy=/\.(doc|xls|ppt)$/i.exec(file.name);
+  if(legacy)bad.push(file.name+'：这是旧版格式，请先在 Office 里另存为 .'+legacy[1].toLowerCase()+'x 格式后再上传');
+  else if(!UPLOAD_PATTERN.test(file.name))bad.push(file.name+'：只能是 .pdf、.jpg、.png、.docx、.xlsx 或 .pptx 文件（旧版 .doc、.xls、.ppt 请另存为新版格式）');
   else if(file.size>maxBytes)bad.push(file.name+'：超过 '+Math.round(maxBytes/1024/1024)+' 兆字节，请压缩或分页后再传');
  }
  if(bad.length)throw Error('以下材料不能上传，请更换后再选：\n'+bad.join('\n'));

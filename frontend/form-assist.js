@@ -1,4 +1,4 @@
-import {checkUploadFiles} from './approval-flow.js?v=20261110-doc1';
+import {checkUploadFiles} from './approval-flow.js?v=20261110-doc2';
 import {takeImage} from './display-image.js?v=20261021-form-merged1';
 // 只帮助填写，所有保存、权限、版本与业务校验仍走原有流程。
 export function validateFileSelection(files,{kind,max=50,existing=0}={}){
