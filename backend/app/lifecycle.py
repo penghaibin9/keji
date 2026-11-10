@@ -859,8 +859,13 @@ def last_return(db, kind, obj):
 
 
 def active_policy(db):
+    """现行口径；学校办法没批、没有启用的口径时，用最新的草稿口径试行（和老师申报时的试行口径一致）。"""
     from .social_models import SocialPolicy
-    return db.scalar(select(SocialPolicy).where(SocialPolicy.state == 'ACTIVE').order_by(SocialPolicy.created_at.desc()).limit(1))
+    for state in ('ACTIVE', 'DRAFT'):
+        found = db.scalar(select(SocialPolicy).where(SocialPolicy.state == state).order_by(SocialPolicy.created_at.desc()).limit(1))
+        if found is not None:
+            return found
+    return None
 
 
 def points_estimate(db, project):
@@ -896,10 +901,11 @@ def points_booked(db, project):
     """已归档入账的社会培训积分（按老师）。"""
     from .social_models import SocialClaim
     out = {}
+    from . import social_training as st
     for c in db.scalars(select(SocialClaim).where(SocialClaim.project_id == project.id, SocialClaim.state == 'ARCHIVED')):
-        total = ((c.snapshot or {}).get('trial') or {}).get('total')
-        if total is not None:
-            out[c.teacher_id] = str(Decimal(str(out.get(c.teacher_id, 0))) + Decimal(str(total)))
+        if ((c.snapshot or {}).get('trial') or {}).get('total') is not None:
+            teaching, auxiliary = st.claim_points(c)  # 审批中改过的以最终认定为准
+            out[c.teacher_id] = str(Decimal(str(out.get(c.teacher_id, 0))) + teaching + auxiliary)
     return out
 
 
@@ -1078,8 +1084,17 @@ def approval_queue(db, a, kind):
     return {'type': kind, 'items': out}
 
 
+def require_close_view(a, project):
+    """结项核验资料（到账收入、财务凭据、留存、人员支出，各位老师的预计积分）只给项目负责人和所属学院、学校看；
+    参与授课的老师、教研室负责人不能通过运行档案接口绕过系统对他们的屏蔽。"""
+    if a.id == project.owner_id or is_manager(a, project):
+        return
+    raise HTTPException(403, '结项核验资料只有项目负责人和所属学院、学校可以查看')
+
+
 def close_review(db, a, project):
     """结项审批页：运行汇总、平铺材料、将记积分。"""
+    require_close_view(a, project)
     from . import social_training as st
     v = view(db, a, 'project', project)
     files = st.evidence(db, 'social_project', project.id)
@@ -1091,8 +1106,11 @@ def points_view(db, a, project):
     """详情页“运行汇总”里的积分：已结项且已归档的显示已记积分，否则按现行口径预估。"""
     booked = points_booked(db, project)
     if project.state == 'CLOSED' and booked:
-        return {'label': '已记积分', 'value': booked.get(a.id, '0'), 'line': '、'.join(booked.values()) and points_line(db, project)}
+        full = a.id == project.owner_id or is_manager(a, project)
+        return {'label': '已记积分', 'value': booked.get(a.id, '0'), 'line': ('、'.join(booked.values()) and points_line(db, project)) if full else ''}
     est = points_estimate(db, project)
     if est is None:
         return {'label': '预计积分', 'value': '口径未启用', 'line': ''}
-    return {'label': '预计积分', 'value': est.get(a.id, '0') if a.role.kind == 'teacher' else str(sum(Decimal(v) for v in est.values())), 'line': points_line(db, project)}
+    full = a.id == project.owner_id or is_manager(a, project)  # 别人的预计积分只给负责人和学院、学校看
+    return {'label': '预计积分', 'value': str(sum(Decimal(v) for v in est.values())) if is_manager(a, project) else est.get(a.id, '0'),
+            'line': points_line(db, project) if full else ''}

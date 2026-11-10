@@ -975,7 +975,8 @@ def personal_claim_trial(trial, teacher_id):
 
 
 def correction_totals(db,claim):
-    totals={'teaching':D(claim.snapshot['trial']['teaching']),'auxiliary':D(claim.snapshot['trial']['auxiliary'])}
+    teaching,auxiliary=claim_points(claim)  # 审批时改过的认定积分才是实际入账的，更正、汇总、年度考核都以它为基数
+    totals={'teaching':teaching,'auxiliary':auxiliary}
     for entry in db.scalars(select(PointEntry).where(PointEntry.teacher_id==claim.teacher_id,PointEntry.kind=='SOCIAL')):
         source=entry.source_snapshot
         if source.get('social_claim')==claim.id and source.get('correction_id'):

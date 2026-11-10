@@ -279,8 +279,8 @@
       "size": 16133
     },
     "backend/app/lifecycle.py": {
-      "sha256": "42d29374fd321a34da7241df2400a7c791b5e2a1b8a6145ca967a8a6afab46ae",
-      "size": 63467
+      "sha256": "339336f6476d437dede0ccaed317896385d1d5e78e2862540038eba1443b7fcf",
+      "size": 64628
     },
     "backend/app/main.py": {
       "sha256": "6adcac945df3ea1b4b667909ce2e00eb702cb23b7172308bc575630ddbaacc65",
@@ -411,8 +411,8 @@
       "size": 73275
     },
     "backend/app/routes/lifecycle.py": {
-      "sha256": "eb9661bdf1d9647741249d8b60fa0b35cc95b2c4fb1ccdd70a485d85f77833c6",
-      "size": 4475
+      "sha256": "09c75b65415d8ab2e92136d8cce70c401127f7fc3afd3778cfcb67182d54bdd1",
+      "size": 4514
     },
     "backend/app/routes/reference.py": {
       "sha256": "74170245dd59bc5ab628decd9b618326a8d971f370170926d3a9cc90a57b75fe",
@@ -487,8 +487,8 @@
       "size": 35993
     },
     "backend/app/social_training.py": {
-      "sha256": "2f458a60823c55b5832356324cc5c9f87fcfd69e96b3e3845ced73ff8494f72f",
-      "size": 89548
+      "sha256": "58d97cef7ea23b0e2253086cb2648d75314cdba3e138e1fd5c5071f741bee86c",
+      "size": 89638
     },
     "backend/app/sso_identity.py": {
       "sha256": "75a02d9db38d36a48142afa2d65bdcb7ab1aa7ec88ba529ed035ebdf531c031c",
@@ -2443,8 +2443,8 @@
       "size": 9931
     },
     "tests/r2/test_points_three_level_20261109.py": {
-      "sha256": "a85aca497be54ea5cdf1a5de7b52f8ec69733469424e3d2792009a87ed7781d5",
-      "size": 11276
+      "sha256": "ce7192f67c27e93736dba520d5680b51f2ab4e7f2d5650ed9a01bd62ac6b374c",
+      "size": 14841
     },
     "tests/r2/test_portal_workbench.py": {
       "sha256": "15287d81860733039e3ba8bd6e9473f3bee4d9a9f65b92f55c2817cd1f0e395d",

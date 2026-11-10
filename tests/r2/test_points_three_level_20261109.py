@@ -192,3 +192,58 @@ def test_voided_policy_still_blocks_claims(setup_social, client2, app2, monkeypa
     r = post(client2, '/api/social/claims', {'project_id': pid, 'period_id': 'period2026', 'policy_id': pol,
                                             'recognition_form_reference': '学校制式认定表与佐证附件', 'reason': '本人申报'})
     assert r.status_code == 422
+
+
+def test_edited_points_flow_into_corrections_booked_display_and_annual_totals(setup_social, client2, app2, monkeypatch):
+    """学院改过的认定积分，要同样用于：更正的基数、已记积分显示、学院年度考核的积分合计。不能还按系统原始试算算。"""
+    from sqlalchemy.orm import Session
+    from app import lifecycle as lc
+    pid, pol = setup_closed(setup_social, client2, monkeypatch)
+    ident, _ = self_claim(client2, pid, pol)
+    base = points_of(client2, ident)
+    assert approve(client2, ident, 'depthead').status_code == 200
+    r = approve(client2, ident, 'collegehead', teaching_points='1.00', auxiliary_points=base['auxiliary'], adjust_reason='学院核减')
+    assert r.status_code == 200
+    assert approve(client2, ident, 'reviewer').status_code == 200
+    final = Decimal('1.00') + Decimal(base['auxiliary'])
+    with Session(app2.state.engine) as db:
+        claim = db.get(SocialClaim, ident)
+        totals = st.correction_totals(db, claim)
+        assert totals['teaching'] == Decimal('1.00') and sum(totals.values()) == final
+        project = db.get(__import__('app.social_models', fromlist=['SocialProject']).SocialProject, pid)
+        assert lc.points_booked(db, project)['teacher'] == str(final)
+
+
+def test_member_teacher_and_dept_head_cannot_read_financials_or_peer_points(setup_social, client2, app2, monkeypatch):
+    """参与授课的老师、教研室负责人不能通过运行档案接口看到结项财务数据和其他老师的预计积分；负责人和学院学校可以。草稿口径下预计积分照常显示。"""
+    from sqlalchemy.orm import Session
+    from app.models import User
+    from app.social_models import SocialPolicy
+    from support import HASH
+    monkeypatch.setattr(st, 'today', lambda: date(2026, 9, 3))
+    c = client2
+    pid = setup_social
+    pol = policy(c, True)
+    with Session(app2.state.engine) as db:
+        db.add(User(id='member', username='member', name='参与教师', staff_no='J009', org_id='dept1', role_id='role-teacher', password_hash=HASH, must_change_password=False, active=True))
+        db.get(SocialPolicy, pol).state = 'DRAFT'  # 办法未批准：只有草稿口径
+        db.commit()
+    member_row = {**row(), 'teachers': [{'teacher_id': 'teacher', 'staff_type': 'internal', 'role': 'lecturer'}, {'teacher_id': 'member', 'staff_type': 'internal', 'role': 'instructor'}]}
+    auth(c, 'reviewer')
+    assert import_rows(c, pid, [member_row]).status_code == 200
+    close_project(c, pid)
+    auth(c, 'member')
+    mine = c.get('/api/social/lifecycle/project/' + pid).json()['points']
+    assert mine['line'] == '' and mine['value'] not in ('口径未启用', '0')
+    assert c.get('/api/social/lifecycle/close-review/' + pid).status_code == 403
+    assert c.get('/api/social/lifecycle/close-check/' + pid).status_code == 403
+    auth(c, 'depthead')
+    assert c.get('/api/social/lifecycle/close-review/' + pid).status_code == 403
+    assert c.get('/api/social/lifecycle/project/' + pid).json()['points']['line'] == ''
+    auth(c, 'teacher')  # 负责人：能看预计积分明细（草稿口径也显示），也能看查缺
+    owner = c.get('/api/social/lifecycle/project/' + pid).json()['points']
+    assert '参与教师' in owner['line'] and owner['value'] != '口径未启用'
+    assert c.get('/api/social/lifecycle/close-check/' + pid).status_code == 200
+    auth(c, 'collegehead')
+    r = c.get('/api/social/lifecycle/close-review/' + pid)
+    assert r.status_code == 200 and 'actual_income' in r.json()['closeout']
