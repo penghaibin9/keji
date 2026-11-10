@@ -1,7 +1,7 @@
 // 2026-11-09 按设计稿：老师“新申报”用普通大小的弹窗、一页填完、点选为主（不再全屏）。
 // 只填审批要用的内容；受众、课时、教学方式等上报信息在项目运行里补，结项前补齐（后端 report_pending 已支持）。
 // 补正、修改仍用原来的完整表单；后端的必填、校验、审批规则都没有改。
-import {checkUploadFiles,uploadEntries,uploadSequential} from './approval-flow.js?v=20261021-form-merged1';
+import {checkUploadFiles,uploadEntries,uploadSequential} from './approval-flow.js?v=20261110-doc1';
 
 const CATEGORY=[['community','社区公益培训'],['subsidy','补贴性培训'],['enterprise','企业定制培训'],['rural','乡村帮扶培训'],['other','其他非学历培训']];
 const OUTCOMES=['结业证书','职业技能等级证书','满意度 95% 以上','就业或增收'];
@@ -26,7 +26,7 @@ const picked=(form,name,options)=>options.map(([v])=>v).filter(v=>form.querySele
 const radio=(form,name)=>form.querySelector(`[name="${name}"]:checked`)?.value||'';
 const text=(form,name)=>(form.querySelector(`[name="${name}"]`)?.value||'').trim();
 function quick(c,target,list){return `<div class="qa-quick">${list.map(([l,v])=>`<button type="button" class="btn sm light" data-qa-fill="${c.esc(target)}" data-qa-value="${c.esc(v)}">${c.esc(l)}</button>`).join('')}</div>`}
-const upload=(c,label,hint)=>`<div class="form-field full"><label for="f-qa_files">${c.esc(label)}</label><input type="file" id="f-qa_files" name="qa_files" multiple accept=".pdf,.png,.jpg,.jpeg"><p class="hint">${c.esc(hint)}</p></div>`;
+const upload=(c,label,hint)=>`<div class="form-field full"><label for="f-qa_files">${c.esc(label)}</label><input type="file" id="f-qa_files" name="qa_files" multiple accept=".pdf,.png,.jpg,.jpeg,.docx,.xlsx,.pptx"><p class="hint">${c.esc(hint)}</p></div>`;
 const wrap=html=>`<div class="qa-form">${html}</div>`;
 const cond=(show,html)=>`<div class="form-field full qa-cond" data-qa-show="${show}" hidden><div class="form-grid">${html}</div></div>`;
 

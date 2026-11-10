@@ -1,7 +1,7 @@
 // 2026-11-07 立项（申报）通过以后的运行过程：档案视图、申请变更、年度确认、停用与恢复。
 // 2026-11-09 按设计图 v2：老师“我的X”三步列表、详情只留三个按钮、上传自动分组、结项查缺、学院学校“待我审批”。
 // 菜单不变（培训项目 / 培训课程 / 培训基地 / 培训师资）；入口是详情里的三个主按钮。名称按验收人定的：项目立项、项目运行、项目结项。
-import {quickApply} from './apply-quick.js?v=20261109-v2l';
+import {quickApply} from './apply-quick.js?v=20261110-doc1';
 
 const TYPE_LABEL={project:'培训项目',course:'培训课程',base:'培训基地',trainer:'培训师资'};
 // 三个主按钮：[动作, 名称, 小字]
@@ -299,8 +299,8 @@ function groupedHtml(c,files){
 async function uploadGrouped(c,d,refresh){
  const kind=d.type==='project'?'social_project':'social_resource',ident=d.id;
  const latest=async()=>{const x=await c.api('/social/objects/'+kind+'/'+ident);return {version:x.item.version,attachments:x.attachments||[]}};
- const {checkUploadFiles,uploadEntries,uploadSequential}=await import('./approval-flow.js?v=20261021-form-merged1');
- const body=`<label class="lv-drop form-field full" id="lv-drop"><input type="file" id="lv-files" data-plain-file="1" data-assist-control="true" multiple accept=".pdf,.png,.jpg,.jpeg" hidden><strong>拖入文件，或点击选择</strong><span>可一次选多个</span></label><div id="lv-grouped" class="form-field full"></div>`;
+ const {checkUploadFiles,uploadEntries,uploadSequential}=await import('./approval-flow.js?v=20261110-doc1');
+ const body=`<label class="lv-drop form-field full" id="lv-drop"><input type="file" id="lv-files" data-plain-file="1" data-assist-control="true" multiple accept=".pdf,.png,.jpg,.jpeg,.docx,.xlsx,.pptx" hidden><strong>拖入文件，或点击选择</strong><span>可一次选多个</span></label><div id="lv-grouped" class="form-field full"></div>`;
  let picked=[];
  c.formModal('上传材料 · '+d.name,body,async()=>{
   if(!picked.length)throw Error('请选择文件');
@@ -448,10 +448,10 @@ async function againForm(c,id){
  const x=await c.api('/social/objects/social_project/'+encodeURIComponent(id)),p=x.item.data,e=c.esc;
  const copied=[['类别',({subsidy:'补贴性培训',enterprise:'企业定制培训',community:'社区公益培训',rural:'乡村帮扶培训',other:'其他非学历培训'})[p.category]||''],['场地',(p.venue&&p.venue.place)||'']].filter(z=>z[1]);
  c.formModal('再办一期 · '+p.name,c.field('name','项目名称','text',p.name,{full:true})+c.field('start_date','开始日期','date','')+c.field('end_date','结束日期','date','')+c.field('expected_participants','预估人次','number','',{min:1,step:'1'})
-  +`<div class="form-field full lv-copied">${copied.map(([k,v])=>`<span>${e(k)}：<b>${e(v)}</b></span>`).join('')}</div>`+c.field('lv_files','方案材料','file','',{multiple:true,accept:'.pdf,.png,.jpg,.jpeg',full:true}),async(v,form)=>{
+  +`<div class="form-field full lv-copied">${copied.map(([k,v])=>`<span>${e(k)}：<b>${e(v)}</b></span>`).join('')}</div>`+c.field('lv_files','方案材料','file','',{multiple:true,accept:'.pdf,.png,.jpg,.jpeg,.docx,.xlsx,.pptx',full:true}),async(v,form)=>{
   if(!v.start_date||!v.end_date||!v.expected_participants)throw Error('请填写起止日期和预估人次');
   if(v.end_date<v.start_date)throw Error('结束日期不能早于开始日期');
-  const {checkUploadFiles,uploadEntries,uploadSequential}=await import('./approval-flow.js?v=20261021-form-merged1');
+  const {checkUploadFiles,uploadEntries,uploadSequential}=await import('./approval-flow.js?v=20261110-doc1');
   const files=checkUploadFiles(form.querySelector('#f-lv_files')?.files||[]);
   if(!files.length)throw Error('请附上方案材料（立项需要正式依据）');
   const keep=['category','high_risk','expected_income','expected_outcomes','mode','class_type','level','scene','target_groups','one_skill','venue','total_hours','audience','service_type','teaching_mode'];

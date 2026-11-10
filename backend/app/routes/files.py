@@ -37,8 +37,8 @@ def inspect_upload(name,data):
                 if doc.is_encrypted or not 1<=len(doc.pages)<=2000:raise ValueError('pdf structure')
         except Exception:raise HTTPException(422,'PDF损坏、加密或超过页数上限') from None
         return 'application/pdf'
-    if ext in {'.docx','.xlsx'}:
-        part,mime=('word/document.xml','application/vnd.openxmlformats-officedocument.wordprocessingml.document') if ext=='.docx' else ('xl/workbook.xml','application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')
+    if ext in {'.docx','.xlsx','.pptx'}:
+        part,mime=('word/document.xml','application/vnd.openxmlformats-officedocument.wordprocessingml.document') if ext=='.docx' else ('ppt/presentation.xml','application/vnd.openxmlformats-officedocument.presentationml.presentation') if ext=='.pptx' else ('xl/workbook.xml','application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')
         try:
             with zipfile.ZipFile(io.BytesIO(data)) as archive:
                 infos=archive.infolist();names={x.filename for x in infos}
@@ -48,7 +48,7 @@ def inspect_upload(name,data):
                 if archive.testzip() is not None:raise ValueError('zip checksum')
         except Exception:raise HTTPException(422,'文档或表格损坏、加密、包含宏或超过解压限制') from None
         return mime
-    raise HTTPException(422,'只接收 .pdf、.png、.jpg、.jpeg、.docx、.xlsx 附件；iPhone（苹果手机）照片请在相机设置里选“兼容性最佳”或截图后上传')
+    raise HTTPException(422,'只接收 .pdf、.png、.jpg、.jpeg、.docx、.xlsx、.pptx 附件（旧版 .doc、.xls、.ppt 请在 Office 里另存为新版格式）；iPhone（苹果手机）照片请在相机设置里选“兼容性最佳”或截图后上传')
 
 def verify_file(root,item):
     root=Path(root)

@@ -188,3 +188,16 @@ def test_office_upload_and_both_download_paths_force_attachment(client2,kind,ext
     assert response.headers['x-content-type-options']=='nosniff'
     auth(client2,'otherteacher')
     assert client2.get('/api/attachments/'+item['id']+'/download').status_code==403
+
+
+def test_pptx_is_accepted_and_macro_pptx_rejected():
+    import zipfile as _z
+    def build(extra=None):
+        out=io.BytesIO()
+        with _z.ZipFile(out,'w') as z:
+            z.writestr('[Content_Types].xml','<Types/>');z.writestr('ppt/presentation.xml','<p:presentation xmlns:p="x"/>')
+            if extra:z.writestr(extra,b'x')
+        return out.getvalue()
+    assert inspect_upload('培训汇报.pptx',build()).endswith('presentationml.presentation')
+    with pytest.raises(HTTPException) as exc:inspect_upload('宏.pptx',build('ppt/vbaProject.bin'))
+    assert exc.value.status_code==422

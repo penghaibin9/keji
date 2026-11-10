@@ -59,7 +59,7 @@ test('响应丢失但材料已入库时按校验值确认，版本同步，不�
 });
 
 test('选择材料先整体检查类型、大小和单个对象 50 份上限',()=>{
- assert.throws(()=>checkUploadFiles([file('a.heic')]),/\.jpg、\.png 或 \.pdf/);
+ assert.throws(()=>checkUploadFiles([file('a.heic')]),/\.pdf、\.jpg、\.png、\.docx、\.xlsx 或 \.pptx/);
  assert.throws(()=>checkUploadFiles([{name:'big.pdf',size:11*1024*1024}]),/超过 10 兆字节/);
  assert.throws(()=>checkUploadFiles([file('a.pdf'),file('b.pdf')],MAX_ATTACHMENTS-1),/最多 50 份附件，已有 49 份，本次最多还能选 1 份/);
  assert.equal(checkUploadFiles([file('a.pdf')],MAX_ATTACHMENTS-1).length,1);

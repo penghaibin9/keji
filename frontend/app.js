@@ -5,10 +5,10 @@ import {renderTrainingWorkspace,trainingChange} from './training-workspace.js?v=
 import {renderSchoolCockpit,bindSchoolCockpit} from './school-cockpit.js?v=20261019-walk3&display=20261019-clean2';
 import {icons} from './icons.js';
 import {dutiesTabHtml,dutiesAction} from './school-duties.js?v=20261104-simplify2';
-import {socialPage,socialAction,applicationProjectPicker} from './social-training.js?v=20261110-aud5';
-import {lifecycleAction,LIFE_ACTIONS,lifePageHtml,lifeBoardHtml,lifePageType,placeLifeBoard,lifeListHtml} from './lifecycle.js?v=20261110-aud4';
+import {socialPage,socialAction,applicationProjectPicker} from './social-training.js?v=20261110-doc1';
+import {lifecycleAction,LIFE_ACTIONS,lifePageHtml,lifeBoardHtml,lifePageType,placeLifeBoard,lifeListHtml} from './lifecycle.js?v=20261110-doc1';
 import {applicationAction,trainersHtml,applyPageHtml,APPLY_PAGES,myApplicationsHtml,homeApplicationsHtml,myCoursesHtml,libraryHtml,libraryFilterSubmit,homeCoursesHtml,courseAction} from './applications.js?v=20261109-v2l';
-import {nextCode,runBatch,batchStage,batchMode,batchPerformer,BATCH_LABELS,materialUploadForm,checkUploadFiles,uploadEntries,uploadSequential,uploadStatusHtml} from './approval-flow.js?v=20261021-form-merged1';
+import {nextCode,runBatch,batchStage,batchMode,batchPerformer,BATCH_LABELS,materialUploadForm,checkUploadFiles,uploadEntries,uploadSequential,uploadStatusHtml} from './approval-flow.js?v=20261110-doc1';
 import {ledgerPage,resourceStatsPage,homeIndicators,ledgerAction,resetLedgerView,minePage,mineReminders} from './social-ledgers.js?v=20261021-form-merged1';
 import {rosterSection,rosterHandlers,onlineHandlers,showStaffDetail,showCourseDetail,presetRoster,loadCodeTables,courseFactsHtml,codeLabel} from './school-data.js?v=20261019-merge1&display=20261019-clean2';
 import {renderCenterStatus,renderImplementationWorkspace,renderSsoMaintenance,handleImplementationAction} from './integration-workspace.js?v=20261013-remediation2';
@@ -1244,13 +1244,13 @@ async function qualificationForm(id){const user=me.user.id,sourcePage=page,cats=
  // 2026-11-09 用户定：只填证书名称（可点选已有资质类型，也能手填）和上传证书。其余由系统补齐。
  const chips=`<div class="form-field full qual-chips">${(cats.categories||[]).map(n=>`<button type="button" class="btn sm light" data-qual-name="${esc(n)}">${esc(n)}</button>`).join('')}</div>`;
  const nameField=field('name','证书名称','text',x.name||'',{full:true})+chips;
- const fileField=field('file','上传证书','file','',{required:!id,uploadKind:'proof',uploadMax:20,multiple:true,accept:'.pdf,.png,.jpg,.jpeg',full:true});
+ const fileField=field('file','上传证书','file','',{required:!id,uploadKind:'proof',uploadMax:20,multiple:true,accept:'.pdf,.png,.jpg,.jpeg,.docx,.xlsx,.pptx',full:true});
  const bindChips=()=>$$('#modal-root [data-qual-name]').forEach(b=>b.addEventListener('click',()=>{const t=$('#f-name');if(t){t.value=b.dataset.qualName;t.dispatchEvent(new Event('input',{bubbles:true}))}}));
  const upload=async(rid,ver,files,f)=>{if(!files.length)return;const box=f.querySelector('#upload-progress'),result=await uploadSequential({api,kind:'qualification',id:rid,version:ver,entries:uploadEntries(files),reason:'本人上传资质证书',latest:async()=>{const fresh=await api('/qualifications/'+rid);return {version:fresh.qualification.version,attachments:fresh.attachments}},onProgress:list=>{if(box)box.innerHTML=uploadStatusHtml(list,esc)}});if(result.failed.length)throw Error(result.failed.length+' 份没传上：'+result.failed.map(entry=>entry.name).join('、'))};
  const submit=async rid=>{const fresh=(await api('/qualifications/'+rid)).qualification;if(['DRAFT','RETURNED'].includes(fresh.state))await api('/qualifications/'+rid+'/actions',{method:'POST',body:{action:'submit',expected_version:fresh.version,reason:'提交资质审核'}})};
  if(id){const full=await api('/qualifications/'+id),current=full.attachments||[];
   const existing=current.length?`<fieldset class="form-field full qual-existing"><legend>已上传的证书</legend>${current.map(a=>`<label class="choice"><input type="checkbox" name="drop_${esc(a.id)}"><span>删除 ${esc(a.name)}</span></label>`).join('')}</fieldset>`:'';
-  formModal('修改',returnedNotice(x.state,full.events)+nameField+existing+field('file','上传证书','file','',{required:false,uploadKind:'proof',uploadMax:20,multiple:true,accept:'.pdf,.png,.jpg,.jpeg',full:true})+'<div id="upload-progress" class="form-field full"></div>',async(v,f)=>{
+  formModal('修改',returnedNotice(x.state,full.events)+nameField+existing+field('file','上传证书','file','',{required:false,uploadKind:'proof',uploadMax:20,multiple:true,accept:'.pdf,.png,.jpg,.jpeg,.docx,.xlsx,.pptx',full:true})+'<div id="upload-progress" class="form-field full"></div>',async(v,f)=>{
    const files=Array.from($('#f-file',f).files||[]);checkUploadFiles(files,0,{max:20});
    const drop=current.filter(a=>f.querySelector(`[name="drop_${a.id}"]`)?.checked);
    if(drop.length===current.length&&!files.length)throw Error('请上传证书');

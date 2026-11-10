@@ -1,12 +1,12 @@
 // 审批精简的公共办理逻辑：只编排现有单条接口，不替代后端的权限、回避、版本和来源校验。
 export const MAX_ATTACHMENTS=50;
-export const UPLOAD_PATTERN=/\.(pdf|png|jpe?g)$/i;
+export const UPLOAD_PATTERN=/\.(pdf|png|jpe?g|docx|xlsx|pptx)$/i;
 
 // 选好的文件先整体检查：类型、大小和单个对象 50 份上限，任何一份不合格都不开始保存或上传。
 export function checkUploadFiles(files,existing=0,{maxBytes=10*1024*1024,max=MAX_ATTACHMENTS}={}){
  const list=[...(files||[])],bad=[];
  for(const file of list){
-  if(!UPLOAD_PATTERN.test(file.name))bad.push(file.name+'：只能是 .jpg、.png 或 .pdf 文件');
+  if(!UPLOAD_PATTERN.test(file.name))bad.push(file.name+'：只能是 .pdf、.jpg、.png、.docx、.xlsx 或 .pptx 文件（旧版 .doc、.xls、.ppt 请另存为新版格式）');
   else if(file.size>maxBytes)bad.push(file.name+'：超过 '+Math.round(maxBytes/1024/1024)+' 兆字节，请压缩或分页后再传');
  }
  if(bad.length)throw Error('以下材料不能上传，请更换后再选：\n'+bad.join('\n'));
@@ -51,7 +51,7 @@ export async function uploadSequential({api,kind,id,version,entries,reason,lates
 export function materialUploadForm(c,{kind,id,title,intro='',contextLabel='',latest,after}){
  let entries=null;
  const max=kind==='qualification'?20:MAX_ATTACHMENTS;
- const result=c.formModal(title,intro+c.field('file','材料文件（可一次选择多张图片或多份文件）','file','',{multiple:true,uploadKind:'proof',uploadMax:max,uploadExisting:-1,accept:'.pdf,.png,.jpg,.jpeg',full:true,hint:'支持照片或扫描件，单个最大 10 兆字节。电脑可按住控制键多选，手机可在相册勾选多张。'})+'<div id="upload-progress" class="form-field full"></div>'+c.field('reason','材料说明','textarea','',{full:true,phrases:'material',textLimit:2000}),async(v,f)=>{
+ const result=c.formModal(title,intro+c.field('file','材料文件（可一次选择多张图片或多份文件）','file','',{multiple:true,uploadKind:'proof',uploadMax:max,uploadExisting:-1,accept:'.pdf,.png,.jpg,.jpeg,.docx,.xlsx,.pptx',full:true,hint:'支持照片或扫描件，单个最大 10 兆字节。电脑可按住控制键多选，手机可在相册勾选多张。'})+'<div id="upload-progress" class="form-field full"></div>'+c.field('reason','材料说明','textarea','',{full:true,phrases:'material',textLimit:2000}),async(v,f)=>{
   const chosen=Array.from(f.querySelector('#f-file').files||[]);
   if(!chosen.length)throw Error('请选择要上传的材料，可一次选择多份。');
   const fresh=await latest(),selected=chosen.map(file=>entries?.find(entry=>entry.file===file)||uploadEntries([file])[0]);

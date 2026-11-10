@@ -472,7 +472,7 @@ test('课程和个人积分从项目候选接口取值，分别提交项目编�
   const fileForm=file=>({querySelector:sel=>sel==='#f-file'?{files:[file]}:null,querySelectorAll:()=>[]});
   if(name==='project_id'){
    // 文件不合格时在建申报之前就拦下，不留一条没有认定表的草稿。
-   await assert.rejects(modal.save(values,fileForm({name:'认定表.heic',size:1000})),/\.jpg、\.png 或 \.pdf/);
+   await assert.rejects(modal.save(values,fileForm({name:'认定表.heic',size:1000})),/\.pdf、\.jpg、\.png、\.docx、\.xlsx 或 \.pptx/);
    await assert.rejects(modal.save(values,fileForm({name:'认定表.pdf',size:11*1024*1024})),/超过 10 兆字节/);
    assert.equal(context.posts.length,0);
   }
