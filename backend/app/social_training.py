@@ -366,7 +366,11 @@ def course_resource_scope(db,a):
 def participated_project_ids(db, teacher_id):
     """本人在核算单元中担任授课或辅助的项目（积分只能就本人参与的项目申报）。"""
     rows = db.execute(select(SocialUnit.project_id, SocialUnit.data).where(cast(SocialUnit.data, String).contains(teacher_id, autoescape=True))).all()
-    return {pid for pid, data in rows if any(t.get('teacher_id') == teacher_id for t in (data or {}).get('teachers', []))}
+    found = {pid for pid, data in rows if any(t.get('teacher_id') == teacher_id for t in (data or {}).get('teachers', []))}
+    # 2026-11-10：本人负责、还没上传参训明细的项目，按预估人次申报
+    with_units = select(SocialUnit.project_id)
+    found |= set(db.scalars(select(SocialProject.id).where(SocialProject.owner_id == teacher_id, SocialProject.id.not_in(with_units))))
+    return found
 
 
 def units(db, project_id):
@@ -470,13 +474,21 @@ def person_day_blockers(rows):
     return []
 
 
+def estimated_participants(project):
+    """没有参训明细时的培训人次：结项时填的实际培训人次，没填就用立项（或变更后）的预估人次。"""
+    actual=(project.closeout or {}).get('actual_participants')
+    return int(D(actual if actual not in (None,'') else (project.data or {}).get('expected_participants') or 0))
+
+
 def project_facts(db, project):
     rows = units(db, project.id)
     followups=project_followups(db,project.id);invalidated=any(x.get('invalidate_cohort') for x in followups)
     issues=person_day_blockers([u.data for u in rows])
+    # 2026-11-10 用户定：参训明细只是佐证；没上传时按项目登记的预估人次（运行中可申请变更，学院审核）计。
+    estimated=not rows and not invalidated
     return {'project':serial(project), 'units':serial(rows), 'evidence':evidence(db,'social_project',project.id),
-            'followups':followups,'invalidated':invalidated,**({'blockers':issues} if issues else {}),
-            'effective':0 if invalidated else sum(unit_counts(u.data)['effective'] for u in rows),
+            'followups':followups,'invalidated':invalidated,**({'blockers':issues} if issues else {}),**({'estimated':True} if estimated else {}),
+            'effective':0 if invalidated else (estimated_participants(project) if estimated else sum(unit_counts(u.data)['effective'] for u in rows)),
             'priority':0 if invalidated else sum(unit_counts(u.data)['priority'] for u in rows),
             'excluded':sum(len(u.data['learners']) if invalidated else unit_counts(u.data)['excluded'] for u in rows)}
 
@@ -597,6 +609,9 @@ def point_trial(db, claim):
             if t['teacher_id']==claim.teacher_id:
                 if t['staff_type']=='external': blockers.append('外聘人员不适用本办法积分认定');continue
                 work.append((u,t,0 if invalidated else unit_counts(u['data'])['effective']))
+    if not work and facts.get('estimated') and claim.teacher_id==project.owner_id:
+        # 没有参训明细：负责人按预估人次、主讲岗位算一笔，学院、学校审批时可改认定积分。
+        work=[({'external_key':'预估人次（未上传参训明细）','data':{'event_date':p['end_date']}},{'teacher_id':claim.teacher_id,'staff_type':'internal','role':'lecturer'},facts['effective'])]
     if not work: blockers.append('缺少本人的合规工作明细')
     if p['mode']=='person_day' and cfg.get('person_day_unit')=='whole_project' and work:
         roles={t['role'] for _,t,_ in work}

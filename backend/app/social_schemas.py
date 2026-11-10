@@ -199,6 +199,8 @@ class UnitsIn(Reason):
 class Closeout(Input):
     closed_on: date
     outcome_report: Text
+    # 2026-11-10 用户定：结项时老师填实际培训人次（默认带出预估人次），没上传参训明细时积分按它算，学院审核。
+    actual_participants: int | None = Field(default=None, ge=0, le=1000000)
     # 2026-11-09 结项按管理办法只要老师交成果报告（第十三条）；满意度（第十四条由继续教育学院组织测评）和财务数（第二十一条由财务处负责）在学校结项核验时登记。
     satisfaction: Decimal | None = Field(default=None, ge=0, le=100, allow_inf_nan=False)
     province_receipt: str = Field(default='', max_length=500)

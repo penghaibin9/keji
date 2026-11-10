@@ -667,7 +667,7 @@ def view(db, a, kind, obj):
         effective = sum(st.unit_counts(u.data)['effective'] for u in rows)
         # 2026-11-09 设计图 v2：已开期次、参训人次、到账收入、材料。
         income = (obj.closeout or {}).get('actual_income')
-        stats = [['已开期次', str(len({u.data.get('class_code') for u in rows})) + ' 期'], ['参训人次', str(effective) + ' / 预估 ' + str(obj.data.get('expected_participants') or 0)],
+        stats = [['已开期次', str(len({u.data.get('class_code') for u in rows})) + ' 期'], (['参训人次', str(effective) + ' / 预估 ' + str(obj.data.get('expected_participants') or 0)] if rows else ['参训人次', (str(obj.closeout['actual_participants']) + '（结项填报）') if (obj.closeout or {}).get('actual_participants') not in (None, '') else '按预估 ' + str(obj.data.get('expected_participants') or 0)]),
                  ['到账收入', (str(income) + ' 元') if income not in (None, '') else '—'], ['材料', str(materials) + ' 份']]
         if obj.state == 'FILED':
             end = date.fromisoformat(obj.data['end_date'])
@@ -878,7 +878,13 @@ def points_estimate(db, project):
     except KeyError:
         return None
     out = {}
-    for u in st.units(db, project.id):
+    rows = st.units(db, project.id)
+    if not rows and project.owner_id:  # 没有参训明细：负责人按预估人次、主讲岗位预估（和积分申报试算一致）
+        count = st.estimated_participants(project)
+        ratio = D(count) / standard
+        base = min(ratio, D(2)) if cfg.get('cap_mode') == 'ratio_cap' else (D(2) if count > standard else ratio)
+        out[project.owner_id] = base * level * scene
+    for u in rows:
         count = st.unit_counts(u.data)['effective']
         ratio = D(count) / standard
         base = min(ratio, D(2)) if cfg.get('cap_mode') == 'ratio_cap' else (D(2) if count > standard else ratio)

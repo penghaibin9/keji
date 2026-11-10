@@ -408,7 +408,7 @@ async function closeReviewModal(c,x){
  const grid=`<div class="lv-mat">${GROUPS.map(g=>{const fs=files.filter(f=>groupOf(f.name)===g);return `<div class="lv-group"><div class="lv-ghead"><strong>${g}</strong><span>${fs.length}</span></div>${fs.map(f=>`<a class="lv-file is-link" href="/api/attachments/${e(f.id)}/download" target="_blank" rel="noopener">${e(f.name)}</a>`).join('')||'<div class="lv-file is-empty">—</div>'}</div>`}).join('')}</div>`;
  const stats=`<div class="life-stats">${(d.stats||[]).map(([k,v])=>`<div><b>${e(v)}</b><small>${e(k)}</small></div>`).join('')}${r.closeout?.satisfaction!=null?`<div><b>${e(r.closeout.satisfaction)}%</b><small>满意度</small></div>`:''}</div>`;
  const noUnits=!r.units,college=x.action==='approve';
- const unitsNote=noUnits?`<div class="lv-gaps"><strong>老师还没上传参训明细表</strong>（不影响结项，参训人次按 0 计）</div>`:'';
+ const unitsNote=noUnits?`<div class="lv-gaps"><strong>老师还没上传参训明细表</strong>（只是佐证，不影响结项；参训人次和积分按预估人次计）</div>`:'';
  const body=`<div class="life-archive">${unitsNote}<dl class="life-facts">${(d.facts||[]).map(([k,v])=>`<div><dt>${e(k)}：</dt><dd>${e(v)}</dd></div>`).join('')}</dl>${stats}${r.points?`<div class="lv-points">本项目将记积分：${e(r.points)}</div>`:''}<div class="lv-mat-head"><h3>运行材料 <span class="life-count">${files.length}</span></h3>${files.length?c.act('一键下载（'+files.length+' 个文件）','q-dl',x.id,'primary'):''}</div>${grid}</div>`;
  view2.files=files;view2.review=r;
  const ok=college?c.act('同意','q-ok-close',qid(x),'primary'):c.act('同意','q-close-review',qid(x),'primary');

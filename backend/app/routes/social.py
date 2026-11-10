@@ -669,7 +669,9 @@ def claim_create(data:ClaimIn,request:Request):
         if not a.user.staff_no:raise HTTPException(403,'积分必须由有工号的本人申报')
         project=db.get(SocialProject,data.project_id);policy=db.get(SocialPolicy,data.policy_id)
         if not project or not policy or policy.period_id!=data.period_id or policy.state=='VOID':raise HTTPException(422,'项目或规则周期无效，或口径已停用')
-        if not any(t['teacher_id']==a.id for u in st.units(db,project.id) for t in u.data['teachers']):raise HTTPException(403,'没有本人参与明细')
+        rows=st.units(db,project.id)
+        # 2026-11-10：没上传参训明细时，项目负责人按预估人次申报
+        if not any(t['teacher_id']==a.id for u in rows for t in u.data['teachers']) and not (not rows and project.owner_id==a.id):raise HTTPException(403,'没有本人参与明细')
         period=require_open_period(db,data.period_id)
         if project.closeout.get('closed_on') and not period.start_date<=date_from(project.closeout['closed_on'])<=period.end_date:
             raise HTTPException(422,'项目结项日期不在所选周期内，请选择包含结项日期的周期')

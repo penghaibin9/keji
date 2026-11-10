@@ -270,7 +270,7 @@ function commonForm(title,body,save,options={}){const reasonPhrases=options.reas
 function projectOptionsHtml(result,selected){
  const c=context,key=projectChoice.key,options=result.items.map(p=>[p[key],p.name+' · '+p.code+' · '+p.cohort]);
  if(selected?.value&&!options.some(([value])=>value===selected.value))options.unshift([selected.value,selected.label]);
- const empty=projectChoice.mine&&!result.total&&!result.q?context.note('还没有可申报的项目：项目须已正常结项，且“参训明细”里登记了你的工号（授课或辅助）。项目还在办理中的，等学院结项后再来申报；如有遗漏，请联系学院补录参训明细。',true):'';
+ const empty=projectChoice.mine&&!result.total&&!result.q?context.note('还没有可申报的项目：项目须已正常结项，且是你负责的项目，或“参训明细”里登记了你的工号（授课或辅助）。项目还在办理中的，等学院结项后再来申报；如有遗漏，请联系学院补录参训明细。',true):'';
  return empty+'<div class="form-field full"><label for="social-project-query">检索关联项目</label><div class="social-picker-tools"><input id="social-project-query" data-assist-control="true" type="search" maxlength="100" placeholder="输入项目名称、编号或期次" value="'+c.esc(result.q)+'">'+c.act('查找项目','social-project-lookup','1')+'</div></div>'+c.field(projectChoice.name,'选择关联项目','select',selected?.value||'',{full:true,required:!projectChoice.optional,options:[['',projectChoice.optional?'不关联项目':'请选择一个项目'],...options],hint:projectChoice.optional?'可不关联项目；选择后自动使用该项目编号，无需手填。':''})+'<div class="social-picker-pager"><span>共 '+result.total+' 项 · 第 '+result.page+' 页</span>'+(result.page>1?c.act('上一页项目','social-project-lookup',String(result.page-1)):'')+(result.page*result.size<result.total?c.act('下一页项目','social-project-lookup',String(result.page+1)):'')+'</div>';
 }
 async function projectPicker(name,key,mine=false,optional=false,value='',courseApplication=''){projectChoice={name,key,q:'',sequence:0,mine,optional,courseApplication};const params=new URLSearchParams();if(mine)params.set('mine','true');if(courseApplication)params.set('course_application_id',courseApplication);const result=await context.api('/social/project-options'+(params.size?'?'+params:''));projectChoice.total=result.total;return '<div id="social-project-picker" class="social-project-picker">'+projectOptionsHtml(result,value?{value,label:'原关联项目：'+value}:null)+'</div>'}
@@ -921,6 +921,7 @@ export async function socialAction(action,id,c){
   // 2026-11-09 按管理办法第十三条：老师结项只交成果报告；“一人一技”另附专项材料，补贴项目另附省平台报送凭证。满意度、到账收入和分配由学校结项核验时登记。
   const oneSkill=!!opened.item.data.one_skill;
   let body=f('closed_on','结项日期','date',(opened.item.data.end_date&&opened.item.data.end_date<=new Date().toLocaleDateString('sv-SE'))?opened.item.data.end_date:'')
+   +f('actual_participants','实际培训人次','number',opened.item.data.expected_participants??'',{min:0,step:'1',hint:'默认带出预估人次，按实际改；没上传参训明细时积分按这个数算，学院审核'})
    +f('outcome_report','成果报告','textarea','',{full:true,phrases:'completion',textLimit:200})
    +(subsidy?f('province_receipt','省平台报送凭证','textarea','',{full:true}):'')
    +(subsidy||oneSkill?f('special_evidence','专项材料（重点群体参训、技能考证、就业转化）','textarea','',{full:true}):'');

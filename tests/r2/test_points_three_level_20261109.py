@@ -247,3 +247,36 @@ def test_member_teacher_and_dept_head_cannot_read_financials_or_peer_points(setu
     auth(c, 'collegehead')
     r = c.get('/api/social/lifecycle/close-review/' + pid)
     assert r.status_code == 200 and 'actual_income' in r.json()['closeout']
+
+
+def test_no_unit_sheet_uses_expected_participants(setup_social, client2, app2, monkeypatch):
+    """2026-11-10 用户定：参训明细只是佐证；没上传时按预估人次给负责人算主讲积分。"""
+    from app.social_models import SocialProject
+    monkeypatch.setattr(st, 'today', lambda: date(2026, 9, 3))
+    pid = setup_social
+    pol = policy(client2, True)
+    close_project(client2, pid)
+    with app2.state.sessions() as db:
+        p = db.get(SocialProject, pid)
+        expected = int(p.data['expected_participants'])
+        assert st.units(db, pid) == [] and p.state == 'CLOSED'
+    ident, state = self_claim(client2, pid, pol)
+    assert state == 'DEPT'
+    d = client2.get('/api/social/objects/social_claim/' + ident).json()
+    trial = d['item']['snapshot']['trial']
+    assert trial['details'][0]['participants'] == expected and '预估人次' in trial['details'][0]['unit']
+    assert Decimal(trial['teaching']) > 0
+
+
+def test_actual_participants_from_closeout_overrides_expected(setup_social, client2, app2, monkeypatch):
+    from app.social_models import SocialProject
+    monkeypatch.setattr(st, 'today', lambda: date(2026, 9, 3))
+    pid = setup_social
+    pol = policy(client2, True)
+    close_project(client2, pid)
+    with app2.state.sessions.begin() as db:
+        p = db.get(SocialProject, pid)
+        p.closeout = {**p.closeout, 'actual_participants': 45}
+    ident, _ = self_claim(client2, pid, pol)
+    trial = client2.get('/api/social/objects/social_claim/' + ident).json()['item']['snapshot']['trial']
+    assert trial['details'][0]['participants'] == 45
