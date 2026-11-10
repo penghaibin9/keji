@@ -71,7 +71,8 @@ def test_recommended_draft_trials_compute_and_auto_achievement_not_double_counte
     assert r.status_code==200,r.text;trial=r.json()['trial']
     assert trial['total']=='1.56' and trial['teaching']=='1.56'
     assert not any('尚待学校书面确认' in b for b in trial['blockers'])
-    assert '制度执行口径尚未正式启用' in trial['blockers']
+    # 2026-11-10：学校办法暂未批准，草稿口径可试行申报，不再拦；标注试行
+    assert '制度执行口径尚未正式启用' not in trial['blockers'] and trial['trial_mode'] is True
     auth(client2,'schooladmin')
     auto=[{'reference':'SAT-'+pid,'name':'满意度自动成果','level':'school'}]
     data={'org_id':'college1','period_id':'period2026','policy_id':pol,'reason':'年度自评推荐口径试算','data':{'self_report':'完整自评报告','income_target':'10000','participants_target':30,'priority_target':30,'target_reference':'年度任务确认','achievements':auto}}

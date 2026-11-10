@@ -5,7 +5,7 @@ import {renderTrainingWorkspace,trainingChange} from './training-workspace.js?v=
 import {renderSchoolCockpit,bindSchoolCockpit} from './school-cockpit.js?v=20261019-walk3&display=20261019-clean2';
 import {icons} from './icons.js';
 import {dutiesTabHtml,dutiesAction} from './school-duties.js?v=20261104-simplify2';
-import {socialPage,socialAction,applicationProjectPicker} from './social-training.js?v=20261110-aud2';
+import {socialPage,socialAction,applicationProjectPicker} from './social-training.js?v=20261110-aud3';
 import {lifecycleAction,LIFE_ACTIONS,lifePageHtml,lifeBoardHtml,lifePageType,placeLifeBoard,lifeListHtml} from './lifecycle.js?v=20261109-v2l';
 import {applicationAction,trainersHtml,applyPageHtml,APPLY_PAGES,myApplicationsHtml,homeApplicationsHtml,myCoursesHtml,libraryHtml,libraryFilterSubmit,homeCoursesHtml,courseAction} from './applications.js?v=20261109-v2l';
 import {nextCode,runBatch,batchStage,batchMode,batchPerformer,BATCH_LABELS,materialUploadForm,checkUploadFiles,uploadEntries,uploadSequential,uploadStatusHtml} from './approval-flow.js?v=20261021-form-merged1';

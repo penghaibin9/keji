@@ -199,6 +199,13 @@ def test_teacher_draft_waits_for_policy_but_returned_claim_stays_actionable(setu
     assert response.status_code==200,response.text
     ident=response.json()['item']['id']
     with app2.state.sessions.begin() as db:db.get(SocialPolicy,pol).state='DRAFT'
+    # 2026-11-10：学校办法暂未批准，草稿口径可以试行申报，不再让老师等
+    pending=client2.get('/api/todos?attention=handle&type=social_claim').json()
+    waiting=client2.get('/api/todos?attention=waiting&type=social_claim').json()
+    assert pending['total']==1 and waiting['total']==0
+    assert pending['items'][0]['id']==ident and pending['items'][0]['action_required'] is True
+    # 口径被停用的才继续等待，不能提交
+    with app2.state.sessions.begin() as db:db.get(SocialPolicy,pol).state='VOID'
     pending=client2.get('/api/todos?attention=handle&type=social_claim').json()
     waiting=client2.get('/api/todos?attention=waiting&type=social_claim').json()
     assert pending['total']==0 and waiting['total']==1

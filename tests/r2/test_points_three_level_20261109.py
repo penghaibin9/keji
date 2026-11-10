@@ -155,3 +155,40 @@ def test_school_one_click_closeout_records_that_materials_were_auto_ticked(setup
     assert events and '一键同意：结项材料由系统自动勾选为已核对' in events[-1].basis
     item = detail(client2, 'social_project', pid)['item']
     assert item['closeout']['materials_auto'] is True
+
+
+def test_teacher_can_file_with_unapproved_draft_policy(setup_social, client2, app2, monkeypatch):
+    """学校积分量化管理办法暂未批准：只有草稿口径（没有启用的口径），老师结项后也能自己申报，系统标注“试行”；三级审批、改积分、入账照常。"""
+    from sqlalchemy.orm import Session
+    from app.social_models import SocialPolicy
+    pid, pol = setup_closed(setup_social, client2, monkeypatch)
+    with Session(app2.state.engine) as db:  # 把口径退回草稿，模拟“办法没批、口径没启用”
+        db.get(SocialPolicy, pol).state = 'DRAFT'
+        db.commit()
+    ident, state = self_claim(client2, pid, pol)
+    assert state == 'DEPT'
+    auth(client2, 'teacher')
+    d = client2.get('/api/social/objects/social_claim/' + ident).json()
+    assert d['trial']['trial_mode'] is True and not d['trial']['blockers']
+    base = points_of(client2, ident)
+    r = approve(client2, ident, 'depthead')
+    assert r.status_code == 200
+    r = approve(client2, ident, 'collegehead', teaching_points='1.00', auxiliary_points=base['auxiliary'], adjust_reason='试行口径下学院核减')
+    assert r.status_code == 200 and r.json()['item']['state'] == 'SCHOOL', r.text
+    r = approve(client2, ident, 'reviewer')
+    assert r.status_code == 200 and r.json()['item']['state'] == 'ARCHIVED', r.text
+    with app2.state.sessions() as db:
+        assert sum(db.scalars(select(PointEntry.amount).where(PointEntry.kind == 'SOCIAL'))) == Decimal('1.00') + Decimal(base['auxiliary'])
+
+
+def test_voided_policy_still_blocks_claims(setup_social, client2, app2, monkeypatch):
+    from sqlalchemy.orm import Session
+    from app.social_models import SocialPolicy
+    pid, pol = setup_closed(setup_social, client2, monkeypatch)
+    with Session(app2.state.engine) as db:
+        db.get(SocialPolicy, pol).state = 'VOID'
+        db.commit()
+    auth(client2, 'teacher')
+    r = post(client2, '/api/social/claims', {'project_id': pid, 'period_id': 'period2026', 'policy_id': pol,
+                                            'recognition_form_reference': '学校制式认定表与佐证附件', 'reason': '本人申报'})
+    assert r.status_code == 422

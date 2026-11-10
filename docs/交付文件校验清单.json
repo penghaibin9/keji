@@ -487,8 +487,8 @@
       "size": 35993
     },
     "backend/app/social_training.py": {
-      "sha256": "ad3213905d9127fa00aa409b1fa7898181a81cdb5d6992f3d4bca07ea176166a",
-      "size": 89423
+      "sha256": "2f458a60823c55b5832356324cc5c9f87fcfd69e96b3e3845ced73ff8494f72f",
+      "size": 89548
     },
     "backend/app/sso_identity.py": {
       "sha256": "75a02d9db38d36a48142afa2d65bdcb7ab1aa7ec88ba529ed035ebdf531c031c",
@@ -831,7 +831,7 @@
       "size": 14358
     },
     "frontend/app.js": {
-      "sha256": "7f3c25ef05352e3674079da7c6dc8eb2ab4f26040e1034ca80f40493fe697b66",
+      "sha256": "74939eef18b183a9561549033b193b462f80d2c86de4a2e0160bc0331e630f71",
       "size": 540615
     },
     "frontend/applications.js": {
@@ -1615,7 +1615,7 @@
       "size": 2302
     },
     "frontend/index.html": {
-      "sha256": "382d621127cb0f8f5c26445df09ce59e09fea21e809cf625a6af4270afeb2d7f",
+      "sha256": "5cc748845383d659750f02c58c713ca83fe6e2d14d2a954acad27a9bf072fb34",
       "size": 1863
     },
     "frontend/integration-drafts.js": {
@@ -1687,8 +1687,8 @@
       "size": 71868
     },
     "frontend/social-training.js": {
-      "sha256": "dc44d4a97b34a31b482651e177e00a28e43004b21fdcfb90f1c92990f0d5d442",
-      "size": 195735
+      "sha256": "ee5b304abdcae870d78fabe2bf880264cfa3759e0825afdc79be3e5c640525ab",
+      "size": 195942
     },
     "frontend/styles.css": {
       "sha256": "60b9696e59938050c07e549720196c62746d39837d59991f5cb37415ee4c02f9",
@@ -2443,8 +2443,8 @@
       "size": 9931
     },
     "tests/r2/test_points_three_level_20261109.py": {
-      "sha256": "62912eaee5113f2bf2a383d12f4f69e5ee9735473201fc611e427e73abfa9154",
-      "size": 9067
+      "sha256": "a85aca497be54ea5cdf1a5de7b52f8ec69733469424e3d2792009a87ed7781d5",
+      "size": 11276
     },
     "tests/r2/test_portal_workbench.py": {
       "sha256": "15287d81860733039e3ba8bd6e9473f3bee4d9a9f65b92f55c2817cd1f0e395d",
@@ -2687,8 +2687,8 @@
       "size": 2356
     },
     "tests/r2/test_social_additions.py": {
-      "sha256": "4e717b9a1a82cc6fb35de88240a7a130a3e5b0b93fa923e4e0df68ec4702b6c1",
-      "size": 10430
+      "sha256": "096a4b2987aec0b0b2642dcb17be8a6553929920869f60b337daf755818f6c82",
+      "size": 10568
     },
     "tests/r2/test_social_audit_regressions.py": {
       "sha256": "f271af13d324d4670720da80ec009d46f6d1fc932ce4f1b8dfeb05d5a3cf5b4d",
@@ -2715,8 +2715,8 @@
       "size": 4690
     },
     "tests/r2/test_social_training.py": {
-      "sha256": "82b6bd87a17a4168fa403da8fddaf519c3a2f0469ce0daf735cbbc233392f45e",
-      "size": 55118
+      "sha256": "9eecb84cdf778f7fd9d3ae9e4532bdcf085f0b6c07bbb1e17969b086a9b7e195",
+      "size": 55670
     },
     "tests/r2/test_sso_logout_pending_callback.py": {
       "sha256": "4679eb8136c142d266f74bb57c0dbada56c24b5c5232b8355734132bd4860c14",

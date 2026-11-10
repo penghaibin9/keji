@@ -569,7 +569,7 @@ def point_trial(db, claim):
     if duplicate_claim(db,project.id,claim.teacher_id,claim.id):blockers.append('同一项目已有本人审批中或已归档的积分申报，不能换考核周期重复认定；请办理原申报或追加更正')
     if p['mode']=='person_day': blockers += missing(cfg,['person_day_unit'])
     if claim.state=='RETURNED':blockers+=missing(cfg,['resubmission_mode'])
-    if policy.state != 'ACTIVE': blockers.append('制度执行口径尚未正式启用')
+    if policy.state == 'VOID': blockers.append('制度执行口径已停用')  # 草稿口径可试行申报（学校办法暂未批准），只有停用的不能用
     if not claim.data.get('recognition_form_reference'):blockers.append('学校制式积分认定表及其附件对应说明尚未提供')
     if project.state != 'CLOSED': blockers.append('项目尚未正常结项')
     if invalidated:blockers.append('正式处理决定已作废本期培训人次；已归档积分须另走更正流程')
@@ -641,7 +641,8 @@ def point_trial(db, claim):
     computed=cfg.get('cap_mode') is not None and cfg.get('precision') is not None and cfg.get('rounding') is not None and (p['mode']!='person_day' or cfg.get('person_day_unit') is not None)
     return {'teaching':number(teaching) if computed else None,'auxiliary':number(auxiliary) if computed else None,'total':number(teaching+auxiliary) if computed else None,
             'details':details,'blockers':list(dict.fromkeys(blockers)),'deadline':serial(deadline),
-            'basis':{'facts':facts,'policy':serial(policy),'claim_data':{k:v for k,v in claim.data.items() if k not in REVIEW_KEYS}},'formal':False}
+            'basis':{'facts':facts,'policy':serial(policy),'claim_data':{k:v for k,v in claim.data.items() if k not in REVIEW_KEYS}},'formal':False,
+            'trial_mode':policy.state!='ACTIVE'}
 
 
 def require_unblocked(trial):
@@ -1174,7 +1175,7 @@ def todo_items(db,a):
         if claim.state in {'DRAFT','RETURNED'} and claim.teacher_id==a.id:
             trial=point_trial(db,claim)
             policy=db.get(SocialPolicy,claim.policy_id)
-            waiting=claim.state=='DRAFT' and (policy.state!='ACTIVE' or not trial['deadline'] or
+            waiting=claim.state=='DRAFT' and (policy.state=='VOID' or not trial['deadline'] or
                 bool(missing(policy.data,['cap_mode','precision','rounding','effective_date','date_basis'])))
             project=db.get(SocialProject,claim.project_id)
             add('social_claim',claim,'本人积分申报 · '+project.data['name'],teacher_id=claim.teacher_id,
