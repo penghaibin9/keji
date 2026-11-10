@@ -1,7 +1,7 @@
 // 2026-11-07 立项（申报）通过以后的运行过程：档案视图、申请变更、年度确认、停用与恢复。
 // 2026-11-09 按设计图 v2：老师“我的X”三步列表、详情只留三个按钮、上传自动分组、结项查缺、学院学校“待我审批”。
 // 菜单不变（培训项目 / 培训课程 / 培训基地 / 培训师资）；入口是详情里的三个主按钮。名称按验收人定的：项目立项、项目运行、项目结项。
-import {quickApply} from './apply-quick.js?v=20261109-v2k';
+import {quickApply} from './apply-quick.js?v=20261109-v2l';
 
 const TYPE_LABEL={project:'培训项目',course:'培训课程',base:'培训基地',trainer:'培训师资'};
 // 三个主按钮：[动作, 名称, 小字]
@@ -48,7 +48,7 @@ const refresh=async c=>{c.closeModal?.();await c.render?.()};
 function remindAct(c,d,text){
  const id=d.type+'|'+d.id;
  if(/项目结项/.test(text)&&d.can.close)return ['life-close',id];
- if(/参训明细/.test(text)&&d.running&&c.can?.('records.write'))return ['life-units',d.id];
+ if(/参训明细/.test(text)&&d.type==='project'&&(d.lead!==false||c.can?.('records.write')))return ['life-units',d.id];
  if(/上报信息/.test(text)&&d.running)return ['life-report',d.id];
  if(/年度/.test(text)&&d.can.annual)return ['life-annual',id];
  if(/申请变更/.test(text)&&d.can.change)return ['life-change',id];
@@ -78,7 +78,9 @@ function archiveHtml(c,d,page=''){
  const stopped=d.state==='STOPPED',lead=d.lead!==false;
  const btn=(action,text,on,primary)=>`<button type="button" class="btn${primary?' primary':''}" data-action="${action}" data-id="${e(id)}"${on?'':' disabled'}>${e(text)}</button>`;
  const end=d.type==='project'?btn('life-close','结项',d.can.close):d.type==='course'?(stopped?btn('life-resume','恢复运行',d.can.resume,true):btn('life-stop','停用',d.can.stop)):(stopped?btn('life-resume','恢复运行',d.can.resume,true):btn('life-annual','年度确认',d.can.annual));
- const main=(d.can.upload?btn('life-upload','上传材料',true,true):'')+(lead?btn('life-change','申请变更',d.can.change)+end:'');
+ // 2026-11-10 参训明细由项目负责人上传一张 Excel（结项前后都能传，再传覆盖）。
+ const sheet=d.type==='project'&&lead&&['FILED','CLOSE_COLLEGE','CLOSE_REVIEW'].includes(d.state)?`<button type="button" class="btn" data-action="life-units" data-id="${e(d.id)}">上传参训明细表</button>`:'';
+ const main=(d.can.upload?btn('life-upload','上传材料',true,true):'')+sheet+(lead?btn('life-change','申请变更',d.can.change)+end:'');
  const minor=lead&&c.me?.role?.kind!=='teacher'&&d.type==='project'&&d.running&&c.can?.('records.write')?`<div class="life-minor">${c.act('导入参训明细','life-units',d.id,'text')}</div>`:'';
  const tl=(d.timeline||[]).length?`<ol class="life-timeline">${d.timeline.map(t=>`<li class="k-${e(t.kind)}"><div class="t">${e(String(t.on||t.at||'').slice(0,10))}<span class="src ${t.source==='auto'?'auto':''}">${e(SOURCE[t.source]||'')}</span>${t.who&&t.source!=='auto'?`<span class="who">${e(t.who)}</span>`:''}</div><div class="w">${e(t.what)}</div>${t.reason&&t.reason!==t.what&&t.kind!=='auto'?`<div class="r">${e(t.reason)}</div>`:''}</li>`).join('')}</ol>`:'';
  const pts=d.points?[[d.points.label,d.points.value]]:[];

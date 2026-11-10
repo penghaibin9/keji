@@ -170,3 +170,12 @@ test('结项审批：没明细时只写“老师还没上传参训明细表”�
  await c.form.save({satisfaction:'93.5',actual_income:'0'});
  assert.equal(posts[0][0],'/social/projects/p2/actions');assert.equal(posts[0][1].action,'close');assert.equal(posts[0][1].review.satisfaction,'93.5');assert.equal(posts[0][1].review.finance_reference,'零收入项目，无到账收入');
 });
+
+test('项目负责人在项目详情里能“上传参训明细表”，没明细的提醒点“现在处理”也去上传',async()=>{
+ const c=ctx({...base,reminders:['还没有参训明细，已在学院待办里提醒导入。']});c.can=()=>false;
+ const html=await lifePageHtml(c,'apply_project','project|p1');
+ assert.match(html,/data-action="life-units" data-id="p1">上传参训明细表/);
+ assert.match(html,/life-remind[\s\S]*data-action="life-units"/);
+ const member=await lifePageHtml(ctx({...base,lead:false}),'apply_project','project|p1');
+ assert.doesNotMatch(member,/上传参训明细表/);
+});
