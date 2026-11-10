@@ -149,7 +149,7 @@ test('新申报项目：必填点选缺项会拦下，补齐后以老师本人�
  assert.equal(calls.length,0);
 });
 
-test('结项审批：没明细时只写“老师还没上传参训明细表”、不给同意；学校同意一键带默认值（满意、零收入）',async()=>{
+test('结项审批：没明细时只写“老师还没上传参训明细表”、不给同意；学校核验要填实际满意度分数，零收入不用填收入',async()=>{
  const review=units=>({archive:{facts:[['负责人','张老师']],stats:[]},files:[],points:'',closeout:{},units,expected_income:'0',state:'CLOSE_COLLEGE'});
  const college={kind:'close',label:'结项',type:'project',id:'p1',name:'茶艺',who:'张老师',on:'2026-11-09',summary:'',action:'approve',version:3,batch:false,units:0};
  const school={...college,label:'结项核验',action:'close',id:'p2'};
@@ -161,9 +161,12 @@ test('结项审批：没明细时只写“老师还没上传参训明细表”�
  await lifecycleAction('q-view','close|project|p2',c);
  assert.match(c.last.foot,/data-action="q-close-review"/);
  await lifecycleAction('q-close-review','close|project|p2',c);
- assert.match(c.form.body,/满意（85% 及以上）/);
+ assert.match(c.form.body,/满意度分数/);assert.doesNotMatch(c.form.body,/满意（85% 及以上）/);
  const posts=[];c.api=async(url,opt)=>{if(opt)posts.push([url,opt.body]);return {items:[]}};
- await c.form.save({actual_income:'0'},{querySelector:()=>({value:'ok'})});
- assert.equal(posts[0][0],'/social/projects/p2/actions');assert.equal(posts[0][1].action,'close');assert.equal(posts[0][1].review.satisfaction,'85');assert.equal(posts[0][1].review.finance_reference,'零收入项目，无到账收入');
- await assert.rejects(()=>c.form.save({actual_income:'0'},{querySelector:()=>({value:'low'})}),/整改期限/);
+ await assert.rejects(()=>c.form.save({satisfaction:'',actual_income:'0'}),/满意度分数/);
+ await assert.rejects(()=>c.form.save({satisfaction:'120',actual_income:'0'}),/满意度分数/);
+ await assert.rejects(()=>c.form.save({satisfaction:'80',actual_income:'0'}),/整改期限/);
+ assert.equal(posts.length,0);
+ await c.form.save({satisfaction:'93.5',actual_income:'0'});
+ assert.equal(posts[0][0],'/social/projects/p2/actions');assert.equal(posts[0][1].action,'close');assert.equal(posts[0][1].review.satisfaction,'93.5');assert.equal(posts[0][1].review.finance_reference,'零收入项目，无到账收入');
 });
