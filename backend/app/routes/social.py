@@ -480,7 +480,11 @@ def project_action(ident:str,data:SocialAction,request:Request):
             handling={'flow':'project_close','decision':'approve','level':'school'}
         else:raise HTTPException(422,'项目操作无效')
         result=event(db,a,'social_project',obj,'项目办理：'+st.state_label(obj),before,data.reason,data.basis,handling)
-        if obj.state=='CLOSED':satisfaction_achievement(db,a,obj,data.reason);auto_claims(db,a,obj)
+        if obj.state=='CLOSED':
+            satisfaction_achievement(db,a,obj,data.reason)
+            note=auto_claims(db,a,obj)
+            if note:workflow(db,a,'social_project',obj.id,'结项通过，未生成积分申报',serial(obj),serial(obj),note,'')
+            result=st.detail(db,a,'social_project',obj)
         if handling and handling.get('decision')=='return':
             from .. import message_push
             message_push.queue(db,[obj.owner_id],'培训项目被退回',obj.data['name']+'：'+data.reason)
@@ -570,16 +574,23 @@ def project_report_info(ident:str,data:ReportInfoIn,request:Request):
 
 def auto_claims(db,a,project):
     """2026-11-09 结项通过后，给参训明细里每位有工号的校内老师生成积分申报并直接送教研室，老师不用填表。
-    找不到含结项日期的开放周期或已启用口径的不生成（老师仍可自己申报）；试算有拦截的留成草稿，老师在待办里看到原因。"""
+    找不到含结项日期的开放周期或已启用口径的不生成（老师仍可自己申报）；试算有拦截的留成草稿，老师在待办里看到原因。
+    没生成时返回原因（调用处写进项目办理记录，学校核验的人当场能看到），正常生成返回空串。"""
     closed=date_from(project.closeout['closed_on'])
     teachers=dict.fromkeys(t['teacher_id'] for u in st.units(db,project.id) for t in u.data['teachers'] if t.get('teacher_id') and t.get('staff_type','internal')=='internal')
     period=db.scalar(select(Period).where(Period.state=='OPEN',Period.start_date<=closed,Period.end_date>=closed).order_by(Period.start_date.desc()).limit(1))
     policy=period and db.scalar(select(SocialPolicy).where(SocialPolicy.period_id==period.id,SocialPolicy.state=='ACTIVE').limit(1))
-    if not policy:return
+    if not period:
+        return '没有包含结项日期（'+closed.isoformat()+'）的开放考核周期，所以没有生成积分申报。请学校管理员在“规则配置 › 考核周期与规则”里建立并保持开放该年度周期；周期和积分认定口径就绪后，老师可点“申报本人积分”自己申报。'
+    if not policy:
+        return '考核周期“'+period.name+'”还没有已启用的积分认定口径，所以没有生成积分申报。请在“规则配置 › 社会培训制度口径”里启用口径；启用后，老师可点“申报本人积分”自己申报。'
+    made=skipped=0
     for tid in teachers:
         user=db.get(User,tid)
-        if not user or not user.staff_no:continue
-        if db.scalar(select(SocialClaim.id).where(SocialClaim.project_id==project.id,SocialClaim.teacher_id==tid,SocialClaim.state!='VOID').limit(1)):continue
+        if not user or not user.staff_no:
+            skipped+=1;continue
+        if db.scalar(select(SocialClaim.id).where(SocialClaim.project_id==project.id,SocialClaim.teacher_id==tid,SocialClaim.state!='VOID').limit(1)):
+            made+=1;continue
         claim=SocialClaim(project_id=project.id,teacher_id=tid,period_id=period.id,policy_id=policy.id,
                           data={'auxiliary':[],'recognition_form_reference':'结项通过后系统自动生成','auto':True})
         db.add(claim);db.flush();before=serial(claim)
@@ -591,6 +602,10 @@ def auto_claims(db,a,project):
         except HTTPException:
             db.refresh(claim)
         event(db,a,'social_claim',claim,'结项通过，系统生成积分申报'+('' if claim.state=='DRAFT' else '：'+st.STATES[claim.state]),before,'结项通过后自动生成','')
+        made+=1
+    if not teachers:return '参训明细里没有带工号的校内授课教师，所以没有生成积分申报。请先补齐参训明细和教师工号；老师也可点“申报本人积分”自己申报。'
+    if skipped and not made:return '参训明细里的授课教师没有可用的本地账号或工号，所以没有生成积分申报。请核对教师工号；老师也可点“申报本人积分”自己申报。'
+    return ''
 
 
 def satisfaction_achievement(db,a,project,reason):

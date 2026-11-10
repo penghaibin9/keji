@@ -18,7 +18,7 @@ from __future__ import annotations
 from decimal import Decimal, InvalidOperation, ROUND_HALF_UP
 from types import SimpleNamespace
 from fastapi import HTTPException
-from sqlalchemy import select
+from sqlalchemy import select, case
 from .models import User, Period, PointEntry, PointBalance, utcnow
 from .core import serial, audit, archive_exists
 from .social_models import SocialResource
@@ -169,7 +169,9 @@ def _points(value, field='积分'):
 def _period_for(db, anchor):
     if anchor is None:
         return None
-    return db.scalar(select(Period).where(Period.start_date <= anchor, Period.end_date >= anchor).order_by(Period.start_date.desc(), Period.id).limit(1))
+    # 覆盖这个学期的周期有好几个时（例如已关闭的试验周期和新建的正式周期日期重叠），优先记入开放的周期。
+    return db.scalar(select(Period).where(Period.start_date <= anchor, Period.end_date >= anchor)
+                     .order_by(case((Period.state == 'OPEN', 0), else_=1), Period.start_date.desc(), Period.id).limit(1))
 
 
 def _balance(db, teacher_id, period):

@@ -171,3 +171,91 @@ def test_approved_qualification_void_request_review_and_withdraw(app2, client2):
             'issuer': '合成发证单位', 'obtained': '2026-01-01', 'expires': '2026-12-31', 'expected_version': item['version'], 'reason': '作废后再改'})
     assert r.status_code == 409 and '已作废' in r.text
     assert qual_action(c, q['id'], 'delete').status_code == 409
+
+
+def _closed_events(app2, pid):
+    from sqlalchemy import select
+    from sqlalchemy.orm import Session
+    from app.models import WorkflowEvent
+    with Session(app2.state.engine) as db:
+        return [(e.action, e.reason) for e in db.scalars(select(WorkflowEvent).where(WorkflowEvent.object_id == pid).order_by(WorkflowEvent.created_at))]
+
+
+def test_closeout_without_policy_or_open_period_says_why_no_claim(setup_social, client2, app2, monkeypatch):
+    """线上现状：没有启用的积分口径、没有开放周期。结项通过后不再静默跳过，项目办理记录里写明原因。"""
+    from datetime import date
+    from sqlalchemy.orm import Session
+    from app import social_training as st
+    from app.models import Period
+    from test_social_training import close_project
+    monkeypatch.setattr(st, 'today', lambda: date(2026, 9, 3))
+    c = client2
+    pid = setup_social
+    assert import_rows(c, pid, [row()]).status_code == 200
+    close_project(c, pid)  # 周期开放，但没有启用口径
+    notes = [r for a_, r in _closed_events(app2, pid) if a_ == '结项通过，未生成积分申报']
+    assert len(notes) == 1 and '还没有已启用的积分认定口径' in notes[0]
+
+
+def test_closeout_with_closed_period_says_no_open_period(setup_social, client2, app2, monkeypatch):
+    from datetime import date
+    from sqlalchemy.orm import Session
+    from app import social_training as st
+    from app.models import Period
+    from test_social_training import close_project
+    monkeypatch.setattr(st, 'today', lambda: date(2026, 9, 3))
+    c = client2
+    pid = setup_social
+    assert import_rows(c, pid, [row()]).status_code == 200
+    with Session(app2.state.engine) as db:
+        db.get(Period, 'period2026').state = 'CLOSED'
+        db.commit()
+    close_project(c, pid)
+    notes = [r for a_, r in _closed_events(app2, pid) if a_ == '结项通过，未生成积分申报']
+    assert len(notes) == 1 and '没有包含结项日期' in notes[0] and '开放考核周期' in notes[0]
+
+
+def test_live_like_config_vacant_dept_and_single_school_approver_still_walks_through(setup_social, client2, app2, monkeypatch):
+    """照线上现状：教研室没有负责人（占位），学校级职责都在同一个账号上。结项通过后自动生成的申报直接到学院，再到学校，能入账。"""
+    from datetime import date
+    from decimal import Decimal
+    from sqlalchemy import select
+    from sqlalchemy.orm import Session
+    from app import social_training as st
+    from app.models import PointEntry, User
+    from app.social_models import SocialClaim
+    from test_social_training import policy, close_project
+    monkeypatch.setattr(st, 'today', lambda: date(2026, 9, 3))
+    c = client2
+    pid = setup_social
+    with Session(app2.state.engine) as db:  # 教研室负责人退成普通教师：dept1 没有负责人
+        db.get(User, 'depthead').role_id = 'role-teacher'
+        db.commit()
+    policy(c, True)
+    assert import_rows(c, pid, [row()]).status_code == 200
+    close_project(c, pid)
+    assert [r for a_, r in _closed_events(app2, pid) if a_ == '结项通过，未生成积分申报'] == []
+    with Session(app2.state.engine) as db:
+        claims = db.scalars(select(SocialClaim).where(SocialClaim.project_id == pid)).all()
+    assert len(claims) == 1 and claims[0].state == 'COLLEGE'  # 教研室缺位，直接到学院
+    ident = claims[0].id
+    for user, after in (('collegehead', 'SCHOOL'), ('reviewer', 'ARCHIVED')):
+        auth(c, user)
+        r = action(c, 'claims', 'social_claim', ident, 'approve')
+        assert r.status_code == 200 and r.json()['item']['state'] == after, r.text
+    with Session(app2.state.engine) as db:
+        assert sum(db.scalars(select(PointEntry.amount).where(PointEntry.kind == 'SOCIAL'))) == Decimal('1.56')
+
+
+def test_teaching_credit_books_into_open_period_when_closed_one_overlaps(setup_social, app2):
+    """线上有个已关闭的试验周期“1111”（2026-01-01～10-31）。新建同样日期的正式周期后，授课认定积分要记入开放的那个。"""
+    from datetime import date
+    from sqlalchemy.orm import Session
+    from app.models import Period
+    from app.teaching_review import _period_for
+    with Session(app2.state.engine) as db:
+        db.add(Period(id='period-closed-test', name='1111', start_date=date(2026, 1, 1), end_date=date(2026, 10, 31), state='CLOSED'))
+        db.commit()
+        for _ in range(3):  # 日期相同时不能靠编号碰运气
+            assert _period_for(db, date(2026, 3, 1)).id == 'period2026'
+        assert _period_for(db, date(2026, 3, 1)).state == 'OPEN'

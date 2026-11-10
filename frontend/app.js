@@ -1,4 +1,4 @@
-import {mountHelp,closeHelp,helpLibraryHTML,helpSearch,openHelp} from './help-system.js?v=20261109-v2l';
+import {mountHelp,closeHelp,helpLibraryHTML,helpSearch,openHelp} from './help-system.js?v=20261110-aud1';
 import {bindFormDraft} from './form-drafts.js?v=20261021-form-merged1';
 import {coursePointsAction} from './course-points.js?v=20261021-form-merged1';
 import {renderTrainingWorkspace,trainingChange} from './training-workspace.js?v=20261109-v2l';
