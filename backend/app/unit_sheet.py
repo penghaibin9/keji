@@ -27,6 +27,22 @@ def template_bytes():
     for cell, width in zip(ws[1], (14, 22, 18, 10, 20)):
         cell.font = Font(bold=True); cell.fill = fill
         ws.column_dimensions[cell.column_letter].width = width
+    from openpyxl.worksheet.datavalidation import DataValidation
+    for row in range(2, 2002): ws.cell(row=row, column=1).number_format = 'yyyy-mm-dd'
+    dv = DataValidation(type='list', formula1='"是,否"', allow_blank=True, showErrorMessage=True, errorTitle='只能选“是”或“否”', error='“是否完成”请从下拉里选“是”或“否”')
+    ws.add_data_validation(dv); dv.add('D2:D2001')
+    ws.column_dimensions['F'].width = 3
+    help_ws = wb.create_sheet('填写说明')
+    for line in ('参训明细表填写说明（本页不用上传，只上传第一页“参训明细”）',
+                 '1. 一行填一位学员，一天一行。同一学员同一天不要重复。',
+                 '2. 培训日期（必填）：写成 2026-11-10 这种格式，必须在项目起止日期之内。',
+                 '3. 课程（选填）：项目只有一门课，或还没登记课程时可以不填；有多门课时填课程名称或课程编码。',
+                 '4. 学员（必填）：学员姓名或学号。本校全日制在校生不计有效人次，学院核验时会剔除。',
+                 '5. 是否完成（选填）：点单元格从下拉里选“是”或“否”，不填按“是”。',
+                 '6. 授课教师工号（选填）：不填按项目负责人；多位老师用顿号或逗号隔开，只能填本院在岗老师的工号。',
+                 '7. 再次上传会替换之前上传的全部明细。出错的行会提示行号和原因，其余行照常导入。'):
+        help_ws.append([line])
+    help_ws.column_dimensions['A'].width = 100; help_ws['A1'].font = Font(bold=True)
     wb.properties.title = '参训明细表'
     out = BytesIO(); wb.save(out); wb.close(); return out.getvalue()
 
@@ -74,7 +90,11 @@ def build_units(db, project, rows, filename, actor=None):
     """返回 (UnitData 字典列表, 错误列表, 有效行数)。错误行跳过，其余照常导入。"""
     code = project.data['code']; mode = project.data['mode']
     courses = list(db.scalars(select(TrainingCourseMaster).where(TrainingCourseMaster.project_code == code, TrainingCourseMaster.active == True)))
-    if not courses: raise HTTPException(409, '项目还没有登记课程，请先在项目里添加课程')
+    if not courses:  # 项目还没登记课程：把项目本身当作唯一一门课，老师不用先去申报课程
+        ccode = code[:64]
+        if db.scalar(select(TrainingCourseMaster).where(TrainingCourseMaster.code == ccode)): ccode = (code[:60] + '-K1')
+        course = TrainingCourseMaster(code=ccode, name=(project.data.get('name') or code)[:160], project_code=code, source='项目自动登记', active=True)
+        db.add(course); db.flush(); courses = [course]
     by_key = {}
     for c in courses: by_key[c.code] = c; by_key.setdefault(c.name, c)
     owner = db.get(User, project.owner_id)

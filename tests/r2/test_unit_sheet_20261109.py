@@ -106,3 +106,21 @@ def test_owner_can_name_same_college_teacher_other_college_row_skipped(setup_soc
     body = r.json()
     assert body['imported'] == 1 and body['errors'] == [{'row': 3, 'reason': '工号 ' + far_no + ' 的老师不在本院，不能填'}]
     assert units(app2, pid)[0].data['teachers'] == [{'teacher_id': 'mate', 'staff_type': 'internal', 'role': 'lecturer'}]
+
+
+def test_project_without_courses_uses_project_as_course_and_template_has_help(setup_social, client2, app2):
+    from app.reference_data import TrainingCourseMaster
+    pid = setup_social
+    with app2.state.sessions.begin() as db:
+        code = db.get(SocialProject, pid).data['code']
+        for c in db.scalars(select(TrainingCourseMaster).where(TrainingCourseMaster.project_code == code)).all(): db.delete(c)
+    auth(client2, 'teacher')
+    r = upload(client2, pid, sheet([('2026-09-01', '', '张三', '', ''), ('2026-09-02', '', '李四', '否', '')]))
+    assert r.status_code == 200, r.text
+    assert r.json()['imported'] == 2 and r.json()['error_count'] == 0
+    with app2.state.sessions() as db:
+        made = db.scalars(select(TrainingCourseMaster).where(TrainingCourseMaster.project_code == code)).all()
+        assert len(made) == 1 and made[0].source == '项目自动登记'
+    wb = load_workbook(BytesIO(client2.get('/api/social/units/template.xlsx').content))
+    assert wb.sheetnames == ['参训明细', '填写说明']
+    assert any('是,否' in (dv.formula1 or '') for dv in wb['参训明细'].data_validations.dataValidation)

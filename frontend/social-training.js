@@ -930,7 +930,7 @@ export async function socialAction(action,id,c){
  if(action==='social-unit-import'){
   // 2026-11-09 老师自己上传一张参训明细表（五列），再传一次会替换上次的。
   const projectId=opened.id;
-  return commonForm('上传参训明细表','<div class="form-field full"><a class="btn light" href="/api/social/units/template.xlsx" download>下载模板</a></div>'+c.field('file','参训明细表','file','',{accept:'.xlsx',full:true}),async(v,f)=>{
+  return commonForm('上传参训明细表','<div class="form-field full"><a class="btn light" href="/api/social/units/template.xlsx" download>下载模板</a><p class="muted">模板里有填写说明；一行一位学员，培训日期和学员必填，“是否完成”可下拉选择；项目还没登记课程也能直接上传。</p></div>'+c.field('file','参训明细表','file','',{accept:'.xlsx',full:true}),async(v,f)=>{
    const file=f?.querySelector('input[type=file]')?.files?.[0];if(!file)throw Error('请选择填好的参训明细表');
    const fd=new FormData;fd.set('file',file);const r=await c.api('/social/projects/'+projectId+'/unit-sheet',{method:'POST',body:fd});
    c.toast('已导入'+r.imported+'行，有效'+r.effective+'人次'+(r.error_count?'；'+r.error_count+'行没导入：'+r.errors.slice(0,3).map(x=>'第'+x.row+'行'+x.reason).join('；'):''));
