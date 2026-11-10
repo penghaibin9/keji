@@ -278,19 +278,12 @@ def normalize(db, a, kind, obj, key, value):
 
 
 def field_level(kind, obj, key, old, new):
-    """每一项改动要谁批。项目：负责人、类别、延期超过一个季度、改到校外、人次或收入变动超过 30% 要学校备案；
-    人次、收入变动不超过 30% 直接生效；其余学院批。课程学时变动超过 50% 要学校；基地地点、级别要学校；师资业务类别要人事认定。"""
+    """每一项改动要谁批。项目（2026-11-10 用户定）：变更只到学院，学校只在结项时把关；人次、收入变动不超过 30% 直接生效，其余学院批。课程学时变动超过 50% 要学校；基地地点、级别要学校；师资业务类别要人事认定。"""
     if kind == 'project':
-        if key in ('owner_id', 'category'):
-            return 'school'
-        if key == 'end_date':
-            return 'school' if (date.fromisoformat(new) - date.fromisoformat(old or new)).days > 92 else 'college'
-        if key == 'venue':
-            return 'school' if (new or {}).get('type') == 'offsite' and (old or {}).get('type') != 'offsite' else 'college'
         if key in ('expected_participants', 'expected_income'):
-            # 对比“上次经审批（或立项）时的值”，不是上一次的值：小变更连着改也累计，超过 30% 就要学校备案。
+            # 对比“上次经审批（或立项）时的值”，不是上一次的值：小变更连着改也累计，超过 30% 就要学院批。
             r = _ratio(((obj.data or {}).get('baseline') or {}).get(key, old), new)
-            return 'direct' if r is not None and r <= Decimal('0.3') else 'school'
+            return 'direct' if r is not None and r <= Decimal('0.3') else 'college'
         return 'college'
     if kind == 'course':
         if key == 'hours':

@@ -53,10 +53,10 @@ def test_big_change_goes_college_then_school_while_project_keeps_running(setup_s
     c = client2
     pid = setup_social
     auth(c, 'teacher')
-    r = change(c, 'project', pid, {'end_date': '2026-12-31'})  # 延期超过一个季度：学院 → 学校
+    r = change(c, 'project', pid, {'end_date': '2026-12-31'})  # 2026-11-10 起项目变更只到学院
     assert r.status_code == 200, r.text
     d = r.json()
-    assert not d['applied'] and d['level'] == 'school'
+    assert not d['applied'] and d['level'] == 'college'
     cid = d['change']['id']
     assert d['change']['state'] == 'COLLEGE'
     assert d['archive']['pending_change']['id'] == cid and not d['archive']['can']['change']
@@ -72,11 +72,7 @@ def test_big_change_goes_college_then_school_while_project_keeps_running(setup_s
     assert any(x['type'] == 'life_change' and x['id'] == cid for x in todos)
     r = change_act(c, cid, 'approve')
     assert r.status_code == 200, r.text
-    assert r.json()['item']['state'] == 'SCHOOL'
-    auth(c, 'reviewer')
-    r = change_act(c, cid, 'approve', '同意延期')
-    assert r.status_code == 200, r.text
-    assert r.json()['item']['state'] == 'ACTIVE'
+    assert r.json()['item']['state'] == 'ACTIVE'  # 学院批完即生效，不再报学校
     item = detail(c, 'social_project', pid)['item']
     assert item['state'] == 'FILED' and item['data']['end_date'] == '2026-12-31' and item['data']['biz_version'] == 2
     auth(c, 'teacher')

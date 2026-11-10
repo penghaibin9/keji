@@ -80,7 +80,7 @@ function archiveHtml(c,d,page=''){
  const end=d.type==='project'?btn('life-close','结项',d.can.close):d.type==='course'?(stopped?btn('life-resume','恢复运行',d.can.resume,true):btn('life-stop','停用',d.can.stop)):(stopped?btn('life-resume','恢复运行',d.can.resume,true):btn('life-annual','年度确认',d.can.annual));
  // 2026-11-10 参训明细由项目负责人上传一张 Excel（结项前后都能传，再传覆盖）。
  const sheet=d.type==='project'&&lead&&['FILED','CLOSE_COLLEGE','CLOSE_REVIEW'].includes(d.state)?`<button type="button" class="btn" data-action="life-units" data-id="${e(d.id)}">上传参训明细表</button>`:'';
- const main=(d.can.upload?btn('life-upload','上传材料',true,true):'')+sheet+(lead?btn('life-change','申请变更',d.can.change)+end:'');
+ const main=(d.can.upload?btn('life-upload','上传材料',true,true):'')+sheet+(lead?btn('life-change','申请变更',d.can.change).replace(' disabled>',d.pending_change?' disabled title="上一次变更还在审批（'+e(d.pending_change.state_label||'')+'），办完才能再申请">':' disabled>')+end:'')+(lead&&!d.can.change&&d.pending_change?`<p class="life-change-wait">上一次变更还在审批（${e(d.pending_change.state_label||'')}），办完才能再申请。</p>`:'');
  const minor=lead&&c.me?.role?.kind!=='teacher'&&d.type==='project'&&d.running&&c.can?.('records.write')?`<div class="life-minor">${c.act('导入参训明细','life-units',d.id,'text')}</div>`:'';
  const tl=(d.timeline||[]).length?`<ol class="life-timeline">${d.timeline.map(t=>`<li class="k-${e(t.kind)}"><div class="t">${e(String(t.on||t.at||'').slice(0,10))}<span class="src ${t.source==='auto'?'auto':''}">${e(SOURCE[t.source]||'')}</span>${t.who&&t.source!=='auto'?`<span class="who">${e(t.who)}</span>`:''}</div><div class="w">${e(t.what)}</div>${t.reason&&t.reason!==t.what&&t.kind!=='auto'?`<div class="r">${e(t.reason)}</div>`:''}</li>`).join('')}</ol>`:'';
  const pts=d.points?[[d.points.label,d.points.value]]:[];
@@ -178,7 +178,7 @@ function readValue(f,form){
  const raw=q(`[name="${n}"]`)?.value??'';
  return f.type==='number'||f.type==='money'?(raw===''?null:raw):raw;
 }
-const LEVEL_HINT={project:'人次、收入变动不超过 30% 直接生效；换负责人、改类别、延期超过三个月、改到校外、人次或收入变动超过 30% 要学院审批后学校备案；其他学院审批。',
+const LEVEL_HINT={project:'人次、收入变动不超过 30% 直接生效；其他变更学院审批后生效，不用报学校（学校在结项时把关）。',
  course:'学时变动超过一半要学院审批后学校备案；面向对象、简介直接更新；其他学院审批。',base:'地点、级别要学院审批后学校备案；负责人直接更新；其他学院审批。',trainer:'业务类别要重新认定（校内：学院审批后组织人事部认定；外聘：教务处备案）；职称、单位、特长直接更新。'};
 const REASONS={project:['学员人数增加','学员时间调整','场地调整','负责人工作变动'],course:['内容增加','学员要求','主讲老师调整'],base:['场地调整','合作变化','负责人变动'],trainer:['职称晋升','单位变动','业务方向调整']};
 function changeForm(c,d){
