@@ -70,7 +70,7 @@ def read_rows(data, filename):
     finally: wb.close()
 
 
-def build_units(db, project, rows, filename):
+def build_units(db, project, rows, filename, actor=None):
     """返回 (UnitData 字典列表, 错误列表, 有效行数)。错误行跳过，其余照常导入。"""
     code = project.data['code']; mode = project.data['mode']
     courses = list(db.scalars(select(TrainingCourseMaster).where(TrainingCourseMaster.project_code == code, TrainingCourseMaster.active == True)))
@@ -79,6 +79,7 @@ def build_units(db, project, rows, filename):
     for c in courses: by_key[c.code] = c; by_key.setdefault(c.name, c)
     owner = db.get(User, project.owner_id)
     staff_cache = {}
+    allowed = set()
     errors, groups, ok = [], {}, 0
     start, end = project.data['start_date'], project.data['end_date']
     for n, v in rows:
@@ -98,9 +99,12 @@ def build_units(db, project, rows, filename):
             else:
                 if s not in staff_cache: staff_cache[s] = db.scalar(select(User).where(User.staff_no == s, User.active == True))
                 user = staff_cache[s]
-            if not user: bad = s; break
+            if not user: bad = '找不到工号 ' + s + ' 的老师'; break
+            if user.id not in allowed:
+                if not _may_name(db, actor, project, owner, user): bad = '工号 ' + (s or '') + ' 的老师不在本院，不能填'; break
+                allowed.add(user.id)
             teachers.append(user.id)
-        if bad: errors.append({'row': n, 'reason': '找不到工号 ' + bad + ' 的老师'}); continue
+        if bad: errors.append({'row': n, 'reason': bad}); continue
         key = (d.isoformat(),) if mode == 'person_day' else (course.code, d.isoformat())
         g = groups.setdefault(key, {'course': course, 'date': d, 'learners': {}, 'teachers': []})
         if learner in g['learners']: errors.append({'row': n, 'reason': '学员“' + learner + '”同一天重复'}); continue
@@ -116,4 +120,17 @@ def build_units(db, project, rows, filename):
                       'learners': [{'reference': r, 'signed': x, 'hours_met': x, 'full_attendance': x, 'passed': x} for r, x in g['learners'].items()],
                       'teachers': [{'teacher_id': t, 'staff_type': 'internal', 'role': 'lecturer'} for t in g['teachers']],
                       'evidence_note': ('参训明细表 ' + filename)[:200]})
-    return units, errors, ok
+    return units, errors, ok, allowed
+
+
+def _may_name(db, actor, project, owner, user):
+    """授课教师：上传人授权范围内的老师；项目负责人上传时也可填本院（项目所属学院）在岗老师。"""
+    if not user.staff_no or not user.active or user.authorization_pending: return False
+    if actor is not None:
+        try: actor.check_teacher(db, user.id, active=True); return True
+        except HTTPException: pass
+    if actor is None or actor.id != project.owner_id: return False
+    from .approvals import college_of
+    college = college_of(db, user)
+    owner_college = college_of(db, owner)
+    return college is not None and college.id in {project.org_id, owner_college.id if owner_college else None}

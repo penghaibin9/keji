@@ -1,7 +1,7 @@
 // 2026-11-07 立项（申报）通过以后的运行过程：档案视图、申请变更、年度确认、停用与恢复。
 // 2026-11-09 按设计图 v2：老师“我的X”三步列表、详情只留三个按钮、上传自动分组、结项查缺、学院学校“待我审批”。
 // 菜单不变（培训项目 / 培训课程 / 培训基地 / 培训师资）；入口是详情里的三个主按钮。名称按验收人定的：项目立项、项目运行、项目结项。
-import {quickApply} from './apply-quick.js?v=20261109-v2j';
+import {quickApply} from './apply-quick.js?v=20261109-v2l';
 
 const TYPE_LABEL={project:'培训项目',course:'培训课程',base:'培训基地',trainer:'培训师资'};
 // 三个主按钮：[动作, 名称, 小字]
@@ -48,7 +48,7 @@ const refresh=async c=>{c.closeModal?.();await c.render?.()};
 function remindAct(c,d,text){
  const id=d.type+'|'+d.id;
  if(/项目结项/.test(text)&&d.can.close)return ['life-close',id];
- if(/参训明细/.test(text)&&d.running&&c.can?.('records.write'))return ['life-units',d.id];
+ if(/参训明细/.test(text)&&d.type==='project'&&(d.lead!==false||c.can?.('records.write')))return ['life-units',d.id];
  if(/上报信息/.test(text)&&d.running)return ['life-report',d.id];
  if(/年度/.test(text)&&d.can.annual)return ['life-annual',id];
  if(/申请变更/.test(text)&&d.can.change)return ['life-change',id];
@@ -78,7 +78,9 @@ function archiveHtml(c,d,page=''){
  const stopped=d.state==='STOPPED',lead=d.lead!==false;
  const btn=(action,text,on,primary)=>`<button type="button" class="btn${primary?' primary':''}" data-action="${action}" data-id="${e(id)}"${on?'':' disabled'}>${e(text)}</button>`;
  const end=d.type==='project'?btn('life-close','结项',d.can.close):d.type==='course'?(stopped?btn('life-resume','恢复运行',d.can.resume,true):btn('life-stop','停用',d.can.stop)):(stopped?btn('life-resume','恢复运行',d.can.resume,true):btn('life-annual','年度确认',d.can.annual));
- const main=(d.can.upload?btn('life-upload','上传材料',true,true):'')+(lead?btn('life-change','申请变更',d.can.change)+end:'');
+ // 2026-11-10 参训明细由项目负责人上传一张 Excel（结项前后都能传，再传覆盖）。
+ const sheet=d.type==='project'&&lead&&['FILED','CLOSE_COLLEGE','CLOSE_REVIEW'].includes(d.state)?`<button type="button" class="btn" data-action="life-units" data-id="${e(d.id)}">上传参训明细表</button>`:'';
+ const main=(d.can.upload?btn('life-upload','上传材料',true,true):'')+sheet+(lead?btn('life-change','申请变更',d.can.change)+end:'');
  const minor=lead&&c.me?.role?.kind!=='teacher'&&d.type==='project'&&d.running&&c.can?.('records.write')?`<div class="life-minor">${c.act('导入参训明细','life-units',d.id,'text')}</div>`:'';
  const tl=(d.timeline||[]).length?`<ol class="life-timeline">${d.timeline.map(t=>`<li class="k-${e(t.kind)}"><div class="t">${e(String(t.on||t.at||'').slice(0,10))}<span class="src ${t.source==='auto'?'auto':''}">${e(SOURCE[t.source]||'')}</span>${t.who&&t.source!=='auto'?`<span class="who">${e(t.who)}</span>`:''}</div><div class="w">${e(t.what)}</div>${t.reason&&t.reason!==t.what&&t.kind!=='auto'?`<div class="r">${e(t.reason)}</div>`:''}</li>`).join('')}</ol>`:'';
  const pts=d.points?[[d.points.label,d.points.value]]:[];
@@ -393,21 +395,22 @@ async function closeReviewModal(c,x){
 // 学校结项核验：登记满意度（管理办法第十四条）和财务确认的到账收入、分配（第二十一条），填完才能同意。
 function schoolCloseForm(c,x){
  const r=view2.review||{},co=r.closeout||{},income=Number(co.actual_income??r.expected_income??0)||0;
- const measured=co.satisfaction!=null&&co.satisfaction!=='';
- const body=(measured?'':`<fieldset class="form-field full"><legend>学员满意度</legend><div class="choice-row"><label class="choice"><input type="radio" name="sat" value="ok" checked><span>满意（85% 及以上）</span></label><label class="choice"><input type="radio" name="sat" value="low"><span>不满意（低于 85%）</span></label></div></fieldset>`)
+ // 2026-11-10 用户定：学校核验时填实际满意度分数（0–100，必填，无默认值）；其余仍一键：收入自动带出，零收入不用填。
+ const body=c.field('satisfaction','满意度分数（%）','number',co.satisfaction??'',{min:0,max:100,step:'0.1'})
   +c.field('rectification_due','整改期限','date','',{required:false})
   +c.field('actual_income','到账收入（元）','number',String(income),{min:0,step:'0.01'})
   +(income>0?c.field('funding_source','资金来源','select','other_training',{options:[['other_training','其他培训收入'],['government_special','政府专项资金']]})+c.field('retained','学校留存（元）','number','',{required:false,min:0,step:'0.01'})+c.field('personnel','人员支出（元）','number','',{required:false,min:0,step:'0.01'})+c.field('finance_reference','财务到账依据','text','',{required:false}):'');
  c.formModal('结项核验 · '+x.name,body,async(v,form)=>{
-  const low=!measured&&form?.querySelector?.('[name="sat"]:checked')?.value==='low';
-  const sat=measured?String(co.satisfaction):(low?'84':'85');
-  if((low||Number(sat)<85)&&!v.rectification_due)throw Error('满意度低于 85%，请定整改期限');
+  const raw=String(v.satisfaction??'').trim(),satNum=Number(raw);
+  if(raw===''||!Number.isFinite(satNum)||satNum<0||satNum>100)throw Error('请填写满意度分数（0–100）');
+  const sat=String(satNum);
+  if(satNum<85&&!v.rectification_due)throw Error('满意度低于 85%，请定整改期限');
   const got=Number(v.actual_income||0);
   const review={satisfaction:sat,actual_income:String(got),finance_reference:String(v.finance_reference||'').trim()||(got===0?'零收入项目，无到账收入':'')};
   if(got>0){
-   if(!review.finance_reference)throw Error('请填写财务到账依据');
    review.funding_source=v.funding_source||'other_training';
-   if(review.funding_source==='other_training'){if(v.retained===''||v.personnel===''||v.retained==null||v.personnel==null)throw Error('请填写学校留存和人员支出');review.retained=String(v.retained);review.personnel=String(v.personnel)}
+   if(v.retained!==''&&v.retained!=null)review.retained=String(v.retained);
+   if(v.personnel!==''&&v.personnel!=null)review.personnel=String(v.personnel);
   }
   if(v.rectification_due)review.rectification_due=v.rectification_due;
   await approveQ(c,x,{review});c.closeModal();c.toast('已结项');await c.render?.();

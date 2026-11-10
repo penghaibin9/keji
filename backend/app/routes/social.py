@@ -276,7 +276,7 @@ def project_edit(ident:str,data:ProjectIn,request:Request):
     return command(request,data.model_dump(),'portal.read',apply)
 
 
-def validate_units(db,a,project,rows):
+def validate_units(db,a,project,rows,teacher_ok=frozenset()):
     previous=st.units(db,project.id);seen=set();existing={u.external_key for u in previous}
     days={(u.data['class_code'],u.data['event_date']) for u in previous}
     modules={(u.data['class_code'],u.data['course_code'],u.data['module']) for u in previous}
@@ -303,7 +303,7 @@ def validate_units(db,a,project,rows):
         if cl and cl.project_code!=project.data['code']:raise HTTPException(422,'班级属于其他项目')
         if cl and cl.course_code and cl.course_code!=row.course_code:raise HTTPException(422,'班级与所选课程不一致')
         for teacher in row.teachers:
-            if teacher.staff_type=='internal':a.check_teacher(db,teacher.teacher_id,active=True)
+            if teacher.staff_type=='internal' and teacher.teacher_id not in teacher_ok:a.check_teacher(db,teacher.teacher_id,active=True)
     return {'rows':len(rows),'effective':sum(st.unit_counts(serial(r.model_dump()))['effective'] for r in rows),
             'excluded':sum(st.unit_counts(serial(r.model_dump()))['excluded'] for r in rows),
             'preview_hash':digest({'project_version':project.version,'rows':serial([r.model_dump() for r in rows])})}
@@ -348,14 +348,14 @@ async def upload_unit_sheet(ident:str,request:Request,file:UploadFile=File(...))
         obj=st.scoped(db,a,'social_project',ident,write=True)
         if obj.owner_id!=a.id:a.require('records.write')
         if obj.state not in {'FILED','CLOSE_COLLEGE','CLOSE_REVIEW'}:raise HTTPException(409,'项目备案后到结项通过前才能上传参训明细表')
-        units,errors,ok=build_units(db,obj,rows,name)
+        units,errors,ok,vetted=build_units(db,obj,rows,name,a)
         if not units:raise HTTPException(422,'表里没有能导入的行'+('：'+'；'.join(f"第{e['row']}行{e['reason']}" for e in errors[:5]) if errors else ''))
         before=serial(obj)
         for old in st.units(db,obj.id):
             if old.external_key.startswith(KEY_PREFIX+obj.id+':'):db.delete(old)
         db.flush()
         parsed=[UnitData.model_validate(u) for u in units]
-        result=validate_units(db,a,obj,parsed)
+        result=validate_units(db,a,obj,parsed,vetted)
         for row in parsed:db.add(SocialUnit(project_id=obj.id,external_key=row.external_key,data=serial(row.model_dump())))
         db.flush();event(db,a,'social_project',obj,f'上传参训明细表 {name}（导入{ok}行）',before,'上传参训明细表')
         return {'imported':ok,'units':len(parsed),'effective':result['effective'],'excluded':result['excluded'],'errors':errors[:200],'error_count':len(errors)}
@@ -451,8 +451,8 @@ def project_action(ident:str,data:SocialAction,request:Request):
             # 2026-11-09 满意度和财务数在这一步由学校登记（老师结项不再填）；在途项目老师已填过的沿用。
             merged=dict(obj.closeout)
             if data.review is not None:merged.update(serial(data.review.model_dump()))
-            # 学校点“同意”即可：满意度不填按“满意”（85%），到账收入不填按已登记数或0；资金来源、留存等由财务处管（第二十一条），这里不拦。
-            if merged.get('satisfaction') in (None,''):merged['satisfaction']='85'
+            # 学校核验时填实际满意度分数（2026-11-10 用户定，第十四条）；到账收入不填按0；资金来源、留存等由财务处管（第二十一条），填了才校验。
+            if merged.get('satisfaction') in (None,''):raise HTTPException(422,'请填满意度分数')
             if merged.get('actual_income') in (None,''):merged['actual_income']='0'
             if not str(merged.get('finance_reference') or '').strip():merged['finance_reference']='零收入项目，无到账收入' if D(str(merged['actual_income']))==0 else '以财务处到账记录为准'
             if D(str(merged['satisfaction']))<85 and not merged.get('rectification_due'):raise HTTPException(422,'满意度低于85%，请定整改期限')
