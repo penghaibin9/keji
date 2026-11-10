@@ -451,8 +451,8 @@ def project_action(ident:str,data:SocialAction,request:Request):
             # 2026-11-09 满意度和财务数在这一步由学校登记（老师结项不再填）；在途项目老师已填过的沿用。
             merged=dict(obj.closeout)
             if data.review is not None:merged.update(serial(data.review.model_dump()))
-            # 学校点“同意”即可：满意度不填按“满意”（85%），到账收入不填按已登记数或0；资金来源、留存等由财务处管（第二十一条），这里不拦。
-            if merged.get('satisfaction') in (None,''):merged['satisfaction']='85'
+            # 学校核验时填实际满意度分数（2026-11-10 用户定，第十四条）；到账收入不填按0；资金来源、留存等由财务处管（第二十一条），填了才校验。
+            if merged.get('satisfaction') in (None,''):raise HTTPException(422,'请填满意度分数')
             if merged.get('actual_income') in (None,''):merged['actual_income']='0'
             if not str(merged.get('finance_reference') or '').strip():merged['finance_reference']='零收入项目，无到账收入' if D(str(merged['actual_income']))==0 else '以财务处到账记录为准'
             if D(str(merged['satisfaction']))<85 and not merged.get('rectification_due'):raise HTTPException(422,'满意度低于85%，请定整改期限')

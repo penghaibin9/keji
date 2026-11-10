@@ -65,7 +65,7 @@ def test_no_usable_rows_or_wrong_format_is_422(setup_social, client2, app2):
     assert r.status_code == 422
 
 
-def test_school_close_one_click_defaults(setup_social, client2, app2, monkeypatch):
+def test_school_close_needs_satisfaction_score_income_defaults_zero(setup_social, client2, app2, monkeypatch):
     monkeypatch.setattr(st, 'today', lambda: date(2026, 9, 3))
     pid = setup_social
     auth(client2, 'schooladmin')
@@ -78,10 +78,12 @@ def test_school_close_one_click_defaults(setup_social, client2, app2, monkeypatc
     assert upload(client2, pid, sheet([('2026-09-01', '', '张三', '', '')])).status_code == 200
     auth(client2, 'reviewer')
     r = action(client2, 'projects', 'social_project', pid, 'close')
+    assert r.status_code == 422 and r.json()['detail'] == '请填满意度分数'
+    r = action(client2, 'projects', 'social_project', pid, 'close', review={'satisfaction': '92.5'})
     assert r.status_code == 200, r.text
     with app2.state.sessions() as db:
         p = db.get(SocialProject, pid)
-        assert p.state == 'CLOSED' and str(p.closeout['satisfaction']) == '85' and str(p.closeout['actual_income']) == '0'
+        assert p.state == 'CLOSED' and str(p.closeout['satisfaction']) == '92.5' and str(p.closeout['actual_income']) == '0'
 
 
 def test_upload_needs_login(setup_social, client2):
