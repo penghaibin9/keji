@@ -1627,7 +1627,7 @@ test('秘书双月报送待办有独立分类、计数与办理入口',async()=>
 test('教师待办分类同时覆盖积分核对与本人更正，不误称全部为教研室核对',async()=>{
  const e=engine(async()=>({items:[{type:'social_resource',id:'fix1',title:'补充积分更正依据',state:'退回补正',teacher_id:'u'}],counts:{social_resource:1},total:1,page:1,size:20}),'teacher');
  const html=await e.t.pages.todos();
- assert.match(html,/积分核对与更正/);assert.match(html,/补充积分更正依据/);assert.doesNotMatch(html,/教研室请我核对积分/);
+ assert.match(html,/补充积分更正依据/);assert.doesNotMatch(html,/我的项目申报|等待他人处理的事项/);assert.doesNotMatch(html,/教研室请我核对积分/);
 });
 test('待办批量办理只给本人可办、同环节事项勾选框，结果分开列出成功与未办理',async()=>{
  const items=[{type:'assessment',id:'a1',title:'本级考核确认',state:'COLLEGE',teacher_id:'t1'},{type:'assessment',id:'a2',title:'本人考核确认',state:'TEACHER',teacher_id:'u'},{type:'social_claim',id:'c1',title:'社会培训积分认定',state:'待教学秘书归档',teacher_id:'t2'},{type:'qualification',id:'q1',title:'资质审核',state:'SUBMITTED',teacher_id:'t3'}];
@@ -1728,10 +1728,10 @@ test('核对摘要复用原业务授权接口，同一记录只读一次，失�
 });
 
 
-test('只有一种待办类别时显示分类说明，有多个类别时才提供切换',()=>{
+test('只有一种待办类别时不重复显示类别，有多个类别时才提供切换',()=>{
  const e=engine(undefined,'teacher'),chips=vm.runInContext('todoTeacherChips',e.ctx);
  assert.equal(chips({counts:{}}),'');
- const single=chips({counts:{social_resource:2}});assert.match(single,/积分核对与更正/);assert.doesNotMatch(single,/<button/);
+ const single=chips({counts:{social_resource:2}});assert.equal(single,'');
  const multiple=chips({counts:{social_resource:2,assessment:1}});assert.match(multiple,/<button/);assert.match(multiple,/我的年度考核/);
 });
 
