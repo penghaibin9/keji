@@ -282,7 +282,7 @@ export async function lifeListHtml(c,page){
  const tab=view2.tab[type]||'run',rf=view2.rf;
  const rows=(m.items||[]).filter(x=>x.stage===tab&&(type!=='project'||rf==='all'||(rf==='lead'?x.lead:!x.lead)));
  const bar=`<div class="lv-stages">${STAGES[type].map(([k,l],i)=>`${i?'<span class="lv-arrow">›</span>':''}<button type="button" class="lv-step${k===tab?' on':''}" data-action="lv-tab" data-id="${type}|${k}">${e(l)}</button>`).join('')}</div>`;
- const seg=type==='project'?`<div class="lv-seg">${[['all','全部'],['lead','我负责的'],['member','我参与的']].map(([k,l])=>`<button type="button" class="${rf===k?'on':''}" data-action="lv-rf" data-id="${k}">${l}</button>`).join('')}</div>`:'';
+ const seg=type==='project'&&tab!=='apply'?`<div class="lv-seg">${[['all','全部'],['lead','我负责的'],['member','我参与的']].map(([k,l])=>`<button type="button" class="${rf===k?'on':''}" data-action="lv-rf" data-id="${k}">${l}</button>`).join('')}</div>`:'';
  const hasTrainer=type==='trainer'&&(m.items||[]).some(x=>x.status!=='done');
  const extra=type==='course'?`<button type="button" class="lv-card lv-new is-sub" data-action="teacher-apply" data-id="credits|">从我的课程导入</button>`:'';
  const add=tab==='apply'&&!hasTrainer?`<button type="button" class="lv-card lv-new" data-action="quick-apply" data-id="${type}">${e(NEW_LABEL[type])}</button>${extra}`:'';
