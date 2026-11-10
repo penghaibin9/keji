@@ -1187,9 +1187,9 @@ test('教师首页复用统一待办，核心数据靠前并明确积分待启�
   if(url.startsWith('/api/notices'))return {items:[{id:'n1',title:'积分办法通知',created_at:'2026-09-01T00:00:00'}]};
   return homeResponse(url)},'teacher');
  e.t.setState('home');const html=await e.t.pages.home();
- for(const t of ['有 <b>2</b> 件事需要你处理','3 项等待核对或学校确认','&lt;img src=x&gt;','todo" data-id="social_resource|r1"','123.45','原表分配人次','12.50','近五年累计 <b>85.00</b> 分','340分条件待学校正式启用','另有 2.00 分还在审批中','88.50','查看并确认','积分办法通知'])assert.ok(html.includes(t),t);
+ for(const t of ['有 <b>2</b> 件事需要你处理','3 项等待核对或学校确认','123.45','原表分配人次','12.50','近五年累计 <b>85.00</b> 分','340分条件待学校正式启用','另有 2.00 分还在审批中','88.50','查看并确认','积分办法通知'])assert.ok(html.includes(t),t);
  assert.ok(html.indexOf('teacher-overview-metrics')<html.indexOf('teacher-apply-grid'));
- assert.ok(html.indexOf('teacher-todo')<html.indexOf('teacher-apply-grid'));
+ assert.doesNotMatch(html,/teacher-todo/);
  assert.doesNotMatch(html,/<img src=x>|不能被当作本人待办|teacher-points-bar|NaN/);
  assert.ok(e.requests.some(x=>x.url==='/api/todos?attention=handle&size=4'));
  assert.match(e.requests.find(x=>x.url.startsWith('/api/statistics')).url,/start=\d{4}-01-01&end=\d{4}-12-31/);
@@ -1202,7 +1202,7 @@ test('教师首页无待办时保留等待进度入口，不把等待事项算�
   if(url.startsWith('/api/assessment-summary/latest'))return {assessment:{id:'a1',teacher_id:'u',state:'ARCHIVED',score:'90',returned:false},period:{name:'2025年度'}};
   return homeResponse(url)},'teacher');
  e.t.setState('home');const html=await e.t.pages.home();
- for(const t of ['当前没有需要你处理的事项','2 项等待核对或学校确认','查看等待事项','已归档，结果已正式生效','查看明细'])assert.ok(html.includes(t),t);
+ for(const t of ['2 项等待核对或学校确认','已归档，结果已正式生效','查看明细'])assert.ok(html.includes(t),t);
  assert.doesNotMatch(html,/查看并确认|有 <b>2<\/b> 件事|NaN/);
 });
 
@@ -1270,7 +1270,7 @@ test('teacher home does not claim there is nothing to do when to-dos fail to loa
   if(url.startsWith('/api/assessment-summary/latest'))return {assessment:{id:'a1',teacher_id:'u',state:'TEACHER',score:'70',returned:true},period:{name:'2026年度'}};
   return homeResponse(url)},'teacher');
  e.t.setState('home');const html=await e.t.pages.home();
- for(const t of ['待办暂时没有加载出来','考核被退回，请先在详情里看退回原因','查看并确认'])assert.ok(html.includes(t),t);
+ for(const t of ['考核被退回，请先在详情里看退回原因','查看并确认'])assert.ok(html.includes(t),t);
  assert.doesNotMatch(html,/当前没有需要你处理的事项|都处理完了|NaN/);
 });
 
