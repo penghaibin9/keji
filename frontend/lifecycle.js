@@ -1,7 +1,7 @@
 // 2026-11-07 立项（申报）通过以后的运行过程：档案视图、申请变更、年度确认、停用与恢复。
 // 2026-11-09 按设计图 v2：老师“我的X”三步列表、详情只留三个按钮、上传自动分组、结项查缺、学院学校“待我审批”。
 // 菜单不变（培训项目 / 培训课程 / 培训基地 / 培训师资）；入口是详情里的三个主按钮。名称按验收人定的：项目立项、项目运行、项目结项。
-import {quickApply} from './apply-quick.js?v=20261110-doc1';
+import {quickApply} from './apply-quick.js?v=20261110-chg1';
 
 const TYPE_LABEL={project:'培训项目',course:'培训课程',base:'培训基地',trainer:'培训师资'};
 // 三个主按钮：[动作, 名称, 小字]
@@ -340,7 +340,7 @@ async function uploadGrouped(c,d,refresh){
  box?.addEventListener('drop',ev=>{const g=ev.target.closest?.('[data-lv-group]');if(!g)return;ev.preventDefault();g.classList.remove('over');add(ev.dataTransfer?.files,g.dataset.lvGroup)});
 }
 
-// 结项前查缺：缺什么列出来，传齐才进结项表。
+// 结项前查缺：没到结束日期、上报信息没补会拦；材料、参训明细缺了只提醒（2026-11-10）。
 async function closeWithCheck(c,d){
  const r=await c.api('/social/lifecycle/close-check/'+encodeURIComponent(d.id));
  if(r.gaps?.length){
@@ -470,12 +470,11 @@ async function againForm(c,id){
  const x=await c.api('/social/objects/social_project/'+encodeURIComponent(id)),p=x.item.data,e=c.esc;
  const copied=[['类别',({subsidy:'补贴性培训',enterprise:'企业定制培训',community:'社区公益培训',rural:'乡村帮扶培训',other:'其他非学历培训'})[p.category]||''],['场地',(p.venue&&p.venue.place)||'']].filter(z=>z[1]);
  c.formModal('再办一期 · '+p.name,c.field('name','项目名称','text',p.name,{full:true})+c.field('start_date','开始日期','date','')+c.field('end_date','结束日期','date','')+c.field('expected_participants','预估人次','number','',{min:1,step:'1'})
-  +`<div class="form-field full lv-copied">${copied.map(([k,v])=>`<span>${e(k)}：<b>${e(v)}</b></span>`).join('')}</div>`+c.field('lv_files','方案材料','file','',{multiple:true,accept:'.pdf,.png,.jpg,.jpeg,.docx,.xlsx,.pptx',full:true}),async(v,form)=>{
+  +`<div class="form-field full lv-copied">${copied.map(([k,v])=>`<span>${e(k)}：<b>${e(v)}</b></span>`).join('')}</div>`+c.field('lv_files','方案材料（选填）','file','',{required:false,multiple:true,accept:'.pdf,.png,.jpg,.jpeg,.docx,.xlsx,.pptx',full:true}),async(v,form)=>{
   if(!v.start_date||!v.end_date||!v.expected_participants)throw Error('请填写起止日期和预估人次');
   if(v.end_date<v.start_date)throw Error('结束日期不能早于开始日期');
   const {checkUploadFiles,uploadEntries,uploadSequential}=await import('./approval-flow.js?v=20261110-doc2');
   const files=checkUploadFiles(form.querySelector('#f-lv_files')?.files||[]);
-  if(!files.length)throw Error('请附上方案材料（立项需要正式依据）');
   const keep=['category','high_risk','expected_income','expected_outcomes','mode','class_type','level','scene','target_groups','one_skill','venue','total_hours','audience','service_type','teaching_mode'];
   const data={...Object.fromEntries(keep.filter(k=>p[k]!==undefined).map(k=>[k,p[k]])),code:'XM-'+String(v.start_date).replace(/-/g,'')+'-'+Math.random().toString(36).slice(2,6).toUpperCase(),name:String(v.name).trim(),cohort:'第一期',org_id:x.item.org_id,owner_id:c.me.user.id,
    expected_participants:Number(v.expected_participants),start_date:v.start_date,end_date:v.end_date,dates_confirmed:true,level_confirmed:true,scene_confirmed:true,mode_confirmed:true};

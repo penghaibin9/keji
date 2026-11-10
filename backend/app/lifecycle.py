@@ -922,22 +922,23 @@ def close_gaps(db, project):
         from .social_schemas import application_blockers
         if issues := application_blockers(d):
             gaps.append('还要补上报信息：' + '、'.join(i.replace('请填写', '').replace('请选择', '') for i in issues) + '，不补不能结项')
-    # 2026-11-09（9e98fb3 起）：老师结项不再被参训明细拦，明细由学院在审核结项时导入，学院、学校通过前必须有。
-    files = st.attachments(db, 'social_project', project.id)
-    names = [str(getattr(f, 'name', '') or (f.get('name') if isinstance(f, dict) else '')) for f in files]
-    if not any(('签到' in n or '名册' in n or '名单' in n) for n in names):
-        gaps.append('缺签到表或学员名册，参训人次不能认定，不计积分')
-    if not any(n.lower().endswith(('.jpg', '.jpeg', '.png', '.heic', '.webp')) for n in names):
-        gaps.append('缺现场照片，过程材料不全')
-    if (project.data or {}).get('category') == 'subsidy' and not any('报送' in n or '凭证' in n for n in names):
-        gaps.append('缺报送凭证，补贴性培训不计积分')
+    # 2026-11-10 用户定：签到表、照片、报送凭证、参训明细缺了只提醒，不拦结项（见 close_notes）。
     return gaps
 
 
 def close_notes(db, project):
-    """结项时只提示、不拦的事：参训明细由老师上传 Excel，学院、学校通过前必须有。"""
+    """结项时只提示、不拦的事：材料和参训明细缺了会影响积分认定，学院、学校审核时会看。"""
     from . import social_training as st
-    return [] if st.units(db, project.id) else ['还没上传参训明细表']
+    notes = [] if st.units(db, project.id) else ['还没上传参训明细表']
+    files = st.attachments(db, 'social_project', project.id)
+    names = [str(getattr(f, 'name', '') or (f.get('name') if isinstance(f, dict) else '')) for f in files]
+    if not any(('签到' in n or '名册' in n or '名单' in n) for n in names):
+        notes.append('还没传签到表或学员名册，参训人次可能不能认定')
+    if not any(n.lower().endswith(('.jpg', '.jpeg', '.png', '.heic', '.webp')) for n in names):
+        notes.append('还没传现场照片')
+    if (project.data or {}).get('category') == 'subsidy' and not any('报送' in n or '凭证' in n for n in names):
+        notes.append('补贴性培训还没传报送凭证，可能不计积分')
+    return notes
 
 
 def _date_line(kind, obj):

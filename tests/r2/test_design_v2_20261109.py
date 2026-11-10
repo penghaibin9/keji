@@ -30,11 +30,10 @@ def test_close_goes_to_college_queue_then_school_queue_with_gap_check(setup_soci
     pid = setup_social
     assert import_rows(c, pid, [row()]).status_code == 200
     auth(c, 'teacher')
-    gaps = c.get('/api/social/lifecycle/close-check/' + pid).json()['gaps']
-    assert any('签到表' in g and '不计积分' in g for g in gaps)
+    r = c.get('/api/social/lifecycle/close-check/' + pid).json()  # 2026-11-10 起缺材料只提醒不拦
+    assert not any('签到表' in g for g in r['gaps']) and any('签到表' in n for n in r['notes'])
     assert upload(c, pid).status_code == 200
-    gaps = c.get('/api/social/lifecycle/close-check/' + pid).json()['gaps']
-    assert not any('签到表' in g for g in gaps)
+    assert not any('签到表' in n for n in c.get('/api/social/lifecycle/close-check/' + pid).json()['notes'])
     closeout = {'closed_on': '2026-09-02', 'outcome_report': '结项报告', 'satisfaction': '96', 'actual_income': '0',
                 'finance_reference': '零收入项目，无到账收入', 'location': 'onsite'}
     assert action(c, 'projects', 'social_project', pid, 'close_submit', closeout=closeout).status_code == 200

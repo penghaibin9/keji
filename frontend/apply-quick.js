@@ -62,7 +62,7 @@ function projectForm(c){
   +`<div class="form-field full qa-days">${quick(c,'days',[['1 天',1],['3 天',3],['1 周',7],['1 个月',30],['一学期',120]])}</div>`
   +c.field('expected_participants','预估人次','number','',{min:0,step:'1'})
   +cond('category=subsidy',chips(c,'groups',GROUPS.map(x=>[x,x]),{multi:true,label:'重点群体'})+c.field('groups_note','行动对接','text','',{required:false,full:true}))
-  +upload(c,'方案材料','')
+  +upload(c,'方案材料（选填）','有方案可以附上，没有也能先提交')
   +`<details class="form-field full qa-more"><summary>结项前补：场地、收入、预期成果、一人一技、积分口径</summary><div class="form-grid">`
   +chips(c,'venue_type',VENUES,{label:'培训场地',checked:['base'],required:false})
   +c.field('venue_place','具体地点','text','',{required:false,full:true})
@@ -85,7 +85,6 @@ function projectForm(c){
   const groups=[...new Set([...picked(form,'groups',GROUPS.map(x=>[x,x])),...picked(form,'groups1',GROUPS.map(x=>[x,x])),text(form,'groups_note')].filter(Boolean))].join('；');
   if((one||cat==='subsidy')&&!groups)throw Error('补贴性培训或“一人一技”项目请选择重点群体');
   const files=form.querySelector('[name="qa_files"]')?.files||[];
-  if(!files.length)throw Error('请附上方案材料');
   checkUploadFiles(files);
   const income=cat==='community'?'0':(v.expected_income==null||v.expected_income===''?'0':String(v.expected_income));
   const data={code:text(form,'code')||autoCode('XM'),name:text(form,'name'),cohort:text(form,'cohort')||'第一期',org_id:(c.me?.org?.kind==='college'?c.me.org.id:c.me?.org?.parent_id)||c.me.user.org_id,owner_id:c.me.user.id,

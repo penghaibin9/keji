@@ -507,7 +507,7 @@ async function showDetail(kind,id,courseList=null){
  if(progress)body+=sectioned?'<details class="detail-fold application-flow"><summary>查看完整办理流程</summary>'+progress+'</details>':progress;
  if(kind==='social_project'&&d.progress?.tone==='red')body+=note(d.progress.headline,true);
  else if(x.state==='RETURNED'){const last=[...(d.events||[])].reverse().find(e=>/退回/.test(e.action));body+=note('退回意见：'+(last?.reason||'请核对办理记录，补充后重新提交。'),true)}
- if(kind==='social_project'&&['DRAFT','RETURNED'].includes(x.state)&&(c.can('records.write')||ownTeacher)){const todo=[...(d.report_issues||[]),...((d.attachments||[]).length?[]:['上传方案材料（点下方“上传佐证”）']),...(x.data?.venue?[]:['填写培训场地（点“修改项目资料”）'])];body+=todo.length?note('提交前还差：'+todo.join('；')+'。',true):note('资料和材料已齐全，点下方“提交”即可。')}
+ if(kind==='social_project'&&['DRAFT','RETURNED'].includes(x.state)&&(c.can('records.write')||ownTeacher)){const todo=[...(d.report_issues||[]),...(x.data?.venue?[]:['填写培训场地（点“修改项目资料”）'])];body+=todo.length?note('提交前还差：'+todo.join('；')+'。',true):note('资料和材料已齐全，点下方“提交”即可。')}
  if(kind==='social_annual'&&x.snapshot?.public_end)body+=note('公示期间：'+x.snapshot.public_start+' 至 '+x.snapshot.public_end+'。公示期满且异议处理完毕后归档。');
  if(kind==='social_annual'&&!d.public_summary&&['REVIEW','COMMITTEE','PUBLIC','ARCHIVED'].includes(x.state))body+='<section class="social-detail-section"><h3>职能部门核验进度</h3>'+table(['核验环节','核验状态','核验意见'],Object.entries({finance:'财务核验',academic:'成果核验',discipline:'纪检核验',coordinator:'归口初核'}).map(([key,label])=>{const check=x.snapshot?.checks?.[key];return [label,check?'已核验':'待核验',esc(check?.reason||check?.basis||(check?'已留痕核验':'等待对应职责人员办理'))]}))+'</section>';
  const data=x.data;
