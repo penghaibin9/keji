@@ -264,3 +264,28 @@ test('结项整改条件放在结项情况内，不创建隐藏后的空整改�
  assert.equal((state.form.body.match(/class="social-fieldset"/g)||[]).length,1,'老师结项只有一组，不再有办理说明');
  assert.doesNotMatch(state.form.body,/结项材料核对|close-check-all|name="checked_/,'材料核对改由学校在结项核验时勾选');
 });
+
+test('三级积分申报：办理区带出认定积分，改了积分必须写原因并一并提交；前面各级的意见和积分改动看得到',async()=>{
+ const claim=()=>returned({teacher_id:'t9',state:'COLLEGE',version:8});
+ const {c,state}=socialContext({me:'dean',duties:['dean'],claim,handler:()=>({})});
+ const api=c.api;
+ c.api=async(url,options)=>{const r=await api(url,options);return !options&&!url.startsWith('/social/workspace')?{...r,can_review:true,points:{teaching:'1.56',auxiliary:'0.00',total:'1.56',adjusted:false,
+  steps:[{level:'dept',decision:'approve',by_name:'教研室甲',at:'2026-11-09T10:00:00',reason:'教研室核对无误',teaching:'1.56',auxiliary:'0.00'}]}}:r};
+ await socialAction('social-detail','social_claim|c1',c);
+ assert.match(state.modal.body,/id="handle-teaching"[^>]*value="1\.56"/);assert.match(state.modal.body,/id="handle-aux"[^>]*value="0\.00"/);
+ assert.match(state.modal.body,/修改积分的原因/);assert.match(state.modal.body,/id="claim-steps"/);assert.match(state.modal.body,/各级审批意见与认定积分/);
+ const doc=(teaching,why)=>({getElementById:id=>({'handle-reason':{value:'学院同意'},'handle-basis':{value:''},'handle-teaching':{value:teaching,dataset:{orig:'1.56'}},'handle-aux':{value:'0.00',dataset:{orig:'0.00'}},'handle-adjust':{value:why}})[id]||null,querySelectorAll:()=>[]});
+ // 改了积分却没写原因：不提交
+ globalThis.document=doc('2.00','');
+ try{await assert.rejects(()=>socialAction('social-handle','approve',c),/请写明修改原因/)}finally{delete globalThis.document}
+ assert.equal(state.posts.length,0);
+ // 写了原因：认定积分和原因一起提交
+ globalThis.document=doc('2.00','额外承担实训指导');
+ try{await socialAction('social-handle','approve',c)}finally{delete globalThis.document}
+ const body=state.posts[0].options.body;
+ assert.deepEqual([body.action,body.teaching_points,body.auxiliary_points,body.adjust_reason],['approve','2.00','0.00','额外承担实训指导']);
+ // 没改积分：只提交意见，不带积分字段
+ globalThis.document=doc('1.56','');
+ try{await socialAction('social-handle','approve',c)}finally{delete globalThis.document}
+ assert.equal(state.posts[1].options.body.teaching_points,undefined);
+});

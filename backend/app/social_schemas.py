@@ -251,6 +251,10 @@ class SocialAction(Reason):
     closeout: Closeout | None = None
     review: CloseoutReview | None = None
     prior_review_on: date | None = None
+    # 三级积分申报：每一级办理时可以改认定积分（授课、辅助），改了必须写原因。
+    teaching_points: Nonnegative | None = None
+    auxiliary_points: Nonnegative | None = None
+    adjust_reason: str = Field(default='', max_length=1000)
     # 学校结项核验时逐项勾选的结项材料（2026-11-04 起材料核对由学校在核验这一步做）。
     materials_checked: list[Literal['plan','filing_form','roster','attendance','hours','process','assessment','outcomes','teacher_review','courseware_review']] | None = Field(default=None, max_length=10)
 

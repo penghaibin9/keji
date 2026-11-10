@@ -419,8 +419,8 @@
       "size": 36239
     },
     "backend/app/routes/social.py": {
-      "sha256": "6f994f4d5066f774a3a0ef7f8383ec8f3ed419c6ffab7d5d792ece0d1d1da155",
-      "size": 108628
+      "sha256": "0931078c23ab9e20e341c29800ece9eca8525eec6a72d2977c2a6bdeeac45f34",
+      "size": 107144
     },
     "backend/app/routes/social_images.py": {
       "sha256": "cef0ee2df4d6e5d2f42547ef6d6922153a30806088b87965fe89137da7b452db",
@@ -483,12 +483,12 @@
       "size": 11093
     },
     "backend/app/social_schemas.py": {
-      "sha256": "4fc48556bb37edebab1a337bf8e3aa2ae63663eaf14ac5c3f718e8e00efa48eb",
-      "size": 35719
+      "sha256": "e7ed67f4fd5286e5334beb7c73aeb262daf2211fe71f0548c46777c502618c57",
+      "size": 35993
     },
     "backend/app/social_training.py": {
-      "sha256": "f8997937f6fcad058861df98c05b08bb7284c044dd5ecfd8516c51b1044fd3e7",
-      "size": 86017
+      "sha256": "ad3213905d9127fa00aa409b1fa7898181a81cdb5d6992f3d4bca07ea176166a",
+      "size": 89423
     },
     "backend/app/sso_identity.py": {
       "sha256": "75a02d9db38d36a48142afa2d65bdcb7ab1aa7ec88ba529ed035ebdf531c031c",
@@ -499,8 +499,8 @@
       "size": 8057
     },
     "backend/app/teaching_review.py": {
-      "sha256": "d6b47183f90b171f82d06cd3a532e3b458d054f45b2a6b160565292706ddf12b",
-      "size": 27915
+      "sha256": "e44e527eb1267b020df4af8f8c32ad199151a8f5e91b26ad52b2414270f45915",
+      "size": 28612
     },
     "backend/app/unit_sheet.py": {
       "sha256": "56967c26d303ccb22873d09ae145aa49b87052e8e4b89991cb50a54d0ab497c2",
@@ -771,8 +771,8 @@
       "size": 12269
     },
     "docs/手册菜单按钮核对表_20261022.md": {
-      "sha256": "242b9849d11483eb6d6c54b7878a505d76fadf7e3d5d0d0f6263b5bcf019815e",
-      "size": 16707
+      "sha256": "d6cd29fb782ed04ee39a5037fabeb99b8dd51550c03e8ca9ad5b6a5803383089",
+      "size": 16384
     },
     "docs/接口异常处理说明.md": {
       "sha256": "6d94797e5033960b7dba94e6f0d5135c06f99c44435153e7fefeab90d629257d",
@@ -807,8 +807,8 @@
       "size": 6788
     },
     "docs/用户操作手册_系统内版_20261022.md": {
-      "sha256": "1fd1337ba5191f78ce68f80333f545507a91934eb97d741a1a10831cd846f1a9",
-      "size": 87596
+      "sha256": "af2207da91e95b2a225ca885895a02555a519259be7b6e27587ea80a43bfe1f7",
+      "size": 88165
     },
     "docs/第三方组件与许可证清单.md": {
       "sha256": "8a8a8d3970f1e1dba3e469378042f7f9e0d10ce808c94a8258b6a7a0090da9d6",
@@ -831,8 +831,8 @@
       "size": 14358
     },
     "frontend/app.js": {
-      "sha256": "1aa13e9c21c056fc741bea18f0485dbfc69157980534b869a8243bd0b1c14ad9",
-      "size": 542794
+      "sha256": "7f3c25ef05352e3674079da7c6dc8eb2ab4f26040e1034ca80f40493fe697b66",
+      "size": 540615
     },
     "frontend/applications.js": {
       "sha256": "2adebfb8c16aaedc20843882a191ccfce77e5133d46fd545d00bae559b2fc101",
@@ -1183,8 +1183,8 @@
       "size": 1040
     },
     "frontend/assets/help/20261022/manual.html": {
-      "sha256": "ed648cf32b839eefc8f07ed70c9ff4e9cae6f7177cdf22b46c1adc4e23dad3ab",
-      "size": 145356
+      "sha256": "5b8465dedf9fd5e6de77dfb30ed44c561df976d7b965fdfca5ee8b95e7084935",
+      "size": 145925
     },
     "frontend/assets/help/20261022/manual.pdf": {
       "sha256": "c24138fc66a76a005d8ec15e763756ac6052b6dc532b2d55c1dd5110b7143f73",
@@ -1587,12 +1587,12 @@
       "size": 13135
     },
     "frontend/help-content.js": {
-      "sha256": "6b14d6a829ae5c3235b716dfc00058beb9ccf0e3b1a9026f5fda4bdb8d462eb3",
-      "size": 58312
+      "sha256": "49fbf90df6d460543d75dec8f6f7f43cf90183e4dcce6d762b77dbd3ffd2d6ba",
+      "size": 58880
     },
     "frontend/help-forms.js": {
-      "sha256": "197711e53d9ef6181fb4d4e993c7e4b5e64c5c3985f40037cd88e9114a4326c1",
-      "size": 151637
+      "sha256": "304f442f9faa1ce1a4e612d37c7be70864a9f4a4f017a7ef8fc7c32dbb5203e5",
+      "size": 156130
     },
     "frontend/help-media.js": {
       "sha256": "5997ea0755ac60ce2700833f215042ebbe8fdaeba4af3c854350a29b3459f3d0",
@@ -1603,8 +1603,8 @@
       "size": 3450
     },
     "frontend/help-system.js": {
-      "sha256": "633c24562075bb698455fd594ae366cacd519dce90e591d37b54d9dede2dabed",
-      "size": 30235
+      "sha256": "33e3447f74c0673a6598479d2a66b11ebe73646c5a047fdc0553842d282890c3",
+      "size": 30236
     },
     "frontend/history-projects.js": {
       "sha256": "2a354347db4c4d503847dd5aaab85bda4901d5204f93436274d9e1fdf62d7f8f",
@@ -1615,8 +1615,8 @@
       "size": 2302
     },
     "frontend/index.html": {
-      "sha256": "d4170f4aad128f610ed6daae497fd3bfde65ab3d56da420739434f2687d32ba0",
-      "size": 1866
+      "sha256": "382d621127cb0f8f5c26445df09ce59e09fea21e809cf625a6af4270afeb2d7f",
+      "size": 1863
     },
     "frontend/integration-drafts.js": {
       "sha256": "8ecc0ab6a0ce01ac7e922540f902ce75ee295194ed81095923b8b59ad3ccb99d",
@@ -1687,8 +1687,8 @@
       "size": 71868
     },
     "frontend/social-training.js": {
-      "sha256": "1399fdab7e6c20079fb7a0a3aaeaf5737f978a168c1af8de591d779b2f5bc4a7",
-      "size": 193737
+      "sha256": "dc44d4a97b34a31b482651e177e00a28e43004b21fdcfb90f1c92990f0d5d442",
+      "size": 195735
     },
     "frontend/styles.css": {
       "sha256": "60b9696e59938050c07e549720196c62746d39837d59991f5cb37415ee4c02f9",
@@ -2019,8 +2019,8 @@
       "size": 42259
     },
     "tests/js/approval-flow.test.mjs": {
-      "sha256": "c45e39147e3235667ab4304d2c7283188e31bb69d5f6a09b097dd29da032cbbc",
-      "size": 25662
+      "sha256": "01d45c72bcf23845a12eb98c4099dc9d459526bbf89a9e46ab926f81e916bd2a",
+      "size": 27660
     },
     "tests/js/assessment-guidance.test.mjs": {
       "sha256": "98165cb83f68303faa786cbf39bd42a7254579e8479c5440ac387714b5c86a71",
@@ -2443,8 +2443,8 @@
       "size": 9931
     },
     "tests/r2/test_points_three_level_20261109.py": {
-      "sha256": "72343e0ce3c327024aa568b74db2d2b67eb358f41282c67dc0ba5e32d9c7a76e",
-      "size": 2279
+      "sha256": "62912eaee5113f2bf2a383d12f4f69e5ee9735473201fc611e427e73abfa9154",
+      "size": 9067
     },
     "tests/r2/test_portal_workbench.py": {
       "sha256": "15287d81860733039e3ba8bd6e9473f3bee4d9a9f65b92f55c2817cd1f0e395d",
@@ -2755,8 +2755,8 @@
       "size": 5802
     },
     "tests/r2/test_walkthrough_fixes_20261108.py": {
-      "sha256": "8ebb333f81e2d20d9d385dafd695b26a306ea5eedb90617b717a5628624d2c78",
-      "size": 9729
+      "sha256": "d151273cb746f03387de8b777888d9610454a9f2f8587023ec041abb1aa02b29",
+      "size": 12112
     },
     "tests/r2/test_workbench_speed.py": {
       "sha256": "1de9f985d71c7218fa834ce2a23e4bc67edc88d14bbea069053cd92d0a044083",

@@ -465,6 +465,7 @@ def project_action(ident:str,data:SocialAction,request:Request):
             obj.closeout=merged
             required={'plan','filing_form','roster','attendance','hours','process','assessment','outcomes'}
             # 材料核对由学校在这一步勾选（2026-11-04 起老师结项不再勾）；在途数据里老师已勾过的沿用。
+            auto_ticked=data.materials_checked is None
             checked=set(obj.closeout.get('materials_checked',[]))|set(data.materials_checked if data.materials_checked is not None else {'plan','filing_form','roster','attendance','hours','process','assessment','outcomes'})
             # 有“立德树人与质量”的项目，结项还要核对主讲教师资格审查表和课件内容审查记录：两项审查由学院登记，登记了百分比就自动补上。
             if obj.data.get('quality'):
@@ -472,7 +473,8 @@ def project_action(ident:str,data:SocialAction,request:Request):
                 q=obj.data['quality']
                 if review_done(q.get('teacher_review')) and review_done(q.get('courseware_review')):checked|={'teacher_review','courseware_review'}
             if not required<=checked:raise HTTPException(409,'培训方案、备案表、名册、签到、学时、过程、结业考核及成果材料'+('，主讲教师资格审查表、课件内容审查记录（须先由学院登记审查百分比）' if obj.data.get('quality') else '')+'尚未逐项核对，请在办理区勾选')
-            obj.closeout={**obj.closeout,'materials_checked':sorted(checked),'materials_checked_by':a.id}
+            obj.closeout={**obj.closeout,'materials_checked':sorted(checked),'materials_checked_by':a.id,'materials_auto':auto_ticked}
+            if auto_ticked:data.basis=(data.basis+'；' if data.basis else '')+'一键同意：结项材料由系统自动勾选为已核对'
             if st.D(obj.closeout['satisfaction'])<85 and not obj.closeout.get('rectification_due'):raise HTTPException(409,'满意度低于85%，须明确整改办理日期')
             from .files import verify_file
             for file in st.attachments(db,'social_project',ident):verify_file(request.app.state.settings.storage_dir,file)
@@ -480,11 +482,7 @@ def project_action(ident:str,data:SocialAction,request:Request):
             handling={'flow':'project_close','decision':'approve','level':'school'}
         else:raise HTTPException(422,'项目操作无效')
         result=event(db,a,'social_project',obj,'项目办理：'+st.state_label(obj),before,data.reason,data.basis,handling)
-        if obj.state=='CLOSED':
-            satisfaction_achievement(db,a,obj,data.reason)
-            note=auto_claims(db,a,obj)
-            if note:workflow(db,a,'social_project',obj.id,'结项通过，未生成积分申报',serial(obj),serial(obj),note,'')
-            result=st.detail(db,a,'social_project',obj)
+        if obj.state=='CLOSED':satisfaction_achievement(db,a,obj,data.reason)
         if handling and handling.get('decision')=='return':
             from .. import message_push
             message_push.queue(db,[obj.owner_id],'培训项目被退回',obj.data['name']+'：'+data.reason)
@@ -570,42 +568,6 @@ def project_report_info(ident:str,data:ReportInfoIn,request:Request):
         result=event(db,a,'social_project',obj,'补填上报信息',before,data.reason,data.basis)
         return result
     return command(request,data.model_dump(mode='json'),'portal.read',apply)
-
-
-def auto_claims(db,a,project):
-    """2026-11-09 结项通过后，给参训明细里每位有工号的校内老师生成积分申报并直接送教研室，老师不用填表。
-    找不到含结项日期的开放周期或已启用口径的不生成（老师仍可自己申报）；试算有拦截的留成草稿，老师在待办里看到原因。
-    没生成时返回原因（调用处写进项目办理记录，学校核验的人当场能看到），正常生成返回空串。"""
-    closed=date_from(project.closeout['closed_on'])
-    teachers=dict.fromkeys(t['teacher_id'] for u in st.units(db,project.id) for t in u.data['teachers'] if t.get('teacher_id') and t.get('staff_type','internal')=='internal')
-    period=db.scalar(select(Period).where(Period.state=='OPEN',Period.start_date<=closed,Period.end_date>=closed).order_by(Period.start_date.desc()).limit(1))
-    policy=period and db.scalar(select(SocialPolicy).where(SocialPolicy.period_id==period.id,SocialPolicy.state=='ACTIVE').limit(1))
-    if not period:
-        return '没有包含结项日期（'+closed.isoformat()+'）的开放考核周期，所以没有生成积分申报。请学校管理员在“规则配置 › 考核周期与规则”里建立并保持开放该年度周期；周期和积分认定口径就绪后，老师可点“申报本人积分”自己申报。'
-    if not policy:
-        return '考核周期“'+period.name+'”还没有已启用的积分认定口径，所以没有生成积分申报。请在“规则配置 › 社会培训制度口径”里启用口径；启用后，老师可点“申报本人积分”自己申报。'
-    made=skipped=0
-    for tid in teachers:
-        user=db.get(User,tid)
-        if not user or not user.staff_no:
-            skipped+=1;continue
-        if db.scalar(select(SocialClaim.id).where(SocialClaim.project_id==project.id,SocialClaim.teacher_id==tid,SocialClaim.state!='VOID').limit(1)):
-            made+=1;continue
-        claim=SocialClaim(project_id=project.id,teacher_id=tid,period_id=period.id,policy_id=policy.id,
-                          data={'auxiliary':[],'recognition_form_reference':'结项通过后系统自动生成','auto':True})
-        db.add(claim);db.flush();before=serial(claim)
-        try:
-            with db.begin_nested():
-                claim.data={**claim.data,'submitted_on':st.today().isoformat(),'chain':3}
-                trial=st.point_trial(db,claim);st.require_unblocked(trial)
-                claim.snapshot=st.freeze(trial);claim.state=st.claim_first_state(db,tid)
-        except HTTPException:
-            db.refresh(claim)
-        event(db,a,'social_claim',claim,'结项通过，系统生成积分申报'+('' if claim.state=='DRAFT' else '：'+st.STATES[claim.state]),before,'结项通过后自动生成','')
-        made+=1
-    if not teachers:return '参训明细里没有带工号的校内授课教师，所以没有生成积分申报。请先补齐参训明细和教师工号；老师也可点“申报本人积分”自己申报。'
-    if skipped and not made:return '参训明细里的授课教师没有可用的本地账号或工号，所以没有生成积分申报。请核对教师工号；老师也可点“申报本人积分”自己申报。'
-    return ''
 
 
 def satisfaction_achievement(db,a,project,reason):
@@ -745,6 +707,9 @@ def claim_action(ident:str,data:SocialAction,request:Request):
             if obj.state not in stages and obj.state not in st.CLAIM_FLOW:raise HTTPException(409,'当前积分申报不在审批阶段')
             if obj.state in st.CLAIM_FLOW:
                 st.claim_level_check(db,a,obj,db.get(SocialProject,obj.project_id));next_state=st.claim_next_state(db,obj)
+                # 每一级的意见和积分变化记在申报里（学院、学校看得到前面各级的意见和改动），改积分必须写原因。
+                step,adjust=st.claim_step(a,obj,data)
+                obj.data={**obj.data,'steps':[*obj.data.get('steps',[]),step],**({'adjust':adjust} if adjust else {})}
             else:
                 code,next_state=stages[obj.state];st.duty(db,a,code,obj.teacher_id,db.get(SocialProject,obj.project_id).org_id)
                 st.check_project_conflicts(db,a,db.get(SocialProject,obj.project_id))

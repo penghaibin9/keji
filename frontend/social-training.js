@@ -378,15 +378,28 @@ async function latestOf(kind,id){const d=await context.api(path(kind,id));return
 function notSubmitted(saved,err){const msg=String(err?.message||'提交没有完成').split(/\r?\n/)[0];return saved+'，但尚未提交：'+(/退回补正的期限口径/.test(msg)?'学校尚未确认退回补正的期限口径，暂不能重新提交，请联系学校社会培训管理员确认后再提交':msg)}
 
 // 审核办理区：固定显示当前环节、申报人、项目、积分、异常和材料入口；常规意见预填，仍须本人点击确认。
+// 三级积分申报：每一级都看得到前面各级的意见和积分改动，也可以改认定积分（改了要写原因）。
+const CLAIM_LEVEL_NAMES={dept:'教研室',college:'学院',school:'学校'};
+function claimStepsHtml(c,points){
+ const rows=(points?.steps||[]).map(s=>[c.esc(CLAIM_LEVEL_NAMES[s.level]||s.level),c.esc(s.by_name||''),c.esc(String(s.at||'').replace('T',' ').slice(0,16)),s.decision==='return'?'退回':'通过',
+  c.esc(s.reason||'—'),s.teaching_before!==undefined?c.esc('授课 '+s.teaching_before+' → '+s.teaching+'，辅助 '+s.auxiliary_before+' → '+s.auxiliary+'；原因：'+(s.adjust_reason||'')):c.esc('授课 '+s.teaching+'，辅助 '+s.auxiliary)]);
+ return rows.length?'<section class="social-detail-section" id="claim-steps"><h3>各级审批意见与认定积分</h3>'+c.table(['环节','办理人','时间','结论','意见','认定积分'],rows)+'</section>':'';
+}
+function claimPointsForm(c,x,d){
+ if(!(d.points&&['DEPT','COLLEGE','SCHOOL'].includes(x.state)))return '';
+ const e=c.esc,num=(id,label,value)=>'<div class="form-field"><label for="'+id+'">'+label+'</label><input id="'+id+'" type="number" min="0" max="1000" step="0.01" value="'+e(value)+'" data-orig="'+e(value)+'"></div>';
+ return '<div class="form-field full"><p class="hint">认定积分按系统试算带出；需要调整的可以直接改，改了请写明原因。通过后下一级和老师都能看到。</p></div>'+num('handle-teaching','授课积分',d.points.teaching)+num('handle-aux','辅助积分',d.points.auxiliary)
+  +'<div class="form-field full"><label for="handle-adjust">修改积分的原因（改了积分才需要填）</label><textarea id="handle-adjust" name="adjust_reason" rows="2" data-text-limit="1000"></textarea></div>';
+}
 function handlePanel(kind,x,d){
  const c=context,esc=c.esc,claim=kind==='social_claim',t=d.trial||{},r=d.review_context||{},label=opened.labels.approve||'审核通过',archive=claim?x.state==='APPROVED':x.state==='APPROVED',files=(d.attachments||[]).length,next=c.queueNext?.(kind+'|'+x.id);
  const project=claim?(t.basis?.facts?.project?.data?.name||t.basis?.facts?.project?.name||workspace.projects?.find(p=>p.id===x.project_id)?.data?.name||''):r.project;
  const owner=claim?c.teacherName(x.teacher_id):(r.teacher_name||c.teacherName(x.data?.teacher_id));
- const points=claim?'授课 '+(t.teaching??'—')+'，辅助 '+(t.auxiliary??'—')+'，合计 '+(t.total??'待确认'):'授课 '+(x.data?.teaching??0)+'，辅助 '+(x.data?.auxiliary??0)+'（追加差额）';
+ const points=claim?(d.points?'授课 '+d.points.teaching+'，辅助 '+d.points.auxiliary+'，合计 '+d.points.total+(d.points.adjusted?'（审批中已修改）':''):'授课 '+(t.teaching??'—')+'，辅助 '+(t.auxiliary??'—')+'，合计 '+(t.total??'待确认')):'授课 '+(x.data?.teaching??0)+'，辅助 '+(x.data?.auxiliary??0)+'（追加差额）';
  const facts=[['当前环节',esc(d.state_label)],[claim?'申报人':'被更正教师',esc(owner||'—')],['项目',esc(project||'—')],[claim?'候选积分':'更正积分',esc(points)],['佐证材料',files+' 份 '+c.act('查看材料','social-materials','','text')]];
  const warn=[...(t.blockers||[]).map(v=>c.note('系统检查发现：'+v+'。通过会被拦下，请先退回补正。',true)),...(!files?[c.note('当前没有佐证材料，请核实材料来源；材料不全的请退回补正。',true)]:[])].join('');
  return {summary:'<section class="approval-object-summary" aria-label="当前审批对象"><dl class="detail-facts">'+facts.map(([k,v])=>'<div><dt>'+esc(k)+'</dt><dd>'+v+'</dd></div>').join('')+'</dl><button type="button" class="btn text" data-detail-section="approval-opinion">填写办理意见</button></section>',
-  form:'<form id="approval-opinion" class="social-detail-section social-handle" aria-label="本环节办理"><h3>本环节办理</h3>'+warn
+  form:(claim?claimStepsHtml(c,d.points):'')+'<form id="approval-opinion" class="social-detail-section social-handle" aria-label="本环节办理"><h3>本环节办理</h3>'+warn+(claim?claimPointsForm(c,x,d):'')
   +'<div class="form-field full"><label for="handle-reason">办理意见（已预填，可修改；须本人点击确认才会办理）</label><textarea id="handle-reason" name="reason" rows="2" data-phrases="'+(archive?'archive':'approve')+'" data-text-limit="2000">'+esc(archive?'审核材料齐全，归档入账':'材料核对无误，审核通过')+'</textarea></div>'
   +'<div class="form-field full"><label for="handle-basis">依据说明或材料编号（选填）</label><textarea id="handle-basis" name="basis" rows="2" data-text-limit="2000"></textarea></div><div id="handle-error" role="alert" tabindex="-1"></div>'
   +'<p class="hint">退回须具体说明补什么材料；“查看下一条”仅打开下一条，不会自动审批。</p></form>'};
@@ -534,6 +547,7 @@ async function showDetail(kind,id,courseList=null){
   const auxiliary=(x.state==='ARCHIVED'?d.trial?.basis?.claim_data?.auxiliary:undefined)??data.auxiliary;
   if(Array.isArray(auxiliary)&&auxiliary.length)body+='<section class="social-detail-section"><h3>辅助工作明细</h3>'+table(['日期','工作说明','申报积分'],auxiliary.map(row=>[esc(row.work_date),esc(row.description),esc(row.amount)]))+'</section>';
  }
+ if(kind==='social_claim'&&d.points){body+=(handling?'':claimStepsHtml(c,d.points))+(d.points.adjusted?note('审批中认定积分已调整为：授课 '+d.points.teaching+'，辅助 '+d.points.auxiliary+'，合计 '+d.points.total+'；以下试算表为系统原始试算。'):'')}
  if(d.trial){const t=d.trial,archived=x.state==='ARCHIVED',gradeLabel=archived?'认定等级':'候选等级';body+=note(archived?'以下为归档时的核算快照':'以下为候选试算，尚非正式认定');body+=table(['指标','分值'],[['授课积分',t.teaching??'不适用'],['辅助积分',t.auxiliary??'不适用'],['基础分',t.base??'不适用'],['认定加分',t.bonus_awarded??'不适用'],['合计',t.total??'待学校确认'],[gradeLabel,esc(t.grade||'待核定')],['申报期限',esc(t.deadline||'不适用或待校历确认')]].filter(([label,value])=>value!=='不适用'&&(label!==gradeLabel||kind==='social_annual')&&(label!=='申报期限'||!!t.deadline)));if(t.details)body+=table(['核算单元','人次','计算依据',archived?'认定积分':'候选积分'],t.details.map((r,i)=>[esc('第'+(i+1)+'核算单元'),r.participants,esc(r.formula)+(r.standard&&/^基数 \d+\.\d+ ×/.test(r.formula)?'<p class="cell-sub">基数显示值已取小数；原始人次比例为'+esc(r.participants)+'÷'+esc(r.standard)+'，按本单封顶口径计算。</p>':''),r.score??'待封顶口径确认']));if(t.metrics)body+=table(['指标','实际值','任务目标','基础分','加分'],t.metrics.map(r=>[esc(r.label),r.actual,r.target??'待下达',r.base??'待核定',r.bonus??'待核定']))}
  if(kind==='social_annual'&&d.trial){const t=d.trial;body+=table(['成果、资金及总分处理','内容'],[['综合成果基础分',t.achievement_base],['资金管理基础分',t.cost_base??'待财务核验'],['封顶前各项加分合计',t.bonus_raw],['全校总加分上限','10 分（所有单项加分共用上限）'],['封顶前总分',t.total_before_cap??'待核定'],['已确认总分上限',t.total_cap??'待核定'],['一票否决',t.veto?'已触发':'未触发'],...(!d.public_summary?[['正式处理依据',esc(t.veto_basis||data.discipline_reference||'无')],['学院个人积分合计',t.points_total],['按已确认人数的平均积分',t.points_average??'人数基准待确认']]:[])]);if(t.cost_details)body+=table(['资金管理扣分项','扣分或说明'],t.cost_details.map(r=>[esc(r.label),esc(r.value)]));if(t.outcome_details)body+=table(['成果认定依据','得分依据'],t.outcome_details.map(r=>[esc(r.label),esc(r.value)]));}
  if(sectioned)body+='</div>';
@@ -876,7 +890,12 @@ export async function socialAction(action,id,c){
   if(typeof document!=='undefined'&&!validateFormAssists(document.getElementById('approval-opinion')))return;
   const x=opened.item,k=opened.kind,label=opened.labels?.approve||'审核通过',reason=domValue('handle-reason'),basis=domValue('handle-basis'),next=id==='approve-next'?c.queueNext?.(k+'|'+x.id):'';
   const box=typeof document!=='undefined'?document.getElementById('handle-error'):null,controls=typeof document!=='undefined'?[...document.querySelectorAll('.social-handle-actions button')]:[];
-  try{if(reason.length<2)throw Error('请填写办理意见');controls.forEach(b=>b.disabled=true);await c.api('/social/'+routeOf(k,x)+'/'+x.id+'/actions',{method:'POST',body:{action:'approve',expected_version:x.version,reason,basis}})}
+  try{if(reason.length<2)throw Error('请填写办理意见');
+   const adjust={},tEl=typeof document!=='undefined'?document.getElementById('handle-teaching'):null,aEl=typeof document!=='undefined'?document.getElementById('handle-aux'):null;
+   if(tEl&&aEl){const t=tEl.value.trim(),a=aEl.value.trim();
+    if(t===''||a===''||!(Number(t)>=0)||!(Number(a)>=0))throw Error('认定积分请填 0 以上的数字');
+    if(Number(t)!==Number(tEl.dataset.orig)||Number(a)!==Number(aEl.dataset.orig)){const why=domValue('handle-adjust');if(why.length<2)throw Error('修改了认定积分，请写明修改原因');Object.assign(adjust,{teaching_points:t,auxiliary_points:a,adjust_reason:why})}}
+   controls.forEach(b=>b.disabled=true);await c.api('/social/'+routeOf(k,x)+'/'+x.id+'/actions',{method:'POST',body:{action:'approve',expected_version:x.version,reason,basis,...adjust}})}
   catch(err){controls.forEach(b=>b.disabled=false);if(box){box.innerHTML='<div class="error-text">'+c.esc(err.message)+'</div>';box.focus?.();return}throw err}
   await (c.renderKeep||c.render)();
   if(next){c.toast(label+'已办理，已打开下一条，请核对后再办理');return c.openNext(next)}

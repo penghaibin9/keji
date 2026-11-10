@@ -641,7 +641,7 @@ def point_trial(db, claim):
     computed=cfg.get('cap_mode') is not None and cfg.get('precision') is not None and cfg.get('rounding') is not None and (p['mode']!='person_day' or cfg.get('person_day_unit') is not None)
     return {'teaching':number(teaching) if computed else None,'auxiliary':number(auxiliary) if computed else None,'total':number(teaching+auxiliary) if computed else None,
             'details':details,'blockers':list(dict.fromkeys(blockers)),'deadline':serial(deadline),
-            'basis':{'facts':facts,'policy':serial(policy),'claim_data':claim.data},'formal':False}
+            'basis':{'facts':facts,'policy':serial(policy),'claim_data':{k:v for k,v in claim.data.items() if k not in REVIEW_KEYS}},'formal':False}
 
 
 def require_unblocked(trial):
@@ -793,12 +793,16 @@ def book_claim(db,actor,claim):
     balance=db.scalar(select(PointBalance).where(PointBalance.teacher_id==claim.teacher_id,PointBalance.period_id==claim.period_id))
     if balance and balance.confirmed:raise HTTPException(409,'个人积分已确认，须先授权留痕解锁')
     if not balance:balance=PointBalance(teacher_id=claim.teacher_id,period_id=claim.period_id);db.add(balance);db.flush()
-    for category in ('teaching','auxiliary'):
-        value=D(claim.snapshot['trial'][category])
+    teaching,auxiliary=claim_points(claim)
+    three=(claim.data or {}).get('chain')==3 and claim.state in CLAIM_FLOW
+    for category,value in (('teaching',teaching),('auxiliary',auxiliary)):
+        computed=D(str(claim.snapshot['trial'][category]))
         db.add(PointEntry(teacher_id=claim.teacher_id,period_id=claim.period_id,item_key='social_'+category+'_'+claim.id,
-                         kind='SOCIAL',amount=value,raw_value=str(value),formula='社会培训项目逐项认定；详见已归档积分申报',
-                         source_snapshot={'social_claim':claim.id,'rule':{'name':'学校社会培训制度'},'recognition':claim.snapshot},
-                         actor_id=actor.id,reason='教学秘书归档入账',basis='已完成学校社会培训审批流程'))
+                         kind='SOCIAL',amount=value,raw_value=str(value),
+                         formula='社会培训项目逐项认定；详见已归档积分申报'+('' if value==computed else '（审批中由 %s 改为 %s）'%(computed,value)),
+                         source_snapshot={'social_claim':claim.id,'rule':{'name':'学校社会培训制度'},'recognition':claim.snapshot,'review_steps':(claim.data or {}).get('steps',[])},
+                         actor_id=actor.id,reason='学校认定入账' if three else '教学秘书归档入账',
+                         basis='已完成教研室、学院、学校三级审批' if three else '已完成学校社会培训审批流程'))
     balance.version+=1
 
 
@@ -934,6 +938,11 @@ def detail(db,actor,kind,obj):
     if isinstance(obj,(SocialClaim,SocialAnnual)):
         result['trial']=obj.snapshot.get('trial') if obj.state=='ARCHIVED' else current_trial(db,obj)
         if obj.state=='ARCHIVED' and obj.snapshot.get('sha256')!=digest(result['trial']):raise HTTPException(409,'归档依据校验失败')
+    if isinstance(obj,SocialClaim):
+        teaching,auxiliary=claim_points(obj,result['trial'])
+        computed=(_points(result['trial'].get('teaching') or 0),_points(result['trial'].get('auxiliary') or 0))
+        result['points']={'teaching':str(teaching),'auxiliary':str(auxiliary),'total':str(teaching+auxiliary),
+                          'adjusted':(teaching,auxiliary)!=computed,'steps':(obj.data or {}).get('steps',[])}
     if isinstance(obj,SocialClaim) and obj.state=='ARCHIVED':result['busy_reason']=claim_busy_reason(db,obj.id)
     if isinstance(obj,SocialClaim) and (actor.role.kind=='dept' or (actor.role.kind=='teacher' and db.get(SocialProject,obj.project_id).owner_id!=actor.id)):
         result['trial']=personal_claim_trial(result['trial'],obj.teacher_id)
@@ -1030,6 +1039,43 @@ REVIEW_STAGES={'SUBMITTED':'dean','DEAN':'coordinator','COORDINATOR':'vice_presi
 # 在途的旧四级申报（SUBMITTED/DEAN/COORDINATOR/APPROVED）按原链走完。
 CLAIM_FLOW={'DEPT':'COLLEGE','COLLEGE':'SCHOOL','SCHOOL':'ARCHIVED'}
 CLAIM_LEVEL={'DEPT':'dept','COLLEGE':'college','SCHOOL':'school'}
+CLAIM_LEVEL_NAME={'dept':'教研室','college':'学院','school':'学校'}
+# 审批过程中追加的记录（各级意见、改过的积分），不属于申报依据，不参与“审批依据是否变化”的核对。
+REVIEW_KEYS=('steps','adjust')
+CENT=D('0.01')
+
+
+def _points(value):
+    return D(str(value)).quantize(CENT,rounding=ROUND_HALF_UP)
+
+
+def claim_points(claim,trial=None):
+    """认定积分（授课、辅助）：试算值；或某一级审批时改过的值（只在改动所依据的试算值没变时有效）。"""
+    trial=trial if trial is not None else ((claim.snapshot or {}).get('trial') or {})
+    base=[str(_points(trial.get('teaching') or 0)),str(_points(trial.get('auxiliary') or 0))]
+    adj=(claim.data or {}).get('adjust')
+    if adj and adj.get('base')==base:return _points(adj['teaching']),_points(adj['auxiliary'])
+    return D(base[0]),D(base[1])
+
+
+def claim_step(actor,claim,action):
+    """三级申报这一级的办理记录：谁、什么意见、积分有没有改。改积分必须写原因；退回不改积分。
+    返回 (步骤, 新的积分调整或 None)。"""
+    from .models import utcnow
+    teaching,auxiliary=claim_points(claim)
+    step={'level':CLAIM_LEVEL[claim.state],'decision':action.action,'by':actor.id,'by_name':actor.name,'at':utcnow().isoformat(timespec='seconds'),
+          'reason':action.reason,'teaching':str(teaching),'auxiliary':str(auxiliary)}
+    adjust=None
+    if action.action=='approve' and (action.teaching_points is not None or action.auxiliary_points is not None):
+        new_t=_points(action.teaching_points) if action.teaching_points is not None else teaching
+        new_a=_points(action.auxiliary_points) if action.auxiliary_points is not None else auxiliary
+        if new_t>D('1000') or new_a>D('1000'):raise HTTPException(422,'认定积分应在 0 到 1000 之间')
+        if (new_t,new_a)!=(teaching,auxiliary):
+            if len((action.adjust_reason or '').strip())<2:raise HTTPException(422,'修改认定积分请写明原因')
+            trial=(claim.snapshot or {}).get('trial') or {}
+            step.update(teaching_before=str(teaching),auxiliary_before=str(auxiliary),teaching=str(new_t),auxiliary=str(new_a),adjust_reason=action.adjust_reason.strip())
+            adjust={'base':[str(_points(trial.get('teaching') or 0)),str(_points(trial.get('auxiliary') or 0))],'teaching':str(new_t),'auxiliary':str(new_a)}
+    return step,adjust
 
 
 def claim_first_state(db,teacher_id):
